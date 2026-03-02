@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ConciergeHero from '../../components/ConciergeHero.astro';
+
+const runtime = (Astro.locals as any).runtime;
+const paypalClientId = runtime?.env?.PAYPAL_CLIENT_ID || '';
+---
+
+<Layout title="AIコンシェルジュ - DayDreamHub" description="AIがホテルに電話して予約。世界85都市のデイユースホテル。">
+  <ConciergeHero locale="ja" paypalClientId={paypalClientId} />
+</Layout>
