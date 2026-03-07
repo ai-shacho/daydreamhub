@@ -1,0 +1,485 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// Fetch hotels from D1
+const env = (Astro.locals as any).runtime?.env;
+const DB = env?.DB;
+
+// Read filter params
+const url = Astro.url;
+const filterPropertyType = url.searchParams.get('propertyType') || '';
+const filterCountry = url.searchParams.get('country') || '';
+const filterCity = url.searchParams.get('city') || '';
+const filterBudget = url.searchParams.get('budget') || '';
+
+// Build filter query
+let whereClauses: string[] = [];
+let params: any[] = [];
+
+if (filterPropertyType) {
+  const idx = params.length + 1;
+  whereClauses.push(`h.property_type = ?${idx}`);
+  params.push(filterPropertyType);
+}
+if (filterCountry) {
+  const idx = params.length + 1;
+  whereClauses.push(`h.country = ?${idx}`);
+  params.push(filterCountry);
+}
+if (filterCity) {
+  const idx = params.length + 1;
+  whereClauses.push(`h.city = ?${idx}`);
+  params.push(filterCity);
+}
+
+const whereSQL = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+const hasFilters = filterPropertyType || filterCountry || filterCity || filterBudget;
+
+let hotels: any[] = [];
+let allPropertyTypes: string[] = [];
+let allCountries: string[] = [];
+let allCities: string[] = [];
+
+try {
+  if (DB) {
+    // Main hotel query with filters
+    const budgetJoin = filterBudget ? '' : '';
+    const limitIdx = params.length + 1;
+    const result = await DB.prepare(
+      `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, MIN(p.price_usd) as min_price, h.images
+       FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+       ${whereSQL}
+       GROUP BY h.id
+       ${filterBudget ? `HAVING min_price <= ?${limitIdx}` : ''}
+       ORDER BY h.id DESC LIMIT ${hasFilters ? 24 : 6}`
+    ).bind(...params, ...(filterBudget ? [parseInt(filterBudget)] : [])).all();
+    hotels = result?.results ?? [];
+
+    // Get filter options
+    const countriesResult = await DB.prepare(
+      "SELECT DISTINCT country FROM hotels WHERE country != '' ORDER BY country"
+    ).all();
+    allCountries = (countriesResult?.results || []).map((r: any) => r.country);
+
+    const ptResult = await DB.prepare(
+      "SELECT DISTINCT property_type FROM hotels WHERE property_type != '' ORDER BY property_type"
+    ).all();
+    allPropertyTypes = (ptResult?.results || []).map((r: any) => r.property_type);
+
+    const cityResult = await DB.prepare(
+      "SELECT DISTINCT city FROM hotels WHERE city != '' ORDER BY city"
+    ).all();
+    allCities = (cityResult?.results || []).map((r: any) => r.city);
+  }
+} catch (e) {
+  hotels = [];
+}
+
+// Fallback property types
+const fallbackPropertyTypes = ['Hotel', 'Villa', 'Resort', 'Hostel', 'Apartment', 'Guest House', 'B&B', 'Ryokan', 'Boutique Hotel', 'Cottage'];
+if (allPropertyTypes.length === 0) {
+  allPropertyTypes = fallbackPropertyTypes;
+} else {
+  // Merge DB types with fallback types (DB first, then missing fallbacks)
+  const dbSet = new Set(allPropertyTypes);
+  for (const ft of fallbackPropertyTypes) {
+    if (!dbSet.has(ft)) allPropertyTypes.push(ft);
+  }
+}
+
+// City region groups
+const cityRegionGroups = [
+  { label: 'Japan', cities: ['Tokyo', 'Osaka', 'Kyoto', 'Nagoya', 'Fukuoka', 'Sapporo', 'Yokohama', 'Kobe', 'Nara', 'Hiroshima', 'Okinawa'] },
+  { label: 'Thailand', cities: ['Bangkok', 'Pattaya', 'Phuket', 'Chiang Mai', 'Krabi', 'Hua Hin', 'Koh Samui'] },
+  { label: 'Malaysia', cities: ['Kuala Lumpur', 'Penang', 'Johor Bahru', 'Langkawi', 'Malacca'] },
+  { label: 'Indonesia', cities: ['Jakarta', 'Bali', 'Bandung', 'Surabaya', 'Yogyakarta'] },
+  { label: 'Vietnam', cities: ['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Hoi An', 'Nha Trang'] },
+  { label: 'South Korea', cities: ['Seoul', 'Busan', 'Jeju', 'Incheon'] },
+  { label: 'Singapore', cities: ['Singapore'] },
+  { label: 'UAE', cities: ['Dubai', 'Abu Dhabi'] },
+  { label: 'UK', cities: ['London', 'Manchester', 'Edinburgh', 'Birmingham'] },
+  { label: 'USA', cities: ['New York', 'Los Angeles', 'San Francisco', 'Miami', 'Las Vegas', 'Chicago'] },
+];
+
+function getGroupedCities(available: string[]) {
+  const assigned = new Set<string>();
+  const groups: { label: string; cities: string[] }[] = [];
+  for (const rg of cityRegionGroups) {
+    const matched = rg.cities.filter(c => available.includes(c));
+    matched.forEach(c => assigned.add(c));
+    if (matched.length > 0) {
+      groups.push({ label: rg.label, cities: matched });
+    }
+  }
+  const other = available.filter(c => !assigned.has(c) && c);
+  if (other.length > 0) {
+    groups.push({ label: 'Other Cities', cities: other });
+  }
+  return groups;
+}
+
+const groupedCities = getGroupedCities(allCities);
+
+// Country region groups (same as search.astro)
+const regionGroups = [
+  { label: 'Southeast Asia', countries: ['Thailand', 'Malaysia', 'Indonesia', 'Vietnam', 'Philippines', 'Laos', 'Sri Lanka'] },
+  { label: 'East Asia', countries: ['Japan', 'South Korea'] },
+  { label: 'Middle East', countries: ['UAE', 'Qatar', 'Bahrain', 'Oman', 'Egypt'] },
+  { label: 'Europe', countries: ['UK', 'Netherlands', 'France', 'Czech Republic', 'Portugal', 'Italy', 'Spain', 'Finland'] },
+  { label: 'Americas', countries: ['Canada', 'USA', 'Colombia', 'Mexico'] },
+  { label: 'Other', countries: ['Australia', 'New Zealand', 'India', 'Singapore'] },
+];
+
+function getGroupedCountries(available: string[]) {
+  const assigned = new Set<string>();
+  const groups: { label: string; countries: string[] }[] = [];
+  for (const rg of regionGroups) {
+    const matched = rg.countries.filter(c => available.includes(c));
+    matched.forEach(c => assigned.add(c));
+    if (matched.length > 0) {
+      groups.push({ label: rg.label, countries: matched });
+    }
+  }
+  const other = available.filter(c => !assigned.has(c) && c);
+  if (other.length > 0) {
+    const existingOther = groups.find(g => g.label === 'Other');
+    if (existingOther) existingOther.countries.push(...other);
+    else groups.push({ label: 'Other', countries: other });
+  }
+  return groups;
+}
+
+const groupedCountries = getGroupedCountries(allCountries);
+
+function buildUrl(overrides: Record<string, string>) {
+  const p = new URLSearchParams(url.searchParams);
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v) p.set(k, v);
+    else p.delete(k);
+  }
+  const qs = p.toString();
+  return qs ? `/?${qs}` : '/';
+}
+---
+
+<Layout title="DayDreamHub — Hotels by the Hour, Worldwide">
+
+  <!-- Hero Section -->
+  <section class="relative min-h-[600px] md:min-h-[700px] flex items-center overflow-hidden">
+    <!-- Slideshow backgrounds -->
+    <div id="hero-slide-0" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-100" style="background-image:url('https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80')"></div>
+    <div id="hero-slide-1" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" style="background-image:url('https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1600&q=80')"></div>
+    <div id="hero-slide-2" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" style="background-image:url('https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=1600&q=80')"></div>
+    <!-- Gradient overlay -->
+    <div class="absolute inset-0 bg-teal-900/80"></div>
+
+    <div class="relative z-10 max-w-7xl mx-auto px-4 py-16 w-full">
+      <div class="text-center text-white mb-8">
+        <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4">Hotels by the Hour. 85+ Cities Worldwide.</h1>
+        <p class="text-lg md:text-xl text-teal-100 max-w-3xl mx-auto mb-6">The day-use hotel booking platform — find short-stay plans for work, rest, or transit across 85+ cities.</p>
+        <div class="flex flex-wrap justify-center gap-3 mb-8">
+          <span class="bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full">From 1 hour</span>
+          <span class="bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full">Half the overnight price</span>
+          <span class="bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full">AI instant search</span>
+        </div>
+      </div>
+
+      <!-- AI Chat UI -->
+      <div class="max-w-2xl mx-auto mb-8">
+        <div class="bg-white rounded-2xl shadow-2xl p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-8 h-8 bg-teal-700 rounded-full flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+            </div>
+            <span class="text-sm font-semibold text-gray-700">AI Concierge</span>
+          </div>
+          <form id="chat-form" class="flex gap-2">
+            <input id="chat-input" type="text" placeholder="Try: 'Hotel near Haneda Airport under $50'" class="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" />
+            <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold px-6 py-3 rounded-xl transition-colors text-sm">Send</button>
+          </form>
+
+          <!-- Airport shortcuts -->
+          <div class="mt-3 flex flex-wrap gap-2">
+            {[
+              { label: 'Haneda (HND)', value: 'Haneda' },
+              { label: 'Narita (NRT)', value: 'Narita' },
+              { label: 'Kansai (KIX)', value: 'Kansai' },
+              { label: 'Suvarnabhumi (BKK)', value: 'Suvarnabhumi' },
+              { label: 'Changi (SIN)', value: 'Changi' },
+              { label: 'Incheon (ICN)', value: 'Incheon' },
+            ].map(ap => (
+              <a href={`/search?location=${ap.value}`} class="text-xs bg-gray-100 hover:bg-teal-50 text-gray-600 hover:text-teal-700 px-3 py-1.5 rounded-full transition-colors border border-gray-200">
+                {ap.label}
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Form -->
+      <div class="max-w-4xl mx-auto">
+        <form action="/search" method="get" class="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4">
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div>
+              <label class="block text-xs text-teal-100 mb-1 font-medium">Date</label>
+              <input type="date" name="date" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </div>
+            <div>
+              <label class="block text-xs text-teal-100 mb-1 font-medium">Check-in</label>
+              <select name="checkin" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="">Select</option>
+                {Array.from({ length: 13 }, (_, i) => i + 7).map(h => (
+                  <option value={`${h}:00`}>{`${h}:00`}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-teal-100 mb-1 font-medium">Check-out</label>
+              <select name="checkout" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="">Select</option>
+                {Array.from({ length: 13 }, (_, i) => i + 10).map(h => (
+                  <option value={`${h}:00`}>{`${h}:00`}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-teal-100 mb-1 font-medium">Guests</label>
+              <select name="guests" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                {[1, 2, 3, 4].map(n => (
+                  <option value={n}>{n} {n === 1 ? 'guest' : 'guests'}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-teal-100 mb-1 font-medium">Budget</label>
+              <select name="budget" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="">Any</option>
+                <option value="50">Under $50</option>
+                <option value="100">Under $100</option>
+                <option value="200">Under $200</option>
+              </select>
+            </div>
+          </div>
+          <div class="mt-3 text-center">
+            <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold px-8 py-2.5 rounded-xl transition-colors text-sm">Search Hotels</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats Bar -->
+  <section class="bg-teal-700 text-white py-6">
+    <div class="max-w-5xl mx-auto px-4 grid grid-cols-3 text-center divide-x divide-teal-600">
+      <div>
+        <div class="text-2xl md:text-3xl font-bold">352+</div>
+        <div class="text-xs md:text-sm text-teal-100 mt-1">Day-Use Hotels</div>
+      </div>
+      <div>
+        <div class="text-2xl md:text-3xl font-bold">85+</div>
+        <div class="text-xs md:text-sm text-teal-100 mt-1">Cities</div>
+      </div>
+      <div>
+        <div class="text-2xl md:text-3xl font-bold">1205+</div>
+        <div class="text-xs md:text-sm text-teal-100 mt-1">Short-Stay Plans</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Speciality Search -->
+  <section class="py-10 bg-white">
+    <div class="max-w-7xl mx-auto px-4">
+      <h2 class="text-xl font-bold text-gray-800 mb-5">Find by Speciality</h2>
+      <div class="flex gap-3 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide">
+        {[
+          { label: 'For Work', icon: '💼', q: 'work' },
+          { label: 'Daycation', icon: '🌴', q: 'daycation' },
+          { label: 'For Couple', icon: '💑', q: 'couple' },
+          { label: 'Transit Use', icon: '✈️', q: 'transit' },
+          { label: 'Early Check-In', icon: '🌅', q: 'early-checkin' },
+          { label: 'Personal Time', icon: '🧘', q: 'personal' },
+          { label: 'Luxury', icon: '✨', q: 'luxury' },
+        ].map(s => (
+          <a href={`/search?speciality=${s.q}`} class="flex-shrink-0 flex items-center gap-2 bg-gray-50 hover:bg-teal-50 border border-gray-200 hover:border-teal-300 rounded-xl px-5 py-3 transition-colors">
+            <span class="text-xl">{s.icon}</span>
+            <span class="text-sm font-medium text-gray-700 whitespace-nowrap">{s.label}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Popular Hotels with Filter -->
+  <section class="py-12 bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">
+          {hasFilters ? 'Filtered Hotels' : 'Popular Hotels'}
+        </h2>
+        {hasFilters && (
+          <a href="/" class="text-sm text-teal-600 hover:text-teal-800 font-medium">Clear all filters</a>
+        )}
+      </div>
+
+      <!-- Filter Bar -->
+      <form method="get" action="/" class="bg-white rounded-xl shadow-sm p-4 mb-6">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <!-- Property Type -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Property Type</label>
+            <select name="propertyType" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white" onchange="this.form.submit()">
+              <option value="">All Types</option>
+              {allPropertyTypes.map(pt => (
+                <option value={pt} selected={filterPropertyType === pt}>{pt}</option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Country -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Country</label>
+            <select name="country" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white" onchange="this.form.submit()">
+              <option value="">All Countries</option>
+              {groupedCountries.map(group => (
+                <optgroup label={group.label}>
+                  {group.countries.map(c => (
+                    <option value={c} selected={filterCountry === c}>{c}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          <!-- City -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">City</label>
+            <select name="city" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white" onchange="this.form.submit()">
+              <option value="">All Cities</option>
+              {groupedCities.map(group => (
+                <optgroup label={group.label}>
+                  {group.cities.map(c => (
+                    <option value={c} selected={filterCity === c}>{c}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+
+          <!-- Budget -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Budget</label>
+            <select name="budget" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white" onchange="this.form.submit()">
+              <option value="">Any</option>
+              <option value="50" selected={filterBudget === '50'}>Under $50</option>
+              <option value="100" selected={filterBudget === '100'}>Under $100</option>
+              <option value="200" selected={filterBudget === '200'}>Under $200</option>
+            </select>
+          </div>
+        </div>
+      </form>
+
+      {hotels.length > 0 ? (
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {hotels.map((hotel: any) => {
+            let imageUrl = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80';
+            try {
+              const imgs = JSON.parse(hotel.images || '[]');
+              if (imgs.length > 0) imageUrl = imgs[0];
+            } catch {}
+            return (
+              <a href={`/hotel/${hotel.slug}`} class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100">
+                <div class="aspect-[4/3] overflow-hidden">
+                  <img src={imageUrl} alt={hotel.name} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                </div>
+                <div class="p-4">
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 class="font-semibold text-gray-800 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
+                      <p class="text-sm text-gray-500 mt-0.5">{hotel.city}, {hotel.country}</p>
+                    </div>
+                    {hotel.min_price && (
+                      <div class="text-right flex-shrink-0">
+                        <div class="text-lg font-bold text-teal-700">${hotel.min_price}</div>
+                        <div class="text-xs text-gray-400">from</div>
+                      </div>
+                    )}
+                  </div>
+                  {hotel.property_type && (
+                    <span class="inline-block mt-2 text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{hotel.property_type}</span>
+                  )}
+                </div>
+              </a>
+            );
+          })}
+        </div>
+      ) : (
+        hasFilters ? (
+          <div class="py-16 text-center">
+            <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+            <h3 class="text-gray-500 font-medium">No properties found</h3>
+            <p class="text-sm text-gray-400 mt-1">Try adjusting your filters</p>
+            <a href="/" class="inline-block mt-4 text-sm text-teal-600 hover:text-teal-800 font-medium">Clear all filters</a>
+          </div>
+        ) : (
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { name: 'Luxury Suite Tokyo', city: 'Tokyo', country: 'Japan', img: 'photo-1566073771259-6a8506099945' },
+              { name: 'Bangkok Airport Hotel', city: 'Bangkok', country: 'Thailand', img: 'photo-1520250497591-112f2f40a3f4' },
+              { name: 'Singapore Transit Inn', city: 'Singapore', country: 'Singapore', img: 'photo-1551882547-ff40c63fe5fa' },
+              { name: 'Seoul Business Hotel', city: 'Seoul', country: 'South Korea', img: 'photo-1582719478250-c89cae4dc85b' },
+              { name: 'Osaka Day Hotel', city: 'Osaka', country: 'Japan', img: 'photo-1618773928121-c32242e63f39' },
+              { name: 'Kuala Lumpur Stay', city: 'Kuala Lumpur', country: 'Malaysia', img: 'photo-1542314831-068cd1dbfeeb' },
+            ].map(h => (
+              <div class="bg-white rounded-xl overflow-hidden shadow-sm border border-gray-100">
+                <div class="aspect-[4/3] overflow-hidden">
+                  <img src={`https://images.unsplash.com/${h.img}?w=600&q=80`} alt={h.name} class="w-full h-full object-cover" loading="lazy" />
+                </div>
+                <div class="p-4">
+                  <h3 class="font-semibold text-gray-800">{h.name}</h3>
+                  <p class="text-sm text-gray-500 mt-0.5">{h.city}, {h.country}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+      <div class="text-center mt-8">
+        <a href="/search" class="inline-flex items-center gap-2 bg-teal-700 hover:bg-teal-600 text-white font-semibold px-8 py-3 rounded-xl transition-colors">
+          View More
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Slideshow Script -->
+  <script>
+    (function() {
+      const slides = [
+        document.getElementById('hero-slide-0'),
+        document.getElementById('hero-slide-1'),
+        document.getElementById('hero-slide-2'),
+      ];
+      let current = 0;
+      setInterval(() => {
+        const next = (current + 1) % 3;
+        if (slides[current]) slides[current].style.opacity = '0';
+        if (slides[next]) slides[next].style.opacity = '1';
+        current = next;
+      }, 3000);
+    })();
+  </script>
+
+  <!-- Chat redirect Script -->
+  <script>
+    document.getElementById('chat-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = document.getElementById('chat-input') as HTMLInputElement;
+      const val = input?.value?.trim();
+      if (val) {
+        window.location.href = '/search?location=' + encodeURIComponent(val);
+      }
+    });
+  </script>
+
+</Layout>

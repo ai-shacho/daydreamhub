@@ -1,0 +1,646 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// Get D1 database binding
+const DB = (Astro.locals as any).runtime?.env?.DB;
+
+// Read URL params
+const url = Astro.url;
+const location = url.searchParams.get('location') || '';
+const speciality = url.searchParams.get('speciality') || '';
+const propertyType = url.searchParams.get('propertyType') || '';
+const country = url.searchParams.get('country') || '';
+const ratingMin = url.searchParams.get('rating') || '';
+const amenityFilter = url.searchParams.get('amenity') || '';
+const cityFilter = url.searchParams.get('city') || '';
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+const perPage = 12;
+const offset = (page - 1) * perPage;
+
+// Build query
+let whereClauses: string[] = [];
+let params: any[] = [];
+
+if (location) {
+  whereClauses.push("(h.city LIKE ?1 OR h.country LIKE ?1 OR h.name LIKE ?1)");
+  params.push(`%${location}%`);
+}
+if (speciality) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`EXISTS (SELECT 1 FROM plans p2 WHERE p2.hotel_id = h.id AND p2.plan_type = ?${paramIdx})`);
+  params.push(speciality);
+}
+if (propertyType) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`h.property_type = ?${paramIdx}`);
+  params.push(propertyType);
+}
+if (country) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`h.country = ?${paramIdx}`);
+  params.push(country);
+}
+if (cityFilter) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`h.city = ?${paramIdx}`);
+  params.push(cityFilter);
+}
+if (ratingMin) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`h.rating >= ?${paramIdx}`);
+  params.push(parseFloat(ratingMin));
+}
+if (amenityFilter) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`EXISTS (SELECT 1 FROM hotel_amenities ha2 JOIN amenities a2 ON a2.id = ha2.amenity_id WHERE ha2.hotel_id = h.id AND a2.name = ?${paramIdx})`);
+  params.push(amenityFilter);
+}
+
+const whereSQL = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+
+let hotels: any[] = [];
+let totalCount = 0;
+let allCountries: string[] = [];
+let allPropertyTypes: string[] = [];
+let allAmenities: string[] = [];
+let allCities: string[] = [];
+
+if (DB) {
+  try {
+    // Count query
+    const countResult = await DB.prepare(
+      `SELECT COUNT(DISTINCT h.id) as total FROM hotels h ${whereSQL}`
+    ).bind(...params).first();
+    totalCount = countResult?.total || 0;
+
+    // Main query
+    const limitIdx = params.length + 1;
+    const offsetIdx = params.length + 2;
+    const result = await DB.prepare(
+      `SELECT h.*, MIN(p.price_usd) as min_price, GROUP_CONCAT(DISTINCT a.name) as amenity_list
+       FROM hotels h
+       LEFT JOIN plans p ON p.hotel_id = h.id
+       LEFT JOIN hotel_amenities ha ON ha.hotel_id = h.id
+       LEFT JOIN amenities a ON a.id = ha.amenity_id
+       ${whereSQL}
+       GROUP BY h.id
+       ORDER BY h.id DESC
+       LIMIT ?${limitIdx} OFFSET ?${offsetIdx}`
+    ).bind(...params, perPage, offset).all();
+    hotels = result?.results || [];
+
+    // Get filter options
+    const countriesResult = await DB.prepare(
+      "SELECT DISTINCT country FROM hotels WHERE country != '' ORDER BY country"
+    ).all();
+    allCountries = (countriesResult?.results || []).map((r: any) => r.country);
+
+    const ptResult = await DB.prepare(
+      "SELECT DISTINCT property_type FROM hotels WHERE property_type != '' ORDER BY property_type"
+    ).all();
+    allPropertyTypes = (ptResult?.results || []).map((r: any) => r.property_type);
+
+    const cityResult = await DB.prepare(
+      "SELECT DISTINCT city FROM hotels WHERE city != '' ORDER BY city"
+    ).all();
+    allCities = (cityResult?.results || []).map((r: any) => r.city);
+
+    const amenResult = await DB.prepare(
+      "SELECT DISTINCT name FROM amenities ORDER BY name"
+    ).all();
+    allAmenities = (amenResult?.results || []).map((r: any) => r.name);
+  } catch (e) {
+    console.error('DB query error:', e);
+  }
+}
+
+// Fallback property types — merge DB values with comprehensive defaults
+const fallbackPropertyTypes = ['Hotel', 'Villa', 'Resort', 'Hostel', 'Apartment', 'Guest House', 'B&B', 'Ryokan', 'Boutique Hotel', 'Cottage', 'Entire Home', 'Private Room', 'Shared Room'];
+if (allPropertyTypes.length === 0) {
+  allPropertyTypes = fallbackPropertyTypes;
+} else {
+  const dbSet = new Set(allPropertyTypes);
+  for (const ft of fallbackPropertyTypes) {
+    if (!dbSet.has(ft)) allPropertyTypes.push(ft);
+  }
+}
+
+const totalPages = Math.ceil(totalCount / perPage);
+
+// Build pagination items (numbers and ellipsis strings) for the template
+const paginationItems: (number | string)[] = Array.from({ length: totalPages }, (_, i) => i + 1)
+  .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+  .reduce((acc: (number | string)[], p, idx, arr) => {
+    if (idx > 0 && typeof arr[idx - 1] === 'number' && (p as number) - (arr[idx - 1] as number) > 1) {
+      acc.push('...');
+    }
+    acc.push(p);
+    return acc;
+  }, []);
+
+// Speciality options
+const specialities = [
+  { value: '', label: 'All Specialities' },
+  { value: 'rest', label: 'Rest & Relaxation' },
+  { value: 'work', label: 'Remote Work' },
+  { value: 'personal_time', label: 'Personal Time' },
+  { value: 'party', label: 'Party & Events' },
+  { value: 'stay', label: 'Day Stay' },
+];
+
+// Country region groups for optgroup
+const regionGroups = [
+  {
+    label: 'Southeast Asia',
+    countries: ['Thailand', 'Malaysia', 'Indonesia', 'Vietnam', 'Philippines', 'Laos', 'Sri Lanka'],
+  },
+  {
+    label: 'East Asia',
+    countries: ['Japan'],
+  },
+  {
+    label: 'Middle East',
+    countries: ['UAE', 'Qatar', 'Bahrain', 'Oman', 'Egypt'],
+  },
+  {
+    label: 'Africa',
+    countries: ['Kenya', 'Rwanda', 'Nigeria', 'South Africa', 'Tanzania'],
+  },
+  {
+    label: 'Europe',
+    countries: ['UK', 'Netherlands', 'France', 'Czech Republic', 'Portugal', 'Italy', 'Spain', 'Finland', 'Bulgaria', 'Serbia', 'Georgia', 'Russia'],
+  },
+  {
+    label: 'Americas',
+    countries: ['Canada', 'USA', 'Colombia', 'Mexico', 'Ecuador', 'Peru'],
+  },
+  {
+    label: 'Other',
+    countries: ['Australia', 'New Zealand', 'India', 'Pakistan', 'Bhutan', 'Mongolia', 'Kazakhstan', 'Uzbekistan'],
+  },
+];
+
+// Assign countries to their groups, leftover to Other
+function getGroupedCountries(available: string[]) {
+  const assigned = new Set<string>();
+  const groups: { label: string; countries: string[] }[] = [];
+
+  for (const rg of regionGroups) {
+    const matched = rg.countries.filter(c => available.includes(c));
+    matched.forEach(c => assigned.add(c));
+    if (matched.length > 0) {
+      groups.push({ label: rg.label, countries: matched });
+    }
+  }
+
+  const other = available.filter(c => !assigned.has(c) && c);
+  if (other.length > 0) {
+    const existingOther = groups.find(g => g.label === 'Other');
+    if (existingOther) {
+      existingOther.countries.push(...other);
+    } else {
+      groups.push({ label: 'Other', countries: other });
+    }
+  }
+
+  return groups;
+}
+
+const groupedCountries = getGroupedCountries(allCountries);
+
+// City region groups for optgroup
+const cityRegionGroups = [
+  { label: 'Japan', cities: ['Tokyo', 'Osaka', 'Kyoto', 'Nagoya', 'Fukuoka', 'Sapporo', 'Yokohama', 'Kobe', 'Nara', 'Hiroshima', 'Okinawa'] },
+  { label: 'Thailand', cities: ['Bangkok', 'Pattaya', 'Phuket', 'Chiang Mai', 'Krabi', 'Hua Hin', 'Koh Samui'] },
+  { label: 'Malaysia', cities: ['Kuala Lumpur', 'Penang', 'Johor Bahru', 'Langkawi', 'Malacca'] },
+  { label: 'Indonesia', cities: ['Jakarta', 'Bali', 'Bandung', 'Surabaya', 'Yogyakarta'] },
+  { label: 'Vietnam', cities: ['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Hoi An', 'Nha Trang'] },
+  { label: 'South Korea', cities: ['Seoul', 'Busan', 'Jeju', 'Incheon'] },
+  { label: 'Singapore', cities: ['Singapore'] },
+  { label: 'UAE', cities: ['Dubai', 'Abu Dhabi'] },
+  { label: 'UK', cities: ['London', 'Manchester', 'Edinburgh', 'Birmingham'] },
+  { label: 'USA', cities: ['New York', 'Los Angeles', 'San Francisco', 'Miami', 'Las Vegas', 'Chicago'] },
+];
+
+function getGroupedCities(available: string[]) {
+  const assigned = new Set<string>();
+  const groups: { label: string; cities: string[] }[] = [];
+  for (const rg of cityRegionGroups) {
+    const matched = rg.cities.filter(c => available.includes(c));
+    matched.forEach(c => assigned.add(c));
+    if (matched.length > 0) {
+      groups.push({ label: rg.label, cities: matched });
+    }
+  }
+  const other = available.filter(c => !assigned.has(c) && c);
+  if (other.length > 0) {
+    groups.push({ label: 'Other Cities', cities: other });
+  }
+  return groups;
+}
+
+const groupedCities = getGroupedCities(allCities);
+
+// Helper: build URL with updated params
+function buildUrl(overrides: Record<string, string>) {
+  const p = new URLSearchParams(url.searchParams);
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v) p.set(k, v);
+    else p.delete(k);
+  }
+  return `/search?${p.toString()}`;
+}
+---
+
+<Layout title="Search Hotels - DayDreamHub" description="Find day-use hotels worldwide. Filter by location, property type, and more.">
+
+  <!-- Search Bar -->
+  <section class="bg-teal-700 pb-6">
+    <div class="max-w-7xl mx-auto px-4">
+      <form method="get" action="/search" class="bg-white rounded-xl shadow-lg p-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <!-- Location -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Location</label>
+            <div class="relative">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <input
+                type="text"
+                name="location"
+                value={location}
+                placeholder="City or country..."
+                class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <!-- Check-in -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Check-in</label>
+            <input
+              type="date"
+              name="checkin"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            />
+          </div>
+
+          <!-- Speciality -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Speciality</label>
+            <select
+              name="speciality"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+            >
+              {specialities.map(s => (
+                <option value={s.value} selected={speciality === s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Guests -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Guests</label>
+            <select
+              name="guests"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+            >
+              <option value="">Any</option>
+              <option value="1">1 Guest</option>
+              <option value="2">2 Guests</option>
+              <option value="3">3 Guests</option>
+              <option value="4">4 Guests</option>
+              <option value="5">5+ Guests</option>
+            </select>
+          </div>
+
+          <!-- Search button -->
+          <div class="flex items-end">
+            <button
+              type="submit"
+              class="w-full bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold py-2.5 px-6 rounded-lg transition-colors text-sm"
+            >
+              Search
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Results section -->
+  <section class="max-w-7xl mx-auto px-4 py-6">
+    <div class="flex flex-col lg:flex-row gap-6">
+
+      <!-- Sidebar filters -->
+      <aside class="w-full lg:w-[280px] shrink-0">
+        <div class="lg:sticky lg:top-20 space-y-5">
+          <form method="get" action="/search" id="filter-form">
+            <!-- Carry search bar values -->
+            {location && <input type="hidden" name="location" value={location} />}
+            {speciality && <input type="hidden" name="speciality" value={speciality} />}
+
+            <!-- Property Type -->
+            <div class="bg-white rounded-xl shadow-sm p-4">
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">Property Type</h3>
+              <div class="space-y-2">
+                {allPropertyTypes.map(pt => (
+                  <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
+                    <input
+                      type="radio"
+                      name="propertyType"
+                      value={pt}
+                      checked={propertyType === pt}
+                      class="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                      onchange="this.form.submit()"
+                    />
+                    {pt}
+                  </label>
+                ))}
+                {propertyType && (
+                  <a href={buildUrl({ propertyType: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-1">Clear filter</a>
+                )}
+              </div>
+            </div>
+
+            <!-- Rating -->
+            <div class="bg-white rounded-xl shadow-sm p-4">
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">Rating</h3>
+              <div class="space-y-2">
+                {[
+                  { value: '4.5', label: '4.5+' },
+                  { value: '4', label: '4.0+' },
+                  { value: '3.5', label: '3.5+' },
+                  { value: '3', label: '3.0+' },
+                ].map(r => (
+                  <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
+                    <input
+                      type="radio"
+                      name="rating"
+                      value={r.value}
+                      checked={ratingMin === r.value}
+                      class="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                      onchange="this.form.submit()"
+                    />
+                    <span class="flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                      {r.label}
+                    </span>
+                  </label>
+                ))}
+                {ratingMin && (
+                  <a href={buildUrl({ rating: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-1">Clear filter</a>
+                )}
+              </div>
+            </div>
+
+            <!-- Country (grouped by region) -->
+            <div class="bg-white rounded-xl shadow-sm p-4">
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">Country</h3>
+              <select
+                name="country"
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                onchange="this.form.submit()"
+              >
+                <option value="">All Countries</option>
+                {groupedCountries.map(group => (
+                  <optgroup label={group.label}>
+                    {group.countries.map(c => (
+                      <option value={c} selected={country === c}>{c}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {country && (
+                <a href={buildUrl({ country: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-2">Clear filter</a>
+              )}
+            </div>
+
+            <!-- City -->
+            <div class="bg-white rounded-xl shadow-sm p-4">
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">City</h3>
+              <select
+                name="city"
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                onchange="this.form.submit()"
+              >
+                <option value="">All Cities</option>
+                {groupedCities.map(group => (
+                  <optgroup label={group.label}>
+                    {group.cities.map(c => (
+                      <option value={c} selected={cityFilter === c}>{c}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              {cityFilter && (
+                <a href={buildUrl({ city: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-2">Clear filter</a>
+              )}
+            </div>
+
+            <!-- Amenities -->
+            {allAmenities.length > 0 && (
+              <div class="bg-white rounded-xl shadow-sm p-4">
+                <h3 class="font-semibold text-sm text-gray-800 mb-3">Amenities</h3>
+                <div class="space-y-2 max-h-48 overflow-y-auto">
+                  {allAmenities.slice(0, 15).map(am => (
+                    <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
+                      <input
+                        type="radio"
+                        name="amenity"
+                        value={am}
+                        checked={amenityFilter === am}
+                        class="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                        onchange="this.form.submit()"
+                      />
+                      {am}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </form>
+        </div>
+      </aside>
+
+      <!-- Main results area -->
+      <div class="flex-1 min-w-0">
+        <!-- Results header -->
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-sm text-gray-600">
+            {totalCount > 0 ? (
+              <span>Showing <strong>{offset + 1}</strong>-<strong>{Math.min(offset + perPage, totalCount)}</strong> of <strong>{totalCount}</strong> properties</span>
+            ) : (
+              <span>No properties found</span>
+            )}
+            {(location || propertyType || country || cityFilter || amenityFilter || ratingMin) && (
+              <a href="/search" class="ml-2 text-teal-600 hover:text-teal-800 text-xs font-medium">Clear all filters</a>
+            )}
+          </p>
+
+          <!-- View toggle -->
+          <div class="hidden sm:flex items-center gap-1 bg-gray-100 rounded-lg p-1" id="view-toggle">
+            <button data-view="grid-3" class="p-1.5 rounded text-gray-500 hover:text-gray-700 bg-white shadow-sm" title="3 columns">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><rect x="0" y="0" width="4" height="4" rx="0.5"/><rect x="6" y="0" width="4" height="4" rx="0.5"/><rect x="12" y="0" width="4" height="4" rx="0.5"/><rect x="0" y="6" width="4" height="4" rx="0.5"/><rect x="6" y="6" width="4" height="4" rx="0.5"/><rect x="12" y="6" width="4" height="4" rx="0.5"/></svg>
+            </button>
+            <button data-view="grid-2" class="p-1.5 rounded text-gray-400 hover:text-gray-700" title="2 columns">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><rect x="0" y="0" width="7" height="4" rx="0.5"/><rect x="9" y="0" width="7" height="4" rx="0.5"/><rect x="0" y="6" width="7" height="4" rx="0.5"/><rect x="9" y="6" width="7" height="4" rx="0.5"/></svg>
+            </button>
+            <button data-view="list" class="p-1.5 rounded text-gray-400 hover:text-gray-700" title="List view">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="3" rx="0.5"/><rect x="0" y="5" width="16" height="3" rx="0.5"/><rect x="0" y="10" width="16" height="3" rx="0.5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Hotel cards grid -->
+        <div id="hotel-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          {hotels.length > 0 ? (
+            hotels.map((hotel: any) => (
+              <a href={`/hotel/${hotel.slug}`} class="group bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                <!-- Image -->
+                <div class="aspect-[3/2] bg-gray-100 overflow-hidden relative">
+                  {hotel.image_url ? (
+                    <img
+                      src={hotel.image_url}
+                      alt={hotel.name}
+                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div class="w-full h-full flex items-center justify-center text-gray-300">
+                      <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                    </div>
+                  )}
+                  {hotel.property_type && (
+                    <span class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm text-xs font-medium text-gray-700 px-2 py-1 rounded-md">
+                      {hotel.property_type}
+                    </span>
+                  )}
+                </div>
+
+                <!-- Card body -->
+                <div class="p-4">
+                  <h3 class="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">
+                    {hotel.name}
+                  </h3>
+                  <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    {hotel.city}{hotel.country ? `, ${hotel.country}` : ''}
+                  </p>
+
+                  {hotel.rating > 0 && (
+                    <div class="flex items-center gap-1 mt-2">
+                      <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                      <span class="text-xs font-medium text-gray-700">{hotel.rating.toFixed(1)}</span>
+                    </div>
+                  )}
+
+                  {hotel.amenity_list && (
+                    <div class="flex flex-wrap gap-1 mt-2">
+                      {hotel.amenity_list.split(',').slice(0, 3).map((am: string) => (
+                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{am.trim()}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                    <div>
+                      {hotel.min_price != null ? (
+                        <div>
+                          <span class="text-xs text-gray-400">from</span>
+                          <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
+                        </div>
+                      ) : (
+                        <span class="text-xs text-gray-400">Price on request</span>
+                      )}
+                    </div>
+                    <span class="text-xs font-medium text-amber-600 group-hover:text-amber-500 transition-colors">
+                      View Details &rarr;
+                    </span>
+                  </div>
+                </div>
+              </a>
+            ))
+          ) : (
+            <div class="col-span-full py-16 text-center">
+              <svg class="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+              <h3 class="text-gray-500 font-medium">No properties found</h3>
+              <p class="text-sm text-gray-400 mt-1">Try adjusting your search or filters</p>
+              <a href="/search" class="inline-block mt-4 text-sm text-teal-600 hover:text-teal-800 font-medium">Clear all filters</a>
+            </div>
+          )}
+        </div>
+
+        <!-- Pagination -->
+        {totalPages > 1 && (
+          <nav class="flex items-center justify-center gap-1 mt-8" aria-label="Pagination">
+            {page > 1 && (
+              <a
+                href={buildUrl({ page: String(page - 1) })}
+                class="px-3 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              >
+                &laquo; Prev
+              </a>
+            )}
+
+            {paginationItems.map(p =>
+                typeof p === 'string' ? (
+                  <span class="px-2 py-2 text-sm text-gray-400">...</span>
+                ) : (
+                  <a
+                    href={buildUrl({ page: String(p) })}
+                    class:list={[
+                      "px-3 py-2 text-sm font-medium rounded-lg border transition-colors",
+                      p === page
+                        ? "bg-teal-700 text-white border-teal-700"
+                        : "text-gray-600 bg-white border-gray-200 hover:bg-gray-50"
+                    ]}
+                  >
+                    {p}
+                  </a>
+                )
+              )
+            }
+
+            {page < totalPages && (
+              <a
+                href={buildUrl({ page: String(page + 1) })}
+                class="px-3 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              >
+                Next &raquo;
+              </a>
+            )}
+          </nav>
+        )}
+      </div>
+
+    </div>
+  </section>
+
+  <!-- View toggle script -->
+  <script>
+    const grid = document.getElementById('hotel-grid');
+    const toggle = document.getElementById('view-toggle');
+    if (grid && toggle) {
+      toggle.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          toggle.querySelectorAll('button').forEach(b => {
+            b.classList.remove('bg-white', 'shadow-sm', 'text-gray-500');
+            b.classList.add('text-gray-400');
+          });
+          btn.classList.add('bg-white', 'shadow-sm', 'text-gray-500');
+          btn.classList.remove('text-gray-400');
+
+          const view = btn.getAttribute('data-view');
+          grid.className = 'grid gap-5';
+          if (view === 'grid-3') {
+            grid.classList.add('grid-cols-1', 'sm:grid-cols-2', 'xl:grid-cols-3');
+          } else if (view === 'grid-2') {
+            grid.classList.add('grid-cols-1', 'sm:grid-cols-2');
+          } else {
+            grid.classList.add('grid-cols-1');
+          }
+        });
+      });
+    }
+  </script>
+</Layout>
