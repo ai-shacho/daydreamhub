@@ -1,0 +1,109 @@
+---
+interface Props {
+  title: string;
+  activeNav?: string;
+}
+
+const { title, activeNav = "" } = Astro.props;
+
+const navItems = [
+  { key: "dashboard", label: "Dashboard", href: "/admin", icon: "home" },
+  { key: "hotels", label: "Hotels", href: "/admin/hotels", icon: "hotel" },
+  { key: "edit-requests", label: "Edit Requests", href: "/admin/edit-requests", icon: "pencil-square" },
+  { key: "bookings", label: "Bookings", href: "/admin/bookings", icon: "calendar" },
+  { key: "call-logs", label: "Call Logs", href: "/admin/call-logs", icon: "phone" },
+  { key: "outreach", label: "Sales Outreach", href: "/admin/outreach", icon: "megaphone" },
+  { key: "messages", label: "Messages", href: "/admin/messages", icon: "envelope" },
+  { key: "blog", label: "Blog", href: "/admin/blog", icon: "document" },
+  { key: "reviews", label: "Reviews", href: "/admin/reviews", icon: "star" },
+  { key: "cities", label: "Cities", href: "/admin/cities", icon: "map" },
+  { key: "coupons", label: "Coupons", href: "/admin/coupons", icon: "coupon" },
+  { key: "users", label: "Users", href: "/admin/users", icon: "users" },
+];
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title} | Admin - DayDreamHub</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-800 text-white transform -translate-x-full lg:translate-x-0 transition-transform duration-200">
+      <div class="flex items-center gap-3 px-6 h-16 border-b border-slate-700">
+        <span class="text-white font-bold text-lg">DayDreamHub</span>
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Admin</span>
+      </div>
+      <nav class="mt-4 px-3 space-y-1">
+        {navItems.map((item) => (
+          <a
+            href={item.href}
+            class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              activeNav === item.key
+                ? "bg-teal-600 text-white"
+                : "text-slate-300 hover:bg-slate-700 hover:text-white"
+            }`}
+          >
+            {item.label}
+          </a>
+        ))}
+      </nav>
+      <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700 space-y-2">
+        <a href="/" class="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
+          ← Back to Site
+        </a>
+        <button id="admin-logout" class="flex items-center gap-2 text-slate-400 hover:text-red-400 text-sm transition-colors w-full">
+          Logout
+        </button>
+      </div>
+    </aside>
+
+    <!-- Mobile sidebar overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-40 hidden lg:hidden"></div>
+
+    <!-- Main content -->
+    <div class="flex-1 lg:ml-64">
+      <!-- Top bar -->
+      <header class="sticky top-0 z-30 bg-white border-b border-slate-200 h-16 flex items-center px-4 lg:px-8">
+        <button id="sidebar-toggle" class="lg:hidden p-2 -ml-2 text-slate-600 hover:text-slate-900">
+          ☰
+        </button>
+        <h1 class="text-lg font-semibold text-slate-900 ml-2 lg:ml-0">{title}</h1>
+      </header>
+
+      <!-- Page content -->
+      <main class="p-4 lg:p-8">
+        <slot />
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const toggle = document.getElementById('sidebar-toggle');
+    const sidebar = document.getElementById('admin-sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (toggle && sidebar && overlay) {
+      toggle.addEventListener('click', () => {
+        sidebar.classList.toggle('-translate-x-full');
+        overlay.classList.toggle('hidden');
+      });
+      overlay.addEventListener('click', () => {
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+      });
+    }
+    const logoutBtn = document.getElementById('admin-logout');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        document.cookie = 'auth_token=; Path=/; Max-Age=0; Secure; SameSite=Strict';
+        window.location.href = '/admin/login';
+      });
+    }
+  </script>
+</body>
+</html>

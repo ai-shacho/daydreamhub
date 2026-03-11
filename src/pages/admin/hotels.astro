@@ -1,0 +1,278 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect("/admin/login");
+
+// Read filter params
+const url = new URL(Astro.request.url);
+const countryFilter = url.searchParams.get("country") || "";
+const cityFilter = url.searchParams.get("city") || "";
+const statusFilter = url.searchParams.get("status") || ""; // "active" | "inactive" | ""
+const sortBy = url.searchParams.get("sort") || "name"; // "name" | "country" | "city" | "created_at"
+const sortOrder = url.searchParams.get("order") || "asc"; // "asc" | "desc"
+
+let hotels: any[] = [];
+let countries: string[] = [];
+let cities: string[] = [];
+let error = "";
+
+if (db) {
+  try {
+    // Fetch distinct countries for filter dropdown
+    const countriesResult = await db.prepare(
+      "SELECT DISTINCT country FROM hotels WHERE country IS NOT NULL AND country != '' ORDER BY country"
+    ).all();
+    countries = (countriesResult?.results || []).map((r: any) => r.country);
+
+    // Fetch distinct cities (filtered by country if selected)
+    let cityQuery = "SELECT DISTINCT city FROM hotels WHERE city IS NOT NULL AND city != ''";
+    const cityBinds: any[] = [];
+    if (countryFilter) {
+      cityQuery += " AND country = ?";
+      cityBinds.push(countryFilter);
+    }
+    cityQuery += " ORDER BY city";
+    const citiesResult = cityBinds.length
+      ? await db.prepare(cityQuery).bind(...cityBinds).all()
+      : await db.prepare(cityQuery).all();
+    cities = (citiesResult?.results || []).map((r: any) => r.city);
+
+    // Build main hotels query
+    const validSortCols: Record<string, string> = {
+      name: "h.name",
+      country: "h.country",
+      city: "h.city",
+      created_at: "h.created_at",
+    };
+    const orderCol = validSortCols[sortBy] || "h.name";
+    const orderDir = sortOrder === "desc" ? "DESC" : "ASC";
+
+    let query = `
+      SELECT h.*,
+        (SELECT COUNT(*) FROM plans p WHERE p.hotel_id = h.id) as plan_count,
+        (SELECT COUNT(*) FROM bookings b WHERE b.hotel_id = h.id AND b.status IN ('pending', 'confirmed')) as active_bookings
+      FROM hotels h
+      WHERE 1=1
+    `;
+    const binds: any[] = [];
+
+    if (countryFilter) {
+      query += " AND h.country = ?";
+      binds.push(countryFilter);
+    }
+    if (cityFilter) {
+      query += " AND h.city = ?";
+      binds.push(cityFilter);
+    }
+    if (statusFilter === "active") {
+      query += " AND h.is_active = 1";
+    } else if (statusFilter === "inactive") {
+      query += " AND h.is_active = 0";
+    }
+
+    query += ` ORDER BY ${orderCol} ${orderDir}`;
+
+    const result = binds.length
+      ? await db.prepare(query).bind(...binds).all()
+      : await db.prepare(query).all();
+    hotels = result?.results || [];
+  } catch (e: any) {
+    error = e.message || "Failed to load hotels";
+  }
+} else {
+  error = "Database not available";
+}
+
+// Helper: toggle sort order link
+function sortLink(col: string) {
+  const params = new URLSearchParams(url.searchParams);
+  if (params.get("sort") === col) {
+    params.set("order", sortOrder === "asc" ? "desc" : "asc");
+  } else {
+    params.set("sort", col);
+    params.set("order", "asc");
+  }
+  return `/admin/hotels?${params.toString()}`;
+}
+
+function sortIcon(col: string) {
+  if (sortBy !== col) return "↕";
+  return sortOrder === "asc" ? "↑" : "↓";
+}
+---
+
+<AdminLayout title="Hotels" activeNav="hotels">
+  <!-- Filter bar -->
+  <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <form method="GET" action="/admin/hotels" class="flex flex-wrap items-end gap-4">
+      <!-- Country filter -->
+      <div class="min-w-[160px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Country</label>
+        <select name="country" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+          <option value="">All Countries</option>
+          {countries.map((c) => (
+            <option value={c} selected={c === countryFilter}>{c}</option>
+          ))}
+        </select>
+      </div>
+
+      <!-- City filter -->
+      <div class="min-w-[160px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">City</label>
+        <select name="city" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+          <option value="">All Cities</option>
+          {cities.map((c) => (
+            <option value={c} selected={c === cityFilter}>{c}</option>
+          ))}
+        </select>
+      </div>
+
+      <!-- Status filter -->
+      <div class="min-w-[140px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+        <select name="status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+          <option value="" selected={statusFilter === ""}>All Status</option>
+          <option value="active" selected={statusFilter === "active"}>Active</option>
+          <option value="inactive" selected={statusFilter === "inactive"}>Inactive</option>
+        </select>
+      </div>
+
+      <!-- Hidden sort params to preserve on filter submit -->
+      <input type="hidden" name="sort" value={sortBy} />
+      <input type="hidden" name="order" value={sortOrder} />
+
+      <div class="flex gap-2">
+        <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+          Filter
+        </button>
+        <a href="/admin/hotels" class="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+          Reset
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Result count -->
+  {error && (
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
+  )}
+
+  <div class="flex items-center justify-between mb-3">
+    <p class="text-sm text-slate-500">{hotels.length} hotel{hotels.length !== 1 ? "s" : ""} found</p>
+    <a href="/admin/hotels/new" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+      + Add Hotel
+    </a>
+  </div>
+
+  <!-- Table -->
+  {hotels.length === 0 && !error ? (
+    <div class="bg-white rounded-xl border border-slate-200 p-12 text-center">
+      <p class="text-slate-500">No hotels found matching the filters.</p>
+    </div>
+  ) : (
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Thumbnail</th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">
+                <a href={sortLink("name")} class="hover:text-teal-600 inline-flex items-center gap-1">
+                  Hotel Name <span class="text-xs">{sortIcon("name")}</span>
+                </a>
+              </th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">
+                <a href={sortLink("country")} class="hover:text-teal-600 inline-flex items-center gap-1">
+                  Country <span class="text-xs">{sortIcon("country")}</span>
+                </a>
+              </th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">
+                <a href={sortLink("city")} class="hover:text-teal-600 inline-flex items-center gap-1">
+                  City <span class="text-xs">{sortIcon("city")}</span>
+                </a>
+              </th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Plans</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Bookings</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+              <th class="text-right px-4 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {hotels.map((hotel) => (
+              <tr class="hover:bg-slate-50 transition-colors">
+                <!-- Thumbnail -->
+                <td class="px-4 py-3">
+                  {hotel.thumbnail_url ? (
+                    <img src={hotel.thumbnail_url} alt={hotel.name} class="w-12 h-9 object-cover rounded-md border border-slate-200" />
+                  ) : (
+                    <div class="w-12 h-9 bg-slate-100 rounded-md border border-slate-200 flex items-center justify-center text-slate-300 text-xs">
+                      🏨
+                    </div>
+                  )}
+                </td>
+
+                <!-- Name -->
+                <td class="px-4 py-3">
+                  <div class="font-medium text-slate-900">{hotel.name}</div>
+                  {hotel.name_ja && <div class="text-xs text-slate-400 mt-0.5">{hotel.name_ja}</div>}
+                  <div class="text-xs text-slate-400 mt-0.5">{hotel.property_type || "Hotel"}</div>
+                </td>
+
+                <!-- Country -->
+                <td class="px-4 py-3 text-slate-600">{hotel.country || "-"}</td>
+
+                <!-- City -->
+                <td class="px-4 py-3 text-slate-600">{hotel.city || "-"}</td>
+
+                <!-- Plans -->
+                <td class="px-4 py-3 text-center">
+                  <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
+                    {hotel.plan_count}
+                  </span>
+                </td>
+
+                <!-- Active Bookings -->
+                <td class="px-4 py-3 text-center">
+                  <span class={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold ${hotel.active_bookings > 0 ? "bg-green-50 text-green-700" : "bg-slate-50 text-slate-500"}`}>
+                    {hotel.active_bookings}
+                  </span>
+                </td>
+
+                <!-- Status -->
+                <td class="px-4 py-3 text-center">
+                  {hotel.is_active ? (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                      <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                      Active
+                    </span>
+                  ) : (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                      Inactive
+                    </span>
+                  )}
+                </td>
+
+                <!-- Actions -->
+                <td class="px-4 py-3 text-right">
+                  <a
+                    href={`/admin/hotels/${hotel.id}`}
+                    class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
+                  >
+                    ✏️ Edit
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</AdminLayout>
