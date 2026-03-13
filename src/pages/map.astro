@@ -310,11 +310,30 @@ const translations = {
         }
       }
 
+      // Check for ?city= URL param (e.g. from hotel detail page "View on Map" button)
+      const urlParams = new URLSearchParams(window.location.search);
+      const cityParam = urlParams.get('city');
+      if (cityParam) {
+        const citySelect = document.getElementById('filter-city');
+        // Try to find matching option (case-insensitive)
+        const options = Array.from(citySelect.options);
+        const match = options.find(o => o.value.toLowerCase() === cityParam.toLowerCase());
+        if (match) {
+          citySelect.value = match.value;
+        } else {
+          citySelect.value = cityParam;
+        }
+      }
+
       // Initial render
-      createHotelMarkers(mapData.hotels);
-      createCityMarkers('', '');
-      document.getElementById('results-count').textContent =
-        translations.hotelsCount.replace('{count}', mapData.hotels.length);
+      if (cityParam) {
+        applyFilters();
+      } else {
+        createHotelMarkers(mapData.hotels);
+        createCityMarkers('', '');
+        document.getElementById('results-count').textContent =
+          translations.hotelsCount.replace('{count}', mapData.hotels.length);
+      }
 
       // Event listeners for filters
       document.getElementById('filter-city').addEventListener('change', applyFilters);

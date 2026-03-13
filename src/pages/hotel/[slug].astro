@@ -203,18 +203,32 @@ function renderStars(rating: number) {
             <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">
               {displayName}
             </h1>
-            <!-- Wishlist button -->
-            <button
-              class="wishlist-btn flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-red-300 hover:bg-red-50 transition-colors text-sm font-medium text-gray-600 hover:text-red-500"
-              data-slug={hotel.slug}
-              id="detail-wishlist-btn"
-              title="Save to wishlist"
-            >
-              <svg class="wishlist-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
-              </svg>
-              <span class="wishlist-label">Save</span>
-            </button>
+            <!-- Action buttons -->
+            <div class="flex flex-shrink-0 items-center gap-2">
+              <!-- View on Map button -->
+              <a
+                href={`/map?city=${encodeURIComponent(hotel.city)}`}
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100 transition-colors text-sm font-medium text-teal-700"
+                title="View on Map"
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
+                </svg>
+                <span class="hidden sm:inline">Map</span>
+              </a>
+              <!-- Wishlist button -->
+              <button
+                class="wishlist-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:border-red-300 hover:bg-red-50 transition-colors text-sm font-medium text-gray-600 hover:text-red-500"
+                data-slug={hotel.slug}
+                id="detail-wishlist-btn"
+                title="Save to wishlist"
+              >
+                <svg class="wishlist-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
+                </svg>
+                <span class="wishlist-label">Save</span>
+              </button>
+            </div>
           </div>
 
           {(avgRating > 0 || hotel.rating) && (
