@@ -49,9 +49,14 @@ const locale = 'en';
 ---
 
 <Layout title="Hotel Map - DayDreamHub" description="Find day-use hotels near you on an interactive map. Browse hotels by city and category.">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" slot="head" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { width: 100%; height: calc(100vh - 64px); }
+    .leaflet-container { font-family: inherit; }
+  </style>
+  
 
-  <div class="relative" style="height: calc(100vh - 64px);">
+  <div class="relative" style="height: calc(100vh - 64px); min-height: 500px;">
     <!-- Filter Panel -->
     <div class="absolute top-4 left-4 z-[1000] bg-white rounded-xl shadow-lg p-4 w-72 max-w-[calc(100vw-2rem)]" id="filter-panel">
       <h2 class="text-lg font-bold text-teal-700 mb-3">Hotel Map</h2>
@@ -94,7 +99,7 @@ const locale = 'en';
     </button>
 
     <!-- Map Container -->
-    <div id="map" class="w-full h-full"></div>
+    <div id="map"></div>
   </div>
 </Layout>
 
@@ -107,8 +112,8 @@ const locale = 'en';
       }).setView([13.7, 105.0], 5);
 
       // Add tile layer
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         maxZoom: 19,
       }).addTo(map);
 
