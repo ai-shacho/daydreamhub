@@ -287,7 +287,7 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
             </div>
             <div>
               <label class="block text-xs text-teal-100 mb-1 font-medium">Check-in</label>
-              <input type="text" name="checkin" id="checkin-input" placeholder="MM / DD / YYYY" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" onfocus="this.type='date';this.placeholder=''" onblur="if(!this.value){this.type='text';this.placeholder='MM / DD / YYYY'}" />
+              <input type="text" name="checkin" id="checkin-fp" placeholder="MM / DD / YYYY" autocomplete="off" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
             <div>
               <label class="block text-xs text-teal-100 mb-1 font-medium">Speciality</label>
@@ -777,4 +777,25 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
   </script>
 
   <ChatWidget />
+
+<!-- Flatpickr: English date picker for Check-in -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+<script is:inline>
+  (function() {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+    s.onload = function() {
+      if (window.flatpickr) {
+        window.flatpickr('#checkin-fp', {
+          locale: 'en',
+          dateFormat: 'm/d/Y',
+          disableMobile: true,
+          allowInput: true,
+        });
+      }
+    };
+    document.head.appendChild(s);
+  })();
+</script>
+
 </Layout>
