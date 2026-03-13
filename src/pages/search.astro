@@ -77,11 +77,9 @@ if (DB) {
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
     const result = await DB.prepare(
-      `SELECT h.*, MIN(p.price_usd) as min_price, GROUP_CONCAT(DISTINCT a.name) as amenity_list
+      `SELECT h.*, MIN(p.price_usd) as min_price
        FROM hotels h
        LEFT JOIN plans p ON p.hotel_id = h.id
-       LEFT JOIN hotel_amenities ha ON ha.hotel_id = h.id
-       LEFT JOIN amenities a ON a.id = ha.amenity_id
        ${whereSQL}
        GROUP BY h.id
        ORDER BY h.id DESC
@@ -280,6 +278,7 @@ function buildUrl(overrides: Record<string, string>) {
             <input
               type="date"
               name="checkin"
+              lang="en"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
@@ -498,9 +497,9 @@ function buildUrl(overrides: Record<string, string>) {
               <a href={`/hotel/${hotel.slug}`} class="group bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                 <!-- Image -->
                 <div class="aspect-[3/2] bg-gray-100 overflow-hidden relative">
-                  {hotel.image_url ? (
+                  {hotel.thumbnail_url ? (
                     <img
-                      src={hotel.image_url}
+                      src={hotel.thumbnail_url}
                       alt={hotel.name}
                       class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       loading="lazy"
