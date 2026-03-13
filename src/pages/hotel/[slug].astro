@@ -149,8 +149,9 @@ const propertyTypeLabels: Record<string, Record<string, string>> = {
 };
 
 function renderStars(rating: number) {
-  const full = Math.floor(rating);
-  const hasHalf = rating % 1 >= 0.5;
+  const clamped = Math.min(Math.max(rating, 0), 5);
+  const full = Math.floor(clamped);
+  const hasHalf = clamped % 1 >= 0.5;
   return '\u2605'.repeat(full) + (hasHalf ? '\u2606' : '') + '\u2606'.repeat(5 - full - (hasHalf ? 1 : 0));
 }
 ---
@@ -231,10 +232,10 @@ function renderStars(rating: number) {
             </div>
           </div>
 
-          {(avgRating > 0 || hotel.rating) && (
+          {(avgRating > 0 || (hotel.rating && hotel.rating <= 5)) && (
             <div class="flex items-center gap-2 mb-3">
               <span class="text-yellow-500 text-lg tracking-wide">{renderStars(avgRating > 0 ? avgRating : hotel.rating || 0)}</span>
-              <span class="text-sm text-gray-500">{(avgRating > 0 ? avgRating : hotel.rating || 0).toFixed(1)}</span>
+              <span class="text-sm text-gray-500">{Math.min(avgRating > 0 ? avgRating : hotel.rating || 0, 5).toFixed(1)}</span>
               {reviewCount > 0 && (
                 <a href="#reviews-section" class="text-sm text-teal-700 hover:underline">
                   ({t('review.reviews_count', locale).replace('{count}', String(reviewCount))})
