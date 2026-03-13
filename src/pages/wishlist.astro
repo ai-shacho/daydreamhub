@@ -129,6 +129,11 @@ import Layout from '../layouts/Layout.astro';
       });
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  // DOMContentLoaded may already have fired (inline scripts run late)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
 </script>

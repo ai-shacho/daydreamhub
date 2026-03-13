@@ -262,7 +262,11 @@ const currentPath = Astro.url.pathname;
       });
     }
 
-    document.addEventListener('DOMContentLoaded', initWishlistBtns);
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initWishlistBtns);
+    } else {
+      initWishlistBtns();
+    }
 
     // Mobile menu toggle
     document.getElementById('mobile-menu-btn')?.addEventListener('click', () => {
