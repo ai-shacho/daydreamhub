@@ -13,6 +13,7 @@ const country = url.searchParams.get('country') || '';
 const ratingMin = url.searchParams.get('rating') || '';
 const amenityFilter = url.searchParams.get('amenity') || '';
 const cityFilter = url.searchParams.get('city') || '';
+const sortBy = url.searchParams.get('sort') || 'default'; // default | price_asc | price_desc
 const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
 const perPage = 12;
 const offset = (page - 1) * perPage;
@@ -74,6 +75,11 @@ if (DB) {
     totalCount = countResult?.total || 0;
 
     // Main query
+    const orderSQL = sortBy === 'price_asc'
+      ? 'ORDER BY min_price ASC NULLS LAST'
+      : sortBy === 'price_desc'
+        ? 'ORDER BY min_price DESC NULLS LAST'
+        : 'ORDER BY h.id DESC';
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
     const result = await DB.prepare(
@@ -82,7 +88,7 @@ if (DB) {
        LEFT JOIN plans p ON p.hotel_id = h.id
        ${whereSQL}
        GROUP BY h.id
-       ORDER BY h.id DESC
+       ${orderSQL}
        LIMIT ?${limitIdx} OFFSET ?${offsetIdx}`
     ).bind(...params, perPage, offset).all();
     hotels = result?.results || [];
@@ -478,6 +484,18 @@ function buildUrl(overrides: Record<string, string>) {
             )}
           </p>
 
+          <!-- Sort selector -->
+          <div class="flex items-center gap-2">
+            <select
+              id="sort-select"
+              class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+            >
+              <option value="default" selected={sortBy === 'default'}>Sort: Default</option>
+              <option value="price_asc" selected={sortBy === 'price_asc'}>Price: Low → High</option>
+              <option value="price_desc" selected={sortBy === 'price_desc'}>Price: High → Low</option>
+            </select>
+          </div>
+
           <!-- View toggle -->
           <div class="hidden sm:flex items-center gap-1 bg-gray-100 rounded-lg p-1" id="view-toggle">
             <button data-view="grid-3" class="p-1.5 rounded text-gray-500 hover:text-gray-700 bg-white shadow-sm" title="3 columns">
@@ -617,7 +635,21 @@ function buildUrl(overrides: Record<string, string>) {
     </div>
   </section>
 
-  <!-- View toggle script -->
+  <!-- Sort select script -->
+  <script is:inline>
+    (function() {
+      var sel = document.getElementById('sort-select');
+      if (!sel) return;
+      sel.addEventListener('change', function() {
+        var p = new URLSearchParams(window.location.search);
+        if (sel.value === 'default') { p.delete('sort'); } else { p.set('sort', sel.value); }
+        p.delete('page');
+        window.location.href = '/search?' + p.toString();
+      });
+    })();
+  </script>
+
+<!-- View toggle script -->
   <script>
     const grid = document.getElementById('hotel-grid');
     const toggle = document.getElementById('view-toggle');
