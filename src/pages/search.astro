@@ -276,10 +276,12 @@ function buildUrl(overrides: Record<string, string>) {
           <div>
             <label class="block text-xs font-medium text-gray-500 mb-1">Check-in</label>
             <input
-              type="date"
+              type="text"
               name="checkin"
-              lang="en"
+              placeholder="MM / DD / YYYY"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              onfocus="this.type='date';this.placeholder=''"
+              onblur="if(!this.value){this.type='text';this.placeholder='MM / DD / YYYY'}"
             />
           </div>
 
