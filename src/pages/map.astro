@@ -11,7 +11,7 @@ if (db) {
   try {
     const result = await db.prepare(`
       SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country,
-             h.thumbnail_url, h.categories,
+             h.thumbnail_url, h.categories, h.latitude, h.longitude,
              MIN(p.price_usd) as min_price
       FROM hotels h
       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
@@ -60,8 +60,8 @@ const mapHotels = hotels.map((h: any) => ({
   slug: h.slug,
   city: h.city,
   country: h.country,
-  lat: null,
-  lng: null,
+  lat: h.latitude || null,
+  lng: h.longitude || null,
   thumbnail: h.thumbnail_url || '',
   categories: h.categories || '[]',
   minPrice: h.min_price || null,
