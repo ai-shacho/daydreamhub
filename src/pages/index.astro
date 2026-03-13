@@ -459,55 +459,7 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
     });
   </script>
 
-  <!-- Search by Speciality -->
-  <section class="py-12 bg-white">
-    <div class="max-w-7xl mx-auto px-4">
-      <h2 class="text-2xl font-bold text-gray-800 mb-2">Search by Speciality</h2>
-      <p class="text-sm text-gray-500 mb-6">Find the perfect day-use experience for your needs</p>
 
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {specialityCards.map(s => (
-          <a href={`/search?speciality=${s.value}`} class={`group p-5 rounded-xl border ${s.color} hover:shadow-md transition-all`}>
-            <svg class="w-8 h-8 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d={s.iconPath}/></svg>
-            <h3 class="font-semibold text-sm">{s.label}</h3>
-            <p class="text-xs mt-1 opacity-70">{s.desc}</p>
-          </a>
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <!-- What's New -->
-  <section class="py-12 bg-gray-50">
-    <div class="max-w-7xl mx-auto px-4">
-      <h2 class="text-2xl font-bold text-gray-800 mb-6">What's New</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <a href="/concierge" class="group bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-100">
-          <div class="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center mb-4">
-            <svg class="w-6 h-6 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-          </div>
-          <h3 class="font-semibold text-gray-800 group-hover:text-teal-700 transition-colors">AI Concierge</h3>
-          <p class="text-sm text-gray-500 mt-2">Chat with our AI to find the perfect day-use hotel. Just describe what you need.</p>
-        </a>
-
-        <a href="/search" class="group bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-100">
-          <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4">
-            <svg class="w-6 h-6 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          </div>
-          <h3 class="font-semibold text-gray-800 group-hover:text-teal-700 transition-colors">Advanced Search</h3>
-          <p class="text-sm text-gray-500 mt-2">Filter by property type, rating, amenities, city and more with our powerful search.</p>
-        </a>
-
-        <a href="/search?speciality=transit_use" class="group bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-6 border border-gray-100">
-          <div class="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-4">
-            <svg class="w-6 h-6 text-sky-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-          </div>
-          <h3 class="font-semibold text-gray-800 group-hover:text-teal-700 transition-colors">Transit Hotels</h3>
-          <p class="text-sm text-gray-500 mt-2">New transit-use hotels near major airports - perfect for layovers and early flights.</p>
-        </a>
-      </div>
-    </div>
-  </section>
 
   <!-- Recommended Features -->
   <section class="py-12 bg-white">
