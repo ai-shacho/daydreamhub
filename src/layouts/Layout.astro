@@ -28,7 +28,7 @@ const currentPath = Astro.url.pathname;
 <body class="min-h-screen flex flex-col bg-gray-50">
 
   <!-- Header -->
-  <header class="bg-teal-700 text-white sticky top-0 z-50 shadow-md">
+  <header class="bg-teal-700 text-white sticky top-0 z-[1100] shadow-md">
     <div class="max-w-7xl mx-auto px-4">
       <!-- Top bar -->
       <div class="flex items-center justify-between h-16">
@@ -74,7 +74,7 @@ const currentPath = Astro.url.pathname;
               More
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
-            <div id="more-dropdown" class="hidden absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50">
+            <div id="more-dropdown" class="hidden absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-[1200]">
               <a href="/about" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/about' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>About Us</a>
               <a href="/faq" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/faq' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>FAQ</a>
               <a href="/for-hotel-owner" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/for-hotel-owner' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>For Property Owner</a>
