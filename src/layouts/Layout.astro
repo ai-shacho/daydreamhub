@@ -223,15 +223,22 @@ const currentPath = Astro.url.pathname;
 
     function updateWishlistBtn(btn: HTMLButtonElement, inWishlist: boolean) {
       const icon = btn.querySelector('.wishlist-icon') as SVGElement | null;
+      const label = btn.querySelector('.wishlist-label') as HTMLElement | null;
       if (!icon) return;
       if (inWishlist) {
         icon.setAttribute('fill', '#ef4444');
         icon.setAttribute('stroke', '#ef4444');
         btn.title = 'Remove from wishlist';
+        if (label) label.textContent = 'Saved';
+        btn.classList.add('border-red-300', 'bg-red-50', 'text-red-500');
+        btn.classList.remove('border-gray-200', 'bg-white', 'text-gray-600');
       } else {
         icon.setAttribute('fill', 'none');
         icon.setAttribute('stroke', 'currentColor');
         btn.title = 'Save to wishlist';
+        if (label) label.textContent = 'Save';
+        btn.classList.remove('border-red-300', 'bg-red-50', 'text-red-500');
+        btn.classList.add('border-gray-200', 'bg-white', 'text-gray-600');
       }
     }
 
