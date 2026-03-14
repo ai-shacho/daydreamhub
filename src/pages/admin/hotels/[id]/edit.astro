@@ -5,6 +5,7 @@ const { id } = Astro.params;
 const db = (Astro.locals as any).runtime?.env?.DB;
 
 let hotel: any = null;
+let plans: any[] = [];
 let error = '';
 
 if (!db) {
@@ -12,7 +13,23 @@ if (!db) {
 } else {
   hotel = await db.prepare('SELECT * FROM hotels WHERE id = ?').bind(id).first();
   if (!hotel) error = 'Hotel not found';
+  if (hotel) {
+    const plansResult = await db.prepare('SELECT * FROM plans WHERE hotel_id = ? ORDER BY price_usd ASC').bind(id).all();
+    plans = plansResult?.results || [];
+  }
 }
+
+const currentAmenities: string[] = hotel ? (() => { try { return JSON.parse(hotel.amenities || '[]'); } catch { return []; } })() : [];
+
+const COMMON_AMENITIES = [
+  'Free Wi-Fi','Parking on Premises','Air Conditioner (Cooling)','Air Conditioner (Heating)',
+  'Swimming Pool','Gym','Spa','Breakfast','Restaurant','Bar','Room Service','Concierge',
+  'Shower','Bath','Hot Tub','Hair Dryer','TV','Refrigerator','Electric pot','Microwave',
+  'Coffee Machine','Towels','Shampoo','Luggage Storage','Desk','Meeting Room','Printer',
+  'Balcony','Garden','Beach Access','Airport Transfer',
+];
+
+const PLAN_TYPES = ['daycation','for_couple','for_work','luxury','personal_time','transit','overnight','early_check_in'];
 ---
 
 <AdminLayout title={hotel ? `Edit: ${hotel.name}` : 'Edit Hotel'} activeNav="hotels">
@@ -166,6 +183,27 @@ if (!db) {
           </div>
         </div>
 
+        <!-- Amenities -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Amenities</h2>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {COMMON_AMENITIES.map(a => (
+              <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input type="checkbox" name="amenities" value={a} checked={currentAmenities.includes(a)}
+                  class="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500" />
+                {a}
+              </label>
+            ))}
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Custom amenities <span class="text-gray-400">(comma-separated)</span></label>
+            <input id="custom-amenities" type="text"
+              value={currentAmenities.filter(a => !COMMON_AMENITIES.includes(a)).join(', ')}
+              placeholder="e.g. Sauna, Rooftop Terrace"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none" />
+          </div>
+        </div>
+
         <!-- Actions -->
         <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3"></div>
         <div id="form-success" class="hidden bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3"></div>
@@ -181,11 +219,155 @@ if (!db) {
           </a>
         </div>
       </form>
+
+      <!-- Plans Section (separate from main form) -->
+      <div class="mt-8 bg-white rounded-xl border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Plans</h2>
+          <button id="add-plan-btn" class="text-sm bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+            + Add Plan
+          </button>
+        </div>
+
+        <!-- Add Plan Form (hidden by default) -->
+        <div id="add-plan-form" class="hidden mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+          <h3 class="text-sm font-semibold text-slate-700">New Plan</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Name (EN) *</label>
+              <input id="new-name" type="text" placeholder="Plan name"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Name (JA)</label>
+              <input id="new-name-ja" type="text" placeholder="プラン名"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Price (USD) *</label>
+              <input id="new-price" type="number" step="0.01" min="0" placeholder="0.00"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Plan Type</label>
+              <select id="new-plan-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none bg-white">
+                {PLAN_TYPES.map(t => <option value={t}>{t.replace('_',' ')}</option>)}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Check-in</label>
+              <input id="new-checkin" type="text" placeholder="10:00"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Check-out</label>
+              <input id="new-checkout" type="text" placeholder="18:00"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Max Guests</label>
+              <input id="new-guests" type="number" min="1" value="2"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Description</label>
+            <textarea id="new-desc" rows={2} placeholder="Plan description..."
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none resize-y"></textarea>
+          </div>
+          <div id="add-plan-error" class="hidden text-red-600 text-xs"></div>
+          <div class="flex gap-2">
+            <button id="save-plan-btn" class="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">Save Plan</button>
+            <button id="cancel-plan-btn" class="text-gray-600 text-sm px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Plans List -->
+        <div id="plans-list" class="space-y-2">
+          {plans.length === 0 && (
+            <p class="text-sm text-gray-400 text-center py-4">No plans yet.</p>
+          )}
+          {plans.map((plan: any) => (
+            <div class="plan-row flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors" data-plan-id={plan.id}>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-medium text-sm text-slate-900 plan-name">{plan.name}</span>
+                  <span class={`text-xs px-2 py-0.5 rounded-full ${plan.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {plan.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                  <span class="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{plan.plan_type}</span>
+                </div>
+                <div class="text-xs text-gray-500 mt-0.5">
+                  ${plan.price_usd} · {plan.check_in_time}–{plan.check_out_time} · max {plan.max_guests} guests
+                </div>
+              </div>
+              <div class="flex gap-1 flex-shrink-0">
+                <button class="edit-plan-btn text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100 transition-colors">Edit</button>
+                <button class="toggle-plan-btn text-xs px-2 py-1 rounded transition-colors"
+                  class:list={[plan.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-700 hover:bg-green-100']}>
+                  {plan.is_active ? 'Deactivate' : 'Activate'}
+                </button>
+                <button class="delete-plan-btn text-xs px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- Edit Plan Modal -->
+      <div id="edit-plan-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
+          <h3 class="text-base font-semibold text-slate-900">Edit Plan</h3>
+          <input type="hidden" id="edit-plan-id" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Name (EN) *</label>
+              <input id="edit-plan-name" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Name (JA)</label>
+              <input id="edit-plan-name-ja" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Price (USD)</label>
+              <input id="edit-plan-price" type="number" step="0.01" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Plan Type</label>
+              <select id="edit-plan-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none bg-white">
+                {PLAN_TYPES.map(t => <option value={t}>{t.replace('_',' ')}</option>)}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Check-in</label>
+              <input id="edit-plan-checkin" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Check-out</label>
+              <input id="edit-plan-checkout" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Max Guests</label>
+              <input id="edit-plan-guests" type="number" min="1" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Description</label>
+            <textarea id="edit-plan-desc" rows={2} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none resize-y"></textarea>
+          </div>
+          <div id="edit-plan-error" class="hidden text-red-600 text-xs"></div>
+          <div class="flex gap-2">
+            <button id="update-plan-btn" class="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">Update</button>
+            <button id="close-modal-btn" class="text-gray-600 text-sm px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">Cancel</button>
+          </div>
+        </div>
+      </div>
     )}
   </div>
 </AdminLayout>
 
-<script is:inline>
+<script is:inline define:vars={{ hotelId: id }}>
+// ── Hotel Info Save ──
 document.getElementById('edit-hotel-form')?.addEventListener('submit', async function(e) {
   e.preventDefault();
   const btn = document.getElementById('save-btn');
@@ -200,21 +382,18 @@ document.getElementById('edit-hotel-form')?.addEventListener('submit', async fun
   const body = { id: parseInt(form.id.value) };
   const fields = ['name','name_ja','slug','description','description_ja','city','country',
     'address','thumbnail_url','property_type','email','phone','ical_url'];
-  for (const f of fields) {
-    if (form[f]) body[f] = form[f].value;
-  }
-  // Number fields
+  for (const f of fields) { if (form[f]) body[f] = form[f].value; }
   if (form.latitude?.value !== '') body.latitude = parseFloat(form.latitude.value);
   if (form.longitude?.value !== '') body.longitude = parseFloat(form.longitude.value);
-  // Checkbox
   body.auto_call_enabled = form.auto_call_enabled?.checked ? 1 : 0;
 
+  // Collect amenities
+  const checked = [...document.querySelectorAll('input[name="amenities"]:checked')].map(el => el.value);
+  const custom = document.getElementById('custom-amenities').value.split(',').map(s => s.trim()).filter(Boolean);
+  body.amenities = JSON.stringify([...new Set([...checked, ...custom])]);
+
   try {
-    const res = await fetch('/api/admin/hotels', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    const res = await fetch('/api/admin/hotels', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (res.ok && data.success) {
       successEl.className = 'block bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3';
@@ -227,9 +406,112 @@ document.getElementById('edit-hotel-form')?.addEventListener('submit', async fun
   } catch {
     errEl.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
     errEl.textContent = 'Connection error. Please try again.';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Save Changes';
+  } finally { btn.disabled = false; btn.textContent = 'Save Changes'; }
+});
+
+// ── Plans ──
+const HOTEL_ID = parseInt(hotelId);
+
+// Add plan toggle
+document.getElementById('add-plan-btn')?.addEventListener('click', () => {
+  document.getElementById('add-plan-form').classList.toggle('hidden');
+});
+document.getElementById('cancel-plan-btn')?.addEventListener('click', () => {
+  document.getElementById('add-plan-form').classList.add('hidden');
+});
+
+// Save new plan
+document.getElementById('save-plan-btn')?.addEventListener('click', async () => {
+  const errEl = document.getElementById('add-plan-error');
+  errEl.className = 'hidden';
+  const name = document.getElementById('new-name').value.trim();
+  if (!name) { errEl.textContent = 'Name is required'; errEl.className = 'block text-red-600 text-xs'; return; }
+  const body = {
+    hotel_id: HOTEL_ID,
+    name,
+    name_ja: document.getElementById('new-name-ja').value || null,
+    price_usd: parseFloat(document.getElementById('new-price').value) || 0,
+    plan_type: document.getElementById('new-plan-type').value,
+    check_in_time: document.getElementById('new-checkin').value,
+    check_out_time: document.getElementById('new-checkout').value,
+    max_guests: parseInt(document.getElementById('new-guests').value) || 2,
+    description: document.getElementById('new-desc').value,
+  };
+  const res = await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (data.success) { window.location.reload(); } else { errEl.textContent = data.error || 'Error'; errEl.className = 'block text-red-600 text-xs'; }
+});
+
+// Plan row actions (event delegation)
+document.getElementById('plans-list')?.addEventListener('click', async function(e) {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const row = btn.closest('.plan-row');
+  const planId = parseInt(row?.dataset.planId);
+
+  if (btn.classList.contains('delete-plan-btn')) {
+    if (!confirm('Delete this plan?')) return;
+    const res = await fetch(`/api/admin/plans?id=${planId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) row.remove(); else alert(data.error);
   }
+
+  if (btn.classList.contains('toggle-plan-btn')) {
+    const isActive = btn.textContent.trim() === 'Deactivate' ? 0 : 1;
+    const res = await fetch('/api/admin/plans', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: planId, is_active: isActive }) });
+    const data = await res.json();
+    if (data.success) window.location.reload(); else alert(data.error);
+  }
+
+  if (btn.classList.contains('edit-plan-btn')) {
+    // Populate modal from row data
+    const nameEl = row.querySelector('.plan-name');
+    document.getElementById('edit-plan-id').value = planId;
+    document.getElementById('edit-plan-name').value = nameEl?.textContent || '';
+    // Fetch full plan data
+    const res = await fetch(`/api/admin/plans?hotel_id=${HOTEL_ID}`);
+    const data = await res.json();
+    const plan = (data.plans || []).find(p => p.id === planId);
+    if (plan) {
+      document.getElementById('edit-plan-name').value = plan.name || '';
+      document.getElementById('edit-plan-name-ja').value = plan.name_ja || '';
+      document.getElementById('edit-plan-price').value = plan.price_usd || '';
+      document.getElementById('edit-plan-type').value = plan.plan_type || 'daycation';
+      document.getElementById('edit-plan-checkin').value = plan.check_in_time || '';
+      document.getElementById('edit-plan-checkout').value = plan.check_out_time || '';
+      document.getElementById('edit-plan-guests').value = plan.max_guests || 2;
+      document.getElementById('edit-plan-desc').value = plan.description || '';
+    }
+    document.getElementById('edit-plan-modal').classList.remove('hidden');
+  }
+});
+
+// Close modal
+document.getElementById('close-modal-btn')?.addEventListener('click', () => {
+  document.getElementById('edit-plan-modal').classList.add('hidden');
+});
+document.getElementById('edit-plan-modal')?.addEventListener('click', function(e) {
+  if (e.target === this) this.classList.add('hidden');
+});
+
+// Update plan
+document.getElementById('update-plan-btn')?.addEventListener('click', async () => {
+  const errEl = document.getElementById('edit-plan-error');
+  errEl.className = 'hidden';
+  const body = {
+    id: parseInt(document.getElementById('edit-plan-id').value),
+    name: document.getElementById('edit-plan-name').value.trim(),
+    name_ja: document.getElementById('edit-plan-name-ja').value || null,
+    price_usd: parseFloat(document.getElementById('edit-plan-price').value) || 0,
+    plan_type: document.getElementById('edit-plan-type').value,
+    check_in_time: document.getElementById('edit-plan-checkin').value,
+    check_out_time: document.getElementById('edit-plan-checkout').value,
+    max_guests: parseInt(document.getElementById('edit-plan-guests').value) || 2,
+    description: document.getElementById('edit-plan-desc').value,
+  };
+  if (!body.name) { errEl.textContent = 'Name is required'; errEl.className = 'block text-red-600 text-xs'; return; }
+  const res = await fetch('/api/admin/plans', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (data.success) window.location.reload(); else { errEl.textContent = data.error || 'Error'; errEl.className = 'block text-red-600 text-xs'; }
 });
 </script>

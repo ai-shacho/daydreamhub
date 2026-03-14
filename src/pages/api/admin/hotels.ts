@@ -94,7 +94,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
   const allowed = ['name','name_ja','slug','description','description_ja','city','country','address',
-    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled'];
+    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities'];
   const updates: string[] = [];
   const params: any[] = [];
   for (const key of allowed) {
