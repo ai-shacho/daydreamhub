@@ -121,6 +121,12 @@ for (let h = 0; h < 24; h++) {
               class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none resize-y"
             >{hotel.description_ja || ''}</textarea>
           </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Cancellation Policy</label>
+            <textarea name="cancellation_policy" rows={3} placeholder="e.g. Free cancellation up to 24 hours before check-in. No refund after that."
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none resize-y"
+            >{hotel.cancellation_policy || ''}</textarea>
+          </div>
         </div>
 
         <!-- Location -->
@@ -282,11 +288,6 @@ for (let h = 0; h < 24; h++) {
             <textarea id="new-desc" rows={2} placeholder="Plan description..."
               class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none resize-y"></textarea>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">Cancellation Policy</label>
-            <textarea id="new-cancel-policy" rows={2} placeholder="e.g. Free cancellation up to 24 hours before check-in. No refund after that."
-              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none resize-y"></textarea>
-          </div>
           <div id="add-plan-error" class="hidden text-red-600 text-xs"></div>
           <div class="flex gap-2">
             <button id="save-plan-btn" class="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">Save Plan</button>
@@ -372,11 +373,6 @@ for (let h = 0; h < 24; h++) {
             <label class="block text-xs font-medium text-slate-600 mb-1">Description</label>
             <textarea id="edit-plan-desc" rows={2} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none resize-y"></textarea>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-600 mb-1">Cancellation Policy</label>
-            <textarea id="edit-plan-cancel-policy" rows={2} placeholder="e.g. Free cancellation up to 24 hours before check-in."
-              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none resize-y"></textarea>
-          </div>
           <div id="edit-plan-error" class="hidden text-red-600 text-xs"></div>
           <div class="flex gap-2">
             <button id="update-plan-btn" class="bg-teal-600 hover:bg-teal-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">Update</button>
@@ -458,7 +454,6 @@ document.getElementById('save-plan-btn')?.addEventListener('click', async () => 
     check_out_time: document.getElementById('new-checkout').value,
     max_guests: parseInt(document.getElementById('new-guests').value) || 2,
     description: document.getElementById('new-desc').value,
-    cancellation_policy: document.getElementById('new-cancel-policy').value,
   };
   const res = await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json();
@@ -504,7 +499,7 @@ document.getElementById('plans-list')?.addEventListener('click', async function(
       document.getElementById('edit-plan-checkout').value = plan.check_out_time || '';
       document.getElementById('edit-plan-guests').value = plan.max_guests || 2;
       document.getElementById('edit-plan-desc').value = plan.description || '';
-      document.getElementById('edit-plan-cancel-policy').value = plan.cancellation_policy || '';
+
     }
     document.getElementById('edit-plan-modal').classList.remove('hidden');
   }
@@ -532,7 +527,6 @@ document.getElementById('update-plan-btn')?.addEventListener('click', async () =
     check_out_time: document.getElementById('edit-plan-checkout').value,
     max_guests: parseInt(document.getElementById('edit-plan-guests').value) || 2,
     description: document.getElementById('edit-plan-desc').value,
-    cancellation_policy: document.getElementById('edit-plan-cancel-policy').value,
   };
   if (!body.name) { errEl.textContent = 'Name is required'; errEl.className = 'block text-red-600 text-xs'; return; }
   const res = await fetch('/api/admin/plans', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
