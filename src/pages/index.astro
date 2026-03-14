@@ -281,9 +281,13 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
       <div class="max-w-4xl mx-auto">
         <form action="/search" method="get" class="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4">
           <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div>
+            <div class="relative" id="location-wrapper">
               <label class="block text-xs text-teal-100 mb-1 font-medium">Location</label>
-              <input type="text" name="location" placeholder="City or country..." class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              <input type="text" name="location" id="location-input" placeholder="City or country..." autocomplete="off"
+                class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              <ul id="location-suggestions"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm">
+              </ul>
             </div>
             <div>
               <label class="block text-xs text-teal-100 mb-1 font-medium">Check-in</label>
@@ -732,6 +736,62 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
 
 <!-- Flatpickr: English date picker for Check-in -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+
+<script is:inline define:vars={{ allCities }}>
+(function() {
+  var cities = (allCities || []).map(function(c) {
+    return { city: c.city, country: c.country };
+  });
+
+  var input = document.getElementById('location-input');
+  var list  = document.getElementById('location-suggestions');
+  if (!input || !list) return;
+
+  function normalize(s) {
+    return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function render(items) {
+    if (!items.length) { list.className = 'hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm'; return; }
+    list.innerHTML = items.map(function(c) {
+      return '<li class="px-4 py-2.5 cursor-pointer hover:bg-teal-50 text-gray-800 flex justify-between" data-city="' + c.city + '">' +
+             '<span>' + c.city + '</span>' +
+             '<span class="text-gray-400 text-xs">' + c.country + '</span>' +
+             '</li>';
+    }).join('');
+    list.className = 'block absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm';
+  }
+
+  input.addEventListener('input', function() {
+    var q = normalize(this.value);
+    if (!q) { render([]); return; }
+    var matches = cities.filter(function(c) {
+      return normalize(c.city).includes(q) || normalize(c.country).includes(q);
+    }).slice(0, 10);
+    render(matches);
+  });
+
+  input.addEventListener('focus', function() {
+    if (!this.value) {
+      render(cities.slice(0, 8));
+    }
+  });
+
+  list.addEventListener('mousedown', function(e) {
+    var li = e.target.closest('li');
+    if (!li) return;
+    input.value = li.dataset.city;
+    render([]);
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!document.getElementById('location-wrapper').contains(e.target)) {
+      render([]);
+    }
+  });
+})();
+</script>
+
 <script is:inline>
   (function() {
     var s = document.createElement('script');
