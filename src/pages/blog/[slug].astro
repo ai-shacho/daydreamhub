@@ -23,6 +23,13 @@ try {
     ).bind(slug).first();
     if (result) {
       post = result;
+      // Strip WordPress related posts plugin HTML from content
+      if (post.content) {
+        post.content = post.content.replace(/<div class=['"]rp4wp-related-posts['"][\s\S]*?<\/div>\s*<\/ul>\s*<\/div>/gi, '');
+      }
+      if (post.content_ja) {
+        post.content_ja = post.content_ja.replace(/<div class=['"]rp4wp-related-posts['"][\s\S]*?<\/div>\s*<\/ul>\s*<\/div>/gi, '');
+      }
       if (post.city) {
         const relatedResult = await db.prepare(
           `SELECT id, title, title_ja, slug, excerpt, city, thumbnail_url, published_at
