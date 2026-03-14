@@ -14,6 +14,7 @@ const url = new URL(Astro.request.url);
 const countryFilter = url.searchParams.get("country") || "";
 const cityFilter = url.searchParams.get("city") || "";
 const statusFilter = url.searchParams.get("status") || ""; // "active" | "inactive" | ""
+const searchQuery = url.searchParams.get("q") || "";
 const sortBy = url.searchParams.get("sort") || "name"; // "name" | "country" | "city" | "created_at"
 const sortOrder = url.searchParams.get("order") || "asc"; // "asc" | "desc"
 
@@ -49,6 +50,8 @@ if (db) {
       country: "h.country",
       city: "h.city",
       created_at: "h.created_at",
+      bookings: "active_bookings",
+      plans: "plan_count",
     };
     const orderCol = validSortCols[sortBy] || "h.name";
     const orderDir = sortOrder === "desc" ? "DESC" : "ASC";
@@ -62,6 +65,16 @@ if (db) {
     `;
     const binds: any[] = [];
 
+    if (searchQuery) {
+      const isNumeric = /^\d+$/.test(searchQuery.trim());
+      if (isNumeric) {
+        query += " AND (h.id = ? OR h.name LIKE ? OR h.name_ja LIKE ?)";
+        binds.push(parseInt(searchQuery), `%${searchQuery}%`, `%${searchQuery}%`);
+      } else {
+        query += " AND (h.name LIKE ? OR h.name_ja LIKE ? OR CAST(h.id AS TEXT) LIKE ?)";
+        binds.push(`%${searchQuery}%`, `%${searchQuery}%`, `%${searchQuery}%`);
+      }
+    }
     if (countryFilter) {
       query += " AND h.country = ?";
       binds.push(countryFilter);
@@ -111,6 +124,18 @@ function sortIcon(col: string) {
   <!-- Filter bar -->
   <div class="bg-white rounded-lg shadow p-4 mb-6">
     <form method="GET" action="/admin/hotels" class="flex flex-wrap items-end gap-4">
+      <!-- Search -->
+      <div class="min-w-[220px] flex-1">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Search by Name or ID</label>
+        <input
+          type="text"
+          name="q"
+          value={searchQuery}
+          placeholder="Hotel name or ID..."
+          class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+        />
+      </div>
+
       <!-- Country filter -->
       <div class="min-w-[160px]">
         <label class="block text-xs font-medium text-slate-500 mb-1">Country</label>
@@ -197,8 +222,12 @@ function sortIcon(col: string) {
                   City <span class="text-xs">{sortIcon("city")}</span>
                 </a>
               </th>
-              <th class="text-center px-4 py-3 font-medium text-slate-600">Plans</th>
-              <th class="text-center px-4 py-3 font-medium text-slate-600">Bookings</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">
+                <a href={sortLink("plans")} class="hover:text-teal-600 inline-flex items-center gap-1">Plans <span class="text-xs">{sortIcon("plans")}</span></a>
+              </th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">
+                <a href={sortLink("bookings")} class="hover:text-teal-600 inline-flex items-center gap-1">Bookings <span class="text-xs">{sortIcon("bookings")}</span></a>
+              </th>
               <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
               <th class="text-right px-4 py-3 font-medium text-slate-600">Actions</th>
             </tr>
