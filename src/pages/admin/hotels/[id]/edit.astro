@@ -30,6 +30,13 @@ const COMMON_AMENITIES = [
 ];
 
 const PLAN_TYPES = ['daycation','for_couple','for_work','luxury','personal_time','transit','overnight','early_check_in'];
+
+// 30-minute interval time options
+const TIME_OPTIONS: string[] = [];
+for (let h = 0; h < 24; h++) {
+  TIME_OPTIONS.push(`${h}:00`);
+  TIME_OPTIONS.push(`${h}:30`);
+}
 ---
 
 <AdminLayout title={hotel ? `Edit: ${hotel.name}` : 'Edit Hotel'} activeNav="hotels">
@@ -256,12 +263,12 @@ const PLAN_TYPES = ['daycation','for_couple','for_work','luxury','personal_time'
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Check-in</label>
-              <input id="new-checkin" type="text" placeholder="10:00"
+              <input id="new-checkin" type="text" list="time-options" placeholder="10:00"
                 class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Check-out</label>
-              <input id="new-checkout" type="text" placeholder="18:00"
+              <input id="new-checkout" type="text" list="time-options" placeholder="18:00"
                 class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
             </div>
             <div>
@@ -314,6 +321,11 @@ const PLAN_TYPES = ['daycation','for_couple','for_work','luxury','personal_time'
         </div>
       </div>
 
+      <!-- Time datalist (shared) -->
+      <datalist id="time-options">
+        {TIME_OPTIONS.map(t => <option value={t} />)}
+      </datalist>
+
       <!-- Edit Plan Modal -->
       <div id="edit-plan-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
@@ -340,11 +352,11 @@ const PLAN_TYPES = ['daycation','for_couple','for_work','luxury','personal_time'
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Check-in</label>
-              <input id="edit-plan-checkin" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+              <input id="edit-plan-checkin" type="text" list="time-options" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Check-out</label>
-              <input id="edit-plan-checkout" type="text" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+              <input id="edit-plan-checkout" type="text" list="time-options" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Max Guests</label>
