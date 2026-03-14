@@ -116,6 +116,15 @@ if (!hotel) {
               <p class="text-sm text-slate-600 leading-relaxed">{hotel.description}</p>
             </div>
           )}
+          <div class="mt-4">
+            <div class="flex items-center justify-between mb-1">
+              <h3 class="text-sm font-medium text-slate-700">Cancellation Policy</h3>
+              <a href={`/admin/hotels/${hotel.id}/edit#cancellation`} class="text-xs text-teal-600 hover:underline">Edit</a>
+            </div>
+            <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+              {hotel.cancellation_policy || <span class="text-gray-400 italic">Not set — click Edit to add</span>}
+            </div>
+          </div>
         </div>
       </div>
 

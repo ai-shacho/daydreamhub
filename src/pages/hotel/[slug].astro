@@ -358,14 +358,12 @@ function renderStars(rating: number) {
       )}
 
       <!-- Cancellation Policy -->
-      {hotel.cancellation_policy && (
-        <section class="mb-10">
-          <h2 class="text-xl font-bold text-slate-900 mb-4">Cancellation Policy</h2>
-          <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-            {hotel.cancellation_policy}
-          </div>
-        </section>
-      )}
+      <section class="mb-10">
+        <h2 class="text-xl font-bold text-slate-900 mb-4">Cancellation Policy</h2>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+          {hotel.cancellation_policy || 'Please contact the hotel directly for cancellation policy details.'}
+        </div>
+      </section>
 
       <!-- Available Plans Section -->
       {plans.length > 0 && (
