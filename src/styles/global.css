@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .btn-primary {
+    @apply bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-400 transition-colors cursor-pointer;
+  }
+}
+
 /* WordPress Gutenberg block styles — fix text color on buttons inside prose */
 .wp-blog-content .wp-block-button__link {
   color: #fff !important;
