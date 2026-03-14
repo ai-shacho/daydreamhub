@@ -194,12 +194,12 @@ const countryRegion: Record<string, string> = {
   // Americas
   'United States': 'Americas', 'Canada': 'Americas', 'Mexico': 'Americas',
   'Brazil': 'Americas', 'Argentina': 'Americas', 'Colombia': 'Americas',
-  // Central Asia
-  'Uzbekistan': 'Central Asia', 'Kazakhstan': 'Central Asia', 'Kyrgyzstan': 'Central Asia',
-  'Tajikistan': 'Central Asia', 'Turkmenistan': 'Central Asia', 'Afghanistan': 'Central Asia',
-  'Mongolia': 'Central Asia',
-  // South Asia
-  'Pakistan': 'South Asia', 'Bhutan': 'South Asia',
+  // Central Asia → Asia
+  'Uzbekistan': 'Asia', 'Kazakhstan': 'Asia', 'Kyrgyzstan': 'Asia',
+  'Tajikistan': 'Asia', 'Turkmenistan': 'Asia', 'Afghanistan': 'Asia',
+  'Mongolia': 'Asia',
+  // South Asia → Asia
+  'Pakistan': 'Asia', 'Bhutan': 'Asia',
   // Country abbreviations
   'UK': 'Europe', 'USA': 'Americas', 'US': 'Americas',
   // Europe (additional)
@@ -218,7 +218,7 @@ const countryRegion: Record<string, string> = {
   'Dominican Republic': 'Americas', 'Trinidad and Tobago': 'Americas',
 };
 
-const regionOrder = ['Asia', 'Middle East', 'Europe', 'Africa', 'Oceania', 'Americas', 'Central Asia', 'South Asia'];
+const regionOrder = ['Asia', 'Middle East', 'Europe', 'Africa', 'Oceania', 'Americas'];
 
 // City-level overrides for edge cases (empty country, etc.)
 const cityRegionOverride: Record<string, string> = {
