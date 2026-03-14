@@ -68,7 +68,7 @@ for (let h = 0; h < 24; h++) {
           <div id="form-success-top" class="hidden bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-3"></div>
           <div id="form-error-top" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-3"></div>
           <div class="flex gap-3">
-            <button type="submit" class="save-btn flex-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">
+            <button type="button" class="save-btn flex-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">
               Save Changes
             </button>
             <a href={`/admin/hotels/${id}`} class="px-5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
@@ -236,7 +236,7 @@ for (let h = 0; h < 24; h++) {
           <div id="form-success-bottom" class="hidden bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3 mb-3"></div>
           <div id="form-error-bottom" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3 mb-3"></div>
           <div class="flex gap-3">
-            <button type="submit" class="save-btn flex-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">
+            <button type="button" class="save-btn flex-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm">
               Save Changes
             </button>
             <a href={`/admin/hotels/${id}`} class="px-5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
@@ -399,8 +399,7 @@ for (let h = 0; h < 24; h++) {
 
 <script is:inline define:vars={{ hotelId: id }}>
 // ── Hotel Info Save ──
-document.getElementById('edit-hotel-form')?.addEventListener('submit', async function(e) {
-  e.preventDefault();
+async function saveHotel() {
   const btns = document.querySelectorAll('.save-btn');
   const errEls = [document.getElementById('form-error-top'), document.getElementById('form-error-bottom')];
   const successEls = [document.getElementById('form-success-top'), document.getElementById('form-success-bottom')];
@@ -408,7 +407,7 @@ document.getElementById('edit-hotel-form')?.addEventListener('submit', async fun
   successEls.forEach(el => el && (el.className = 'hidden'));
   btns.forEach(b => { b.disabled = true; b.textContent = 'Saving...'; });
 
-  const form = e.target;
+  const form = document.getElementById('edit-hotel-form');
   const body = { id: parseInt(form.id.value) };
   const fields = ['name','name_ja','slug','description','description_ja','cancellation_policy','city','country',
     'address','thumbnail_url','property_type','email','phone','ical_url'];
@@ -448,7 +447,9 @@ document.getElementById('edit-hotel-form')?.addEventListener('submit', async fun
       el.textContent = msg;
     });
   } finally { btns.forEach(b => { b.disabled = false; b.textContent = 'Save Changes'; }); }
-});
+}
+
+document.querySelectorAll('.save-btn').forEach(btn => btn.addEventListener('click', saveHotel));
 
 // ── Plans ──
 const HOTEL_ID = parseInt(hotelId);
