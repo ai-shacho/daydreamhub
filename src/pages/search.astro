@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { getAirportCoords, haversineKm } from '../lib/airports';
 
 // Get D1 database binding
 const DB = (Astro.locals as any).runtime?.env?.DB;
@@ -13,7 +14,7 @@ const country = url.searchParams.get('country') || '';
 const ratingMin = url.searchParams.get('rating') || '';
 const amenityFilter = url.searchParams.get('amenity') || '';
 const cityFilter = url.searchParams.get('city') || '';
-const sortBy = url.searchParams.get('sort') || 'default'; // default | price_asc | price_desc
+const sortBy = url.searchParams.get('sort') || 'default'; // default | price_asc | price_desc | airport_distance
 const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
 const perPage = 12;
 const offset = (page - 1) * perPage;
@@ -75,11 +76,20 @@ if (DB) {
     totalCount = countResult?.total || 0;
 
     // Main query
+    const isAirportSort = sortBy === 'airport_distance';
     const orderSQL = sortBy === 'price_asc'
       ? 'ORDER BY min_price ASC NULLS LAST'
       : sortBy === 'price_desc'
         ? 'ORDER BY min_price DESC NULLS LAST'
         : 'ORDER BY h.id DESC';
+
+    let fetchLimit = perPage;
+    let fetchOffset = offset;
+    if (isAirportSort) {
+      // Fetch all matching hotels to sort by distance in JS
+      fetchLimit = 9999;
+      fetchOffset = 0;
+    }
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
     const result = await DB.prepare(
@@ -88,10 +98,34 @@ if (DB) {
        LEFT JOIN plans p ON p.hotel_id = h.id
        ${whereSQL}
        GROUP BY h.id
-       ${orderSQL}
+       ${isAirportSort ? 'ORDER BY h.id DESC' : orderSQL}
        LIMIT ?${limitIdx} OFFSET ?${offsetIdx}`
-    ).bind(...params, perPage, offset).all();
-    hotels = result?.results || [];
+    ).bind(...params, fetchLimit, fetchOffset).all();
+    let allResults: any[] = result?.results || [];
+
+    if (isAirportSort) {
+      // Determine airport from location/city filter
+      const targetCity = cityFilter || location;
+      let airportCoords = getAirportCoords(targetCity);
+      // Fallback: use city of first result
+      if (!airportCoords && allResults.length > 0) {
+        airportCoords = getAirportCoords(allResults[0].city);
+      }
+      if (airportCoords) {
+        const [aLat, aLng] = airportCoords;
+        allResults = allResults
+          .map((h: any) => ({
+            ...h,
+            _airport_km: (h.latitude != null && h.longitude != null)
+              ? haversineKm(h.latitude, h.longitude, aLat, aLng)
+              : 99999,
+          }))
+          .sort((a: any, b: any) => a._airport_km - b._airport_km);
+      }
+      hotels = allResults.slice(offset, offset + perPage);
+    } else {
+      hotels = allResults;
+    }
 
     // Get filter options
     const countriesResult = await DB.prepare(
@@ -493,6 +527,7 @@ function buildUrl(overrides: Record<string, string>) {
               <option value="default" selected={sortBy === 'default'}>Sort: Default</option>
               <option value="price_asc" selected={sortBy === 'price_asc'}>Price: Low → High</option>
               <option value="price_desc" selected={sortBy === 'price_desc'}>Price: High → Low</option>
+              <option value="airport_distance" selected={sortBy === 'airport_distance'}>Distance from Airport</option>
             </select>
           </div>
 
