@@ -1,4 +1,6 @@
 ---
+import '../styles/global.css';
+
 interface Props {
   title: string;
   activeNav?: string;
@@ -12,6 +14,8 @@ const navItems = [
   { key: "edit-requests", label: "Edit Requests", href: "/admin/edit-requests", icon: "pencil-square" },
   { key: "bookings", label: "Bookings", href: "/admin/bookings", icon: "calendar" },
   { key: "call-logs", label: "Call Logs", href: "/admin/call-logs", icon: "phone" },
+  { key: "concierge", label: "Concierge", href: "/admin/concierge", icon: "phone" },
+  { key: "telnyx", label: "📞 Telnyx Phone", href: "/admin/telnyx", icon: "phone" },
   { key: "outreach", label: "Sales Outreach", href: "/admin/outreach", icon: "megaphone" },
   { key: "messages", label: "Messages", href: "/admin/messages", icon: "envelope" },
   { key: "blog", label: "Blog", href: "/admin/blog", icon: "document" },
@@ -29,17 +33,16 @@ const navItems = [
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{title} | Admin - DayDreamHub</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 min-h-screen">
   <div class="flex min-h-screen">
     <!-- Sidebar -->
-    <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-800 text-white transform -translate-x-full lg:translate-x-0 transition-transform duration-200">
-      <div class="flex items-center gap-3 px-6 h-16 border-b border-slate-700">
+    <aside id="admin-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-800 text-white flex flex-col transform -translate-x-full lg:translate-x-0 transition-transform duration-200">
+      <div class="flex-shrink-0 flex items-center gap-3 px-6 h-16 border-b border-slate-700">
         <span class="text-white font-bold text-lg">DayDreamHub</span>
         <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Admin</span>
       </div>
-      <nav class="mt-4 px-3 space-y-1">
+      <nav class="flex-1 overflow-y-auto mt-4 px-3 space-y-1 pb-4">
         {navItems.map((item) => (
           <a
             href={item.href}
@@ -53,7 +56,7 @@ const navItems = [
           </a>
         ))}
       </nav>
-      <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700 space-y-2">
+      <div class="flex-shrink-0 p-4 border-t border-slate-700 space-y-2">
         <a href="/" class="flex items-center gap-2 text-slate-400 hover:text-white text-sm transition-colors">
           ← Back to Site
         </a>
