@@ -111,25 +111,33 @@ for (let h = 0; h < 24; h++) {
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Thumbnail URL</label>
-            <input name="thumbnail_url" type="text" value={hotel.thumbnail_url || ''}
-              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none" />
-            {hotel.thumbnail_url && (
-              <img src={hotel.thumbnail_url} alt="thumbnail preview" class="mt-2 h-24 w-40 object-cover rounded-lg border" />
-            )}
+            <label class="block text-sm font-medium text-slate-700 mb-1">Thumbnail</label>
+            <div class="flex gap-2 mb-2">
+              <input name="thumbnail_url" id="thumbnail-url-input" type="text" value={hotel.thumbnail_url || ''}
+                placeholder="https://..." class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none" />
+              <label for="thumbnail-upload" class="cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition-colors whitespace-nowrap">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Upload
+              </label>
+              <input id="thumbnail-upload" type="file" accept="image/*" class="hidden" />
+            </div>
+            <div id="thumbnail-preview" class={hotel.thumbnail_url ? '' : 'hidden'}>
+              <img id="thumbnail-img" src={hotel.thumbnail_url || ''} alt="thumbnail" class="h-24 w-40 object-cover rounded-lg border" />
+            </div>
+            <span id="thumbnail-status" class="text-xs text-gray-500"></span>
           </div>
         </div>
 
         <!-- Gallery Images -->
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
           <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Gallery Images</h2>
-          <p class="text-xs text-gray-500">ドラッグ＆ドロップで表示順を変更できます。最初の画像がメイン表示になります。</p>
+          <p class="text-xs text-gray-500">Drag and drop to reorder. The first image will be shown as the main photo.</p>
 
           <!-- Upload button -->
           <div class="flex items-center gap-3">
             <label for="img-upload" class="cursor-pointer flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg transition-colors">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-              画像をアップロード
+              Upload Images
             </label>
             <input id="img-upload" type="file" accept="image/*" multiple class="hidden" />
             <span id="upload-status" class="text-sm text-gray-500"></span>
@@ -139,7 +147,7 @@ for (let h = 0; h < 24; h++) {
           <div id="gallery-grid" class="grid grid-cols-3 sm:grid-cols-4 gap-3 min-h-[80px]">
             <!-- JS will populate this -->
           </div>
-          <p id="gallery-empty" class="text-sm text-gray-400 text-center py-4 hidden">画像がまだありません</p>
+          <p id="gallery-empty" class="text-sm text-gray-400 text-center py-4 hidden">No images yet.</p>
         </div>
 
         <!-- Description -->
@@ -475,6 +483,41 @@ document.querySelectorAll('.save-btn').forEach(btn => btn.addEventListener('clic
 
 const HOTEL_ID = parseInt(hotelId);
 
+// ── Thumbnail Upload ──
+document.getElementById('thumbnail-upload')?.addEventListener('change', async function() {
+  const file = this.files?.[0];
+  if (!file) return;
+  const statusEl = document.getElementById('thumbnail-status');
+  statusEl.textContent = 'Uploading...';
+  const fd = new FormData();
+  fd.append('hotel_id', HOTEL_ID);
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/admin/hotel-images', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.success) {
+      const input = document.getElementById('thumbnail-url-input');
+      input.value = data.image_url;
+      const preview = document.getElementById('thumbnail-preview');
+      const img = document.getElementById('thumbnail-img');
+      img.src = data.image_url;
+      preview.classList.remove('hidden');
+      statusEl.textContent = '✅ Uploaded';
+    } else {
+      statusEl.textContent = `Error: ${data.error}`;
+    }
+  } catch { statusEl.textContent = 'Connection error'; }
+  this.value = '';
+});
+
+// Update thumbnail preview on URL input change
+document.getElementById('thumbnail-url-input')?.addEventListener('input', function() {
+  const img = document.getElementById('thumbnail-img');
+  const preview = document.getElementById('thumbnail-preview');
+  if (this.value) { img.src = this.value; preview.classList.remove('hidden'); }
+  else { preview.classList.add('hidden'); }
+});
+
 // ── Gallery Images ──
 (function() {
   const grid = document.getElementById('gallery-grid');
@@ -527,7 +570,7 @@ const HOTEL_ID = parseInt(hotelId);
       });
       // Delete
       div.querySelector('.delete-img-btn').addEventListener('click', async () => {
-        if (!confirm('この画像を削除しますか？')) return;
+        if (!confirm('Delete this image?')) return;
         await fetch(`/api/admin/hotel-images?id=${img.id}`, { method: 'DELETE' });
         images = images.filter(i => i.id !== img.id);
         images.forEach((im, idx) => im.sort_order = idx);
@@ -536,14 +579,14 @@ const HOTEL_ID = parseInt(hotelId);
       grid.appendChild(div);
     });
     // Update order badges
-    grid.querySelectorAll('.order-badge').forEach((badge, idx) => { badge.textContent = idx === 0 ? 'メイン' : `${idx+1}`; });
+    grid.querySelectorAll('.order-badge').forEach((badge, idx) => { badge.textContent = idx === 0 ? 'Main' : `${idx+1}`; });
   }
 
   // File upload
   document.getElementById('img-upload').addEventListener('change', async function() {
     const files = [...this.files];
     if (!files.length) return;
-    statusEl.textContent = `アップロード中... (0/${files.length})`;
+    statusEl.textContent = `Uploading... (0/${files.length})`;
     let done = 0;
     for (const file of files) {
       const fd = new FormData();
@@ -555,14 +598,14 @@ const HOTEL_ID = parseInt(hotelId);
         if (data.success) {
           images.push({ id: data.id, image_url: data.image_url, sort_order: data.sort_order });
           done++;
-          statusEl.textContent = `アップロード中... (${done}/${files.length})`;
+          statusEl.textContent = `Uploading... (${done}/${files.length})`;
         } else {
-          statusEl.textContent = `エラー: ${data.error}`;
+          statusEl.textContent = `Error: ${data.error}`;
         }
-      } catch { statusEl.textContent = '接続エラー'; }
+      } catch { statusEl.textContent = 'Connection error'; }
     }
     renderGrid();
-    statusEl.textContent = done > 0 ? `✅ ${done}枚アップロード完了` : '';
+    statusEl.textContent = done > 0 ? `✅ ${done} image(s) uploaded` : '';
     this.value = '';
   });
 
