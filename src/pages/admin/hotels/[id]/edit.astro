@@ -398,7 +398,7 @@ document.getElementById('edit-hotel-form')?.addEventListener('submit', async fun
 
   const form = e.target;
   const body = { id: parseInt(form.id.value) };
-  const fields = ['name','name_ja','slug','description','description_ja','city','country',
+  const fields = ['name','name_ja','slug','description','description_ja','cancellation_policy','city','country',
     'address','thumbnail_url','property_type','email','phone','ical_url'];
   for (const f of fields) { if (form[f]) body[f] = form[f].value; }
   if (form.latitude?.value !== '') body.latitude = parseFloat(form.latitude.value);
