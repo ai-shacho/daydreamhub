@@ -22,12 +22,21 @@ if (!db) {
 const currentAmenities: string[] = hotel ? (() => { try { return JSON.parse(hotel.amenities || '[]'); } catch { return []; } })() : [];
 
 const COMMON_AMENITIES = [
-  'Free Wi-Fi','Parking on Premises','Air Conditioner (Cooling)','Air Conditioner (Heating)',
-  'Swimming Pool','Pool','Gym','Spa','Breakfast','Restaurant','Bar','Bar / Restaurant','Room Service','Concierge',
-  'Shower','Bath','Hot Tub','Hair Dryer','TV','Refrigerator','Electric pot','Microwave',
-  'Coffee Machine','Towels','Shampoo','Toothbrush','Night wear','Laundry Service',
-  'Kitchen','Luggage Storage','Desk','Meeting Room','Printer','TEL',
-  'Balcony','Garden','Beach Access','Airport Transfer',
+  'Air Conditioner (Cooling)','Air Conditioner (Heating)','Airport Transfer',
+  'Balcony','Bar','Bar / Restaurant','Bath','Beach Access','Breakfast',
+  'Coffee Machine','Concierge','Desk',
+  'Electric pot',
+  'Free Wi-Fi',
+  'Garden','Gym',
+  'Hair Dryer','Hot Tub',
+  'Kitchen',
+  'Laundry Service','Luggage Storage',
+  'Meeting Room','Microwave',
+  'Night wear',
+  'Parking on Premises','Pool','Printer',
+  'Refrigerator','Restaurant','Room Service',
+  'Shampoo','Shower','Spa','Swimming Pool',
+  'TEL','Toothbrush','Towels','TV',
 ];
 
 const PLAN_TYPES = ['daycation','for_couple','for_work','luxury','personal_time','transit','overnight','early_check_in'];
