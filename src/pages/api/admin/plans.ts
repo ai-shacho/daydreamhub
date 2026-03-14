@@ -21,13 +21,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!d) return json({ error: 'DB unavailable' }, 500);
   let body: any;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const { hotel_id, name, name_ja, description, description_ja, price_usd, check_in_time, check_out_time, plan_type, max_guests, duration_hours } = body;
+  const { hotel_id, name, name_ja, description, description_ja, price_usd, check_in_time, check_out_time, plan_type, max_guests, duration_hours, cancellation_policy } = body;
   if (!hotel_id || !name) return json({ error: 'hotel_id and name required' }, 400);
   try {
     const r = await d.prepare(
-      `INSERT INTO plans (hotel_id,name,name_ja,description,description_ja,price_usd,check_in_time,check_out_time,plan_type,max_guests,duration_hours,is_active)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`
-    ).bind(hotel_id, name, name_ja||null, description||'', description_ja||null, price_usd||0, check_in_time||'', check_out_time||'', plan_type||'daycation', max_guests||2, duration_hours||null).run();
+      `INSERT INTO plans (hotel_id,name,name_ja,description,description_ja,price_usd,check_in_time,check_out_time,plan_type,max_guests,duration_hours,cancellation_policy,is_active)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)`
+    ).bind(hotel_id, name, name_ja||null, description||'', description_ja||null, price_usd||0, check_in_time||'', check_out_time||'', plan_type||'daycation', max_guests||2, duration_hours||null, cancellation_policy||'').run();
     return json({ success: true, id: r.meta?.last_row_id });
   } catch (e) { return json({ error: String(e) }, 500); }
 };
@@ -40,7 +40,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { id, ...fields } = body;
   if (!id) return json({ error: 'id required' }, 400);
-  const allowed = ['name','name_ja','description','description_ja','price_usd','check_in_time','check_out_time','plan_type','max_guests','duration_hours','is_active'];
+  const allowed = ['name','name_ja','description','description_ja','price_usd','check_in_time','check_out_time','plan_type','max_guests','duration_hours','cancellation_policy','is_active'];
   const updates: string[] = []; const params: any[] = [];
   for (const k of allowed) { if (k in fields) { updates.push(`${k} = ?`); params.push(fields[k]); } }
   if (!updates.length) return json({ error: 'No fields to update' }, 400);
