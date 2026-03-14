@@ -184,13 +184,41 @@ function renderStars(rating: number) {
       <!-- Top Section: Gallery + Info -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
         <!-- Image Gallery -->
-        <div class="w-full aspect-[16/9] overflow-hidden rounded-lg bg-gray-100">
-          <img
-            src={hotel.thumbnail_url || '/images/placeholder-hotel.jpg'}
-            alt={displayName}
-            class="w-full h-full object-cover"
-          />
-        </div>
+        {(() => {
+          // Build gallery list: hotel_images first, fallback to thumbnail
+          const galleryImages = images.length > 0
+            ? images.map((img: any) => img.image_url)
+            : (hotel.thumbnail_url ? [hotel.thumbnail_url] : ['/images/placeholder-hotel.jpg']);
+          const hasMultiple = galleryImages.length > 1;
+          return (
+            <div class="w-full">
+              {/* Main image */}
+              <div class="w-full aspect-[16/9] overflow-hidden rounded-lg bg-gray-100 mb-2">
+                <img
+                  id="gallery-main"
+                  src={galleryImages[0]}
+                  alt={displayName}
+                  class="w-full h-full object-cover cursor-pointer"
+                />
+              </div>
+              {/* Thumbnails */}
+              {hasMultiple && (
+                <div class="flex gap-2 overflow-x-auto pb-1">
+                  {galleryImages.map((url: string, i: number) => (
+                    <button
+                      type="button"
+                      class={`gallery-thumb flex-shrink-0 w-20 h-14 rounded-md overflow-hidden border-2 transition-all ${i === 0 ? 'border-teal-500' : 'border-transparent hover:border-teal-300'}`}
+                      data-src={url}
+                      data-index={i}
+                    >
+                      <img src={url} alt={`${displayName} ${i + 1}`} class="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <!-- Hotel Info -->
         <div>
@@ -424,3 +452,19 @@ function renderStars(rating: number) {
   )}
 
 </Layout>
+
+<script is:inline>
+(function() {
+  var mainImg = document.getElementById('gallery-main');
+  if (!mainImg) return;
+  document.querySelectorAll('.gallery-thumb').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      mainImg.src = this.dataset.src;
+      document.querySelectorAll('.gallery-thumb').forEach(function(b) {
+        b.className = b.className.replace('border-teal-500', 'border-transparent');
+      });
+      this.className = this.className.replace('border-transparent', 'border-teal-500');
+    });
+  });
+})();
+</script>
