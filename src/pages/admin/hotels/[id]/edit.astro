@@ -432,7 +432,6 @@ document.getElementById('edit-hotel-form')?.addEventListener('submit', async fun
         el.className = 'block bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3';
         el.textContent = msg;
       });
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       const msg = data.error || 'Failed to save changes.';
       errEls.forEach(el => {
