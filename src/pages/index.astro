@@ -37,6 +37,8 @@ let totalHotels = 0;
 let totalPlans = 0;
 let recentBlogs: any[] = [];
 let mapHotels: any[] = [];
+let popularPlans: any[] = [];
+let hotelPlanTypes: Record<number, string[]> = {};
 
 try {
   if (DB) {
@@ -111,9 +113,55 @@ try {
        GROUP BY h.id LIMIT 100`
     ).all();
     mapHotels = mapResult?.results ?? [];
+
   }
 } catch (e) {
   console.error('Index DB error:', e);
+}
+
+// Popular Day-Use Plans — separate try block
+try {
+  const DB2 = (Astro.locals as any).runtime?.env?.DB;
+  if (DB2) {
+    const popularResult = await DB2.prepare(
+      `SELECT p.id as plan_id, p.name as plan_name, p.price_usd, p.check_in_time, p.check_out_time, p.plan_type,
+              h.id as hotel_id, h.name as hotel_name, h.slug, h.city, h.country, h.thumbnail_url, h.property_type
+       FROM plans p
+       JOIN hotels h ON h.id = p.hotel_id
+       WHERE h.is_active = 1
+       ORDER BY p.price_usd ASC
+       LIMIT 9`
+    ).all();
+    popularPlans = popularResult?.results ?? [];
+  }
+} catch (e2) {
+  console.error('Popular plans error:', e2);
+}
+
+// Plan types per hotel — separate try block
+try {
+  const DB3 = (Astro.locals as any).runtime?.env?.DB;
+  if (DB3 && heroHotels.length > 0) {
+    const allHotelIds = [
+      ...heroHotels.map((h: any) => h.id),
+      ...Object.values(categoryHotels).flat().map((h: any) => h.id),
+    ].filter((id, i, arr) => id != null && arr.indexOf(id) === i).slice(0, 50);
+
+    if (allHotelIds.length > 0) {
+      const placeholders = allHotelIds.map(() => '?').join(',');
+      const ptResult = await DB3.prepare(
+        `SELECT hotel_id, plan_type FROM plans WHERE hotel_id IN (${placeholders}) AND plan_type IS NOT NULL GROUP BY hotel_id, plan_type`
+      ).bind(...allHotelIds).all();
+      for (const row of ptResult?.results ?? []) {
+        if (!hotelPlanTypes[row.hotel_id]) hotelPlanTypes[row.hotel_id] = [];
+        if (row.plan_type && !hotelPlanTypes[row.hotel_id].includes(row.plan_type)) {
+          hotelPlanTypes[row.hotel_id].push(row.plan_type);
+        }
+      }
+    }
+  }
+} catch (e3) {
+  console.error('Plan types error:', e3);
 }
 
 // City images (unsplash fallbacks)
@@ -159,9 +207,13 @@ const roomTypes = [
   { label: 'Hotel', value: 'Hotel', img: 'photo-1566073771259-6a8506099945' },
   { label: 'Villa', value: 'Villa', img: 'photo-1600596542815-ffad4c1539a9' },
   { label: 'Resort', value: 'Resort', img: 'photo-1520250497591-112f2f40a3f4' },
-  { label: 'Hostel', value: 'Hostel', img: 'photo-1555854877-bab0e564b8d5' },
   { label: 'Apartment', value: 'Apartment', img: 'photo-1522708323590-d24dbb6b0267' },
-  { label: 'Boutique Hotel', value: 'Boutique Hotel', img: 'photo-1551882547-ff40c63fe5fa' },
+  { label: 'Clinic', value: 'Clinic', img: 'photo-1519494026892-80bbd2d6fd0d' },
+  { label: 'Spa', value: 'Spa', img: 'photo-1544161515-4ab6ce6db874' },
+  { label: 'Wellness', value: 'Wellness', img: 'photo-1506126613408-eca07ce68773' },
+  { label: 'Coworking Space', value: 'Coworking Space', img: 'photo-1497366216548-37526070297c' },
+  { label: 'Cafe & Lounge', value: 'Cafe & Lounge', img: 'photo-1501339847302-ac426a4a7cbb' },
+  { label: 'Hostel', value: 'Hostel', img: 'photo-1555854877-bab0e564b8d5' },
 ];
 
 // Region mapping (country → region)
@@ -277,12 +329,62 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
         </div>
       </div>
 
+      <!-- AI Chat Box -->
+      <div class="max-w-4xl mx-auto mb-4" id="ai-chat-wrapper">
+        <!-- AI Messages (hidden until chat starts) -->
+        <div id="hero-chat-messages" class="hidden bg-gray-900/75 backdrop-blur-sm border border-white/20 rounded-xl p-4 mb-3 space-y-3 max-h-72 overflow-y-auto">
+          <!-- messages injected here -->
+        </div>
+
+        <!-- AI Input Row -->
+        <!-- Chat input label -->
+        <p class="text-white font-semibold text-sm mb-2 pl-1 flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+          💬 Ask the AI Concierge — Enter city or airport name
+        </p>
+        <div class="bg-white border border-amber-400/60 shadow-lg shadow-amber-500/20 rounded-xl p-3 flex items-center gap-2 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/40 transition-all">
+          <!-- Upload flight photo -->
+          <label for="hero-flight-upload" class="flex-shrink-0 cursor-pointer text-gray-400 hover:text-amber-500 transition-colors p-1.5 rounded-lg hover:bg-amber-50" title="フライト写真をアップロード / Upload flight photo">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <input type="file" id="hero-flight-upload" accept="image/*" class="hidden" />
+          </label>
+
+          <!-- Upload status -->
+          <span id="hero-upload-status" class="hidden text-xs text-amber-500 flex-shrink-0">Uploading...</span>
+          <span id="hero-upload-name" class="hidden text-xs text-teal-600 flex-shrink-0 max-w-[80px] truncate"></span>
+
+          <!-- Text input -->
+          <input
+            type="text"
+            id="hero-chat-input"
+            placeholder="例: Tokyo, Dubai, Bangkok... / e.g. Paris, New York"
+            class="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm focus:outline-none font-medium"
+            maxlength="300"
+          />
+
+          <!-- Send button -->
+          <button
+            id="hero-chat-send"
+            class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white font-bold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+            Send
+          </button>
+        </div>
+      </div>
+
       <!-- Search Form -->
       <div class="max-w-4xl mx-auto">
-        <form action="/search" method="get" class="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-4">
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div class="relative" id="location-wrapper">
-              <label class="block text-xs text-teal-100 mb-1 font-medium">Location</label>
+        <form action="/search" method="get" class="bg-white/95 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+          <!-- Row 1: Location, Date, Check-in time, Check-out time, Guests, Budget, Search -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div class="relative col-span-2 md:col-span-1" id="location-wrapper">
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">Location</label>
               <input type="text" name="location" id="location-input" placeholder="City or country..." autocomplete="off"
                 class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
               <ul id="location-suggestions"
@@ -290,11 +392,29 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
               </ul>
             </div>
             <div>
-              <label class="block text-xs text-teal-100 mb-1 font-medium">Check-in</label>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">Date</label>
               <input type="text" name="checkin" id="checkin-fp" placeholder="MM / DD / YYYY" autocomplete="off" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
             <div>
-              <label class="block text-xs text-teal-100 mb-1 font-medium">Speciality</label>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">Check-in</label>
+              <select name="checkin_time" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                {['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'].map(t => (
+                  <option value={t} selected={t === '10:00'}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">Check-out</label>
+              <select name="checkout_time" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                {['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'].map(t => (
+                  <option value={t} selected={t === '18:00'}>{t}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">Speciality</label>
               <select name="speciality" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
                 <option value="">All Types</option>
                 {specialities.filter(s => s.value).map(s => (
@@ -303,18 +423,50 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
               </select>
             </div>
             <div>
-              <label class="block text-xs text-teal-100 mb-1 font-medium">Guests</label>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">Guests</label>
               <select name="guests" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                {[1, 2, 3, 4].map(n => (
-                  <option value={n}>{n} {n === 1 ? 'guest' : 'guests'}</option>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <option value={n}>{n === 5 ? '5+' : n} {n === 1 ? 'guest' : 'guests'}</option>
                 ))}
               </select>
             </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">Budget</label>
+              <select name="budget" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="">Any Budget</option>
+                <option value="budget">Budget (under $30)</option>
+                <option value="mid">Mid-range ($30–$100)</option>
+                <option value="premium">Premium ($100+)</option>
+              </select>
+            </div>
             <div class="flex items-end">
-              <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm">Search</button>
+              <button type="button" id="hero-search-btn" onclick="window._heroAskAI()" class="w-full bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                Ask AI
+              </button>
             </div>
           </div>
         </form>
+
+        <!-- Airport Shortcuts -->
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <span class="text-white font-semibold text-xs">✈️ I'm at:</span>
+          {[
+            { label: 'Haneda(HND)', city: 'Tokyo', airport: 'I need a hotel near Haneda Airport Tokyo' },
+            { label: 'Narita(NRT)', city: 'Tokyo', airport: 'I need a hotel near Narita Airport Tokyo' },
+            { label: 'Kansai(KIX)', city: 'Osaka', airport: 'I need a hotel near Kansai Airport Osaka' },
+            { label: 'Suvarnabhumi(BKK)', city: 'Bangkok', airport: 'I need a hotel near Suvarnabhumi Airport Bangkok' },
+            { label: 'Changi(SIN)', city: 'Singapore', airport: 'I need a hotel near Changi Airport Singapore' },
+            { label: 'Incheon(ICN)', city: 'Seoul', airport: 'I need a hotel near Incheon Airport Seoul' },
+          ].map(airport => (
+            <button
+              type="button"
+              data-airport={airport.airport}
+              class="text-xs text-white/80 hover:text-white border border-white/30 hover:border-white/60 rounded-full px-3 py-1 transition-colors bg-white/10 hover:bg-white/20">
+              {airport.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   </section>
@@ -362,33 +514,46 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
       <!-- Hotels grid -->
       {heroHotels.length > 0 ? (
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {heroHotels.map((hotel: any) => (
-            <a href={`/hotel/${hotel.slug}`} class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100">
-              <div class="aspect-[4/3] overflow-hidden bg-gray-100">
-                <img src={getHotelImage(hotel)} alt={hotel.name} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-              </div>
-              <div class="p-4">
-                <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
-                <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                  {hotel.city}, {hotel.country}
-                </p>
-                <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
-                  {hotel.min_price != null ? (
-                    <div>
-                      <span class="text-xs text-gray-400">from</span>
-                      <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
+          {heroHotels.map((hotel: any) => {
+            const planTags = (hotelPlanTypes[hotel.id] || []).slice(0, 2);
+            return (
+              <div class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100 relative">
+                <a href={`/hotel/${hotel.slug}`} class="block">
+                  <div class="aspect-[4/3] overflow-hidden bg-gray-100 relative">
+                    <img src={getHotelImage(hotel)} alt={hotel.name} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                    {planTags.length > 0 && (
+                      <div class="absolute top-2 left-2 flex gap-1 flex-wrap">
+                        {planTags.map((tag: string) => (
+                          <span class="text-[10px] font-semibold bg-teal-700/90 text-white px-2 py-0.5 rounded-full capitalize">{tag.replace(/_/g, ' ')}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div class="p-4">
+                    <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
+                    <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                      {hotel.city}, {hotel.country}
+                    </p>
+                    <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
+                      {hotel.min_price != null ? (
+                        <div>
+                          <span class="text-xs text-gray-400">from</span>
+                          <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
+                        </div>
+                      ) : (
+                        <span class="text-xs text-gray-400">Price on request</span>
+                      )}
+                      <span class="text-xs text-teal-700 font-medium">View Plans →</span>
                     </div>
-                  ) : (
-                    <span class="text-xs text-gray-400">Price on request</span>
-                  )}
-                  {hotel.property_type && (
-                    <span class="text-[10px] bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{hotel.property_type}</span>
-                  )}
-                </div>
+                  </div>
+                </a>
+                <button class="wishlist-btn absolute top-2 right-2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow hover:bg-white transition-colors" data-slug={hotel.slug} title="Save to wishlist">
+                  <svg class="wishlist-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"/></svg>
+                </button>
               </div>
-            </a>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div class="py-12 text-center text-gray-400">
@@ -465,53 +630,7 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
 
 
 
-  <!-- Recommended Features -->
-  <section class="py-12 bg-white">
-    <div class="max-w-7xl mx-auto px-4">
-      <h2 class="text-2xl font-bold text-gray-800 mb-6">Recommended Features</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="flex gap-4 items-start">
-          <div class="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg class="w-5 h-5 text-teal-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          </div>
-          <div>
-            <h3 class="font-semibold text-gray-800 text-sm">Flexible Hours</h3>
-            <p class="text-xs text-gray-500 mt-1">Book from 1 hour up to a full day. Choose check-in and check-out times that work for you.</p>
-          </div>
-        </div>
 
-        <div class="flex gap-4 items-start">
-          <div class="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg class="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-          </div>
-          <div>
-            <h3 class="font-semibold text-gray-800 text-sm">Save Up to 50%</h3>
-            <p class="text-xs text-gray-500 mt-1">Day-use rates are typically half the overnight price. Pay only for the hours you need.</p>
-          </div>
-        </div>
-
-        <div class="flex gap-4 items-start">
-          <div class="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg class="w-5 h-5 text-purple-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-          </div>
-          <div>
-            <h3 class="font-semibold text-gray-800 text-sm">Secure Booking</h3>
-            <p class="text-xs text-gray-500 mt-1">Pay securely with PayPal. Instant confirmation and 24-hour cancellation support.</p>
-          </div>
-        </div>
-
-        <div class="flex gap-4 items-start">
-          <div class="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg class="w-5 h-5 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          </div>
-          <div>
-            <h3 class="font-semibold text-gray-800 text-sm">Global Coverage</h3>
-            <p class="text-xs text-gray-500 mt-1">{totalHotels || 350}+ properties across {uniqueCityCount}+ cities worldwide. New hotels added weekly.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <!-- Category Hotel Sections -->
   {categoryDefs.map(cat => {
@@ -535,33 +654,50 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {hotels.map((hotel: any) => (
-              <a href={`/hotel/${hotel.slug}`} class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100">
-                <div class="aspect-[3/2] overflow-hidden bg-gray-100">
-                  <img src={getHotelImage(hotel)} alt={hotel.name} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                </div>
-                <div class="p-4">
-                  <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
-                  <p class="text-xs text-gray-500 mt-1">{hotel.city}, {hotel.country}</p>
-                  <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
-                    {hotel.min_price != null ? (
-                      <div>
-                        <span class="text-xs text-gray-400">from</span>
-                        <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
+            {hotels.map((hotel: any) => {
+              const planTags = (hotelPlanTypes[hotel.id] || []).slice(0, 2);
+              return (
+                <div class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100 relative">
+                  <a href={`/hotel/${hotel.slug}`} class="block">
+                    <div class="aspect-[3/2] overflow-hidden bg-gray-100 relative">
+                      <img src={getHotelImage(hotel)} alt={hotel.name} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                      {planTags.length > 0 && (
+                        <div class="absolute top-2 left-2 flex gap-1 flex-wrap">
+                          {planTags.map((tag: string) => (
+                            <span class="text-[10px] font-semibold bg-teal-700/90 text-white px-2 py-0.5 rounded-full capitalize">{tag.replace(/_/g,' ')}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div class="p-4">
+                      <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
+                      <p class="text-xs text-gray-500 mt-1">{hotel.city}, {hotel.country}</p>
+                      <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
+                        {hotel.min_price != null ? (
+                          <div>
+                            <span class="text-xs text-gray-400">from</span>
+                            <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
+                          </div>
+                        ) : (
+                          <span class="text-xs text-gray-400">Price on request</span>
+                        )}
+                        {hotel.rating > 0 ? (
+                          <div class="flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                            <span class="text-xs font-medium text-gray-600">{hotel.rating.toFixed(1)}</span>
+                          </div>
+                        ) : (
+                          <span class="text-xs text-teal-700 font-medium">View Plans →</span>
+                        )}
                       </div>
-                    ) : (
-                      <span class="text-xs text-gray-400">Price on request</span>
-                    )}
-                    {hotel.rating > 0 && (
-                      <div class="flex items-center gap-1">
-                        <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                        <span class="text-xs font-medium text-gray-600">{hotel.rating.toFixed(1)}</span>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  </a>
+                  <button class="wishlist-btn absolute top-2 right-2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow hover:bg-white transition-colors" data-slug={hotel.slug} title="Save to wishlist">
+                    <svg class="wishlist-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"/></svg>
+                  </button>
                 </div>
-              </a>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -635,8 +771,15 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
                 )}
               </div>
               <div class="p-4">
-                {post.city && <span class="text-xs text-teal-600 font-medium">{post.city}</span>}
-                <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 mt-1 group-hover:text-teal-700 transition-colors">{post.title}</h3>
+                <div class="flex items-center justify-between mb-1">
+                  {post.city && <span class="text-xs text-teal-600 font-medium">{post.city}</span>}
+                  {post.published_at && (
+                    <span class="text-xs text-gray-400">
+                      {new Date(post.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+                <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{post.title}</h3>
                 {post.excerpt && <p class="text-xs text-gray-500 mt-2 line-clamp-2">{post.excerpt}</p>}
               </div>
             </a>
@@ -649,6 +792,37 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
       )}
     </div>
   </section>
+
+  <!-- What's New -->
+  {recentBlogs.length > 0 && (
+    <section class="py-10 bg-white border-t border-gray-100">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-2xl font-bold text-gray-800">What's New</h2>
+          <a href="/blog" class="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1">
+            View More →
+          </a>
+        </div>
+        <ul class="space-y-3 max-w-2xl">
+          {recentBlogs.map((post: any) => (
+            <li class="flex items-start gap-3">
+              <span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-teal-500 flex-shrink-0"></span>
+              <div>
+                <a href={`/blog/${post.slug}`} class="text-sm text-gray-800 hover:text-teal-700 transition-colors font-medium leading-snug">
+                  {post.title}
+                </a>
+                {post.published_at && (
+                  <span class="block text-xs text-gray-400 mt-0.5">
+                    {new Date(post.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  )}
 
   <!-- Map Script (Leaflet) -->
   <script is:inline define:vars={{ mapHotels }}>
@@ -734,59 +908,804 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
 
   <ChatWidget />
 
+<!-- Hero AI Chatbot -->
+<script is:inline>
+(function() {
+  var sessionId = 'hero_' + Math.random().toString(36).slice(2, 11);
+  var pendingImageKey = null;
+  var isSending = false;
+
+  var messagesEl = document.getElementById('hero-chat-messages');
+  var inputEl    = document.getElementById('hero-chat-input');
+  var sendBtn    = document.getElementById('hero-chat-send');
+  var uploadEl   = document.getElementById('hero-flight-upload');
+  var uploadStatus = document.getElementById('hero-upload-status');
+  var uploadName   = document.getElementById('hero-upload-name');
+
+  if (!messagesEl || !inputEl || !sendBtn) return;
+
+  // --- helpers ---
+  function getFormContext() {
+    var checkin  = document.getElementById('checkin-fp')?.value || '';
+    var ciTime   = document.querySelector('select[name="checkin_time"]')?.value || '';
+    var coTime   = document.querySelector('select[name="checkout_time"]')?.value || '';
+    var guests   = document.querySelector('select[name="guests"]')?.value || '1';
+    var budget   = document.querySelector('select[name="budget"]')?.value || '';
+    var parts = [];
+    if (checkin)  parts.push('Date: ' + checkin);
+    if (ciTime)   parts.push('Check-in: ' + ciTime);
+    if (coTime)   parts.push('Check-out: ' + coTime);
+    if (guests)   parts.push('Guests: ' + guests);
+    if (budget)   parts.push('Budget: ' + budget);
+    return parts.length ? '[' + parts.join(', ') + '] ' : '';
+  }
+
+  function showMessages() {
+    messagesEl.classList.remove('hidden');
+  }
+
+  // Parse hotel slugs from text (e.g. /hotel/some-slug)
+  function extractHotelSlugs(text) {
+    var slugs = [];
+    var re = /\/hotel\/([\w-]+)/g;
+    var m;
+    while ((m = re.exec(text)) !== null) {
+      if (!slugs.includes(m[1])) slugs.push(m[1]);
+    }
+    return slugs;
+  }
+
+  // Render text with hotel links converted to clickable cards
+  function renderMsgContent(text) {
+    // XSS対策: HTMLエスケープ（リンク変換前に実施）
+    var html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Markdown: ### 見出し
+    html = html.replace(/^### (.+)$/gm, '<strong class="block text-amber-300 text-sm mt-2">$1</strong>');
+    html = html.replace(/^## (.+)$/gm, '<strong class="block text-amber-200 text-sm mt-2 mb-1">$1</strong>');
+    html = html.replace(/^# (.+)$/gm, '<strong class="block text-white text-base mt-2 mb-1">$1</strong>');
+
+    // Markdown: **太字**
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    // Markdown: *斜体*
+    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+
+    // Markdown: --- 区切り線
+    html = html.replace(/^---+$/gm, '<hr class="border-white/20 my-2"/>');
+
+    // Markdown: - リスト項目
+    html = html.replace(/^[-•]\s+(.+)$/gm, '<span class="flex gap-1.5"><span class="text-amber-400 flex-shrink-0">•</span><span>$1</span></span>');
+
+    // Hotel links: [text](http.../hotel/slug...)
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]*?\/hotel\/([\w-]+)[^)]*)\)/g,
+      '<a href="/hotel/$3" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
+    // Hotel links: [text](/hotel/slug)
+    html = html.replace(/\[([^\]]+)\]\((\/hotel\/([\w-]+))\)/g,
+      '<a href="/hotel/$3" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
+    // Bare /hotel/slug
+    html = html.replace(/(\/hotel\/([\w-]+))/g,
+      '<a href="$1" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
+
+    // 通常リンク [text](url)
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+      '<a href="$2" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
+
+    return html;
+  }
+
+  // 外部ホテル情報をテキストから抽出
+  // 📞 電話番号を持つ行をすべて外部ホテルとして扱う（/hotel/slugがない場合）
+  function extractExternalHotels(text) {
+    var hotels = [];
+    var lines = text.split('\n');
+    lines.forEach(function(line) {
+      // 📞または電話番号パターンを含む行を探す
+      var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/);
+      if (!phoneMatch) return;
+      var phone = phoneMatch[1].trim();
+      // ホテル名を抽出: **名前** または行頭の数字. 名前
+      var nameParts = line.match(/\*\*(.*?)\*\*/);
+      if (!nameParts) nameParts = line.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞)/);
+      if (!nameParts) nameParts = line.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞)/);
+      var name = nameParts ? nameParts[1].replace(/\*\*/g, '').trim() : '';
+      if (!name || name.length < 2) return;
+      // /hotel/slug がある行（自社ホテル）は除外
+      if (line.indexOf('/hotel/') !== -1) return;
+      hotels.push({ name: name, phone: phone });
+    });
+    return hotels;
+  }
+
+  function addMsg(text, role) {
+    showMessages();
+    var wrap = document.createElement('div');
+    wrap.className = 'flex gap-2' + (role === 'user' ? ' flex-row-reverse' : '');
+    if (role === 'assistant') {
+      var slugs = extractHotelSlugs(text);
+      var externalHotels = extractExternalHotels(text);
+
+      // 自社ホテル: Book Now ボタン（無料）
+      var bookBtns = slugs.map(function(slug) {
+        return '<button onclick="window._heroBookNow(\'' + slug + '\', this)" ' +
+          'class="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-gray-900 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">' +
+          '🏨 Book Now — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30) +
+          '</button>';
+      }).join('');
+
+      // 外部ホテル: Call to Book ボタン（$7）
+      var callBtns = externalHotels.map(function(h) {
+        var safePhone = h.phone.replace(/'/g, '');
+        var safeName = h.name.replace(/'/g, '').slice(0, 40);
+        return '<button onclick="window._heroCallBook(\'' + safeName + '\',\'' + safePhone + '\', this)" ' +
+          'class="flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">' +
+          '📞 Call to Book (+$7) — ' + h.name.slice(0, 28) +
+          '</button>';
+      }).join('');
+
+      var allBtns = bookBtns + callBtns;
+      wrap.innerHTML =
+        '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
+        '<div class="bg-white/20 text-white rounded-xl rounded-tl-none px-3 py-2.5 text-sm max-w-[85%] shadow border border-white/10">' +
+          '<div class="whitespace-pre-wrap leading-relaxed">' + renderMsgContent(text) + '</div>' +
+          (allBtns ? '<div class="flex flex-wrap gap-2 mt-2.5">' + allBtns + '</div>' : '') +
+        '</div>';
+    } else {
+      wrap.innerHTML =
+        '<div class="bg-amber-500 text-gray-900 rounded-xl rounded-tr-none px-3 py-2 text-sm max-w-[85%] font-medium">' + text + '</div>';
+    }
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // ===== Call Status Polling =====
+  window._startCallPolling = function(callId, sid, loc) {
+    var maxAttempts = 36; // 最大3分（5秒×36回）
+    var attempt = 0;
+    var waitEl = document.createElement('div');
+    waitEl.id = 'call-polling-' + callId;
+    waitEl.className = 'flex gap-2';
+    waitEl.innerHTML =
+      '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
+      '<div class="bg-white/20 text-white/80 rounded-xl rounded-tl-none px-3 py-2 text-sm border border-white/10">' +
+        '<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse mr-2"></span>' +
+        '📞 AIがホテルに電話中... / Calling hotel...' +
+      '</div>';
+    messagesEl.appendChild(waitEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    var timer = setInterval(async function() {
+      attempt++;
+      if (attempt > maxAttempts) {
+        clearInterval(timer);
+        waitEl.remove();
+        addMsg('⏱️ 電話の結果を取得できませんでした。しばらく後に確認してください。 / Call timed out.', 'assistant');
+        return;
+      }
+      try {
+        var r = await fetch('/api/concierge/chat', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({session_id: sid, message: '__check_call_status:' + callId, locale: loc || 'en'})
+        });
+        var d = await r.json();
+        var status = d.metadata?.call_status || d.metadata?.status;
+        if (status === 'calling' || status === 'pending') return; // まだ通話中
+        // 完了・失敗・その他
+        clearInterval(timer);
+        waitEl.remove();
+        if (d.response) addMsg(d.response, 'assistant');
+
+        // 全件失敗 → 返金通知
+        if (status === 'failed' && d.metadata?.failed_count >= 1) {
+          setTimeout(function(){
+            addMsg(
+              '💸 **全ホテルへの電話が繋がりませんでした。**\n\n' +
+              '$7の料金は自動的に全額返金されます（PayPal処理に2〜5営業日）。\n\n' +
+              '別の日時や別の都市で再度お試しください。',
+              'assistant'
+            );
+          }, 1000);
+        }
+      } catch(e) { /* retry */ }
+    }, 5000); // 5秒ごとにポーリング
+  };
+
+  // ===== External Hotel Call Booking Flow ($7) =====
+  window._heroCallBook = async function(hotelName, hotelPhone, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    // フォームをチャットに表示
+    var messagesEl = document.getElementById('hero-chat-messages');
+    var formDiv = document.createElement('div');
+    formDiv.className = 'flex gap-2';
+    // 今日の日付をデフォルト値に
+    var today = new Date().toISOString().split('T')[0];
+    var safeName = hotelName.replace(/'/g, '&#39;');
+    var safePhone = hotelPhone.replace(/'/g, '');
+    formDiv.innerHTML =
+      '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
+      '<div class="bg-gray-900/80 border border-white/20 text-white rounded-xl rounded-tl-none px-4 py-3 text-sm max-w-[92%] w-full" id="call-booking-form">' +
+        '<p class="font-bold text-base mb-1">📞 AI電話予約代行</p>' +
+        '<p class="text-amber-300 text-xs font-medium mb-3">🏨 ' + safeName + '</p>' +
+        '<p class="text-white/70 text-xs mb-3">AIがホテルに電話して空き状況を確認します。<br>サービス料 <strong class="text-amber-400">$7</strong>（全件不成立時は全額返金）</p>' +
+        '<div class="space-y-2">' +
+          '<div>' +
+            '<label class="text-xs text-white/60 block mb-1">お名前 / Your Name</label>' +
+            '<input id="call-guest-name" type="text" placeholder="Taro Yamada" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+          '</div>' +
+          '<div>' +
+            '<label class="text-xs text-white/60 block mb-1">メール / Email</label>' +
+            '<input id="call-guest-email" type="email" placeholder="your@email.com" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-2">' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">📅 チェックイン日</label>' +
+              '<input id="call-checkin-date" type="date" value="' + today + '" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">🕐 チェックイン時間</label>' +
+              '<select id="call-checkin-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
+                ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'].map(function(t){ return '<option value="' + t + '"' + (t==='10:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<label class="text-xs text-white/60 block mb-1">🕔 チェックアウト時間</label>' +
+            '<select id="call-checkout-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
+              ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'].map(function(t){ return '<option value="' + t + '"' + (t==='18:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="window._heroSubmitCallBook(\'' + safeName + '\',\'' + safePhone + '\')" ' +
+          'class="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">' +
+          '💳 PayPalで$7支払い → AI電話予約へ進む' +
+        '</button>' +
+        '<button onclick="document.getElementById(\'call-booking-form\').closest(\'.flex\').remove()" ' +
+          'class="mt-2 w-full text-white/40 hover:text-white/70 text-xs py-1 transition-colors">キャンセル / Cancel</button>' +
+      '</div>';
+    messagesEl.appendChild(formDiv);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    btn.textContent = '📞 Call to Book (+$7)';
+    btn.disabled = false;
+  };
+
+  window._heroSubmitCallBook = async function(hotelName, hotelPhone) {
+    var name = document.getElementById('call-guest-name')?.value?.trim();
+    var email = document.getElementById('call-guest-email')?.value?.trim();
+    var date = document.getElementById('call-checkin-date')?.value;
+    var checkinTime = document.getElementById('call-checkin-time')?.value || '10:00';
+    var checkoutTime = document.getElementById('call-checkout-time')?.value || '18:00';
+    if (!name || !email || !date) {
+      alert('お名前・メール・日付を入力してください / Please fill in name, email, and date');
+      return;
+    }
+    var submitBtn = event?.target;
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '処理中...'; }
+
+    try {
+      // セッションIDを取得
+      var sessionId = window._heroSessionId || ('hero-' + Date.now());
+      // call_groupを作成（外部ホテル1件）
+      var res = await fetch('/api/concierge/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          message: '__create_call_group_direct',
+          locale: document.documentElement.lang || 'en',
+          _call_group: {
+            hotels: [{ hotel_name: hotelName, hotel_phone: hotelPhone, hotel_source: 'external' }],
+            guest_name: name, guest_email: email, check_in_date: date,
+            check_in_time: checkinTime, check_out_time: checkoutTime
+          }
+        })
+      });
+      var data = await res.json();
+      if (data.paypal_url) {
+        window.open(data.paypal_url, '_blank');
+        addMsg('✅ PayPalページを開きました。支払い完了後、AIがホテルに電話します。\n\n📞 ' + hotelName + '\n👤 ' + name + '\n📅 ' + date, 'assistant');
+      // PayPal完了後にポーリング開始を案内
+      setTimeout(function(){
+        addMsg('💡 支払い完了後、このチャットに「電話済み」と入力すると結果を確認できます。または自動で結果が届きます。', 'assistant');
+      }, 2000);
+      } else if (data.error) {
+        addMsg('❌ エラー: ' + data.error, 'assistant');
+      } else {
+        addMsg(data.response || '予約リクエストを受け付けました。', 'assistant');
+      }
+    } catch(e) {
+      addMsg('❌ 通信エラーが発生しました。もう一度お試しください。', 'assistant');
+    }
+  };
+
+  // ===== Inline Booking Flow =====
+  window._heroBookNow = async function(slug, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    try {
+      var res = await fetch('/api/hotels/' + slug + '/plans');
+      var data = await res.json();
+      if (!data.hotel || !data.plans || data.plans.length === 0) {
+        btn.textContent = '❌ No plans available';
+        return;
+      }
+      showBookingForm(data.hotel, data.plans, btn);
+    } catch(e) {
+      btn.textContent = '❌ Error loading plans';
+    }
+  };
+
+  function showBookingForm(hotel, plans, btn) {
+    // Remove any existing form
+    var existing = document.getElementById('hero-booking-form');
+    if (existing) existing.remove();
+
+    var planOptions = plans.map(function(p) {
+      return '<option value="' + p.id + '">' +
+        p.name + ' — $' + p.price_usd +
+        (p.check_in_time ? ' (' + p.check_in_time + '–' + p.check_out_time + ')' : '') +
+        '</option>';
+    }).join('');
+
+    var formEl = document.createElement('div');
+    formEl.id = 'hero-booking-form';
+    formEl.className = 'flex gap-2 mt-2';
+    formEl.innerHTML =
+      '<div class="w-6 h-6 flex-shrink-0"></div>' +
+      '<div class="bg-white rounded-xl p-4 text-gray-800 text-sm max-w-[90%] w-full shadow-lg">' +
+        '<div class="flex items-center justify-between mb-3">' +
+          '<p class="font-bold text-gray-900 text-sm">📋 ' + hotel.name + '</p>' +
+          '<button onclick="document.getElementById(\'hero-booking-form\').remove()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>' +
+        '</div>' +
+        '<div class="space-y-2">' +
+          '<div>' +
+            '<label class="text-xs text-gray-500 font-medium">Plan *</label>' +
+            '<select id="hbf-plan" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500">' +
+            planOptions +
+            '</select>' +
+          '</div>' +
+          '<div class="grid grid-cols-2 gap-2">' +
+            '<div>' +
+              '<label class="text-xs text-gray-500 font-medium">Name *</label>' +
+              '<input id="hbf-name" type="text" placeholder="John Doe" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-gray-500 font-medium">Email *</label>' +
+              '<input id="hbf-email" type="email" placeholder="you@email.com" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
+            '</div>' +
+          '</div>' +
+          '<div class="grid grid-cols-3 gap-2">' +
+            '<div>' +
+              '<label class="text-xs text-gray-500 font-medium">Check-in Date *</label>' +
+              '<input id="hbf-date" type="date" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-gray-500 font-medium">Adults</label>' +
+              '<input id="hbf-adults" type="number" value="1" min="1" max="10" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-gray-500 font-medium">Children</label>' +
+              '<input id="hbf-children" type="number" value="0" min="0" max="10" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
+            '</div>' +
+          '</div>' +
+          '<div id="hbf-error" class="hidden text-xs text-red-500 font-medium"></div>' +
+          '<button id="hbf-submit" onclick="window._heroSubmitBooking()" ' +
+            'class="w-full mt-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 rounded-lg text-xs transition-colors">' +
+            'Confirm Booking' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+
+    messagesEl.appendChild(formEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    btn.textContent = '✅ Form opened below';
+  }
+
+  window._heroSubmitBooking = async function() {
+    var planId   = document.getElementById('hbf-plan')?.value;
+    var name     = document.getElementById('hbf-name')?.value.trim();
+    var email    = document.getElementById('hbf-email')?.value.trim();
+    var date     = document.getElementById('hbf-date')?.value;
+    var adults   = parseInt(document.getElementById('hbf-adults')?.value || '1');
+    var children = parseInt(document.getElementById('hbf-children')?.value || '0');
+    var errEl    = document.getElementById('hbf-error');
+    var submitBtn = document.getElementById('hbf-submit');
+
+    if (!planId || !name || !email || !date) {
+      errEl.textContent = '⚠️ Please fill in all required fields.';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    errEl.classList.add('hidden');
+    submitBtn.textContent = 'Processing...';
+    submitBtn.disabled = true;
+
+    try {
+      var res = await fetch('/api/bookings/direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan_id: parseInt(planId), guest_name: name, guest_email: email, check_in_date: date, adults: adults, children: children }),
+      });
+      var data = await res.json();
+      if (data.success) {
+        // Remove form, show success message
+        document.getElementById('hero-booking-form')?.remove();
+        addMsg('✅ Booking confirmed!\n\n🏨 ' + data.hotel_name + '\n📋 ' + data.plan_name + '\n📅 ' + date + '\n💰 $' + data.total + ' USD\n\nConfirmation has been sent to ' + email + '.', 'assistant');
+      } else {
+        errEl.textContent = '❌ ' + (data.error || 'Booking failed. Please try again.');
+        errEl.classList.remove('hidden');
+        submitBtn.textContent = 'Confirm Booking';
+        submitBtn.disabled = false;
+      }
+    } catch(e) {
+      errEl.textContent = '❌ Connection error. Please try again.';
+      errEl.classList.remove('hidden');
+      submitBtn.textContent = 'Confirm Booking';
+      submitBtn.disabled = false;
+    }
+  };
+
+  function addTyping() {
+    var el = document.createElement('div');
+    el.id = 'hero-typing';
+    el.className = 'flex gap-2';
+    el.innerHTML =
+      '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
+      '<div class="bg-white/15 text-white rounded-xl rounded-tl-none px-3 py-2 text-sm flex items-center gap-1">' +
+        '<span class="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce" style="animation-delay:0ms"></span>' +
+        '<span class="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce" style="animation-delay:150ms"></span>' +
+        '<span class="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce" style="animation-delay:300ms"></span>' +
+      '</div>';
+    messagesEl.appendChild(el);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function removeTyping() {
+    var el = document.getElementById('hero-typing');
+    if (el) el.remove();
+  }
+
+  // --- send message ---
+  async function sendMessage() {
+    var text = inputEl.value.trim();
+    if (!text || isSending) return;
+
+    isSending = true;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+
+    var ctx = getFormContext();
+    var fullMsg = ctx + text;
+    addMsg(text, 'user');
+    addTyping();
+
+    try {
+      var body = { session_id: sessionId, message: fullMsg, locale: 'en' };
+      if (pendingImageKey) { body.image_key = pendingImageKey; pendingImageKey = null; }
+
+      var res = await fetch('/api/concierge/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      var data = await res.json();
+      removeTyping();
+      addMsg(data.response || data.reply || data.message || 'Sorry, something went wrong.', 'assistant');
+
+      // 電話発信中なら自動ポーリング開始
+      if (data.message_type === 'call_status' && data.metadata?.call_status === 'calling') {
+        var callId = data.metadata.call_id;
+        window._startCallPolling(callId, sessionId, 'en');
+      }
+
+      // Clear upload badge
+      uploadName.classList.add('hidden');
+      uploadStatus.classList.add('hidden');
+    } catch (e) {
+      removeTyping();
+      addMsg('Connection error. Please try again.', 'assistant');
+    } finally {
+      isSending = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  inputEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
+  });
+
+  // グローバル関数として登録（onclick属性から呼び出し）
+  window._heroAskAI = function() {
+    var location = document.getElementById('location-input') ? document.getElementById('location-input').value.trim() : '';
+    var date     = document.getElementById('checkin-fp') ? document.getElementById('checkin-fp').value.trim() : '';
+    var ciTime   = document.querySelector('select[name="checkin_time"]') ? document.querySelector('select[name="checkin_time"]').value : '10:00';
+    var coTime   = document.querySelector('select[name="checkout_time"]') ? document.querySelector('select[name="checkout_time"]').value : '18:00';
+    var guestsEl = document.querySelector('select[name="guests"]');
+    var guests   = guestsEl ? guestsEl.value : '1';
+    var budgetEl = document.querySelector('select[name="budget"]');
+    var budget   = budgetEl ? budgetEl.value : '';
+    var specEl   = document.querySelector('select[name="speciality"]');
+    var spec     = specEl ? specEl.value : '';
+
+    if (!location) {
+      var li = document.getElementById('location-input');
+      if (li) li.focus();
+      showMessages();
+      addMsg('Please enter a city or location first! 📍', 'assistant');
+      return;
+    }
+
+    var parts = ['Please recommend 3 day-use hotels in ' + location];
+    if (date) parts.push('for ' + date);
+    if (ciTime && coTime) parts.push('from ' + ciTime + ' to ' + coTime);
+    if (guests) parts.push('for ' + guests + ' guest' + (parseInt(guests) > 1 ? 's' : ''));
+    if (budget) parts.push('with ' + budget + ' budget');
+    if (spec) parts.push('(' + spec + ')');
+    parts.push('. Show the top 3 options with price, time slot, and booking link.');
+
+    var autoMsg = parts.join(' ');
+    inputEl.value = autoMsg;
+
+    var wrapper = document.getElementById('ai-chat-wrapper');
+    if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    setTimeout(function() { sendMessage(); }, 400);
+  };
+
+  // --- airport shortcuts → fill input ---
+  document.querySelectorAll('[data-airport]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      inputEl.value = btn.dataset.airport;
+      inputEl.focus();
+    });
+  });
+
+  // --- flight photo upload ---
+  uploadEl.addEventListener('change', async function() {
+    var file = uploadEl.files[0];
+    if (!file) return;
+
+    uploadStatus.textContent = 'Uploading...';
+    uploadStatus.classList.remove('hidden');
+    uploadName.classList.add('hidden');
+
+    var form = new FormData();
+    form.append('image', file);
+    form.append('session_id', sessionId);
+
+    try {
+      var res = await fetch('/api/concierge/upload', { method: 'POST', body: form });
+      var data = await res.json();
+      if (data.image_key || data.key) {
+        pendingImageKey = data.image_key || data.key;
+        uploadStatus.classList.add('hidden');
+        uploadName.textContent = '📎 ' + file.name;
+        uploadName.classList.remove('hidden');
+        inputEl.placeholder = 'Photo attached! Now type your destination or "find hotels near this airport"...';
+        inputEl.focus();
+      } else {
+        uploadStatus.textContent = data.error || 'Upload failed';
+      }
+    } catch (e) {
+      uploadStatus.textContent = 'Upload error';
+    }
+  });
+})();
+</script>
+
 <!-- Flatpickr: English date picker for Check-in -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
 
 <script is:inline define:vars={{ allCities }}>
 (function() {
-  var cities = (allCities || []).map(function(c) {
-    return { city: c.city, country: c.country };
+  // 世界のメジャー都市（DB未登録でも検索可能にする）
+  var WORLD_CITIES = [
+    // North America
+    {city:"New York",country:"USA"},{city:"Los Angeles",country:"USA"},{city:"Chicago",country:"USA"},
+    {city:"Houston",country:"USA"},{city:"Phoenix",country:"USA"},{city:"Philadelphia",country:"USA"},
+    {city:"San Antonio",country:"USA"},{city:"San Diego",country:"USA"},{city:"Dallas",country:"USA"},
+    {city:"San Francisco",country:"USA"},{city:"Seattle",country:"USA"},{city:"Boston",country:"USA"},
+    {city:"Denver",country:"USA"},{city:"Miami",country:"USA"},{city:"Atlanta",country:"USA"},
+    {city:"Las Vegas",country:"USA"},{city:"Minneapolis",country:"USA"},{city:"Portland",country:"USA"},
+    {city:"Nashville",country:"USA"},{city:"Detroit",country:"USA"},{city:"Austin",country:"USA"},
+    {city:"Honolulu",country:"USA"},{city:"Washington DC",country:"USA"},{city:"New Orleans",country:"USA"},
+    {city:"Toronto",country:"Canada"},{city:"Vancouver",country:"Canada"},{city:"Montreal",country:"Canada"},
+    {city:"Calgary",country:"Canada"},{city:"Ottawa",country:"Canada"},{city:"Mexico City",country:"Mexico"},
+    {city:"Cancun",country:"Mexico"},{city:"Guadalajara",country:"Mexico"},
+    // Europe
+    {city:"London",country:"UK"},{city:"Paris",country:"France"},{city:"Berlin",country:"Germany"},
+    {city:"Madrid",country:"Spain"},{city:"Rome",country:"Italy"},{city:"Amsterdam",country:"Netherlands"},
+    {city:"Barcelona",country:"Spain"},{city:"Vienna",country:"Austria"},{city:"Prague",country:"Czech Republic"},
+    {city:"Warsaw",country:"Poland"},{city:"Budapest",country:"Hungary"},{city:"Athens",country:"Greece"},
+    {city:"Lisbon",country:"Portugal"},{city:"Stockholm",country:"Sweden"},{city:"Oslo",country:"Norway"},
+    {city:"Copenhagen",country:"Denmark"},{city:"Helsinki",country:"Finland"},{city:"Zurich",country:"Switzerland"},
+    {city:"Geneva",country:"Switzerland"},{city:"Brussels",country:"Belgium"},{city:"Dublin",country:"Ireland"},
+    {city:"Milan",country:"Italy"},{city:"Munich",country:"Germany"},{city:"Frankfurt",country:"Germany"},
+    {city:"Hamburg",country:"Germany"},{city:"Cologne",country:"Germany"},{city:"Düsseldorf",country:"Germany"},
+    {city:"Marseille",country:"France"},{city:"Lyon",country:"France"},{city:"Nice",country:"France"},
+    {city:"Istanbul",country:"Turkey"},{city:"Ankara",country:"Turkey"},{city:"Antalya",country:"Turkey"},
+    {city:"Moscow",country:"Russia"},{city:"St. Petersburg",country:"Russia"},{city:"Kiev",country:"Ukraine"},
+    {city:"Bucharest",country:"Romania"},{city:"Sofia",country:"Bulgaria"},{city:"Zagreb",country:"Croatia"},
+    // Asia
+    {city:"Tokyo",country:"Japan"},{city:"Osaka",country:"Japan"},{city:"Kyoto",country:"Japan"},
+    {city:"Yokohama",country:"Japan"},{city:"Nagoya",country:"Japan"},{city:"Sapporo",country:"Japan"},
+    {city:"Fukuoka",country:"Japan"},{city:"Kobe",country:"Japan"},{city:"Hiroshima",country:"Japan"},
+    {city:"Beijing",country:"China"},{city:"Shanghai",country:"China"},{city:"Shenzhen",country:"China"},
+    {city:"Guangzhou",country:"China"},{city:"Chengdu",country:"China"},{city:"Xi'an",country:"China"},
+    {city:"Hangzhou",country:"China"},{city:"Wuhan",country:"China"},{city:"Chongqing",country:"China"},
+    {city:"Taipei",country:"Taiwan"},{city:"Taichung",country:"Taiwan"},{city:"Kaohsiung",country:"Taiwan"},
+    {city:"Seoul",country:"South Korea"},{city:"Busan",country:"South Korea"},{city:"Jeju",country:"South Korea"},
+    {city:"Hong Kong",country:"Hong Kong"},{city:"Macau",country:"Macau"},
+    {city:"Singapore",country:"Singapore"},
+    {city:"Bangkok",country:"Thailand"},{city:"Chiang Mai",country:"Thailand"},{city:"Phuket",country:"Thailand"},
+    {city:"Pattaya",country:"Thailand"},{city:"Hua Hin",country:"Thailand"},
+    {city:"Kuala Lumpur",country:"Malaysia"},{city:"Penang",country:"Malaysia"},{city:"Johor Bahru",country:"Malaysia"},
+    {city:"Bali",country:"Indonesia"},{city:"Jakarta",country:"Indonesia"},{city:"Surabaya",country:"Indonesia"},
+    {city:"Yogyakarta",country:"Indonesia"},{city:"Lombok",country:"Indonesia"},
+    {city:"Manila",country:"Philippines"},{city:"Cebu",country:"Philippines"},{city:"Boracay",country:"Philippines"},
+    {city:"Ho Chi Minh City",country:"Vietnam"},{city:"Hanoi",country:"Vietnam"},{city:"Da Nang",country:"Vietnam"},
+    {city:"Phnom Penh",country:"Cambodia"},{city:"Siem Reap",country:"Cambodia"},
+    {city:"Vientiane",country:"Laos"},{city:"Luang Prabang",country:"Laos"},
+    {city:"Yangon",country:"Myanmar"},{city:"Colombo",country:"Sri Lanka"},
+    {city:"Mumbai",country:"India"},{city:"Delhi",country:"India"},{city:"Bangalore",country:"India"},
+    {city:"Chennai",country:"India"},{city:"Kolkata",country:"India"},{city:"Hyderabad",country:"India"},
+    {city:"Goa",country:"India"},{city:"Jaipur",country:"India"},{city:"Agra",country:"India"},
+    {city:"Karachi",country:"Pakistan"},{city:"Lahore",country:"Pakistan"},{city:"Islamabad",country:"Pakistan"},
+    {city:"Dhaka",country:"Bangladesh"},{city:"Kathmandu",country:"Nepal"},
+    {city:"Islamabad",country:"Pakistan"},{city:"Colombo",country:"Sri Lanka"},
+    // Middle East
+    {city:"Dubai",country:"UAE"},{city:"Abu Dhabi",country:"UAE"},{city:"Sharjah",country:"UAE"},
+    {city:"Doha",country:"Qatar"},{city:"Riyadh",country:"Saudi Arabia"},{city:"Jeddah",country:"Saudi Arabia"},
+    {city:"Mecca",country:"Saudi Arabia"},{city:"Medina",country:"Saudi Arabia"},
+    {city:"Kuwait City",country:"Kuwait"},{city:"Manama",country:"Bahrain"},
+    {city:"Muscat",country:"Oman"},{city:"Beirut",country:"Lebanon"},{city:"Amman",country:"Jordan"},
+    {city:"Tel Aviv",country:"Israel"},{city:"Jerusalem",country:"Israel"},
+    {city:"Cairo",country:"Egypt"},{city:"Alexandria",country:"Egypt"},
+    // Oceania
+    {city:"Sydney",country:"Australia"},{city:"Melbourne",country:"Australia"},{city:"Brisbane",country:"Australia"},
+    {city:"Perth",country:"Australia"},{city:"Adelaide",country:"Australia"},{city:"Gold Coast",country:"Australia"},
+    {city:"Auckland",country:"New Zealand"},{city:"Wellington",country:"New Zealand"},{city:"Queenstown",country:"New Zealand"},
+    {city:"Nadi",country:"Fiji"},
+    // Africa
+    {city:"Cape Town",country:"South Africa"},{city:"Johannesburg",country:"South Africa"},{city:"Durban",country:"South Africa"},
+    {city:"Nairobi",country:"Kenya"},{city:"Lagos",country:"Nigeria"},{city:"Accra",country:"Ghana"},
+    {city:"Casablanca",country:"Morocco"},{city:"Marrakech",country:"Morocco"},{city:"Tunis",country:"Tunisia"},
+    {city:"Addis Ababa",country:"Ethiopia"},{city:"Dar es Salaam",country:"Tanzania"},
+    // South America
+    {city:"São Paulo",country:"Brazil"},{city:"Rio de Janeiro",country:"Brazil"},{city:"Brasília",country:"Brazil"},
+    {city:"Buenos Aires",country:"Argentina"},{city:"Santiago",country:"Chile"},
+    {city:"Lima",country:"Peru"},{city:"Bogotá",country:"Colombia"},{city:"Medellín",country:"Colombia"},
+    {city:"Caracas",country:"Venezuela"},{city:"Montevideo",country:"Uruguay"},
+    {city:"Quito",country:"Ecuador"},{city:"La Paz",country:"Bolivia"},
+  ];
+
+  // DBの自社登録都市（優先表示）
+  var dbCities = (allCities || []).map(function(c) {
+    return { city: c.city, country: c.country, inDB: true };
   });
+  var dbCityKeys = new Set(dbCities.map(function(c){ return c.city.toLowerCase(); }));
+
+  // マージ: DB都市優先 + 世界都市（重複除外）
+  var worldExtras = WORLD_CITIES.filter(function(c) {
+    return !dbCityKeys.has(c.city.toLowerCase());
+  }).map(function(c) { return { city: c.city, country: c.country, inDB: false }; });
+
+  var cities = dbCities.concat(worldExtras);
 
   var input = document.getElementById('location-input');
   var list  = document.getElementById('location-suggestions');
   if (!input || !list) return;
 
+  var activeIdx = -1;
+
   function normalize(s) {
     return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
   }
 
-  function render(items) {
-    if (!items.length) { list.className = 'hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm'; return; }
-    list.innerHTML = items.map(function(c) {
-      return '<li class="px-4 py-2.5 cursor-pointer hover:bg-teal-50 text-gray-800 flex justify-between" data-city="' + c.city + '">' +
-             '<span>' + c.city + '</span>' +
-             '<span class="text-gray-400 text-xs">' + c.country + '</span>' +
+  function highlight(text, q) {
+    if (!q) return text;
+    var re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    return text.replace(re, '<strong class="text-teal-600">$1</strong>');
+  }
+
+  function render(items, q) {
+    activeIdx = -1;
+    if (!items.length) {
+      list.classList.add('hidden');
+      list.innerHTML = '';
+      return;
+    }
+    list.innerHTML = items.map(function(c, i) {
+      var badge = c.inDB
+        ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">DDH</span>'
+        : '';
+      return '<li class="px-4 py-2.5 cursor-pointer hover:bg-teal-50 text-gray-800 flex justify-between items-center suggestion-item" data-city="' + c.city + '" data-idx="' + i + '">' +
+             '<span class="font-medium flex items-center">' + highlight(c.city, q) + badge + '</span>' +
+             '<span class="text-gray-400 text-xs ml-2 flex-shrink-0">' + c.country + '</span>' +
              '</li>';
     }).join('');
-    list.className = 'block absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm';
+    list.classList.remove('hidden');
+  }
+
+  function setActive(idx, items) {
+    var lis = list.querySelectorAll('.suggestion-item');
+    lis.forEach(function(li, i) {
+      li.classList.toggle('bg-teal-50', i === idx);
+    });
+    if (lis[idx]) {
+      input.value = lis[idx].dataset.city;
+    }
+  }
+
+  function getMatches(q) {
+    if (!q) {
+      // 未入力時はDB登録都市を優先表示
+      var dbTop = cities.filter(function(c){ return c.inDB; }).slice(0, 8);
+      return dbTop.length >= 8 ? dbTop : dbTop.concat(cities.filter(function(c){ return !c.inDB; }).slice(0, 8 - dbTop.length));
+    }
+    var nq = normalize(q);
+    var prefixDB = [], prefixWorld = [], containsDB = [], containsWorld = [];
+    cities.forEach(function(c) {
+      var nc = normalize(c.city), nco = normalize(c.country);
+      var isPrefix = nc.startsWith(nq) || nco.startsWith(nq);
+      var isContains = !isPrefix && (nc.includes(nq) || nco.includes(nq));
+      if (isPrefix) { c.inDB ? prefixDB.push(c) : prefixWorld.push(c); }
+      else if (isContains) { c.inDB ? containsDB.push(c) : containsWorld.push(c); }
+    });
+    // DB優先: prefix(DB) → prefix(world) → contains(DB) → contains(world)
+    return prefixDB.concat(prefixWorld).concat(containsDB).concat(containsWorld).slice(0, 10);
   }
 
   input.addEventListener('input', function() {
-    var q = normalize(this.value);
-    if (!q) { render([]); return; }
-    var matches = cities.filter(function(c) {
-      return normalize(c.city).includes(q) || normalize(c.country).includes(q);
-    }).slice(0, 10);
-    render(matches);
+    var q = this.value.trim();
+    var matches = getMatches(q);
+    render(matches, normalize(q));
   });
 
   input.addEventListener('focus', function() {
-    if (!this.value) {
-      render(cities.slice(0, 8));
+    var q = this.value.trim();
+    render(getMatches(q), normalize(q));
+  });
+
+  input.addEventListener('keydown', function(e) {
+    var lis = list.querySelectorAll('.suggestion-item');
+    if (!lis.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, lis.length - 1);
+      setActive(activeIdx, lis);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      setActive(activeIdx, lis);
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      input.value = lis[activeIdx].dataset.city;
+      list.classList.add('hidden');
+      activeIdx = -1;
+    } else if (e.key === 'Escape') {
+      list.classList.add('hidden');
     }
   });
 
   list.addEventListener('mousedown', function(e) {
-    var li = e.target.closest('li');
+    var li = e.target.closest('.suggestion-item');
     if (!li) return;
+    e.preventDefault();
     input.value = li.dataset.city;
-    render([]);
+    list.classList.add('hidden');
   });
 
   document.addEventListener('click', function(e) {
     if (!document.getElementById('location-wrapper').contains(e.target)) {
-      render([]);
+      list.classList.add('hidden');
     }
   });
 })();
