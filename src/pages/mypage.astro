@@ -1,0 +1,305 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// Auth: verify JWT (same logic as Layout.astro)
+async function verifyJWT(token: string, secret: string): Promise<Record<string, any> | null> {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [header, body, signature] = parts;
+    const key = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    );
+    const sigBytes = Uint8Array.from(
+      atob(signature.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)
+    );
+    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(`${header}.${body}`));
+    if (!valid) return null;
+    const payload = JSON.parse(atob(body));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch { return null; }
+}
+
+const env = (Astro.locals as any).runtime?.env;
+const DB = env?.DB;
+const jwtSecret = env?.JWT_SECRET || 'ddh-secret-2025';
+const cookieHeader = Astro.request.headers.get('cookie') || '';
+const tokenMatch = cookieHeader.match(/ddh_token=([^;]+)/);
+const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
+const currentUser = authPayload
+  ? { id: authPayload.sub, name: authPayload.name, email: authPayload.email, role: authPayload.role }
+  : null;
+
+// Redirect to login if not authenticated
+if (!currentUser) {
+  return Astro.redirect('/login?redirect=/mypage');
+}
+
+// Fetch bookings for the logged-in user
+let bookings: any[] = [];
+let error = '';
+
+try {
+  if (DB) {
+    const result = await DB.prepare(`
+      SELECT
+        b.id, b.status, b.check_in_date, b.total_price_usd,
+        b.adults, b.children, b.created_at, b.paypal_order_id,
+        b.notes,
+        h.name as hotel_name, h.slug as hotel_slug,
+        h.city, h.country, h.thumbnail_url,
+        p.name as plan_name, p.check_in_time, p.check_out_time
+      FROM bookings b
+      LEFT JOIN hotels h ON h.id = b.hotel_id
+      LEFT JOIN plans p ON p.id = b.plan_id
+      WHERE b.guest_email = ?
+      ORDER BY b.created_at DESC
+      LIMIT 50
+    `).bind(currentUser.email).all();
+    bookings = result?.results ?? [];
+  }
+} catch (e: any) {
+  error = 'Failed to load bookings.';
+}
+
+const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
+  pending:              { label: 'Payment Pending',     color: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: '⏳' },
+  pending_confirmation: { label: 'Awaiting Hotel',      color: 'bg-blue-100 text-blue-700 border-blue-200',       icon: '📨' },
+  confirmed:            { label: 'Confirmed',            color: 'bg-green-100 text-green-700 border-green-200',    icon: '✅' },
+  completed:            { label: 'Completed',            color: 'bg-gray-100 text-gray-600 border-gray-200',       icon: '🏁' },
+  cancelled:            { label: 'Cancelled',            color: 'bg-red-100 text-red-600 border-red-200',          icon: '❌' },
+  failed:               { label: 'Failed',               color: 'bg-red-100 text-red-600 border-red-200',          icon: '⚠️' },
+};
+
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '-';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch { return dateStr; }
+}
+---
+
+<Layout title="My Bookings — DaydreamHub">
+  <div class="max-w-4xl mx-auto px-4 py-10">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">My Bookings</h1>
+        <p class="text-sm text-gray-500 mt-1">Welcome back, <span class="font-medium text-gray-700">{currentUser.name}</span></p>
+      </div>
+      <a href="/search" class="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        New Booking
+      </a>
+    </div>
+
+    {error && (
+      <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-6">{error}</div>
+    )}
+
+    {bookings.length === 0 ? (
+      <!-- Empty state -->
+      <div class="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
+        <div class="text-6xl mb-4">🏨</div>
+        <h2 class="text-xl font-semibold text-gray-700 mb-2">No bookings yet</h2>
+        <p class="text-gray-400 mb-6 text-sm">Your day-use hotel bookings will appear here.</p>
+        <a href="/search" class="inline-block bg-teal-600 hover:bg-teal-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors">Browse Hotels</a>
+      </div>
+    ) : (
+      <!-- Bookings list -->
+      <div class="space-y-4">
+        {bookings.map((b: any) => {
+          const status = statusConfig[b.status] || { label: b.status, color: 'bg-gray-100 text-gray-600 border-gray-200', icon: '•' };
+          const guestCount = b.children > 0 ? `${b.adults}+${b.children}` : `${b.adults}`;
+          return (
+            <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+              <div class="flex flex-col sm:flex-row">
+                <!-- Hotel thumbnail -->
+                <div class="sm:w-36 h-28 sm:h-auto flex-shrink-0 bg-gray-100 overflow-hidden">
+                  {b.thumbnail_url ? (
+                    <img src={b.thumbnail_url} alt={b.hotel_name} class="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div class="w-full h-full flex items-center justify-center text-gray-300">
+                      <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                    </div>
+                  )}
+                </div>
+
+                <!-- Booking info -->
+                <div class="flex-1 p-4 sm:p-5">
+                  <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                    <div>
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs font-mono text-gray-400">#{b.id}</span>
+                        <span class={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${status.color}`}>
+                          {status.icon} {status.label}
+                        </span>
+                      </div>
+                      <h2 class="font-semibold text-gray-900 mt-1 text-base">
+                        <a href={`/hotel/${b.hotel_slug}`} class="hover:text-teal-700 transition-colors">{b.hotel_name || 'Hotel'}</a>
+                      </h2>
+                      <p class="text-xs text-gray-400">{b.city}{b.country ? `, ${b.country}` : ''}</p>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-lg font-bold text-teal-700">${Number(b.total_price_usd || 0).toFixed(2)}</div>
+                      <div class="text-xs text-gray-400">USD</div>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <div class="text-xs text-gray-400 mb-0.5">Plan</div>
+                      <div class="font-medium text-gray-700 text-xs leading-snug">{b.plan_name || '-'}</div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-gray-400 mb-0.5">Date</div>
+                      <div class="font-medium text-gray-700 text-xs">{formatDate(b.check_in_date)}</div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-gray-400 mb-0.5">Time</div>
+                      <div class="font-medium text-gray-700 text-xs">
+                        {b.check_in_time && b.check_out_time ? `${b.check_in_time} – ${b.check_out_time}` : '-'}
+                      </div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-gray-400 mb-0.5">Guests</div>
+                      <div class="font-medium text-gray-700 text-xs">{guestCount} guest{guestCount !== '1' ? 's' : ''}</div>
+                    </div>
+                  </div>
+
+                  <!-- Status messages -->
+                  {b.status === 'pending_confirmation' && (
+                    <div class="mt-3 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
+                      📨 Your booking request has been sent to the hotel. Confirmation usually arrives within 24 hours.
+                    </div>
+                  )}
+                  {b.status === 'confirmed' && (
+                    <div class="mt-3 bg-green-50 border border-green-100 rounded-lg px-3 py-2 text-xs text-green-700">
+                      ✅ Your booking is confirmed! Please arrive at the hotel on {formatDate(b.check_in_date)} by {b.check_in_time || 'check-in time'}.
+                    </div>
+                  )}
+                  {(b.status === 'cancelled' || b.status === 'failed') && (
+                    <div class="mt-3 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-xs text-red-700">
+                      If you have questions about this booking, <a href="/contact" class="underline font-medium">contact us</a>.
+                    </div>
+                  )}
+
+                  <!-- Footer row -->
+                  <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
+                    <span class="text-xs text-gray-300">Booked {formatDate(b.created_at)}</span>
+                    <div class="flex gap-2">
+                      <a href={`/hotel/${b.hotel_slug}`}
+                        class="text-xs text-teal-600 hover:text-teal-700 font-medium border border-teal-200 hover:border-teal-400 px-3 py-1.5 rounded-lg transition-colors">
+                        View Hotel
+                      </a>
+                      {(b.status === 'pending_confirmation' || b.status === 'confirmed') && (
+                        <button
+                          class="btn-cancel-booking text-xs text-red-500 hover:text-red-700 font-medium border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors"
+                          data-booking-id={b.id}
+                          data-hotel-name={b.hotel_name}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+
+    <!-- Help section -->
+    <div class="mt-8 bg-gray-50 rounded-xl p-5 flex flex-col sm:flex-row items-center gap-4">
+      <div class="flex-1">
+        <h3 class="font-semibold text-gray-800 text-sm mb-1">Need help with a booking?</h3>
+        <p class="text-xs text-gray-500">Our team is available Mon–Fri 9:00–18:00 JST. We typically respond within a few hours.</p>
+      </div>
+      <a href="/contact" class="flex-shrink-0 bg-white border border-gray-200 hover:border-teal-400 text-gray-700 hover:text-teal-700 text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
+        Contact Support
+      </a>
+    </div>
+  </div>
+<!-- Cancel modal -->
+<div id="cancel-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4">
+  <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+    <h3 class="text-lg font-bold text-gray-900 mb-2">Cancel Booking</h3>
+    <p class="text-sm text-gray-500 mb-1">Booking at: <span id="cancel-hotel-name" class="font-medium text-gray-700"></span></p>
+    <p class="text-sm text-gray-500 mb-4">Please let us know why you're cancelling.</p>
+    <textarea id="cancel-reason" rows="3" placeholder="Reason for cancellation (optional)"
+      class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none resize-none mb-4"></textarea>
+    <div class="flex gap-3">
+      <button id="cancel-modal-close" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+        Keep Booking
+      </button>
+      <button id="cancel-modal-confirm" class="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-bold transition-colors">
+        Confirm Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+(function() {
+  var modal = document.getElementById('cancel-modal');
+  var hotelNameEl = document.getElementById('cancel-hotel-name');
+  var reasonEl = document.getElementById('cancel-reason');
+  var confirmBtn = document.getElementById('cancel-modal-confirm');
+  var closeBtn = document.getElementById('cancel-modal-close');
+  var currentBookingId = null;
+
+  function openModal(bookingId, hotelName) {
+    currentBookingId = bookingId;
+    hotelNameEl.textContent = hotelName;
+    reasonEl.value = '';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    currentBookingId = null;
+  }
+
+  document.querySelectorAll('.btn-cancel-booking').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      openModal(btn.dataset.bookingId, btn.dataset.hotelName);
+    });
+  });
+
+  closeBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+
+  confirmBtn.addEventListener('click', async function() {
+    if (!currentBookingId) return;
+    confirmBtn.textContent = 'Cancelling...';
+    confirmBtn.disabled = true;
+    try {
+      var res = await fetch('/api/guest/cancel-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: Number(currentBookingId), reason: reasonEl.value.trim() }),
+      });
+      var data = await res.json();
+      if (data.success) {
+        closeModal();
+        window.location.reload();
+      } else {
+        alert(data.error || 'Failed to cancel booking');
+        confirmBtn.textContent = 'Confirm Cancel';
+        confirmBtn.disabled = false;
+      }
+    } catch (e) {
+      alert('Error cancelling booking. Please contact support.');
+      confirmBtn.textContent = 'Confirm Cancel';
+      confirmBtn.disabled = false;
+    }
+  });
+})();
+</script>
+</Layout>

@@ -1,0 +1,1047 @@
+---
+import OwnerLayout from '../../../layouts/OwnerLayout.astro';
+import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const owner = await verifyOwner(Astro.request, jwtSecret);
+if (!owner) return Astro.redirect("/login?redirect=/owner/hotels");
+
+const { id } = Astro.params;
+const hotelId = parseInt(id || "0");
+
+const ownerHotelIds = await getOwnerHotelIds(db, owner);
+if (!ownerHotelIds.includes(hotelId)) return Astro.redirect("/owner/hotels");
+
+let hotel: any = null;
+let plans: any[] = [];
+let editRequests: any[] = [];
+
+if (db) {
+  hotel = await db.prepare("SELECT * FROM hotels WHERE id = ?").bind(hotelId).first();
+  if (!hotel) return Astro.redirect("/owner/hotels");
+
+  const planRes = await db.prepare("SELECT * FROM plans WHERE hotel_id = ? ORDER BY sort_order ASC, id ASC").bind(hotelId).all();
+  plans = planRes?.results || [];
+
+  try {
+    const erRes = await db.prepare(
+      "SELECT * FROM hotel_edit_requests WHERE hotel_id = ? ORDER BY created_at DESC LIMIT 10"
+    ).bind(hotelId).all();
+    editRequests = erRes?.results || [];
+  } catch {
+    editRequests = [];
+  }
+}
+
+let selectedCategories: string[] = [];
+try {
+  selectedCategories = JSON.parse(hotel?.categories || "[]");
+} catch {}
+
+let selectedAmenities: string[] = [];
+try {
+  const arr = JSON.parse(hotel?.amenities || "[]");
+  selectedAmenities = Array.isArray(arr) ? arr : [];
+} catch {}
+let amenitiesStr = selectedAmenities.join(", ");
+
+let galleryImages: string[] = [];
+try {
+  galleryImages = JSON.parse(hotel?.images || "[]");
+} catch {}
+
+const amenityOptions = [
+  "24h Front Desk", "Accessible", "Air Conditioning", "Airport Shuttle",
+  "Balcony", "Bar / Lounge", "Bathtub", "BBQ Area", "Business Center",
+  "Co-working Space", "Concierge", "Dry Cleaning", "EV Charging",
+  "Elevator", "Garden", "Gym / Fitness", "Hairdryer", "Heating",
+  "Hot Tub", "Housekeeping", "Laundry", "Luggage Storage",
+  "Meeting Room", "Netflix", "Non-smoking", "Parking", "Pet Friendly",
+  "Pool", "Restaurant", "Room Service", "Rooftop", "Sauna",
+  "Shower", "Spa", "TV", "WiFi",
+];
+
+const categoryOptions = [
+  { value: "workspace", label: "Workspace" },
+  { value: "luxury", label: "Luxury" },
+  { value: "transit", label: "Transit" },
+  { value: "personal_time", label: "Personal Time" },
+  { value: "daycation", label: "Daycation" },
+  { value: "for_couple", label: "For Couple" },
+  { value: "early_checkin", label: "Early Check-in" }
+];
+
+// 30分単位の時間オプション生成（00:00〜23:30）
+const timeOptions: string[] = [];
+for (let h = 0; h < 24; h++) {
+  timeOptions.push(`${String(h).padStart(2,'0')}:00`);
+  timeOptions.push(`${String(h).padStart(2,'0')}:30`);
+}
+
+const propertyTypes = [
+  "Hotel", "Hostel", "Resort", "Apartment", "Villa", "Guest House", "B&B",
+  "Private Room", "Shared Room", "Entire Home", "Cottage",
+  // Non-hotel types
+  "Clinic", "Spa", "Wellness", "Coworking Space", "Cafe & Lounge",
+];
+---
+
+<OwnerLayout title="Edit Hotel" activeNav="hotels">
+  <div class="mb-6">
+    <nav class="flex items-center gap-2 text-sm text-slate-500">
+      <a href="/owner/hotels" class="hover:text-slate-700 transition-colors">My Hotels</a>
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+      </svg>
+      <span class="text-slate-900 font-medium">{hotel?.name}</span>
+    </nav>
+  </div>
+
+  <!-- Status Message -->
+  <div id="status-msg" class="mb-6 hidden"></div>
+
+  <!-- Currently Published Information -->
+  <div class="mb-8 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+        </svg>
+        <h2 class="text-base font-semibold text-slate-700">Currently Published Information</h2>
+      </div>
+      <p class="mt-1 text-xs text-slate-500">This is the information currently shown on the public site.</p>
+    </div>
+    <div class="p-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="md:col-span-2 space-y-4">
+          <div>
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Hotel Name</span>
+            <p class="text-sm text-slate-900 mt-0.5">{hotel?.name}{hotel?.name_ja ? ` / ${hotel.name_ja}` : ""}</p>
+          </div>
+          <div>
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Description</span>
+            <p class="text-sm text-slate-700 mt-0.5 line-clamp-3">{hotel?.description || "No description"}</p>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">City</span>
+              <p class="text-sm text-slate-700 mt-0.5">{hotel?.city}{hotel?.country ? `, ${hotel.country}` : ""}</p>
+            </div>
+            <div>
+              <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Property Type</span>
+              <p class="text-sm text-slate-700 mt-0.5">{hotel?.property_type || "Hotel"}</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Categories</span>
+              <div class="flex flex-wrap gap-1 mt-1">
+                {selectedCategories.length > 0 ? selectedCategories.map((cat) => (
+                  <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700">{cat.replace("_", " ")}</span>
+                )) : (
+                  <span class="text-xs text-slate-400">None</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Amenities</span>
+              <p class="text-sm text-slate-700 mt-0.5">{amenitiesStr || "None listed"}</p>
+            </div>
+          </div>
+        </div>
+        <div>
+          {hotel?.thumbnail_url ? (
+            <img src={hotel.thumbnail_url} alt={hotel.name} class="w-full h-40 object-cover rounded-lg border border-slate-200" />
+          ) : (
+            <div class="w-full h-40 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center">
+              <svg class="w-10 h-10 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
+              </svg>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Request Changes Form -->
+  <form id="edit-form" class="mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+        <h2 class="text-base font-semibold text-slate-900">Edit Hotel</h2>
+        <p class="mt-1 text-xs text-slate-500">Changes are saved immediately.</p>
+      </div>
+      <div class="p-6 space-y-5">
+        <!-- Name / Name JA -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="edit_name" class="block text-sm font-medium text-slate-700 mb-1">Name</label>
+            <input type="text" id="edit_name" name="name" value={hotel?.name || ""} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow">
+          </div>
+          <div>
+            <label for="edit_name_ja" class="block text-sm font-medium text-slate-700 mb-1">Name (Japanese)</label>
+            <input type="text" id="edit_name_ja" name="name_ja" value={hotel?.name_ja || ""} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow">
+          </div>
+        </div>
+
+        <!-- Description / Description JA -->
+        <div>
+          <label for="edit_description" class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+          <textarea id="edit_description" name="description" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow">{hotel?.description || ""}</textarea>
+        </div>
+        <div>
+          <label for="edit_description_ja" class="block text-sm font-medium text-slate-700 mb-1">Description (Japanese)</label>
+          <textarea id="edit_description_ja" name="description_ja" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow">{hotel?.description_ja || ""}</textarea>
+        </div>
+
+        <!-- Amenities (Checkboxes) -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Amenities</label>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {amenityOptions.map((amenity) => (
+              <label class="inline-flex items-center gap-2 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  name="amenities"
+                  value={amenity}
+                  checked={selectedAmenities.includes(amenity)}
+                  class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span class="text-sm text-slate-700 group-hover:text-slate-900">{amenity}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <!-- Categories -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Categories</label>
+          <div class="flex flex-wrap gap-3">
+            {categoryOptions.map((cat) => (
+              <label class="inline-flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="categories" value={cat.value} checked={selectedCategories.includes(cat.value)} class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                <span class="text-sm text-slate-700">{cat.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <!-- Property Type -->
+        <div>
+          <label for="edit_property_type" class="block text-sm font-medium text-slate-700 mb-1">Property Type</label>
+          <select id="edit_property_type" name="property_type" class="w-64 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow">
+            {propertyTypes.map((pt) => (
+              <option value={pt} selected={hotel?.property_type === pt}>{pt}</option>
+            ))}
+          </select>
+        </div>
+
+        <!-- Thumbnail Upload -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-2">Thumbnail Image</label>
+          <div class="flex gap-4 items-start">
+            <div id="thumbnail-preview" class="flex-shrink-0">
+              {hotel?.thumbnail_url ? (
+                <img src={hotel.thumbnail_url} alt="Thumbnail" id="thumb-img" class="w-28 h-20 object-cover rounded-lg border border-slate-200" />
+              ) : (
+                <div id="thumb-placeholder" class="w-28 h-20 bg-slate-100 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center">
+                  <svg class="w-7 h-7 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+            <div class="flex-1">
+              <label for="thumb-upload" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                </svg>
+                Choose Image
+              </label>
+              <input type="file" id="thumb-upload" accept="image/*" class="hidden" />
+              <p class="mt-1.5 text-xs text-slate-400">JPG, PNG, WebP — recommended 800×600px</p>
+              <div id="thumb-upload-status" class="mt-1.5 text-xs hidden"></div>
+            </div>
+          </div>
+          <input type="hidden" id="edit_thumbnail_url" name="thumbnail_url" value={hotel?.thumbnail_url || ""}>
+        </div>
+
+        <!-- iCal URL -->
+        <div>
+          <label for="edit_ical_url" class="block text-sm font-medium text-slate-700 mb-1">iCal URL</label>
+          <input type="text" id="edit_ical_url" name="ical_url" value={hotel?.ical_url || ""} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow" placeholder="https://...">
+          <p class="mt-1 text-xs text-slate-400">Calendar feed URL for availability sync.</p>
+        </div>
+
+        <!-- Submit -->
+        <div class="flex items-center gap-4 pt-2">
+          <button type="submit" id="btn-request-changes" class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6M9 11h6M9 15h4" />
+            </svg>
+            Save Changes
+          </button>
+          <a href="/owner/hotels" class="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+            Cancel
+          </a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <!-- Gallery Images -->
+  <div class="mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-slate-900">Gallery Images</h2>
+          <p class="mt-0.5 text-xs text-slate-500">Up to 20 images. Click × to remove.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="gallery-count" class="text-xs text-slate-400">{galleryImages.length}/20</span>
+          <label for="gallery-upload" id="gallery-upload-btn" class={`inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors cursor-pointer ${galleryImages.length >= 20 ? "opacity-50 pointer-events-none" : ""}`}>
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            Add Images
+          </label>
+          <input type="file" id="gallery-upload" accept="image/*" multiple class="hidden" />
+        </div>
+      </div>
+      <div class="p-4">
+        <div id="gallery-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+          {galleryImages.map((img: string, idx: number) => (
+            <div
+              class="gallery-item relative group cursor-grab active:cursor-grabbing"
+              draggable="true"
+              data-index={idx}
+            >
+              <img src={img} alt={`Gallery ${idx+1}`} class="w-full aspect-video object-cover rounded-lg border border-slate-200 pointer-events-none select-none" />
+              <div class="absolute inset-0 rounded-lg border-2 border-indigo-400 opacity-0 drag-over-indicator pointer-events-none transition-opacity"></div>
+              <button
+                type="button"
+                class="btn-remove-gallery absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600 z-10"
+                data-index={idx}
+              >×</button>
+              <div class="absolute bottom-1 left-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <svg class="w-4 h-4 text-white drop-shadow" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                </svg>
+              </div>
+            </div>
+          ))}
+          {galleryImages.length === 0 && (
+            <div class="col-span-5 py-8 text-center text-slate-400 text-sm">
+              No images yet. Click "Add Images" to upload.
+            </div>
+          )}
+        </div>
+        <div id="gallery-upload-status" class="mt-3 text-xs hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plans -->
+  <div class="mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-slate-900">Plans</h2>
+          <p class="mt-0.5 text-xs text-slate-500">Manage your plans here.</p>
+        </div>
+        <button id="open-add-plan" type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Add Plan
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Name</th>
+              <th class="text-right px-4 py-3 font-medium text-slate-600">Price (USD)</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Check-in</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Check-out</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Max Guests</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+              <th class="text-right px-4 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {plans.length === 0 && (
+              <tr>
+                <td colspan="6" class="px-4 py-8 text-center text-slate-400">
+                  No plans found for this hotel.
+                </td>
+              </tr>
+            )}
+            {plans.map((plan: any) => (
+              <tr class="plan-row hover:bg-slate-50 transition-colors cursor-grab active:cursor-grabbing" draggable="true" data-plan-id={plan.id}>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-slate-300 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                    </svg>
+                    <div>
+                      <div class="font-medium text-slate-900">{plan.name}</div>
+                      {plan.name_ja && <div class="text-xs text-slate-400 mt-0.5">{plan.name_ja}</div>}
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-right font-mono text-slate-700">${plan.price_usd}</td>
+                <td class="px-4 py-3 text-center text-slate-600">{plan.check_in_time || "-"}</td>
+                <td class="px-4 py-3 text-center text-slate-600">{plan.check_out_time || "-"}</td>
+                <td class="px-4 py-3 text-center text-slate-600">{plan.max_guests || "-"}</td>
+                <td class="px-4 py-3 text-center">
+                  {plan.is_active ? (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                      <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                      Active
+                    </span>
+                  ) : (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
+                      <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                      Inactive
+                    </span>
+                  )}
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <button
+                    type="button"
+                    class="btn-toggle-plan text-xs font-medium mr-3 transition-colors"
+                    class:list={[plan.is_active ? 'text-amber-600 hover:text-amber-800' : 'text-green-600 hover:text-green-800']}
+                    data-plan-id={plan.id}
+                    data-is-active={plan.is_active ? '1' : '0'}
+                  >{plan.is_active ? '⏸ Pause' : '▶ Resume'}</button>
+                  <button
+                    type="button"
+                    class="btn-edit-plan text-xs text-indigo-600 hover:text-indigo-800 font-medium mr-3"
+                    data-plan={JSON.stringify(plan)}
+                  >Edit</button>
+                  <button
+                    type="button"
+                    class="btn-delete-plan text-xs text-red-500 hover:text-red-700 font-medium"
+                    data-plan-id={plan.id}
+                  >Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Plan Modal -->
+  <div id="plan-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-black/50" id="plan-modal-backdrop"></div>
+    <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+        <h2 id="plan-modal-title" class="text-lg font-semibold text-slate-900">Add Plan</h2>
+        <button id="close-plan-modal" type="button" class="text-slate-400 hover:text-slate-600">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form id="plan-form" class="p-6 space-y-4">
+        <input type="hidden" id="plan-id" name="id" value="" />
+        <div class="grid grid-cols-2 gap-4">
+          <div class="col-span-2">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Plan Name <span class="text-red-500">*</span></label>
+            <input type="text" id="plan-name" name="name" required placeholder="e.g. Morning Day-Use"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none" />
+          </div>
+          <div class="col-span-2">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Plan Name (Japanese)</label>
+            <input type="text" id="plan-name-ja" name="name_ja" placeholder="（任意）"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Price (USD) <span class="text-red-500">*</span></label>
+            <input type="number" id="plan-price" name="price_usd" min="0" step="0.01" required placeholder="0.00"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Max Guests</label>
+            <input type="number" id="plan-guests" name="max_guests" min="1" placeholder="2"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Check-in Time</label>
+            <select id="plan-checkin" name="check_in_time"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+              <option value="">-- Select --</option>
+              {timeOptions.map(t => <option value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Check-out Time</label>
+            <select id="plan-checkout" name="check_out_time"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-400 outline-none">
+              <option value="">-- Select --</option>
+              {timeOptions.map(t => <option value={t}>{t}</option>)}
+            </select>
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <div id="plan-duration-display" class="hidden flex items-center gap-2 text-sm text-slate-600">
+            <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            Duration: <span id="plan-duration-value" class="font-semibold text-indigo-600"></span>
+            <span id="plan-overnight-badge" class="hidden text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 px-2 py-0.5 rounded-full">Overnight</span>
+          </div>
+          <label class="inline-flex items-center gap-2 cursor-pointer ml-auto">
+            <input type="checkbox" id="plan-overnight-check" name="is_overnight" class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+            <span class="text-sm text-slate-700">Overnight</span>
+          </label>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Plan Type</label>
+          <input
+            type="text"
+            id="plan-type"
+            name="plan_type"
+            list="plan-type-options"
+            placeholder="Select or type custom..."
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none bg-white"
+          />
+          <datalist id="plan-type-options">
+            <option value="Daycation" />
+            <option value="Morning" />
+            <option value="Afternoon" />
+            <option value="Evening" />
+            <option value="Overnight" />
+            <option value="Hourly" />
+            <option value="Full Day" />
+            <option value="Half Day" />
+            <option value="Weekend" />
+            <option value="Package" />
+          </datalist>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Description</label>
+          <textarea id="plan-desc" name="description" rows="2" placeholder="Plan description..."
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none resize-none"></textarea>
+        </div>
+        <div id="plan-form-error" class="hidden p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700"></div>
+        <div class="flex gap-3 pt-1">
+          <button type="button" id="cancel-plan-btn" class="flex-1 px-4 py-2.5 border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50">Cancel</button>
+          <button type="submit" id="submit-plan-btn" class="flex-1 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">Save Plan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script define:vars={{ hotelId, originalName: hotel?.name || "", originalNameJa: hotel?.name_ja || "", originalDescription: hotel?.description || "", originalDescriptionJa: hotel?.description_ja || "", originalAmenities: amenitiesStr, originalCategories: selectedCategories, originalPropertyType: hotel?.property_type || "Hotel", originalThumbnailUrl: hotel?.thumbnail_url || "", originalIcalUrl: hotel?.ical_url || "" }}>
+    // -- Thumbnail preview --
+    // -- Gallery upload --
+    var galleryUploadInput = document.getElementById('gallery-upload');
+    var galleryGrid = document.getElementById('gallery-grid');
+    var galleryCount = document.getElementById('gallery-count');
+    var galleryStatus = document.getElementById('gallery-upload-status');
+    var currentGalleryCount = parseInt(galleryCount.textContent) || 0;
+
+    galleryUploadInput.addEventListener('change', async function() {
+      var files = Array.from(this.files);
+      if (!files.length) return;
+      var remaining = 20 - currentGalleryCount;
+      if (files.length > remaining) {
+        files = files.slice(0, remaining);
+      }
+      galleryStatus.className = 'mt-3 text-xs text-slate-500';
+      galleryStatus.textContent = 'Uploading ' + files.length + ' image(s)...';
+
+      var successCount = 0;
+      for (var i = 0; i < files.length; i++) {
+        try {
+          var dataUrl = await resizeAndConvert(files[i], 1200, 900, 0.85);
+          var res = await fetch('/api/owner/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hotel_id: hotelId, image_data: dataUrl, field: 'gallery' }),
+          });
+          var result = await res.json();
+          if (!res.ok) throw new Error(result.error);
+          // Add to grid
+          var idx = result.index;
+          var div = document.createElement('div');
+          div.className = 'gallery-item relative group';
+          div.dataset.index = idx;
+          div.innerHTML = '<img src="' + dataUrl + '" alt="Gallery" class="w-full aspect-video object-cover rounded-lg border border-slate-200" />' +
+            '<button type="button" class="btn-remove-gallery absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center hover:bg-red-600" data-index="' + idx + '">×</button>';
+          div.querySelector('.btn-remove-gallery').addEventListener('click', handleRemoveGallery);
+          // Remove empty state
+          var emptyEl = galleryGrid.querySelector('.col-span-5');
+          if (emptyEl) emptyEl.remove();
+          galleryGrid.appendChild(div);
+          currentGalleryCount = result.count;
+          galleryCount.textContent = result.count + '/20';
+          successCount++;
+        } catch (err) {
+          console.error(err);
+        }
+      }
+      galleryStatus.className = 'mt-3 text-xs ' + (successCount > 0 ? 'text-green-600' : 'text-red-600');
+      galleryStatus.textContent = successCount > 0 ? '✅ ' + successCount + ' image(s) uploaded!' : 'Upload failed.';
+      this.value = '';
+      // Disable button if at max
+      if (currentGalleryCount >= 20) {
+        document.getElementById('gallery-upload-btn').classList.add('opacity-50', 'pointer-events-none');
+      }
+    });
+
+    function handleRemoveGallery() {
+      var idx = parseInt(this.dataset.index);
+      fetch('/api/owner/upload?hotel_id=' + hotelId + '&index=' + idx, { method: 'DELETE' })
+        .then(function(res) { return res.json(); })
+        .then(function(result) {
+          if (result.success) window.location.reload();
+        });
+    }
+    document.querySelectorAll('.btn-remove-gallery').forEach(function(btn) {
+      btn.addEventListener('click', handleRemoveGallery);
+    });
+
+    // -- Gallery Drag & Drop reorder --
+    var dragSrc = null;
+
+    function initDragDrop() {
+      document.querySelectorAll('.gallery-item[draggable]').forEach(function(item) {
+        item.addEventListener('dragstart', function(e) {
+          dragSrc = this;
+          e.dataTransfer.effectAllowed = 'move';
+          setTimeout(function() { dragSrc.style.opacity = '0.4'; }, 0);
+        });
+        item.addEventListener('dragend', function() {
+          this.style.opacity = '';
+          document.querySelectorAll('.drag-over-indicator').forEach(function(el) {
+            el.style.opacity = '0';
+          });
+        });
+        item.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (this !== dragSrc) {
+            this.querySelector('.drag-over-indicator').style.opacity = '1';
+          }
+        });
+        item.addEventListener('dragleave', function() {
+          this.querySelector('.drag-over-indicator').style.opacity = '0';
+        });
+        item.addEventListener('drop', async function(e) {
+          e.preventDefault();
+          this.querySelector('.drag-over-indicator').style.opacity = '0';
+          if (this === dragSrc) return;
+
+          // Reorder DOM
+          var items = Array.from(galleryGrid.querySelectorAll('.gallery-item[draggable]'));
+          var fromIdx = items.indexOf(dragSrc);
+          var toIdx = items.indexOf(this);
+          if (fromIdx === toIdx) return;
+
+          // Build new order array
+          var order = items.map(function(el, i) { return i; });
+          order.splice(fromIdx, 1);
+          order.splice(toIdx, 0, fromIdx);
+
+          // Move DOM element
+          if (fromIdx < toIdx) {
+            this.parentNode.insertBefore(dragSrc, this.nextSibling);
+          } else {
+            this.parentNode.insertBefore(dragSrc, this);
+          }
+
+          // Save to server
+          try {
+            var res = await fetch('/api/owner/upload', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ hotel_id: hotelId, order: order }),
+            });
+            if (!res.ok) throw new Error('Failed to save order');
+            // Update data-index attributes
+            galleryGrid.querySelectorAll('.gallery-item[draggable]').forEach(function(el, i) {
+              el.dataset.index = i;
+              var removeBtn = el.querySelector('.btn-remove-gallery');
+              if (removeBtn) removeBtn.dataset.index = i;
+            });
+          } catch (err) {
+            console.error(err);
+          }
+        });
+      });
+    }
+    initDragDrop();
+
+    // -- Thumbnail upload --
+    var thumbUpload = document.getElementById('thumb-upload');
+    var thumbHiddenInput = document.getElementById('edit_thumbnail_url');
+    var thumbStatus = document.getElementById('thumb-upload-status');
+    var thumbPreview = document.getElementById('thumbnail-preview');
+
+    function resizeAndConvert(file, maxWidth, maxHeight, quality) {
+      return new Promise(function(resolve) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var img = new Image();
+          img.onload = function() {
+            var w = img.width, h = img.height;
+            if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+            if (h > maxHeight) { w = Math.round(w * maxHeight / h); h = maxHeight; }
+            var canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    thumbUpload.addEventListener('change', async function() {
+      var file = this.files[0];
+      if (!file) return;
+      thumbStatus.className = 'mt-1.5 text-xs text-slate-500';
+      thumbStatus.textContent = 'Uploading...';
+      try {
+        var dataUrl = await resizeAndConvert(file, 800, 600, 0.85);
+        var res = await fetch('/api/owner/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotel_id: hotelId, image_data: dataUrl, field: 'thumbnail' }),
+        });
+        var result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Upload failed');
+        thumbHiddenInput.value = dataUrl;
+        thumbPreview.innerHTML = '<img src="' + dataUrl + '" alt="Thumbnail" class="w-28 h-20 object-cover rounded-lg border border-slate-200" />';
+        thumbStatus.className = 'mt-1.5 text-xs text-green-600';
+        thumbStatus.textContent = '✅ Uploaded!';
+      } catch (err) {
+        thumbStatus.className = 'mt-1.5 text-xs text-red-600';
+        thumbStatus.textContent = 'Error: ' + err.message;
+      }
+    });
+
+    // -- Status message helper --
+    function showStatus(msg, isError) {
+      var el = document.getElementById('status-msg');
+      el.className = 'mb-6 p-4 rounded-lg text-sm ' + (isError ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-green-50 border border-green-200 text-green-700');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (!isError) setTimeout(function() { el.classList.add('hidden'); }, 4000);
+    }
+
+    // -- Form submission: compare and submit only changed fields --
+    document.getElementById('edit-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      var btn = document.getElementById('btn-request-changes');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      try {
+        var form = e.target;
+        var fieldChanges = {};
+
+        // Compare text fields
+        var newName = form.querySelector('[name="name"]').value;
+        if (newName !== originalName) fieldChanges.name = newName;
+
+        var newNameJa = form.querySelector('[name="name_ja"]').value;
+        if (newNameJa !== originalNameJa) fieldChanges.name_ja = newNameJa;
+
+        var newDesc = form.querySelector('[name="description"]').value;
+        if (newDesc !== originalDescription) fieldChanges.description = newDesc;
+
+        var newDescJa = form.querySelector('[name="description_ja"]').value;
+        if (newDescJa !== originalDescriptionJa) fieldChanges.description_ja = newDescJa;
+
+        var newAmenities = Array.from(form.querySelectorAll('input[name="amenities"]:checked')).map(function(cb) { return cb.value; });
+        var origAmenSorted = originalAmenities ? originalAmenities.split(',').map(function(a){return a.trim();}).filter(Boolean).sort().join(',') : '';
+        var newAmenSorted = newAmenities.slice().sort().join(',');
+        if (origAmenSorted !== newAmenSorted) {
+          fieldChanges.amenities = JSON.stringify(newAmenities);
+        }
+
+        var newCategories = Array.from(form.querySelectorAll('input[name="categories"]:checked')).map(function(cb) { return cb.value; });
+        var origSorted = originalCategories.slice().sort().join(',');
+        var newSorted = newCategories.slice().sort().join(',');
+        if (origSorted !== newSorted) {
+          fieldChanges.categories = JSON.stringify(newCategories);
+        }
+
+        var newPropertyType = form.querySelector('[name="property_type"]').value;
+        if (newPropertyType !== originalPropertyType) fieldChanges.property_type = newPropertyType;
+
+        var newThumbnailUrl = form.querySelector('[name="thumbnail_url"]').value;
+        if (newThumbnailUrl !== originalThumbnailUrl) fieldChanges.thumbnail_url = newThumbnailUrl;
+
+        var newIcalUrl = form.querySelector('[name="ical_url"]').value;
+        if (newIcalUrl !== originalIcalUrl) fieldChanges.ical_url = newIcalUrl;
+
+        // Check if there are changes
+        if (Object.keys(fieldChanges).length === 0) {
+          showStatus('No changes to submit.', true);
+          btn.disabled = false;
+          btn.innerHTML = 'Save Changes';
+          return;
+        }
+
+        var res = await fetch('/api/owner/hotels/' + hotelId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ field_changes: fieldChanges }),
+        });
+
+        var result = await res.json();
+
+        if (!res.ok) {
+          throw new Error(result.error || 'Failed to submit edit request');
+        }
+
+        showStatus('✅ Changes saved successfully!', false);
+        setTimeout(function() { window.location.reload(); }, 1500);
+      } catch (err) {
+        showStatus('Error: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Save Changes';
+      }
+    });
+
+    // -- Plan Duration Calculator --
+    function calcDuration() {
+      var cin = document.getElementById('plan-checkin').value;
+      var cout = document.getElementById('plan-checkout').value;
+      var isOvernightChecked = document.getElementById('plan-overnight-check').checked;
+      var display = document.getElementById('plan-duration-display');
+      var valueEl = document.getElementById('plan-duration-value');
+      var overnightBadge = document.getElementById('plan-overnight-badge');
+
+      if (!cin || !cout) { display.classList.add('hidden'); return; }
+
+      var cinMins = parseInt(cin.split(':')[0]) * 60 + parseInt(cin.split(':')[1]);
+      var coutMins = parseInt(cout.split(':')[0]) * 60 + parseInt(cout.split(':')[1]);
+
+      var diffMins = coutMins - cinMins;
+      var isOvernight = false;
+
+      if (isOvernightChecked) {
+        // オーバーナイトチェック済み：翌日チェックアウトとして計算
+        if (diffMins <= 0) {
+          // すでに逆転（例 15:00→10:00）→ 通常の翌日計算
+          diffMins += 24 * 60;
+        } else {
+          // 同日で時間順（例 8:00→12:00）→ 翌日扱いで+24H
+          diffMins += 24 * 60;
+        }
+        isOvernight = true;
+      } else {
+        // 通常計算：逆転している場合のみ翌日扱い
+        if (diffMins <= 0) {
+          diffMins += 24 * 60;
+          isOvernight = true;
+        }
+      }
+
+      var hours = diffMins / 60;
+      var displayStr = Number.isInteger(hours) ? hours + 'H' : hours.toFixed(1) + 'H';
+
+      valueEl.textContent = displayStr;
+      overnightBadge.classList.toggle('hidden', !isOvernight);
+      display.classList.remove('hidden');
+    }
+
+    document.getElementById('plan-checkin').addEventListener('change', calcDuration);
+    document.getElementById('plan-checkout').addEventListener('change', calcDuration);
+    document.getElementById('plan-overnight-check').addEventListener('change', calcDuration);
+
+    // -- Plan Row Drag & Drop --
+    (function() {
+      var planTbody = document.querySelector('table tbody');
+      if (!planTbody) return;
+      var dragRow = null;
+
+      planTbody.querySelectorAll('.plan-row').forEach(function(row) {
+        row.addEventListener('dragstart', function(e) {
+          dragRow = this;
+          e.dataTransfer.effectAllowed = 'move';
+          setTimeout(function() { dragRow.style.opacity = '0.4'; }, 0);
+        });
+        row.addEventListener('dragend', function() {
+          this.style.opacity = '';
+          planTbody.querySelectorAll('.plan-row').forEach(function(r) {
+            r.style.borderTop = '';
+          });
+        });
+        row.addEventListener('dragover', function(e) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          planTbody.querySelectorAll('.plan-row').forEach(function(r) { r.style.borderTop = ''; });
+          if (this !== dragRow) this.style.borderTop = '2px solid #6366f1';
+        });
+        row.addEventListener('dragleave', function() {
+          this.style.borderTop = '';
+        });
+        row.addEventListener('drop', async function(e) {
+          e.preventDefault();
+          this.style.borderTop = '';
+          if (this === dragRow) return;
+
+          var rows = Array.from(planTbody.querySelectorAll('.plan-row'));
+          var fromIdx = rows.indexOf(dragRow);
+          var toIdx = rows.indexOf(this);
+
+          // Move DOM
+          if (fromIdx < toIdx) {
+            this.parentNode.insertBefore(dragRow, this.nextSibling);
+          } else {
+            this.parentNode.insertBefore(dragRow, this);
+          }
+
+          // Build new order
+          var newOrder = Array.from(planTbody.querySelectorAll('.plan-row')).map(function(r) {
+            return parseInt(r.dataset.planId);
+          });
+
+          dragRow.style.opacity = '';
+
+          // Save to server
+          try {
+            await fetch('/api/owner/plans', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ hotel_id: hotelId, order: newOrder }),
+            });
+          } catch (err) {
+            console.error('Failed to save plan order', err);
+          }
+        });
+      });
+    })();
+
+    // -- Plan Modal --
+    function openPlanModal(plan) {
+      document.getElementById('plan-modal').classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      var isEdit = !!plan;
+      document.getElementById('plan-modal-title').textContent = isEdit ? 'Edit Plan' : 'Add Plan';
+      document.getElementById('plan-id').value = isEdit ? plan.id : '';
+      document.getElementById('plan-name').value = isEdit ? (plan.name || '') : '';
+      document.getElementById('plan-name-ja').value = isEdit ? (plan.name_ja || '') : '';
+      document.getElementById('plan-price').value = isEdit ? (plan.price_usd || '') : '';
+      document.getElementById('plan-guests').value = isEdit ? (plan.max_guests || '') : '';
+      document.getElementById('plan-checkin').value = isEdit ? (plan.check_in_time || '') : '';
+      document.getElementById('plan-checkout').value = isEdit ? (plan.check_out_time || '') : '';
+      document.getElementById('plan-type').value = isEdit ? (plan.plan_type || '') : '';
+      document.getElementById('plan-desc').value = isEdit ? (plan.description || '') : '';
+      document.getElementById('plan-overnight-check').checked = false;
+      document.getElementById('plan-form-error').classList.add('hidden');
+      calcDuration();
+    }
+    function closePlanModal() {
+      document.getElementById('plan-modal').classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    document.getElementById('open-add-plan')?.addEventListener('click', function() { openPlanModal(null); });
+    document.getElementById('close-plan-modal')?.addEventListener('click', closePlanModal);
+    document.getElementById('cancel-plan-btn')?.addEventListener('click', closePlanModal);
+    document.getElementById('plan-modal-backdrop')?.addEventListener('click', closePlanModal);
+
+    // Pause / Resume plan
+    document.querySelectorAll('.btn-toggle-plan').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        var planId = this.dataset.planId;
+        var isActive = this.dataset.isActive === '1';
+        var action = isActive ? 'pause' : 'resume';
+        if (!confirm((isActive ? 'Pause this plan? Guests will no longer be able to book it.' : 'Resume this plan?'))) return;
+        try {
+          var res = await fetch('/api/owner/plans', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: Number(planId), hotel_id: Number(hotelId), is_active: isActive ? 0 : 1 }),
+          });
+          var data = await res.json();
+          if (data.success || data.id) {
+            window.location.reload();
+          } else {
+            alert(data.error || 'Failed to update plan');
+          }
+        } catch (e) {
+          alert('Error updating plan');
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-edit-plan').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var plan = JSON.parse(this.dataset.plan);
+        openPlanModal(plan);
+      });
+    });
+
+    document.querySelectorAll('.btn-delete-plan').forEach(function(btn) {
+      btn.addEventListener('click', async function() {
+        if (!confirm('Delete this plan?')) return;
+        var planId = this.dataset.planId;
+        await fetch('/api/owner/plans?id=' + planId + '&hotel_id=' + hotelId, { method: 'DELETE' });
+        window.location.reload();
+      });
+    });
+
+    document.getElementById('plan-form')?.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var btn = document.getElementById('submit-plan-btn');
+      var errEl = document.getElementById('plan-form-error');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      errEl.classList.add('hidden');
+
+      var planId = document.getElementById('plan-id').value;
+      var isEdit = !!planId;
+      var data = {
+        hotel_id: hotelId,
+        name: document.getElementById('plan-name').value,
+        name_ja: document.getElementById('plan-name-ja').value,
+        price_usd: parseFloat(document.getElementById('plan-price').value) || 0,
+        max_guests: parseInt(document.getElementById('plan-guests').value) || 2,
+        check_in_time: document.getElementById('plan-checkin').value,
+        check_out_time: document.getElementById('plan-checkout').value,
+        plan_type: document.getElementById('plan-type').value,
+        description: document.getElementById('plan-desc').value,
+      };
+      if (isEdit) data.id = planId;
+
+      try {
+        var res = await fetch('/api/owner/plans', {
+          method: isEdit ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        var result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Failed to save plan');
+        closePlanModal();
+        window.location.reload();
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Save Plan';
+      }
+    });
+  </script>
+</OwnerLayout>

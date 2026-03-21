@@ -8,6 +8,57 @@ interface Props {
 
 const { title, description = "Day-use hotel booking platform - Find hourly hotels worldwide" } = Astro.props;
 const currentPath = Astro.url.pathname;
+const isJa = currentPath.startsWith('/ja');
+const basePath = isJa ? (currentPath.replace(/^\/ja/, '') || '/') : currentPath;
+const enPath = basePath;
+const jaPath = `/ja${basePath === '/' ? '' : basePath}`;
+
+// Auth: read ddh_token cookie and verify JWT
+async function verifyJWT(token: string, secret: string): Promise<Record<string, any> | null> {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [header, body, signature] = parts;
+    const key = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    );
+    const sigBytes = Uint8Array.from(
+      atob(signature.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)
+    );
+    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(`${header}.${body}`));
+    if (!valid) return null;
+    const payload = JSON.parse(atob(body));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch { return null; }
+}
+const env0 = (Astro.locals as any).runtime?.env;
+const jwtSecret = env0?.JWT_SECRET || 'ddh-secret-2025';
+const cookieHeader = Astro.request.headers.get('cookie') || '';
+const tokenMatch = cookieHeader.match(/ddh_token=([^;]+)/);
+const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
+const currentUser = authPayload ? { id: authPayload.sub, name: authPayload.name, email: authPayload.email, role: authPayload.role } : null;
+
+// Footer dynamic data
+const env = (Astro.locals as any).runtime?.env;
+const DB = env?.DB;
+let footerBlogs: any[] = [];
+let footerCities: any[] = [];
+try {
+  if (DB) {
+    const blogRes = await DB.prepare(
+      "SELECT title, slug FROM blog_posts ORDER BY published_at DESC LIMIT 3"
+    ).all();
+    footerBlogs = blogRes?.results ?? [];
+    const cityRes = await DB.prepare(
+      "SELECT city, COUNT(*) as cnt FROM hotels WHERE is_active=1 AND city!='' GROUP BY city ORDER BY cnt DESC LIMIT 8"
+    ).all();
+    footerCities = cityRes?.results ?? [];
+  }
+} catch {}
+
+const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi','Ho Chi Minh City','Phuket'];
 ---
 
 <!doctype html>
@@ -68,6 +119,18 @@ const currentPath = Astro.url.pathname;
               Blog
             </span>
           </a>
+          <a href="/how-it-works" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/how-it-works' ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
+            <span class="inline-flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              How it Works
+            </span>
+          </a>
+          <a href="/services" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/services' ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
+            <span class="inline-flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+              Services
+            </span>
+          </a>
           <!-- More dropdown -->
           <div class="relative" id="more-menu-wrapper">
             <button id="more-menu-btn" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5", ['/about','/faq','/for-hotel-owner','/for-ai-agents'].includes(currentPath) ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
@@ -77,6 +140,8 @@ const currentPath = Astro.url.pathname;
             <div id="more-dropdown" class="hidden absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-[1200]">
               <a href="/about" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/about' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>About Us</a>
               <a href="/faq" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/faq' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>FAQ</a>
+              <a href="/contact" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/contact' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>Contact Us</a>
+              <div class="border-t border-gray-100 my-1"></div>
               <a href="/for-hotel-owner" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/for-hotel-owner' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>For Property Owner</a>
               <a href="/for-ai-agents" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/for-ai-agents' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>For AI Agents</a>
             </div>
@@ -94,18 +159,64 @@ const currentPath = Astro.url.pathname;
             <option value="GBP">GBP &pound;</option>
             <option value="AUD">AUD $</option>
             <option value="MYR">MYR RM</option>
+            <option value="SGD">SGD $</option>
+            <option value="IDR">IDR Rp</option>
+            <option value="VND">VND &#8363;</option>
+            <option value="PHP">PHP &#8369;</option>
+            <option value="KRW">KRW &#8361;</option>
+            <option value="AED">AED &#1583;.&#1573;</option>
+            <option value="INR">INR &#8377;</option>
           </select>
 
           <!-- Language toggle -->
           <div class="hidden sm:flex items-center bg-teal-600 rounded-md overflow-hidden border border-teal-500">
-            <a href={currentPath} class="px-2 py-1.5 text-xs font-medium bg-teal-500 text-white">EN</a>
-            <a href={`/ja${currentPath}`} class="px-2 py-1.5 text-xs font-medium text-teal-200 hover:text-white">JP</a>
+            <a href={enPath} class={`px-2 py-1.5 text-xs font-medium ${!isJa ? 'bg-teal-500 text-white' : 'text-teal-200 hover:text-white'}`}>EN</a>
+            <a href={jaPath} class={`px-2 py-1.5 text-xs font-medium ${isJa ? 'bg-teal-500 text-white' : 'text-teal-200 hover:text-white'}`}>JP</a>
           </div>
 
+          <!-- List Your Property CTA -->
+          <a href="/for-hotel-owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:text-amber-200 border border-amber-400/40 hover:border-amber-400 px-3 py-1.5 rounded-md transition-colors">
+            🏨 List Your Property
+          </a>
+
           <!-- Auth buttons -->
-          <div class="hidden sm:flex items-center gap-2 ml-2">
-            <a href="/login" class="text-xs font-medium text-teal-100 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-teal-600">Login</a>
-            <a href="/register" class="text-xs font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 px-3 py-1.5 rounded-md transition-colors">Register</a>
+          <div class="hidden sm:flex items-center gap-2 ml-2" id="auth-area">
+            {currentUser ? (
+              <div class="relative" id="user-menu-wrap">
+                <button id="user-menu-btn" class="flex items-center gap-1.5 text-xs font-medium text-teal-100 hover:text-white px-3 py-1.5 rounded-md hover:bg-teal-600 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  <span class="max-w-[80px] truncate">{currentUser.name}</span>
+                  <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div id="user-dropdown" class="hidden absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 text-left">
+                  <div class="px-3 py-2 border-b border-gray-100">
+                    <p class="text-xs font-semibold text-gray-800 truncate">{currentUser.name}</p>
+                    <p class="text-xs text-gray-400 truncate">{currentUser.email}</p>
+                  </div>
+                  <a href="/mypage" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                    📋 My Bookings
+                  </a>
+                  {(currentUser.role === 'admin' || currentUser.role === 'owner' || currentUser.role === 'staff') && (
+                    <a href="/owner" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                      🏨 Owner Portal
+                    </a>
+                  )}
+                  {currentUser.role === 'admin' && (
+                    <a href="/admin" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                      ⚙️ Admin Panel
+                    </a>
+                  )}
+                  <button id="logout-btn" class="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50">
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <a href="/login" class="text-xs font-medium text-teal-100 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-teal-600">Login</a>
+                <a href="/register" class="text-xs font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 px-3 py-1.5 rounded-md transition-colors">Register</a>
+              </>
+            )}
           </div>
 
           <!-- Mobile menu button -->
@@ -123,56 +234,115 @@ const currentPath = Astro.url.pathname;
         <a href="/wishlist" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Wishlist</a>
         <a href="/map" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Map</a>
         <a href="/blog" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Blog</a>
+        <a href="/how-it-works" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">How it Works</a>
+        <a href="/services" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Services</a>
         <div class="pt-1 pb-0.5">
           <p class="px-3 py-1 text-xs font-semibold text-teal-400 uppercase tracking-wider">More</p>
           <a href="/about" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">About Us</a>
           <a href="/faq" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">FAQ</a>
-          <a href="/for-hotel-owner" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">For Property Owner</a>
+          <a href="/contact" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Contact Us</a>
+          <a href="/for-hotel-owner" class="block px-3 py-2 rounded-lg text-sm font-medium text-amber-300 hover:bg-teal-600">🏨 List Your Property</a>
           <a href="/for-ai-agents" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">For AI Agents</a>
         </div>
         <hr class="border-teal-600" />
-        <div class="flex items-center gap-2 pt-1">
-          <a href="/login" class="text-sm text-teal-100 hover:text-white px-3 py-2">Login</a>
-          <a href="/register" class="text-sm bg-amber-500 text-gray-900 px-3 py-2 rounded-md">Register</a>
+        {currentUser ? (
+          <div class="pt-1">
+            <div class="px-3 py-2">
+              <p class="text-sm font-medium text-white">{currentUser.name}</p>
+              <p class="text-xs text-teal-300">{currentUser.email}</p>
+            </div>
+            <a href="/mypage" class="block px-3 py-2 text-sm text-teal-100 hover:text-white">📋 My Bookings</a>
+            {(currentUser.role === 'admin' || currentUser.role === 'owner' || currentUser.role === 'staff') && (
+              <a href="/owner" class="block px-3 py-2 text-sm text-teal-100 hover:text-white">🏨 Owner Portal</a>
+            )}
+            <button id="logout-btn-mobile" class="w-full text-left px-3 py-2 text-sm text-red-400 hover:text-red-300">Sign Out</button>
+          </div>
+        ) : (
+          <div class="flex items-center gap-2 pt-1">
+            <a href="/login" class="text-sm text-teal-100 hover:text-white px-3 py-2">Login</a>
+            <a href="/register" class="text-sm bg-amber-500 text-gray-900 px-3 py-2 rounded-md">Register</a>
+          </div>
+        )}
+        <!-- Language toggle (mobile) -->
+        <div class="flex items-center gap-2 px-3 py-2 border-t border-teal-600 mt-1">
+          <span class="text-xs text-teal-400 font-medium">Language:</span>
+          <a href={enPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${!isJa ? 'bg-teal-500 text-white' : 'text-teal-200 hover:text-white hover:bg-teal-600'}`}>EN</a>
+          <a href={jaPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${isJa ? 'bg-teal-500 text-white' : 'text-teal-200 hover:text-white hover:bg-teal-600'}`}>JP</a>
         </div>
       </div>
     </div>
   </header>
 
   <!-- Main content -->
-  <main class="flex-1">
+  <main class="flex-1 pb-16 md:pb-0">
     <slot />
   </main>
+
+  <!-- Mobile bottom navigation -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-[1050]" style="padding-bottom: env(safe-area-inset-bottom, 0px)">
+    <div class="grid grid-cols-4 h-14">
+      <a href="/" class={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${currentPath === '/' ? 'text-teal-700' : 'text-gray-500 hover:text-teal-700'}`}>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+        <span>Home</span>
+      </a>
+      <a href="/search" class={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${currentPath === '/search' ? 'text-teal-700' : 'text-gray-500 hover:text-teal-700'}`}>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <span>Search</span>
+      </a>
+      <a href="/wishlist" class={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${currentPath === '/wishlist' ? 'text-teal-700' : 'text-gray-500 hover:text-teal-700'}`}>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+        <span>Wishlist</span>
+      </a>
+      <a href="/map" class={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${currentPath === '/map' ? 'text-teal-700' : 'text-gray-500 hover:text-teal-700'}`}>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+        <span>Map</span>
+      </a>
+    </div>
+  </nav>
 
   <!-- Footer -->
   <footer class="bg-gray-900 text-gray-300 mt-auto">
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
         <!-- Blog Categories -->
+=======
+
+        <!-- Blog Categories (dynamic cities) -->
         <div>
-          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">Blog Categories</h3>
+          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'ブログカテゴリ' : 'Blog Categories'}</h3>
           <ul class="space-y-2 text-sm">
-            <li><a href="/blog/category/travel-tips" class="hover:text-white transition-colors">Travel Tips</a></li>
-            <li><a href="/blog/category/city-guides" class="hover:text-white transition-colors">City Guides</a></li>
-            <li><a href="/blog/category/hotel-reviews" class="hover:text-white transition-colors">Hotel Reviews</a></li>
-            <li><a href="/blog/category/digital-nomad" class="hover:text-white transition-colors">Digital Nomad</a></li>
+            {(footerCities.length > 0 ? footerCities.map((c: any) => c.city) : defaultCities).map((city: string) => (
+              <li>
+                <a href={`/blog?city=${encodeURIComponent(city)}`} class="hover:text-white transition-colors">{city}</a>
+              </li>
+            ))}
           </ul>
         </div>
 
-        <!-- What's New -->
+        <!-- What's New (dynamic blog posts) -->
         <div>
-          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">What's New</h3>
-          <ul class="space-y-2 text-sm">
-            <li><a href="/concierge" class="hover:text-white transition-colors">AI Concierge</a></li>
-            <li><a href="/map" class="hover:text-white transition-colors">Map View</a></li>
-            <li><a href="/search" class="hover:text-white transition-colors">Advanced Search</a></li>
-            <li><a href="/wishlist" class="hover:text-white transition-colors">Wishlist</a></li>
+          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? '最新情報' : "What's New"}</h3>
+          <ul class="space-y-3 text-sm">
+            {footerBlogs.length > 0 ? footerBlogs.map((post: any) => (
+              <li>
+                <a href={`/${isJa ? 'ja/' : ''}blog/${post.slug}`} class="hover:text-white transition-colors line-clamp-2 leading-snug">{post.title}</a>
+              </li>
+            )) : (
+              <>
+                <li><a href={isJa ? '/ja/concierge' : '/concierge'} class="hover:text-white transition-colors">{isJa ? 'AIコンシェルジュ' : 'AI Concierge'}</a></li>
+                <li><a href="/map" class="hover:text-white transition-colors">{isJa ? 'マップ表示' : 'Map View'}</a></li>
+                <li><a href={isJa ? '/ja/search' : '/search'} class="hover:text-white transition-colors">{isJa ? '詳細検索' : 'Advanced Search'}</a></li>
+              </>
+            )}
           </ul>
+          <a href={isJa ? '/ja/blog' : '/blog'} class="inline-block mt-3 text-xs text-teal-400 hover:text-teal-300 transition-colors">{isJa ? 'もっと見る →' : 'View More →'}</a>
         </div>
 
         <!-- Contact -->
         <div>
           <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">Contact</h3>
+=======
+          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'お問い合わせ' : 'Contact'}</h3>
           <ul class="space-y-2.5 text-sm">
             <li class="flex items-start gap-2 text-gray-400">
               <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
@@ -194,6 +364,15 @@ const currentPath = Astro.url.pathname;
           <div class="mt-4 space-y-1.5 text-sm">
             <a href="/terms" class="block text-gray-500 hover:text-white transition-colors">Terms of Service</a>
             <a href="/privacy-policy" class="block text-gray-500 hover:text-white transition-colors">Privacy Policy</a>
+=======
+              <span>{isJa ? '月〜金：9:00〜18:00（JST）' : 'Mon - Fri: 9:00 - 18:00 (JST)'}</span>
+            </li>
+          </ul>
+          <div class="mt-4 space-y-1.5 text-sm">
+            <a href="/contact" class="block text-teal-400 hover:text-white transition-colors font-medium">{isJa ? '📧 お問い合わせフォーム' : '📧 Contact Form'}</a>
+            <a href="/mypage" class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'マイページ（予約確認）' : 'My Bookings'}</a>
+            <a href="/terms" class="block text-gray-500 hover:text-white transition-colors">{isJa ? '利用規約' : 'Terms of Service'}</a>
+            <a href="/privacy-policy" class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'プライバシーポリシー' : 'Privacy Policy'}</a>
           </div>
         </div>
 
@@ -209,12 +388,25 @@ const currentPath = Astro.url.pathname;
             <li><a href="/for-ai-agents" class="hover:text-white transition-colors">For AI Agents</a></li>
             <li><a href="/map" class="hover:text-white transition-colors">Map View</a></li>
             <li><a href="/wishlist" class="hover:text-white transition-colors">Wishlist</a></li>
+=======
+          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'クイックリンク' : 'Quick Links'}</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href={isJa ? '/ja/about' : '/about'} class="hover:text-white transition-colors">{isJa ? '私たちについて' : 'About Us'}</a></li>
+            <li><a href={isJa ? '/ja/faq' : '/faq'} class="hover:text-white transition-colors">FAQ</a></li>
+            <li><a href={isJa ? '/ja/how-it-works' : '/how-it-works'} class="hover:text-white transition-colors">{isJa ? '使い方' : 'How it Works'}</a></li>
+            <li><a href={isJa ? '/ja/services' : '/services'} class="hover:text-white transition-colors">{isJa ? 'サービス' : 'Services'}</a></li>
+            <li><a href={isJa ? '/ja/for-hotel-owner' : '/for-hotel-owner'} class="hover:text-white transition-colors">{isJa ? '施設オーナー様へ' : 'For Property Owner'}</a></li>
+            <li><a href="/for-ai-agents" class="hover:text-white transition-colors">{isJa ? 'AIエージェント向け' : 'For AI Agents'}</a></li>
+            <li><a href="/map" class="hover:text-white transition-colors">{isJa ? 'マップ表示' : 'Map View'}</a></li>
+            <li><a href="/wishlist" class="hover:text-white transition-colors">{isJa ? 'ウィッシュリスト' : 'Wishlist'}</a></li>
           </ul>
         </div>
       </div>
 
       <div class="border-t border-gray-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
         <span>&copy; {new Date().getFullYear()} DayDreamHub. All Rights Reserved.</span>
+=======
+        <span>&copy; {new Date().getFullYear()} DayDreamHub. {isJa ? 'All Rights Reserved.' : 'All Rights Reserved.'}</span>
         <div class="flex gap-4">
           <a href="#" class="text-gray-500 hover:text-white transition-colors" aria-label="Twitter">
             <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"/></svg>
@@ -311,7 +503,90 @@ const currentPath = Astro.url.pathname;
       if (!document.getElementById('more-menu-wrapper')?.contains(e.target as Node)) {
         moreDropdown?.classList.add('hidden');
       }
+      // Close user dropdown too
+      if (!document.getElementById('user-menu-wrap')?.contains(e.target as Node)) {
+        document.getElementById('user-dropdown')?.classList.add('hidden');
+      }
     });
+
+    // User menu dropdown toggle
+    document.getElementById('user-menu-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('user-dropdown')?.classList.toggle('hidden');
+    });
+
+    // Logout
+    async function doLogout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      window.location.href = '/';
+    }
+    document.getElementById('logout-btn')?.addEventListener('click', doLogout);
+    document.getElementById('logout-btn-mobile')?.addEventListener('click', doLogout);
+
+    // ===== Currency Converter =====
+    const CURRENCY_SYMBOLS: Record<string, string> = {
+      USD: '$', EUR: '€', JPY: '¥', THB: '฿', GBP: '£', AUD: 'A$', MYR: 'RM',
+      SGD: 'S$', IDR: 'Rp', VND: '₫', PHP: '₱', KRW: '₩', AED: 'AED', INR: '₹'
+    };
+    const HIGH_DENOM = new Set(['JPY', 'KRW', 'IDR', 'VND']);
+    const CURRENCY_KEY = 'ddh_currency';
+
+    let cachedRates: Record<string, number> | null = null;
+
+    async function fetchRates(): Promise<Record<string, number>> {
+      if (cachedRates) return cachedRates;
+      try {
+        const res = await fetch('/api/exchange-rates');
+        if (!res.ok) throw new Error('rate fetch failed');
+        const data = await res.json();
+        cachedRates = data.rates as Record<string, number>;
+        return cachedRates;
+      } catch {
+        // Fallback rates
+        return {
+          USD: 1, JPY: 150, THB: 35, SGD: 1.35, KRW: 1350, MYR: 4.7,
+          PHP: 56, INR: 83, AED: 3.67, GBP: 0.79, EUR: 0.92, AUD: 1.55,
+          IDR: 15800, VND: 25000
+        };
+      }
+    }
+
+    function formatPrice(usd: number, currency: string, rate: number): string {
+      const amount = usd * rate;
+      const sym = CURRENCY_SYMBOLS[currency] || currency;
+      if (HIGH_DENOM.has(currency)) {
+        return `${sym}${Math.round(amount).toLocaleString()}`;
+      }
+      return `${sym}${amount.toFixed(2)}`;
+    }
+
+    async function applyConversion(currency: string) {
+      const rates = await fetchRates();
+      const rate = rates[currency] ?? 1;
+      document.querySelectorAll<HTMLElement>('[data-usd]').forEach(el => {
+        const usd = parseFloat(el.dataset.usd || '0');
+        if (isNaN(usd)) return;
+        el.textContent = formatPrice(usd, currency, rate);
+      });
+      // Update currency label spans
+      document.querySelectorAll<HTMLElement>('[data-currency-label]').forEach(el => {
+        el.textContent = currency;
+      });
+    }
+
+    const currencySelector = document.getElementById('currency-selector') as HTMLSelectElement | null;
+    if (currencySelector) {
+      // Restore saved currency
+      const saved = localStorage.getItem(CURRENCY_KEY) || 'USD';
+      currencySelector.value = saved;
+      if (saved !== 'USD') applyConversion(saved);
+
+      currencySelector.addEventListener('change', () => {
+        const currency = currencySelector.value;
+        localStorage.setItem(CURRENCY_KEY, currency);
+        applyConversion(currency);
+      });
+    }
   </script>
 </body>
 </html>
