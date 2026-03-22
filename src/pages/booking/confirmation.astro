@@ -35,7 +35,35 @@ const orderId = Astro.url.searchParams.get('order') || '';
         </div>
       </div>
       <h1 class="text-3xl font-bold text-gray-900 mb-4">{t('booking.confirmation_title', locale)}</h1>
-      <p class="text-gray-600 text-lg mb-8 max-w-md mx-auto">{t('booking.confirmation_message', locale)}</p>
+      <p class="text-gray-600 text-lg mb-4 max-w-md mx-auto">{t('booking.confirmation_message', locale)}</p>
+      <div class="text-sm text-gray-500 mb-6 space-y-1 max-w-md mx-auto">
+        <p>📧 A confirmation email has been sent to your inbox.</p>
+        <p>🏨 Please proceed directly to the hotel during check-in hours.</p>
+        <p>❓ Questions? Contact us at <a href="mailto:contact@daydreamhub.com" class="text-teal-600 hover:underline">contact@daydreamhub.com</a></p>
+      </div>
+
+      <!-- Booking Details Card -->
+      <div id="booking-details-card" class="hidden mt-4 bg-white border border-gray-200 rounded-2xl p-6 text-left max-w-md mx-auto">
+        <h3 class="font-semibold text-slate-800 mb-4 text-sm uppercase tracking-wide text-center">Booking Details</h3>
+        <dl class="space-y-3 text-sm">
+          <div class="flex justify-between">
+            <dt class="text-gray-500">Hotel</dt>
+            <dd id="detail-hotel" class="font-medium text-slate-800 text-right max-w-[180px]">—</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-500">Plan</dt>
+            <dd id="detail-plan" class="font-medium text-slate-800 text-right max-w-[180px]">—</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-500">Check-in Date</dt>
+            <dd id="detail-checkin" class="font-medium text-slate-800">—</dd>
+          </div>
+          <div class="flex justify-between border-t pt-3 mt-3">
+            <dt class="text-gray-700 font-semibold">Total Paid</dt>
+            <dd id="detail-price" class="font-bold text-teal-700">—</dd>
+          </div>
+        </dl>
+      </div>
     </div>
 
     <!-- State: Alt Choice -->
@@ -116,9 +144,23 @@ const orderId = Astro.url.searchParams.get('order') || '';
           document.getElementById('state-cancelled')?.classList.add('hidden');
 
           switch (data.status) {
-            case 'confirmed':
+            case 'confirmed': {
               document.getElementById('state-confirmed')?.classList.remove('hidden');
+              // Populate booking details card
+              const card = document.getElementById('booking-details-card');
+              if (card) {
+                const hotelEl = document.getElementById('detail-hotel');
+                const planEl = document.getElementById('detail-plan');
+                const checkinEl = document.getElementById('detail-checkin');
+                const priceEl = document.getElementById('detail-price');
+                if (hotelEl) hotelEl.textContent = data.hotel_name || '—';
+                if (planEl) planEl.textContent = data.plan_name || '—';
+                if (checkinEl) checkinEl.textContent = data.check_in_date || '—';
+                if (priceEl) priceEl.textContent = data.total_price_usd != null ? `$${Number(data.total_price_usd).toFixed(2)}` : '—';
+                card.classList.remove('hidden');
+              }
               break;
+            }
             case 'pending':
             case 'calling':
               document.getElementById('state-pending')?.classList.remove('hidden');

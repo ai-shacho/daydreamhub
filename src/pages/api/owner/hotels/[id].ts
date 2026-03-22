@@ -71,7 +71,8 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   }
 
   const allowed = ['name', 'name_ja', 'description', 'description_ja', 'amenities',
-    'categories', 'property_type', 'thumbnail_url', 'ical_url', 'address', 'phone'];
+    'categories', 'property_type', 'thumbnail_url', 'ical_url', 'address', 'phone',
+    'latitude', 'longitude'];
   const updates: string[] = [];
   const params_vals: any[] = [];
   for (const key of allowed) {
