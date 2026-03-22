@@ -9,3 +9,8 @@ database_id = "9e5348d0-477f-40fe-ac05-e842164b9032"
 
 [ai]
 binding = "AI"
+
+[triggers]
+crons = ["0 1 * * *"]
+# Cron: 毎日01:00 UTC に /api/cron/update-booking-status を POST で叩くこと
+# 外部サービス（cron-job.org 等）から Authorization: Bearer {CRON_SECRET} を付けてリクエスト

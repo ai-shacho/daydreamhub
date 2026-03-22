@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import CookieBanner from '../components/CookieBanner.astro';
 
 interface Props {
   title: string;
@@ -101,6 +102,7 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
     <>
       <script async src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}></script>
       <script define:vars={{ ga4Id }}>
+        window.__GA4_ID__ = ga4Id;
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
@@ -621,5 +623,7 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
       });
     }
   </script>
+
+  <CookieBanner />
 </body>
 </html>

@@ -1,0 +1,63 @@
+---
+// CookieBanner.astro
+---
+
+<div id="cookie-banner" class="fixed bottom-0 left-0 right-0 z-[9999] bg-slate-900 text-white shadow-2xl transform translate-y-0 transition-transform duration-300" style="display:none">
+  <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div class="flex-1 text-sm text-slate-300">
+        <p>
+          We use cookies to improve your experience and analyze site usage.
+          <a href="/privacy" class="text-teal-400 hover:text-teal-300 underline ml-1">Learn more</a>
+        </p>
+      </div>
+      <div class="flex items-center gap-3 flex-shrink-0">
+        <button id="cookie-reject" class="px-4 py-2 text-sm text-slate-400 hover:text-white border border-slate-600 hover:border-slate-400 rounded-lg transition-colors">
+          Reject non-essential
+        </button>
+        <button id="cookie-accept" class="px-5 py-2 text-sm font-semibold bg-teal-600 hover:bg-teal-500 text-white rounded-lg transition-colors">
+          Accept all
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const COOKIE_KEY = 'ddh_cookie_consent';
+  const banner = document.getElementById('cookie-banner');
+
+  function getConsent(): string | null {
+    return localStorage.getItem(COOKIE_KEY);
+  }
+
+  function setConsent(value: 'accepted' | 'rejected') {
+    localStorage.setItem(COOKIE_KEY, value);
+    // 有効期限: 180日後 (cookieにも保存)
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 180);
+    document.cookie = `${COOKIE_KEY}=${value}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
+    hideBanner();
+    // GA4の有効化/無効化
+    if (value === 'rejected') {
+      (window as any)[`ga-disable-${(window as any).__GA4_ID__}`] = true;
+    }
+  }
+
+  function hideBanner() {
+    if (banner) {
+      banner.style.transform = 'translateY(100%)';
+      setTimeout(() => { if (banner) banner.style.display = 'none'; }, 300);
+    }
+  }
+
+  // バナー表示判定
+  if (!getConsent()) {
+    setTimeout(() => {
+      if (banner) banner.style.display = 'block';
+    }, 1000); // 1秒後に表示（UX配慮）
+  }
+
+  document.getElementById('cookie-accept')?.addEventListener('click', () => setConsent('accepted'));
+  document.getElementById('cookie-reject')?.addEventListener('click', () => setConsent('rejected'));
+</script>
