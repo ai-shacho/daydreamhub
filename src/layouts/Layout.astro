@@ -4,9 +4,14 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
+  ogImage?: string;
+  canonicalUrl?: string;
 }
 
-const { title, description = "Day-use hotel booking platform - Find hourly hotels worldwide" } = Astro.props;
+const { title, description = "Day-use hotel booking platform - Find hourly hotels worldwide", ogImage, canonicalUrl } = Astro.props;
+const siteUrl = 'https://www.daydreamhub.com';
+const resolvedOgImage = ogImage || `${siteUrl}/og-default.jpg`;
+const resolvedCanonical = canonicalUrl || `${siteUrl}${Astro.url.pathname}`;
 const currentPath = Astro.url.pathname;
 const isJa = currentPath.startsWith('/ja');
 const basePath = isJa ? (currentPath.replace(/^\/ja/, '') || '/') : currentPath;
@@ -40,6 +45,9 @@ const tokenMatch = cookieHeader.match(/ddh_token=([^;]+)/);
 const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
 const currentUser = authPayload ? { id: authPayload.sub, name: authPayload.name, email: authPayload.email, role: authPayload.role } : null;
 
+// GA4
+const ga4Id: string | undefined = (Astro.locals as any).runtime?.env?.GA4_MEASUREMENT_ID;
+
 // Footer dynamic data
 const env = (Astro.locals as any).runtime?.env;
 const DB = env?.DB;
@@ -69,12 +77,37 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
   <meta name="description" content={description} />
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <!-- Canonical -->
+  <link rel="canonical" href={resolvedCanonical} />
+  <!-- OGP (Facebook/LINE/Slack等) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content={resolvedCanonical} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:image" content={resolvedOgImage} />
+  <meta property="og:site_name" content="DayDreamHub" />
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+  <meta name="twitter:image" content={resolvedOgImage} />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     body { font-family: 'Inter', sans-serif; }
   </style>
+  {ga4Id && (
+    <>
+      <script async src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}></script>
+      <script define:vars={{ ga4Id }}>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', ga4Id, { anonymize_ip: true });
+      </script>
+    </>
+  )}
 </head>
 <body class="min-h-screen flex flex-col bg-gray-50">
 

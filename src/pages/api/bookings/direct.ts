@@ -21,6 +21,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
+  // ボットチェック（honeypot）
+  if (body.website) {
+    return new Response(JSON.stringify({ error: 'Invalid request' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+
   const { plan_id, guest_name, guest_email, guest_phone, check_in_date, adults, children, notes } = body;
 
   if (!plan_id || !guest_name || !guest_email || !check_in_date) {

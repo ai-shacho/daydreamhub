@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /owner/
+Disallow: /admin/
+Disallow: /mypage
+
+Sitemap: https://www.daydreamhub.com/sitemap.xml

@@ -156,7 +156,12 @@ function renderStars(rating: number) {
 }
 ---
 
-<Layout title={hotel ? `${displayName} | ${t('site.name', locale)}` : t('hotel.not_found', locale)} description={hotel ? displayDescription.slice(0, 160) : t('hotel.not_found_desc', locale)}>
+<Layout
+  title={hotel ? `${displayName} | ${t('site.name', locale)}` : t('hotel.not_found', locale)}
+  description={hotel ? displayDescription.slice(0, 160) : t('hotel.not_found_desc', locale)}
+  ogImage={hotel?.thumbnail_url || undefined}
+  canonicalUrl={hotel ? `https://www.daydreamhub.com/hotel/${hotel.slug}` : undefined}
+>
 
   {hotel ? (
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
