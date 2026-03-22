@@ -1,0 +1,155 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const { slug } = Astro.params;
+// Convert slug to city name (e.g. "kuala-lumpur" → "Kuala Lumpur")
+const cityName = (slug || '').replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+
+const env = (Astro.locals as any).runtime?.env;
+const DB = env?.DB;
+
+let hotels: any[] = [];
+let totalCount = 0;
+let dbAvailable = false;
+
+try {
+  if (DB) {
+    dbAvailable = true;
+    const result = await DB.prepare(
+      `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+              MIN(p.price_usd) as min_price
+       FROM hotels h
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+       WHERE h.is_active = 1 AND LOWER(h.city) = LOWER(?1)
+       GROUP BY h.id
+       ORDER BY h.rating DESC, min_price ASC`
+    ).bind(cityName).all();
+    hotels = result?.results ?? [];
+
+    // Try slug-based match if city name didn't work
+    if (hotels.length === 0) {
+      const result2 = await DB.prepare(
+        `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+                MIN(p.price_usd) as min_price
+         FROM hotels h
+         LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+         WHERE h.is_active = 1 AND REPLACE(REPLACE(LOWER(h.city), ' ', '-'), '_', '-') = LOWER(?1)
+         GROUP BY h.id
+         ORDER BY h.rating DESC, min_price ASC`
+      ).bind(slug).all();
+      hotels = result2?.results ?? [];
+    }
+
+    totalCount = hotels.length;
+  }
+} catch (e) {
+  console.error('City page DB error:', e);
+}
+
+if (!dbAvailable || totalCount === 0) {
+  return Astro.redirect(`/search?location=${encodeURIComponent(cityName)}`);
+}
+
+// City image map (Unsplash fallbacks)
+const cityImages: Record<string, string> = {
+  bangkok: 'https://images.unsplash.com/photo-1508009603885-50cf7c579365?w=1200&q=80',
+  bali: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=1200&q=80',
+  singapore: 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=1200&q=80',
+  tokyo: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=1200&q=80',
+  dubai: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=1200&q=80',
+  'kuala lumpur': 'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=1200&q=80',
+  hanoi: 'https://images.unsplash.com/photo-1509030450996-dd1a26dda07a?w=1200&q=80',
+  'ho chi minh city': 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=1200&q=80',
+  nairobi: 'https://images.unsplash.com/photo-1611348524140-53c9a25263d6?w=1200&q=80',
+  istanbul: 'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=1200&q=80',
+};
+const heroImage = cityImages[cityName.toLowerCase()] || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&q=80';
+
+function getHotelImage(hotel: any): string {
+  if (hotel.thumbnail_url) return hotel.thumbnail_url;
+  return 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=70';
+}
+---
+
+<Layout
+  title={`Day-Use Hotels in ${cityName} | DayDreamHub`}
+  description={`Find ${totalCount}+ day-use hotels in ${cityName}. Book by the hour for work, transit, or relaxation. Instant confirmation.`}
+>
+  <!-- Hero -->
+  <section class="relative overflow-hidden h-48 sm:h-64">
+    <img src={heroImage} alt={`Day-use hotels in ${cityName}`} class="w-full h-full object-cover" loading="eager" />
+    <div class="absolute inset-0 bg-gradient-to-r from-teal-900/70 to-teal-800/40"></div>
+    <div class="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
+      <nav class="text-teal-200 text-xs mb-3">
+        <a href="/" class="hover:text-white">Home</a>
+        <span class="mx-2">/</span>
+        <span class="text-white font-medium">{cityName}</span>
+      </nav>
+      <h1 class="text-3xl sm:text-4xl font-bold text-white mb-2">Day-Use Hotels in {cityName}</h1>
+      <p class="text-teal-100 text-sm">{totalCount} {totalCount === 1 ? 'property' : 'properties'} available</p>
+    </div>
+  </section>
+
+  <!-- Hotels Grid -->
+  <section class="py-12 bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4">
+
+      {hotels.length > 0 ? (
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {hotels.map((hotel: any) => (
+            <div class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100 relative">
+              <a href={`/hotel/${hotel.slug}`} class="block">
+                <div class="aspect-[4/3] overflow-hidden bg-gray-100">
+                  <img src={getHotelImage(hotel)} alt={hotel.name} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                </div>
+                <div class="p-4">
+                  {hotel.property_type && (
+                    <span class="text-[10px] bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 mb-2 inline-block">{hotel.property_type}</span>
+                  )}
+                  <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
+                  <p class="text-xs text-gray-500 mt-1">{hotel.city}, {hotel.country}</p>
+                  <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
+                    {hotel.min_price != null ? (
+                      <div>
+                        <span class="text-xs text-gray-400">from</span>
+                        <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
+                      </div>
+                    ) : (
+                      <span class="text-xs text-gray-400">Price on request</span>
+                    )}
+                    <span class="text-xs text-teal-700 font-medium">View Plans →</span>
+                  </div>
+                </div>
+              </a>
+              <button
+                class="wishlist-btn absolute top-2 right-2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow hover:bg-white transition-colors"
+                data-slug={hotel.slug}
+                title="Save to wishlist"
+              >
+                <svg class="wishlist-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"/>
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-20">
+          <p class="text-gray-400 mb-4">No hotels found in {cityName}.</p>
+          <a href="/search" class="text-teal-700 hover:underline font-medium">Browse all hotels</a>
+        </div>
+      )}
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-12 bg-teal-700 text-white text-center">
+    <div class="max-w-xl mx-auto px-4">
+      <h2 class="text-xl sm:text-2xl font-bold mb-3">Looking for more options in {cityName}?</h2>
+      <p class="text-teal-100 mb-6 text-sm">Use our advanced search to filter by speciality, time, and budget.</p>
+      <a href={`/search?location=${encodeURIComponent(cityName)}`} class="bg-amber-500 hover:bg-amber-400 text-gray-900 font-bold px-8 py-3 rounded-lg transition-colors inline-block">
+        Advanced Search
+      </a>
+    </div>
+  </section>
+</Layout>

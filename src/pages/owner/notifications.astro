@@ -1,0 +1,162 @@
+---
+import OwnerLayout from '../../layouts/OwnerLayout.astro';
+import { verifyOwner, getOwnerHotelIds } from '../../lib/ownerAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const owner = await verifyOwner(Astro.request, jwtSecret);
+if (!owner) {
+  return Astro.redirect("/login?redirect=/owner/notifications");
+}
+
+let hotels: any[] = [];
+let settings: any[] = [];
+const settingsMap: Record<number, any> = {};
+
+if (db) {
+  try {
+    const ownerHotelIds = await getOwnerHotelIds(db, owner);
+    if (ownerHotelIds.length > 0) {
+      const placeholders = ownerHotelIds.map(() => "?").join(",");
+      const hotelsRes = await db.prepare(`SELECT id, name FROM hotels WHERE id IN (${placeholders})`).bind(...ownerHotelIds).all();
+      hotels = hotelsRes?.results || [];
+
+      try {
+        const settingsRes = await db.prepare(`SELECT * FROM notification_settings WHERE user_id = ? AND hotel_id IN (${placeholders})`).bind(owner.sub, ...ownerHotelIds).all();
+        settings = settingsRes?.results || [];
+      } catch {
+        settings = [];
+      }
+
+      for (const h of hotels) {
+        const existing = settings.find((s: any) => s.hotel_id === h.id);
+        settingsMap[h.id] = existing || {
+          hotel_id: h.id,
+          email_on_booking: 1,
+          email_on_cancellation: 1,
+          email_on_review: 1,
+          auto_call_enabled: 1
+        };
+      }
+    }
+  } catch (e) {
+    console.error("Notifications page DB error:", e);
+  }
+}
+---
+
+<OwnerLayout title="Notification Settings" activeNav="notifications">
+  <div class="max-w-2xl">
+    <div class="mb-6">
+      <h2 class="text-xl font-bold text-slate-900">Notification Settings</h2>
+      <p class="mt-1 text-sm text-slate-500">Manage email and call notification settings for each of your hotels.</p>
+    </div>
+
+    {hotels.length === 0 ? (
+      <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <p class="text-sm text-slate-500">No hotels found. You need at least one hotel to configure notification settings.</p>
+      </div>
+    ) : hotels.map((hotel: any) => {
+      const s = settingsMap[hotel.id];
+      return (
+        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6" data-hotel-id={hotel.id}>
+          <h3 class="text-lg font-semibold text-slate-900 mb-4">{hotel.name}</h3>
+          <div class="space-y-4">
+            <label class="flex items-center justify-between cursor-pointer">
+              <div>
+                <span class="text-sm font-medium text-slate-700">Email on new booking</span>
+                <p class="text-xs text-slate-400">Receive an email when a guest makes a new booking</p>
+              </div>
+              <input type="checkbox" checked={!!s.email_on_booking} class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" data-field="email_on_booking">
+            </label>
+            <label class="flex items-center justify-between cursor-pointer">
+              <div>
+                <span class="text-sm font-medium text-slate-700">Email on cancellation</span>
+                <p class="text-xs text-slate-400">Get notified when a booking is cancelled</p>
+              </div>
+              <input type="checkbox" checked={!!s.email_on_cancellation} class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" data-field="email_on_cancellation">
+            </label>
+            <label class="flex items-center justify-between cursor-pointer">
+              <div>
+                <span class="text-sm font-medium text-slate-700">Email on new review</span>
+                <p class="text-xs text-slate-400">Receive an email when a guest leaves a review</p>
+              </div>
+              <input type="checkbox" checked={!!s.email_on_review} class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" data-field="email_on_review">
+            </label>
+            <label class="flex items-center justify-between cursor-pointer">
+              <div>
+                <span class="text-sm font-medium text-slate-700">Auto-call enabled</span>
+                <p class="text-xs text-slate-400">Automatically place a phone call for new bookings</p>
+              </div>
+              <input type="checkbox" checked={!!s.auto_call_enabled} class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" data-field="auto_call_enabled">
+            </label>
+          </div>
+          <div class="mt-5 flex items-center gap-3">
+            <button type="button" class="save-btn px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors" data-hotel-id={hotel.id}>
+              Save
+            </button>
+            <span class="save-msg text-sm hidden"></span>
+          </div>
+        </div>
+      );
+    })}
+  </div>
+</OwnerLayout>
+
+<script>
+  document.querySelectorAll('.save-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const hotelId = btn.getAttribute('data-hotel-id');
+      const card = document.querySelector(`[data-hotel-id="${hotelId}"]`);
+      if (!card) return;
+
+      const msgEl = card.querySelector('.save-msg');
+      const checkboxes = card.querySelectorAll('input[type="checkbox"]');
+      const data: Record<string, any> = { hotel_id: Number(hotelId) };
+
+      checkboxes.forEach((cb: any) => {
+        const field = cb.getAttribute('data-field');
+        if (field) data[field] = cb.checked;
+      });
+
+      (btn as HTMLButtonElement).disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const res = await fetch('/api/owner/notifications', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        if (res.ok) {
+          if (msgEl) {
+            msgEl.textContent = 'Settings saved successfully.';
+            msgEl.className = 'save-msg text-sm text-emerald-600';
+          }
+        } else {
+          const err = await res.json().catch(() => ({}));
+          if (msgEl) {
+            msgEl.textContent = err.error || 'Failed to save settings.';
+            msgEl.className = 'save-msg text-sm text-red-600';
+          }
+        }
+      } catch {
+        if (msgEl) {
+          msgEl.textContent = 'Error saving settings.';
+          msgEl.className = 'save-msg text-sm text-red-600';
+        }
+      }
+
+      (btn as HTMLButtonElement).disabled = false;
+      btn.textContent = 'Save';
+
+      // Auto-hide message after 3 seconds
+      setTimeout(() => {
+        if (msgEl) msgEl.className = 'save-msg text-sm hidden';
+      }, 3000);
+    });
+  });
+</script>

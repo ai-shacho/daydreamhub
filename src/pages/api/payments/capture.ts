@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getAccessToken, captureOrder } from '../../../lib/paypal';
-import { sendBookingNotificationToHotel, sendGuestBookingConfirmation } from '../../../lib/email';
+import { sendBookingNotificationToHotel, sendGuestBookingConfirmation, sendPaymentFailureEmail } from '../../../lib/email';
 import { getBookingInfoForCall, triggerAutoCall } from '../../../lib/autoCall';
 
 async function logMessage(params: {
@@ -69,6 +69,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  // Step 1: Find the booking by paypal_order_id (existence check only)
   const booking = await db
     .prepare('SELECT * FROM bookings WHERE paypal_order_id = ?')
     .bind(order_id)
@@ -79,17 +81,35 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  if (['confirmed', 'pending_confirmation'].includes((booking as any).status)) {
-    return new Response(JSON.stringify({ error: 'Payment already captured' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+
+  // Step 2: Atomic optimistic lock — only advance if status is 'pending'
+  // This prevents race conditions: only one request can set status to 'processing'
+  const lockResult = await db
+    .prepare(
+      "UPDATE bookings SET status = 'processing', updated_at = datetime('now') WHERE id = ? AND status = 'pending'"
+    )
+    .bind((booking as any).id)
+    .run();
+
+  if (lockResult.meta.changes === 0) {
+    // Another request already grabbed the lock (processing) or payment already done
+    return new Response(
+      JSON.stringify({ error: 'Payment already captured or is currently being processed' }),
+      {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
   }
+
+  // Step 3: Execute PayPal capture (we now hold the 'processing' lock)
   try {
     const accessToken = await getAccessToken(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE || 'sandbox');
     const captureResult = await captureOrder(accessToken, order_id, PAYPAL_MODE || 'sandbox');
     const captureStatus = captureResult.status;
+
     if (captureStatus === 'COMPLETED') {
+      // Step 4 (success): Update to pending_confirmation with capture ID
       let captureId = null;
       try {
         const pu = captureResult.purchase_units;
@@ -128,7 +148,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             .bind((booking as any).hotel_id)
             .first();
           const plan = await db
-            .prepare('SELECT name, check_in_time, check_out_time FROM plans WHERE id = ?')
+            .prepare('SELECT name, check_in_time, check_out_time, cancellation_hours FROM plans WHERE id = ?')
             .bind((booking as any).plan_id)
             .first();
           if (plan) {
@@ -182,6 +202,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 children: (booking as any).children,
                 totalPriceUsd: (booking as any).total_price_usd,
                 notes: (booking as any).notes,
+                cancellationHours: (plan as any).cancellation_hours ?? 24,
               });
               await logMessage({
                 db,
@@ -210,10 +231,31 @@ export const POST: APIRoute = async ({ request, locals }) => {
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     } else {
+      // Step 5 (failure): PayPal returned a non-COMPLETED status — revert to 'failed'
       await db
         .prepare("UPDATE bookings SET status = 'failed', updated_at = datetime('now') WHERE id = ?")
         .bind((booking as any).id)
         .run();
+
+      // Fire-and-forget: send payment failure email to guest
+      if (RESEND_API_KEY && (booking as any).guest_email) {
+        const plan = await db
+          .prepare('SELECT name FROM plans WHERE id = ?')
+          .bind((booking as any).plan_id)
+          .first().catch(() => null);
+        const hotel = await db
+          .prepare('SELECT name FROM hotels WHERE id = ?')
+          .bind((booking as any).hotel_id)
+          .first().catch(() => null);
+        sendPaymentFailureEmail(RESEND_API_KEY, {
+          guestName: (booking as any).guest_name,
+          guestEmail: (booking as any).guest_email,
+          hotelName: (hotel as any)?.name || '',
+          planName: (plan as any)?.name || '',
+          errorMessage: `Payment not completed. PayPal status: ${captureStatus}`,
+        }).catch(() => {});
+      }
+
       return new Response(
         JSON.stringify({
           success: false,
@@ -224,6 +266,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
   } catch (error) {
+    // Step 6 (unexpected error): Revert status to 'pending' so the guest can retry
+    await db
+      .prepare("UPDATE bookings SET status = 'pending', updated_at = datetime('now') WHERE id = ?")
+      .bind((booking as any).id)
+      .run()
+      .catch(() => {});
+
     const message = error instanceof Error ? error.message : 'Payment capture failed';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,

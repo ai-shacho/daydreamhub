@@ -1,0 +1,26 @@
+---
+import { localePath } from '../lib/i18n';
+
+interface Props {
+  city: any;
+  locale?: string;
+}
+
+const { city, locale } = Astro.props;
+const displayName = locale === 'ja' && city.name_ja ? city.name_ja : city.name;
+const link = localePath('/city/' + city.slug, locale);
+const imageUrl = city.image_url || `/images/cities/${city.slug}.jpg`;
+---
+
+<a href={link} class="group block relative rounded-xl overflow-hidden aspect-[4/3] shadow-md hover:shadow-xl transition-shadow duration-300">
+  <!-- City image -->
+  <img src={imageUrl} alt={displayName} loading="lazy" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+  <!-- Gradient overlay -->
+  <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
+  <!-- City name -->
+  <div class="absolute bottom-0 left-0 right-0 p-4">
+    <h3 class="text-white text-lg sm:text-xl font-bold drop-shadow-md">
+      {displayName}
+    </h3>
+  </div>
+</a>

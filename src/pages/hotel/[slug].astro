@@ -371,6 +371,15 @@ function renderStars(rating: number) {
                         <span>{t('hotel.max_guests', locale)}: {plan.max_guests} {t('hotel.guests_unit', locale)}</span>
                       </div>
                     )}
+                    {plan.cancellation_hours === 0 ? (
+                      <div class="inline-flex items-center gap-1 text-xs font-medium bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                        ❌ Non-refundable
+                      </div>
+                    ) : (
+                      <div class="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                        ✅ Free cancellation up to {plan.cancellation_hours ?? 24}h before check-in
+                      </div>
+                    )}
                   </div>
                   <a href={bookingLink} class="block w-full text-center bg-[#45A2C1] text-white font-medium py-2.5 rounded-lg hover:bg-[#3891AE] transition-colors duration-200">
                     {t('hotel.book_now', locale)}

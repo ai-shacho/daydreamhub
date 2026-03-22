@@ -1,0 +1,198 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { getLocale, t, localePath } from '../../../lib/i18n';
+
+const locale = getLocale(Astro.url);
+const { slug } = Astro.params;
+const cityName = slug ? slug.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : '';
+
+const url = Astro.url;
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+const perPage = 12;
+const offset = (page - 1) * perPage;
+
+let hotels: any[] = [];
+let total = 0;
+let plansMap = new Map<number, any[]>();
+let dbAvailable = false;
+
+try {
+  const runtime = (Astro.locals as any).runtime;
+  const db = runtime?.env?.DB;
+  if (db) {
+    dbAvailable = true;
+    const countResult = await db.prepare(
+      `SELECT COUNT(*) as count FROM hotels WHERE city LIKE ? AND is_active = 1`
+    ).bind(`%${cityName}%`).first();
+    total = countResult?.count || 0;
+
+    const result = await db.prepare(
+      `SELECT h.*, MIN(p.price_usd) as min_price FROM hotels h
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+       WHERE h.city LIKE ? AND h.is_active = 1
+       GROUP BY h.id
+       ORDER BY h.created_at DESC
+       LIMIT ? OFFSET ?`
+    ).bind(`%${cityName}%`, perPage, offset).all();
+    hotels = result?.results || [];
+
+    if (hotels.length > 0) {
+      const hotelIds = hotels.map((h: any) => h.id);
+      const placeholders = hotelIds.map(() => '?').join(',');
+      const plansResult = await db.prepare(
+        `SELECT * FROM plans WHERE hotel_id IN (${placeholders}) AND is_active = 1`
+      ).bind(...hotelIds).all();
+      for (const plan of plansResult?.results || []) {
+        if (!plansMap.has(plan.hotel_id)) plansMap.set(plan.hotel_id, []);
+        plansMap.get(plan.hotel_id)!.push(plan);
+      }
+    }
+  }
+} catch (e) {
+  dbAvailable = false;
+}
+
+if (!dbAvailable) {
+  const sampleHotels = [
+    { id: 1, name: 'The Work Loft Bangkok', slug: 'work-loft-bangkok', city: 'Bangkok', country: 'Thailand', thumbnail_url: '', categories: '["workspace"]', property_type: 'hotel' },
+    { id: 2, name: 'CoWork Stay Silom', slug: 'cowork-stay-silom', city: 'Bangkok', country: 'Thailand', thumbnail_url: '', categories: '["workspace"]', property_type: 'hotel' },
+    { id: 5, name: 'Airport Transit Hotel', slug: 'airport-transit-hotel', city: 'Singapore', country: 'Singapore', thumbnail_url: '', categories: '["transit"]', property_type: 'hotel' },
+    { id: 6, name: 'Changi Layover Rest', slug: 'changi-layover-rest', city: 'Singapore', country: 'Singapore', thumbnail_url: '', categories: '["transit"]', property_type: 'hotel' },
+    { id: 9, name: 'Romance Suite Bali', slug: 'romance-suite-bali', city: 'Bali', country: 'Indonesia', thumbnail_url: '', categories: '["couple"]', property_type: 'villa' },
+    { id: 13, name: 'The Ritz-Carlton KL', slug: 'ritz-carlton-kl', city: 'Kuala Lumpur', country: 'Malaysia', thumbnail_url: '', categories: '["luxury"]', property_type: 'hotel' },
+  ];
+  const samplePlans = [
+    { id: 1, hotel_id: 1, name: '4-Hour Workspace', price_usd: 25, plan_type: 'day-use' },
+    { id: 6, hotel_id: 5, name: '6-Hour Layover', price_usd: 40, plan_type: 'day-use' },
+    { id: 10, hotel_id: 9, name: 'Romantic Half Day', price_usd: 80, plan_type: 'day-use' },
+    { id: 14, hotel_id: 13, name: 'Luxury Day Pass', price_usd: 150, plan_type: 'day-use' },
+  ];
+  const cn = cityName.toLowerCase();
+  const filtered = sampleHotels.filter(h => h.city.toLowerCase() === cn);
+  total = filtered.length;
+  hotels = filtered.slice(offset, offset + perPage);
+  for (const hotel of hotels) {
+    const hotelPlans = samplePlans.filter(p => p.hotel_id === hotel.id);
+    plansMap.set(hotel.id, hotelPlans);
+  }
+}
+
+const totalPages = Math.ceil(total / perPage);
+
+function buildPageUrl(pageNum: number) {
+  const params = new URLSearchParams();
+  if (pageNum > 1) params.set('page', String(pageNum));
+  const qs = params.toString();
+  const basePath = localePath(`/city/${slug}`, locale);
+  return qs ? `${basePath}?${qs}` : basePath;
+}
+
+function getPageNumbers(current: number, totalPg: number) {
+  if (totalPg <= 7) return Array.from({ length: totalPg }, (_, i) => i + 1);
+  const pages: (number | string)[] = [];
+  if (current <= 4) { for (let i = 1; i <= 5; i++) pages.push(i); pages.push('...'); pages.push(totalPg); }
+  else if (current >= totalPg - 3) { pages.push(1); pages.push('...'); for (let i = totalPg - 4; i <= totalPg; i++) pages.push(i); }
+  else { pages.push(1); pages.push('...'); for (let i = current - 1; i <= current + 1; i++) pages.push(i); pages.push('...'); pages.push(totalPg); }
+  return pages;
+}
+
+const pageNumbers = getPageNumbers(page, totalPages);
+const pageTitle = t('city.hotels_in', locale).replace('{city}', cityName);
+const resultsText = t('city.hotels_found', locale).replace('{count}', String(total)).replace('{city}', cityName);
+
+function getMinPrice(hotelId: number) {
+  const plans = plansMap.get(hotelId) || [];
+  if (plans.length === 0) return null;
+  return Math.min(...plans.map((p: any) => p.price_usd));
+}
+---
+
+<Layout title={pageTitle} description={pageTitle}>
+  <section class="py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="mb-6">
+        <nav class="mb-4 text-sm text-gray-500">
+          <a href={localePath('/', locale)} class="hover:text-[#45A2C1] transition-colors">{t('breadcrumb.home', locale)}</a>
+          <span class="mx-2">/</span>
+          <span class="text-gray-700">{cityName}</span>
+        </nav>
+        <h1 class="text-2xl font-bold text-gray-800">{pageTitle}</h1>
+        <p class="text-sm text-gray-500 mt-1">{resultsText}</p>
+      </div>
+
+      {hotels.length > 0 ? (
+        <>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {hotels.map((hotel: any) => {
+              const minPrice = getMinPrice(hotel.id);
+              const displayName = locale === 'ja' && hotel.name_ja ? hotel.name_ja : hotel.name;
+              return (
+                <a href={localePath(`/hotel/${hotel.slug}`, locale)} class="group bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                  <div class="aspect-[4/3] overflow-hidden bg-gray-100">
+                    <img src={hotel.thumbnail_url || '/images/placeholder-hotel.jpg'} alt={displayName} loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  </div>
+                  <div class="p-4">
+                    <h3 class="font-semibold text-gray-900 text-sm mb-1 line-clamp-1">{displayName}</h3>
+                    <p class="text-xs text-gray-500 mb-2">{hotel.city}, {hotel.country}</p>
+                    {minPrice && <p class="text-sm font-bold text-[#45A2C1]">{t('hotel.from', locale)} ${minPrice} {t('hotel.usd', locale)}</p>}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+          {totalPages > 1 && (
+            <nav class="mt-10 flex justify-center" aria-label="Pagination">
+              <ul class="flex items-center gap-1.5">
+                <li>
+                  {page > 1 ? (
+                    <a href={buildPageUrl(page - 1)} class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                      <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                      {t('search.previous', locale)}
+                    </a>
+                  ) : (
+                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed">
+                      <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                      {t('search.previous', locale)}
+                    </span>
+                  )}
+                </li>
+                {pageNumbers.map(p => (
+                  <li>
+                    {p === '...' ? <span class="inline-flex items-center justify-center w-10 h-10 text-sm text-gray-500">...</span>
+                    : p === page ? <span class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium text-white bg-[#45A2C1] rounded-lg">{p}</span>
+                    : <a href={buildPageUrl(p as number)} class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">{p}</a>}
+                  </li>
+                ))}
+                <li>
+                  {page < totalPages ? (
+                    <a href={buildPageUrl(page + 1)} class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                      {t('search.next', locale)}
+                      <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </a>
+                  ) : (
+                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed">
+                      {t('search.next', locale)}
+                      <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </span>
+                  )}
+                </li>
+              </ul>
+            </nav>
+          )}
+        </>
+      ) : (
+        <div class="text-center py-16">
+          <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"></path>
+          </svg>
+          <h2 class="text-xl font-semibold text-gray-600 mb-2">{t('city.not_found', locale)}</h2>
+          <p class="text-gray-400 max-w-md mx-auto mb-6">{t('city.not_found_desc', locale)}</p>
+          <a href={localePath('/search', locale)} class="inline-flex items-center px-5 py-2.5 bg-[#45A2C1] text-white rounded-lg text-sm font-medium hover:bg-[#3891af] transition-colors">
+            {t('nav.search', locale)}
+          </a>
+        </div>
+      )}
+    </div>
+  </section>
+</Layout>

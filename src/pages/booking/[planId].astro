@@ -1,0 +1,350 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import PayPalButton from '../../components/PayPalButton.astro';
+import { getLocale, t, localePath } from '../../lib/i18n';
+
+const locale = getLocale(Astro.url);
+const { planId } = Astro.params;
+const planIdNum = parseInt(planId || '0');
+
+let plan: any = null;
+let dbAvailable = false;
+let paypalClientId = '';
+
+try {
+  const runtime = (Astro.locals as any).runtime;
+  const db = runtime?.env?.DB;
+  paypalClientId = runtime?.env?.PAYPAL_CLIENT_ID || '';
+  if (db) {
+    dbAvailable = true;
+    plan = await db.prepare(
+      "SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?"
+    ).bind(planIdNum).first();
+  }
+} catch (e) {
+  dbAvailable = false;
+}
+
+if (!dbAvailable) {
+  const samplePlans = [
+    { id: 1, name: "4-Hour Workspace", name_ja: "4時間ワークスペース", price_usd: 25, check_in_time: "09:00", check_out_time: "13:00", plan_type: "day-use", max_guests: 1, duration_hours: 4, hotel_name: "The Work Loft Bangkok", hotel_name_ja: "ザ ワークロフト バンコク", hotel_slug: "work-loft-bangkok", city: "Bangkok", country: "Thailand" },
+    { id: 2, name: "Full Day Office", name_ja: "1日オフィス", price_usd: 45, check_in_time: "09:00", check_out_time: "18:00", plan_type: "day-use", max_guests: 2, duration_hours: 9, hotel_name: "The Work Loft Bangkok", hotel_name_ja: "ザ ワークロフト バンコク", hotel_slug: "work-loft-bangkok", city: "Bangkok", country: "Thailand" },
+    { id: 6, name: "6-Hour Layover", name_ja: "6時間レイオーバー", price_usd: 40, check_in_time: "00:00", check_out_time: "06:00", plan_type: "day-use", max_guests: 2, duration_hours: 6, hotel_name: "Airport Transit Hotel", hotel_name_ja: "エアポート トランジットホテル", hotel_slug: "airport-transit-hotel", city: "Singapore", country: "Singapore" },
+    { id: 10, name: "Romantic Half Day", name_ja: "ロマンチック半日", price_usd: 80, check_in_time: "12:00", check_out_time: "18:00", plan_type: "day-use", max_guests: 2, duration_hours: 6, hotel_name: "Romance Suite Bali", hotel_name_ja: "ロマンス スイート バリ", hotel_slug: "romance-suite-bali", city: "Bali", country: "Indonesia" },
+    { id: 14, name: "Luxury Day Pass", name_ja: "ラグジュアリーデイパス", price_usd: 150, check_in_time: "10:00", check_out_time: "18:00", plan_type: "day-use", max_guests: 2, duration_hours: 8, hotel_name: "The Ritz-Carlton KL", hotel_name_ja: "ザ・リッツカールトン KL", hotel_slug: "ritz-carlton-kl", city: "Kuala Lumpur", country: "Malaysia" },
+    { id: 18, name: "Beach & Pool Day", name_ja: "ビーチ＆プールデイ", price_usd: 55, check_in_time: "09:00", check_out_time: "17:00", plan_type: "day-use", max_guests: 4, duration_hours: 8, hotel_name: "Daycation Paradise", hotel_name_ja: "デイケーション パラダイス", hotel_slug: "daycation-paradise", city: "Bali", country: "Indonesia" },
+  ];
+  plan = samplePlans.find((p) => p.id === planIdNum) || null;
+  paypalClientId = 'sandbox';
+}
+
+if (!plan) {
+  Astro.response.status = 404;
+}
+
+const displayPlanName = plan ? (locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name) : '';
+const displayHotelName = plan ? (locale === 'ja' && plan.hotel_name_ja ? plan.hotel_name_ja : plan.hotel_name) : '';
+const timeSlot = plan?.check_in_time && plan?.check_out_time ? `${plan.check_in_time} - ${plan.check_out_time}` : '';
+const today = new Date().toISOString().split('T')[0];
+const todayParts = today.split('-');
+const bookingMonths = [
+  { val: '01', label: 'Jan' }, { val: '02', label: 'Feb' }, { val: '03', label: 'Mar' },
+  { val: '04', label: 'Apr' }, { val: '05', label: 'May' }, { val: '06', label: 'Jun' },
+  { val: '07', label: 'Jul' }, { val: '08', label: 'Aug' }, { val: '09', label: 'Sep' },
+  { val: '10', label: 'Oct' }, { val: '11', label: 'Nov' }, { val: '12', label: 'Dec' },
+];
+const bookingCurYear = new Date().getFullYear();
+const bookingYears = [bookingCurYear, bookingCurYear + 1, bookingCurYear + 2];
+const bookingDays = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
+const maxGuests = plan?.max_guests || 10;
+const adultOptions = Array.from({ length: maxGuests }, (_, i) => i + 1);       // 1〜maxGuests
+const guestOptions = Array.from({ length: maxGuests + 1 }, (_, i) => i);       // 0〜maxGuests
+
+const planTypeColors: Record<string, string> = {
+  'day-use': 'bg-blue-100 text-blue-700',
+  'overnight': 'bg-indigo-100 text-indigo-700',
+  'hourly': 'bg-green-100 text-green-700',
+};
+const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-100 text-gray-700') : '';
+---
+
+<Layout title={plan ? `${t('booking.title', locale)} - ${displayPlanName} | ${t('site.name', locale)}` : t('booking.plan_not_found', locale)} description={plan ? `${t('booking.title', locale)} - ${displayHotelName}` : t('booking.plan_not_found_desc', locale)}>
+
+  {plan ? (
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <!-- Breadcrumb -->
+      <nav class="mb-6" aria-label="Breadcrumb">
+        <ol class="flex items-center text-sm text-gray-500 space-x-2">
+          <li>
+            <a href={localePath('/', locale)} class="hover:text-[#45A2C1] transition-colors">
+              {t('breadcrumb.home', locale)}
+            </a>
+          </li>
+          <li><span class="mx-1">/</span></li>
+          <li>
+            <a href={localePath('/search', locale)} class="hover:text-[#45A2C1] transition-colors">
+              {t('breadcrumb.hotels', locale)}
+            </a>
+          </li>
+          <li><span class="mx-1">/</span></li>
+          <li>
+            <a href={localePath(`/hotel/${plan.hotel_slug}`, locale)} class="hover:text-[#45A2C1] transition-colors truncate max-w-[150px] inline-block">
+              {displayHotelName}
+            </a>
+          </li>
+          <li><span class="mx-1">/</span></li>
+          <li class="text-gray-800 font-medium" aria-current="page">
+            {t('breadcrumb.book', locale)}
+          </li>
+        </ol>
+      </nav>
+
+      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">
+        {t('booking.title', locale)}
+      </h1>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Left column: Booking Form -->
+        <div class="lg:col-span-2">
+          <div class="bg-white border border-gray-200 rounded-xl p-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-5">
+              {t('booking.guest_info', locale)}
+            </h2>
+            <form id="booking-form" class="space-y-5" novalidate>
+              <div>
+                <label for="guest_name" class="block text-sm font-medium text-gray-700 mb-1">
+                  {t('booking.guest_name', locale)} <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="guest_name" name="guest_name" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors" placeholder={locale === 'ja' ? '山田 太郎' : 'John Doe'} />
+              </div>
+              <div>
+                <label for="guest_email" class="block text-sm font-medium text-gray-700 mb-1">
+                  {t('booking.email', locale)} <span class="text-red-500">*</span>
+                </label>
+                <input type="email" id="guest_email" name="guest_email" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors" placeholder="email@example.com" />
+              </div>
+              <div>
+                <label for="guest_phone" class="block text-sm font-medium text-gray-700 mb-1">
+                  {t('booking.phone', locale)}
+                </label>
+                <input type="tel" id="guest_phone" name="guest_phone" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors" placeholder="+81-90-1234-5678" />
+              </div>
+              <div>
+                <label for="check_in_date" class="block text-sm font-medium text-gray-700 mb-1">
+                  {t('booking.date', locale)} <span class="text-red-500">*</span>
+                </label>
+                <div class="flex gap-2">
+                  <select id="checkin-y" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white">
+                    <option value="">YYYY</option>
+                    {bookingYears.map(y => <option value={y}>{y}</option>)}
+                  </select>
+                  <select id="checkin-m" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white">
+                    <option value="">MM</option>
+                    {bookingMonths.map(m => <option value={m.val}>{m.label}</option>)}
+                  </select>
+                  <select id="checkin-d" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white">
+                    <option value="">DD</option>
+                    {bookingDays.map(d => <option value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <input type="hidden" id="check_in_date" name="check_in_date" />
+              </div>
+              {plan?.max_guests && (
+                <div class="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  <svg class="w-3.5 h-3.5 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                  </svg>
+                  Max <strong class="text-slate-700 mx-1">{plan.max_guests}</strong> guests total (adults + children + infants)
+                </div>
+              )}
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label for="adults" class="block text-sm font-medium text-gray-700 mb-1">
+                    {t('booking.adults', locale)} <span class="text-red-500">*</span>
+                  </label>
+                  <select id="adults" name="adults" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white transition-colors">
+                    {adultOptions.map(n => <option value={n} selected={n === 1}>{n}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label for="children" class="block text-sm font-medium text-gray-700 mb-1">
+                    {t('booking.children', locale)}
+                  </label>
+                  <select id="children" name="children" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white transition-colors">
+                    {guestOptions.map(n => <option value={n} selected={n === 0}>{n}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label for="infants" class="block text-sm font-medium text-gray-700 mb-1">
+                    {t('booking.infants', locale)}
+                  </label>
+                  <select id="infants" name="infants" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white transition-colors">
+                    {guestOptions.map(n => <option value={n} selected={n === 0}>{n}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div id="guests-error" style="display:none" class="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+                <span>This plan allows a maximum of <strong>{maxGuests}</strong> guests in total (adults + children + infants).</span>
+              </div>
+              <div>
+                <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">
+                  {t('booking.special_requests', locale)}
+                </label>
+                <textarea id="notes" name="notes" rows="3" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors resize-vertical" placeholder={t('booking.special_requests_placeholder', locale)}></textarea>
+              </div>
+              <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">
+                {t('booking.form_validation_error', locale)}
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Right column: Summary + PayPal -->
+        <div class="lg:col-span-1">
+          <div class="bg-white border border-gray-200 rounded-xl p-6 sticky top-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">
+              {t('booking.summary', locale)}
+            </h2>
+            <div class="mb-4">
+              <p class="text-sm text-gray-500">{t('booking.hotel', locale)}</p>
+              <p class="font-medium text-gray-900">{displayHotelName}</p>
+              <p class="text-xs text-gray-400 mt-0.5">{plan.city}, {plan.country}</p>
+            </div>
+            <div class="mb-4">
+              <p class="text-sm text-gray-500">{t('booking.plan', locale)}</p>
+              <div class="flex items-center gap-2 mt-0.5">
+                <p class="font-medium text-gray-900">{displayPlanName}</p>
+                {plan.plan_type && (
+                  <span class:list={['text-xs font-medium rounded-full px-2 py-0.5', planTypeClass]}>
+                    {plan.plan_type}
+                  </span>
+                )}
+              </div>
+            </div>
+            {timeSlot && (
+              <div class="mb-4">
+                <p class="text-sm text-gray-500">{t('booking.time_slot', locale)}</p>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                  </svg>
+                  <p class="font-medium text-gray-900">{timeSlot}</p>
+                </div>
+              </div>
+            )}
+            {plan.duration_hours && (
+              <div class="mb-4">
+                <p class="text-sm text-gray-500">{t('hotel.duration', locale)}</p>
+                <p class="font-medium text-gray-900">{plan.duration_hours} {t('hotel.hours', locale)}</p>
+              </div>
+            )}
+            {plan.max_guests && (
+              <div class="mb-4">
+                <p class="text-sm text-gray-500">{t('booking.max_guests', locale)}</p>
+                <p class="font-medium text-gray-900">{plan.max_guests} {t('hotel.guests_unit', locale)}</p>
+              </div>
+            )}
+            <div class="mb-4">
+              <p class="text-sm text-gray-500">Cancellation Policy</p>
+              {plan.cancellation_hours === 0 ? (
+                <span class="inline-flex items-center gap-1 text-xs font-medium bg-red-100 text-red-700 px-2 py-0.5 rounded-full mt-1">
+                  ❌ Non-refundable
+                </span>
+              ) : (
+                <span class="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full mt-1">
+                  ✅ Free cancellation up to {plan.cancellation_hours ?? 24}h before check-in
+                </span>
+              )}
+            </div>
+            <div class="border-t border-gray-200 my-4"></div>
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-base font-semibold text-gray-800">{t('booking.total', locale)}</p>
+              <p class="text-2xl font-bold text-[#45A2C1]">
+                ${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
+              </p>
+            </div>
+            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} />
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : (
+    <!-- 404: Plan Not Found -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-20 text-center">
+      <svg class="w-20 h-20 mx-auto text-gray-300 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+      </svg>
+      <h1 class="text-2xl font-bold text-gray-700 mb-3">
+        {t('booking.plan_not_found', locale)}
+      </h1>
+      <p class="text-gray-500 mb-8 max-w-md mx-auto">
+        {t('booking.plan_not_found_desc', locale)}
+      </p>
+      <a href={localePath('/', locale)} class="inline-flex items-center px-6 py-3 bg-[#45A2C1] text-white font-medium rounded-lg hover:bg-[#3891AE] transition-colors">
+        {t('hotel.back_home', locale)}
+      </a>
+    </div>
+  )}
+
+</Layout>
+
+<script define:vars={{ maxGuests }}>
+  function syncCheckin() {
+    var y = (document.getElementById('checkin-y') as HTMLSelectElement).value;
+    var m = (document.getElementById('checkin-m') as HTMLSelectElement).value;
+    var d = (document.getElementById('checkin-d') as HTMLSelectElement).value;
+    (document.getElementById('check_in_date') as HTMLInputElement).value = (y && m && d) ? y + '-' + m + '-' + d : '';
+  }
+  ['checkin-y', 'checkin-m', 'checkin-d'].forEach(function(id) {
+    document.getElementById(id)?.addEventListener('change', syncCheckin);
+  });
+
+  // Max guests: show error immediately
+  if (maxGuests > 0) {
+    var guestSelIds = ['adults', 'children', 'infants'];
+
+    function checkGuestTotal() {
+      var total = 0;
+      guestSelIds.forEach(function(id) {
+        total += parseInt((document.getElementById(id) as HTMLSelectElement)?.value || '0') || 0;
+      });
+      var errEl = document.getElementById('guests-error');
+      var over = total > maxGuests;
+
+      if (errEl) {
+        errEl.style.display = over ? 'flex' : 'none';
+      }
+
+      // Highlight selects in red when over
+      guestSelIds.forEach(function(id) {
+        var el = document.getElementById(id) as HTMLSelectElement;
+        if (!el) return;
+        if (over) {
+          el.style.borderColor = '#ef4444';
+          el.style.boxShadow = '0 0 0 2px rgba(239,68,68,0.2)';
+        } else {
+          el.style.borderColor = '';
+          el.style.boxShadow = '';
+        }
+      });
+
+      return !over;
+    }
+
+    guestSelIds.forEach(function(id) {
+      var el = document.getElementById(id);
+      el?.addEventListener('change', checkGuestTotal);
+      el?.addEventListener('input', checkGuestTotal);  // for mobile
+    });
+
+    document.querySelector('form')?.addEventListener('submit', function(e) {
+      if (!checkGuestTotal()) {
+        e.preventDefault();
+        document.getElementById('guests-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, true);
+  }
+</script>

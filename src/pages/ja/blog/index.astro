@@ -1,0 +1,172 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import BlogCard from '../../../components/BlogCard.astro';
+import { getLocale, t, localePath } from '../../../lib/i18n';
+
+const locale = getLocale(Astro.url);
+const url = Astro.url;
+const cityFilter = url.searchParams.get('city') || '';
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+const perPage = 12;
+const offset = (page - 1) * perPage;
+
+let posts: any[] = [];
+let total = 0;
+let dbAvailable = false;
+
+try {
+  const runtime = (Astro.locals as any).runtime;
+  const db = runtime?.env?.DB;
+  if (db) {
+    dbAvailable = true;
+    const whereClauses = ['is_published = 1'];
+    const params: any[] = [];
+    if (cityFilter) {
+      whereClauses.push('city LIKE ?');
+      params.push(`%${cityFilter}%`);
+    }
+    const whereStr = whereClauses.join(' AND ');
+    const countResult = await db.prepare(
+      `SELECT COUNT(*) as count FROM blog_posts WHERE ${whereStr}`
+    ).bind(...params).first();
+    total = countResult?.count || 0;
+
+    const result = await db.prepare(
+      `SELECT id, title, title_ja, slug, excerpt, city, thumbnail_url, published_at
+       FROM blog_posts
+       WHERE ${whereStr}
+       ORDER BY published_at DESC
+       LIMIT ? OFFSET ?`
+    ).bind(...params, perPage, offset).all();
+    posts = result?.results || [];
+  }
+} catch (e) {
+  dbAvailable = false;
+}
+
+if (!dbAvailable) {
+  const samplePosts = [
+    { id: 1, title: 'Best Day-Use Hotels in Bangkok for Remote Work', title_ja: 'バンコクでリモートワークに最適なデイユースホテル', slug: 'best-dayuse-hotels-bangkok-remote-work', excerpt: 'Discover the top hotels in Bangkok that offer comfortable workspaces, high-speed WiFi, and flexible day-use plans perfect for digital nomads.', city: 'Bangkok', thumbnail_url: '', published_at: '2025-01-15T09:00:00Z' },
+    { id: 2, title: 'Singapore Airport Transit Hotels: A Complete Guide', title_ja: 'シンガポール空港トランジットホテル完全ガイド', slug: 'singapore-airport-transit-hotels-guide', excerpt: 'Everything you need to know about transit hotels near Changi Airport, including pricing, amenities, and booking tips for layovers.', city: 'Singapore', thumbnail_url: '', published_at: '2025-01-10T09:00:00Z' },
+    { id: 3, title: 'Romantic Day-Use Hotels in Bali for Couples', title_ja: 'バリ島カップルにおすすめのデイユースホテル', slug: 'romantic-dayuse-hotels-bali-couples', excerpt: 'Looking for a romantic daytime escape in Bali? Here are the best day-use hotels and villas perfect for couples seeking privacy and luxury.', city: 'Bali', thumbnail_url: '', published_at: '2025-01-05T09:00:00Z' },
+    { id: 4, title: 'Top Luxury Day-Use Hotels in Kuala Lumpur', title_ja: 'クアラルンプールのラグジュアリーデイユースホテルTOP', slug: 'luxury-dayuse-hotels-kuala-lumpur', excerpt: 'Experience five-star luxury without the overnight stay. These Kuala Lumpur hotels offer premium day-use packages with spa, pool, and dining.', city: 'Kuala Lumpur', thumbnail_url: '', published_at: '2024-12-28T09:00:00Z' },
+    { id: 5, title: 'How to Book Day-Use Hotels: A Beginner Guide', title_ja: 'デイユースホテルの予約方法：初心者ガイド', slug: 'how-to-book-dayuse-hotels-beginner-guide', excerpt: 'New to day-use hotel booking? This guide covers everything from finding the right hotel to making the most of your short stay.', city: '', thumbnail_url: '', published_at: '2024-12-20T09:00:00Z' },
+    { id: 6, title: 'Hong Kong Daycation: Pool & Spa Day Passes', title_ja: '香港デイケーション：プール＆スパのデイパス', slug: 'hong-kong-daycation-pool-spa-day-passes', excerpt: 'Enjoy a refreshing daycation in Hong Kong with pool and spa day passes at top hotels. Perfect for a weekend escape without leaving the city.', city: 'Hong Kong', thumbnail_url: '', published_at: '2024-12-15T09:00:00Z' },
+  ];
+  let filtered = samplePosts;
+  if (cityFilter) {
+    const cf = cityFilter.toLowerCase();
+    filtered = filtered.filter(p => p.city?.toLowerCase().includes(cf));
+  }
+  total = filtered.length;
+  posts = filtered.slice(offset, offset + perPage);
+}
+
+const totalPages = Math.ceil(total / perPage);
+
+function buildPageUrl(pageNum: number) {
+  const params = new URLSearchParams();
+  if (cityFilter) params.set('city', cityFilter);
+  if (pageNum > 1) params.set('page', String(pageNum));
+  const qs = params.toString();
+  const basePath = localePath('/blog', locale);
+  return qs ? `${basePath}?${qs}` : basePath;
+}
+
+function getPageNumbers(current: number, totalPg: number) {
+  if (totalPg <= 7) return Array.from({ length: totalPg }, (_, i) => i + 1);
+  const pages: (number | string)[] = [];
+  if (current <= 4) {
+    for (let i = 1; i <= 5; i++) pages.push(i);
+    pages.push('...'); pages.push(totalPg);
+  } else if (current >= totalPg - 3) {
+    pages.push(1); pages.push('...');
+    for (let i = totalPg - 4; i <= totalPg; i++) pages.push(i);
+  } else {
+    pages.push(1); pages.push('...');
+    for (let i = current - 1; i <= current + 1; i++) pages.push(i);
+    pages.push('...'); pages.push(totalPg);
+  }
+  return pages;
+}
+
+const pageNumbers = getPageNumbers(page, totalPages);
+const resultsText = t('blog.posts_found', locale).replace('{count}', String(total));
+---
+
+<Layout title={t('blog.title', locale)} description={t('blog.title', locale)}>
+  <section class="py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">{t('blog.title', locale)}</h1>
+        <p class="text-sm text-gray-500 mt-2">{resultsText}</p>
+        {cityFilter && (
+          <div class="mt-3 flex items-center gap-2">
+            <span class="text-sm text-gray-600">{t('blog.filter_by_city', locale)}:</span>
+            <span class="bg-blue-50 text-blue-600 text-sm font-medium rounded px-2.5 py-0.5">{cityFilter}</span>
+            <a href={localePath('/blog', locale)} class="text-sm text-gray-400 hover:text-gray-600 transition-colors" title={t('blog.all_posts', locale)}>
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </a>
+          </div>
+        )}
+      </div>
+
+      {posts.length > 0 ? (
+        <>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {posts.map(post => <BlogCard post={post} locale={locale} />)}
+          </div>
+          {totalPages > 1 && (
+            <nav class="mt-10 flex justify-center" aria-label="Pagination">
+              <ul class="flex items-center gap-1.5">
+                <li>
+                  {page > 1 ? (
+                    <a href={buildPageUrl(page - 1)} class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                      <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                      {t('search.previous', locale)}
+                    </a>
+                  ) : (
+                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed">
+                      <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                      {t('search.previous', locale)}
+                    </span>
+                  )}
+                </li>
+                {pageNumbers.map(p => (
+                  <li>
+                    {p === '...' ? <span class="inline-flex items-center justify-center w-10 h-10 text-sm text-gray-500">...</span>
+                    : p === page ? <span class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium text-white bg-[#45A2C1] rounded-lg">{p}</span>
+                    : <a href={buildPageUrl(p as number)} class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">{p}</a>}
+                  </li>
+                ))}
+                <li>
+                  {page < totalPages ? (
+                    <a href={buildPageUrl(page + 1)} class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                      {t('search.next', locale)}
+                      <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </a>
+                  ) : (
+                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed">
+                      {t('search.next', locale)}
+                      <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </span>
+                  )}
+                </li>
+              </ul>
+            </nav>
+          )}
+        </>
+      ) : (
+        <div class="text-center py-16">
+          <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"></path>
+          </svg>
+          <h2 class="text-xl font-semibold text-gray-600 mb-2">{t('blog.no_posts', locale)}</h2>
+          <p class="text-gray-400 max-w-md mx-auto">{t('blog.no_posts_desc', locale)}</p>
+        </div>
+      )}
+    </div>
+  </section>
+</Layout>

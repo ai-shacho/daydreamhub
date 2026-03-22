@@ -265,6 +265,7 @@ export async function sendGuestBookingConfirmation(
     children: number;
     totalPriceUsd: number;
     notes?: string;
+    cancellationHours?: number | null;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const subject = `Booking Request Received #${data.bookingId} — DaydreamHub`;
@@ -295,6 +296,7 @@ export async function sendGuestBookingConfirmation(
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(guestCount)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Total Paid</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px"><strong style="color:#0d9488">$${data.totalPriceUsd.toFixed(2)} USD</strong></td></tr>
         ${data.notes ? `<tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Notes</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(data.notes)}</td></tr>` : ''}
+        <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Cancellation Policy</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${data.cancellationHours === 0 ? '❌ Non-refundable' : `✅ Free cancellation up to ${data.cancellationHours ?? 24}h before check-in`}</td></tr>
       </table>
     </div>
 
@@ -312,6 +314,63 @@ export async function sendGuestBookingConfirmation(
     </p>
   </div>
 </div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.guestEmail,
+    subject,
+    html,
+  });
+}
+
+export async function sendPaymentFailureEmail(
+  apiKey: string,
+  data: {
+    guestName: string;
+    guestEmail: string;
+    hotelName: string;
+    planName: string;
+    errorMessage: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = `Payment Failed — DaydreamHub`;
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#dc2626;color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
+    <div style="font-size:40px;margin-bottom:8px">⚠️</div>
+    <h1 style="margin:0;font-size:22px;font-weight:700">Payment Failed</h1>
+    <p style="margin:6px 0 0;opacity:0.85;font-size:14px">Your payment could not be processed</p>
+  </div>
+
+  <div style="padding:28px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#ffffff">
+    <p style="font-size:16px;margin-top:0">Hello <strong>${escapeHtml(data.guestName)}</strong>,</p>
+    <p style="color:#374151">We were unable to process your payment for the following booking:</p>
+
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;margin:20px 0">
+      <table style="border-collapse:collapse;width:100%">
+        <tr><td style="padding:7px 10px;border:1px solid #fecaca;font-weight:600;background:#fef2f2;width:38%;font-size:13px">Hotel</td><td style="padding:7px 10px;border:1px solid #fecaca;font-size:13px">${escapeHtml(data.hotelName)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid #fecaca;font-weight:600;background:#fef2f2;font-size:13px">Plan</td><td style="padding:7px 10px;border:1px solid #fecaca;font-size:13px">${escapeHtml(data.planName)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid #fecaca;font-weight:600;background:#fef2f2;font-size:13px">Reason</td><td style="padding:7px 10px;border:1px solid #fecaca;font-size:13px;color:#dc2626">${escapeHtml(data.errorMessage)}</td></tr>
+      </table>
+    </div>
+
+    <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px">
+      <strong>What to do next:</strong><br>
+      Please return to the booking page and try again. If the problem persists, try using a different payment method.
+      If you continue to experience issues, please contact our support team.
+    </div>
+
+    <div style="text-align:center;margin:24px 0">
+      <a href="https://daydreamhub.com" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Return to DaydreamHub</a>
+    </div>
+
+    <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
+      Questions? <a href="https://daydreamhub.com/contact" style="color:#0d9488">Contact us</a> or reply to this email.<br>
+      DaydreamHub — Day-Use Hotel Booking Worldwide
+    </p>
+  </div>
+</div>`;
+
   return sendEmail({
     apiKey,
     from: 'DaydreamHub <noreply@daydreamhub.com>',

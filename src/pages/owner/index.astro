@@ -1,0 +1,295 @@
+---
+import OwnerLayout from '../../layouts/OwnerLayout.astro';
+import { verifyOwner, getOwnerHotelIds } from '../../lib/ownerAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const owner = await verifyOwner(Astro.request, jwtSecret);
+if (!owner) {
+  return Astro.redirect("/login?redirect=/owner");
+}
+
+let myHotelsCount = 0;
+let totalBookings = 0;
+let pendingBookings = 0;
+let monthRevenue = 0;
+let recentBookings: any[] = [];
+let calendarDays: any[] = [];
+let latestReviews: any[] = [];
+
+
+
+
+if (db) {
+  try {
+    const ownerHotelIds = await getOwnerHotelIds(db, owner);
+    myHotelsCount = ownerHotelIds.length;
+
+    if (ownerHotelIds.length > 0) {
+      const placeholders = ownerHotelIds.map(() => "?").join(",");
+
+      const [bookingsRes, pendingRes, revenueRes, recentRes, reviewsRes] = await Promise.all([
+        db.prepare(
+          `SELECT COUNT(*) as count FROM bookings WHERE hotel_id IN (${placeholders})`
+        ).bind(...ownerHotelIds).first(),
+        db.prepare(
+          `SELECT COUNT(*) as count FROM bookings WHERE hotel_id IN (${placeholders}) AND status = 'pending'`
+        ).bind(...ownerHotelIds).first(),
+        db.prepare(
+          `SELECT COALESCE(SUM(total_price_usd), 0) as total FROM bookings WHERE hotel_id IN (${placeholders}) AND status = 'confirmed' AND check_in_date >= date('now', 'start of month')`
+        ).bind(...ownerHotelIds).first(),
+        db.prepare(
+          `SELECT b.*, h.name as hotel_name, p.name as plan_name FROM bookings b LEFT JOIN hotels h ON b.hotel_id = h.id LEFT JOIN plans p ON b.plan_id = p.id WHERE b.hotel_id IN (${placeholders}) ORDER BY b.created_at DESC LIMIT 10`
+        ).bind(...ownerHotelIds).all(),
+        db.prepare(
+          `SELECT r.*, h.name as hotel_name FROM reviews r LEFT JOIN hotels h ON r.hotel_id = h.id WHERE r.hotel_id IN (${placeholders}) ORDER BY r.created_at DESC LIMIT 3`
+        ).bind(...ownerHotelIds).all()
+      ]);
+
+      totalBookings = bookingsRes?.count ?? 0;
+      pendingBookings = pendingRes?.count ?? 0;
+      monthRevenue = revenueRes?.total ?? 0;
+      recentBookings = recentRes?.results ?? [];
+      latestReviews = reviewsRes?.results ?? [];
+
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const today = new Date();
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        const dateStr = d.toISOString().split("T")[0];
+        const dayLabel = i === 0 ? "Today" : i === 1 ? "Tomorrow" : `${dayNames[d.getDay()]} ${d.getDate()}`;
+        calendarDays.push({ date: dateStr, dayLabel, count: 0 });
+      }
+
+      const calendarRes = await db.prepare(
+        `SELECT check_in_date, COUNT(*) as count FROM bookings WHERE hotel_id IN (${placeholders}) AND check_in_date >= date('now') AND check_in_date < date('now', '+7 days') AND status IN ('confirmed', 'pending') GROUP BY check_in_date`
+      ).bind(...ownerHotelIds).all();
+
+      const calendarMap = new Map();
+      for (const row of calendarRes?.results || []) {
+        calendarMap.set(row.check_in_date, row.count);
+      }
+      for (const day of calendarDays) {
+        day.count = calendarMap.get(day.date) || 0;
+      }
+
+
+    }
+  } catch (e) {
+    console.error("Owner dashboard DB error:", e);
+  }
+}
+
+const maxCalendarCount = Math.max(...calendarDays.map((d) => d.count), 1);
+
+const stats = [
+  {
+    label: "My Hotels",
+    value: myHotelsCount,
+    icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />',
+    color: "bg-indigo-50 text-indigo-600",
+    iconBg: "bg-indigo-100"
+  },
+  {
+    label: "Total Bookings",
+    value: totalBookings,
+    icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />',
+    color: "bg-blue-50 text-blue-600",
+    iconBg: "bg-blue-100"
+  },
+  {
+    label: "This Month Revenue",
+    value: `$${Number(monthRevenue).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />',
+    color: "bg-emerald-50 text-emerald-600",
+    iconBg: "bg-emerald-100"
+  },
+  {
+    label: "Pending Bookings",
+    value: pendingBookings,
+    icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />',
+    color: "bg-amber-50 text-amber-600",
+    iconBg: "bg-amber-100"
+  }
+];
+
+const statusColors: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  confirmed: "bg-green-100 text-green-700",
+  cancelled: "bg-red-100 text-red-700",
+  completed: "bg-blue-100 text-blue-700"
+};
+
+const quickActions = [
+  { label: "My Hotels", href: "/owner/hotels", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />' },
+  { label: "Bookings", href: "/owner/bookings", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />' },
+  { label: "Calendar", href: "/owner/calendar", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5m-9-6h.008v.008H12v-.008ZM12 15h.008v.008H12V15Zm0 2.25h.008v.008H12v-.008ZM9.75 15h.008v.008H9.75V15Zm0 2.25h.008v.008H9.75v-.008ZM7.5 15h.008v.008H7.5V15Zm0 2.25h.008v.008H7.5v-.008Zm6.75-4.5h.008v.008h-.008v-.008Zm0 2.25h.008v.008h-.008V15Zm0 2.25h.008v.008h-.008v-.008Zm2.25-4.5h.008v.008H16.5v-.008Zm0 2.25h.008v.008H16.5V15Z" />' },
+  { label: "Reviews", href: "/owner/reviews", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />' },
+  { label: "Reports", href: "/owner/reports", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />' },
+  { label: "Staff", href: "/owner/staff", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />' },
+  { label: "Settings", href: "/owner/settings", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />' },
+  { label: "Messages", href: "/owner/messages", icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />' }
+];
+---
+
+<OwnerLayout title="Dashboard" activeNav="dashboard">
+  <div class="mb-8">
+    <h2 class="text-2xl font-bold text-slate-900">Welcome back, {owner.name}</h2>
+    <p class="mt-1 text-sm text-slate-500">Here is an overview of your properties on DayDreamHub.</p>
+  </div>
+
+
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    {stats.map((stat) => (
+      <div class="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
+        <div class="flex items-center gap-3">
+          <div class={`flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${stat.iconBg}`}>
+            <svg class={`w-5 h-5 ${stat.color.split(" ")[1]}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><Fragment set:html={stat.icon} /></svg>
+          </div>
+          <div class="min-w-0">
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide truncate">{stat.label}</p>
+            <p class="text-2xl font-bold text-slate-900 mt-0.5">{stat.value}</p>
+          </div>
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <!-- Next 7 Days -->
+  <div class="bg-white rounded-xl border border-slate-200 p-5 mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-base font-semibold text-slate-900">Next 7 Days</h3>
+      <a href="/owner/calendar" class="text-sm text-indigo-600 hover:text-indigo-700 font-medium">Full Calendar</a>
+    </div>
+    <div class="space-y-2.5">
+      {calendarDays.map((day) => (
+        <div class="flex items-center gap-3">
+          <span class={`w-24 text-sm font-medium flex-shrink-0 ${day.dayLabel === "Today" ? "text-indigo-600" : "text-slate-600"}`}>
+            {day.dayLabel}
+          </span>
+          <div class="flex-1 bg-slate-100 rounded-full h-6 overflow-hidden">
+            {day.count > 0 ? (
+              <div class="h-full bg-indigo-500 rounded-full flex items-center justify-end pr-2 transition-all" style={`width: ${Math.max(day.count / maxCalendarCount * 100, 12)}%`}>
+                <span class="text-xs font-bold text-white">{day.count}</span>
+              </div>
+            ) : (
+              <div class="h-full flex items-center pl-3">
+                <span class="text-xs text-slate-400">No bookings</span>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="mb-8">
+    <h3 class="text-sm font-semibold text-slate-900 uppercase tracking-wide mb-3">Quick Actions</h3>
+    <div class="flex flex-wrap gap-3">
+      {quickActions.map((action) => (
+        <a href={action.href} class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><Fragment set:html={action.icon} /></svg>
+          {action.label}
+        </a>
+      ))}
+    </div>
+  </div>
+
+  <!-- Latest Reviews & Recent Bookings -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <!-- Latest Reviews -->
+    <div class="lg:col-span-1 bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h3 class="text-base font-semibold text-slate-900">Latest Reviews</h3>
+        <a href="/owner/reviews" class="text-sm text-indigo-600 hover:text-indigo-700 font-medium">View All</a>
+      </div>
+      {latestReviews.length > 0 ? (
+        <div class="divide-y divide-slate-100">
+          {latestReviews.map((review) => (
+            <div class="px-5 py-4">
+              <div class="flex items-center gap-2 mb-1.5">
+                <div class="flex items-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <svg class={`w-4 h-4 ${i < (review.rating || 0) ? "text-amber-400" : "text-slate-200"}`} fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                </div>
+                {review.is_approved === 0 && (
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">Pending</span>
+                )}
+              </div>
+              <p class="text-sm font-medium text-slate-900 truncate">{review.title || "No title"}</p>
+              <p class="text-sm text-slate-500 mt-0.5 line-clamp-2">{review.comment || "No comment provided."}</p>
+              <div class="flex items-center justify-between mt-2">
+                <span class="text-xs text-slate-400">{review.guest_name} - {review.hotel_name || "N/A"}</span>
+                <span class="text-xs text-slate-400">{review.created_at?.split("T")[0] || ""}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div class="px-5 py-12 text-center">
+          <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+          </svg>
+          <p class="text-sm text-slate-500">No reviews yet.</p>
+        </div>
+      )}
+    </div>
+
+    <!-- Recent Bookings -->
+    <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h3 class="text-base font-semibold text-slate-900">Recent Bookings</h3>
+        <a href="/owner/bookings" class="text-sm text-indigo-600 hover:text-indigo-700 font-medium">View All</a>
+      </div>
+      {recentBookings.length > 0 ? (
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-slate-50 text-left">
+                <th class="px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wide">ID</th>
+                <th class="px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wide">Guest Name</th>
+                <th class="px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wide">Hotel</th>
+                <th class="px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wide">Plan</th>
+                <th class="px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wide">Date</th>
+                <th class="px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wide">Amount</th>
+                <th class="px-5 py-3 font-medium text-slate-500 text-xs uppercase tracking-wide">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {recentBookings.map((booking) => (
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="px-5 py-3 text-slate-600 font-mono text-xs">#{booking.id}</td>
+                  <td class="px-5 py-3 text-slate-900 font-medium">{booking.guest_name}</td>
+                  <td class="px-5 py-3 text-slate-600">{booking.hotel_name || "N/A"}</td>
+                  <td class="px-5 py-3 text-slate-600">{booking.plan_name || "N/A"}</td>
+                  <td class="px-5 py-3 text-slate-600">{booking.check_in_date}</td>
+                  <td class="px-5 py-3 text-slate-900 font-medium">${Number(booking.total_price_usd).toFixed(2)}</td>
+                  <td class="px-5 py-3">
+                    <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[booking.status] || "bg-slate-100 text-slate-700"}`}>
+                      {booking.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div class="px-5 py-12 text-center">
+          <svg class="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+          </svg>
+          <p class="text-sm text-slate-500">No bookings yet for your hotels.</p>
+        </div>
+      )}
+    </div>
+  </div>
+</OwnerLayout>

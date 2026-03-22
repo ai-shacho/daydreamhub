@@ -1,0 +1,247 @@
+---
+import OwnerLayout from '../../layouts/OwnerLayout.astro';
+import { verifyOwner, getOwnerHotelIds } from '../../lib/ownerAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const owner = await verifyOwner(Astro.request, jwtSecret);
+if (!owner) return Astro.redirect("/login?redirect=/owner/edit-requests");
+
+const url = new URL(Astro.request.url);
+const statusFilter = url.searchParams.get("status") || "";
+const hotelFilter = url.searchParams.get("hotel_id") || "";
+
+let editRequests: any[] = [];
+let ownerHotels: any[] = [];
+let error = "";
+
+if (db) {
+  try {
+    const hotelIds = await getOwnerHotelIds(db, owner);
+
+    // Load owned hotels for filter dropdown
+    if (hotelIds.length > 0) {
+      const ph = hotelIds.map(() => "?").join(",");
+      const hotelsRes = await db.prepare(
+        `SELECT id, name FROM hotels WHERE id IN (${ph}) ORDER BY name`
+      ).bind(...hotelIds).all();
+      ownerHotels = hotelsRes?.results || [];
+    }
+
+    // Load edit requests
+    if (hotelIds.length > 0) {
+      const ph = hotelIds.map(() => "?").join(",");
+      let query = `
+        SELECT er.*, h.name as hotel_name
+        FROM hotel_edit_requests er
+        LEFT JOIN hotels h ON h.id = er.hotel_id
+        WHERE er.hotel_id IN (${ph})
+      `;
+      const binds: any[] = [...hotelIds];
+
+      if (statusFilter) {
+        query += " AND er.status = ?";
+        binds.push(statusFilter);
+      }
+      if (hotelFilter) {
+        query += " AND er.hotel_id = ?";
+        binds.push(parseInt(hotelFilter));
+      }
+
+      query += " ORDER BY er.created_at DESC LIMIT 200";
+      const res = await db.prepare(query).bind(...binds).all();
+      editRequests = res?.results || [];
+    }
+  } catch (e: any) {
+    error = e.message || "Failed to load edit requests";
+  }
+}
+
+const statusOptions = ["", "pending", "approved", "rejected"];
+const statusLabels: Record<string, string> = {
+  "": "All Statuses",
+  pending: "Pending Review",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+const statusColors: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-700",
+  approved: "bg-emerald-50 text-emerald-700",
+  rejected: "bg-red-50 text-red-700",
+};
+
+const counts = {
+  all: editRequests.length,
+  pending: editRequests.filter((r: any) => r.status === "pending").length,
+  approved: editRequests.filter((r: any) => r.status === "approved").length,
+  rejected: editRequests.filter((r: any) => r.status === "rejected").length,
+};
+---
+
+<OwnerLayout title="Edit Requests" activeNav="edit-requests">
+  {error && (
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
+  )}
+
+  <!-- Filters -->
+  <div class="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+    <form method="GET" action="/owner/edit-requests" class="flex flex-wrap items-end gap-4">
+      <div class="min-w-[180px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Hotel</label>
+        <select name="hotel_id" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+          <option value="">All My Hotels</option>
+          {ownerHotels.map((h: any) => (
+            <option value={h.id} selected={String(h.id) === hotelFilter}>{h.name}</option>
+          ))}
+        </select>
+      </div>
+      <div class="min-w-[160px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+        <select name="status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
+          {statusOptions.map((s) => (
+            <option value={s} selected={s === statusFilter}>{statusLabels[s]}</option>
+          ))}
+        </select>
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+          Filter
+        </button>
+        <a href="/owner/edit-requests" class="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+          Reset
+        </a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Stats -->
+  <div class="flex items-center gap-4 mb-4 text-sm">
+    <span class="text-slate-500">{counts.all} request{counts.all !== 1 ? "s" : ""} found</span>
+    <span class="text-slate-300">|</span>
+    <span class="text-amber-600">{counts.pending} pending</span>
+    <span class="text-emerald-600">{counts.approved} approved</span>
+    <span class="text-red-600">{counts.rejected} rejected</span>
+  </div>
+
+  <!-- Table -->
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+      <h2 class="font-semibold text-slate-900">Edit Requests</h2>
+      <a
+        href="/owner/hotels"
+        class="text-sm text-indigo-600 hover:text-indigo-700 font-medium inline-flex items-center gap-1"
+      >
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        New Request
+      </a>
+    </div>
+
+    {ownerHotels.length === 0 ? (
+      <div class="px-6 py-12 text-center">
+        <svg class="w-10 h-10 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75" />
+        </svg>
+        <p class="text-slate-500 text-sm">No hotels assigned to your account yet.</p>
+        <p class="text-slate-400 text-xs mt-1">Contact admin if your hotels should be listed here.</p>
+      </div>
+    ) : (
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-4 py-3 font-medium text-slate-600">ID</th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Hotel</th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Requested Changes</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Date</th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Admin Note</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {editRequests.length === 0 ? (
+              <tr>
+                <td colspan="7" class="px-4 py-12 text-center text-slate-400">
+                  No edit requests found
+                  {statusFilter || hotelFilter ? " for the selected filters" : ""}.
+                  {!statusFilter && !hotelFilter && (
+                    <span class="block mt-2 text-xs">
+                      To request changes to a hotel, go to{" "}
+                      <a href="/owner/hotels" class="text-indigo-600 hover:underline">My Hotels</a>
+                      {" "}and click on a hotel.
+                    </span>
+                  )}
+                </td>
+              </tr>
+            ) : editRequests.map((er: any) => {
+              // Parse field_changes JSON
+              let changes: any = {};
+              try { changes = JSON.parse(er.field_changes || "{}"); } catch { changes = {}; }
+              const changeKeys: string[] = Object.keys(changes).filter((k: string) => changes[k] !== null && changes[k] !== undefined);
+
+              return (
+                <tr class="hover:bg-slate-50 transition-colors">
+                  <td class="px-4 py-3 font-mono text-slate-500 text-xs">#{er.id}</td>
+                  <td class="px-4 py-3">
+                    <a
+                      href={`/owner/hotels/${er.hotel_id}`}
+                      class="font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
+                    >
+                      {er.hotel_name || `Hotel #${er.hotel_id}`}
+                    </a>
+                  </td>
+                  <td class="px-4 py-3">
+                    {changeKeys.length > 0 ? (
+                      <div class="flex flex-wrap gap-1">
+                        {changeKeys.slice(0, 4).map((k) => (
+                          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700 font-mono">
+                            {k}
+                          </span>
+                        ))}
+                        {changeKeys.length > 4 && (
+                          <span class="text-xs text-slate-400">+{changeKeys.length - 4} more</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span class="text-slate-400 text-xs">—</span>
+                    )}
+                  </td>
+                  <td class="px-4 py-3 text-center">
+                    <span class={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[er.status] || "bg-slate-100 text-slate-600"}`}>
+                      <span class={`w-1.5 h-1.5 rounded-full ${er.status === "pending" ? "bg-amber-500" : er.status === "approved" ? "bg-emerald-500" : er.status === "rejected" ? "bg-red-500" : "bg-slate-400"}`}></span>
+                      {statusLabels[er.status] || er.status}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-slate-500 text-xs">
+                    {er.created_at ? new Date(er.created_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—"}
+                  </td>
+                  <td class="px-4 py-3 text-slate-600 text-xs max-w-[180px] truncate" title={er.admin_note || ""}>
+                    {er.admin_note || "—"}
+                  </td>
+                  <td class="px-4 py-3 text-center">
+                    <a
+                      href={`/owner/hotels/${er.hotel_id}`}
+                      class="px-3 py-1 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors"
+                    >
+                      View Hotel
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+
+  <!-- Info box -->
+  <div class="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700">
+    <p class="font-medium mb-1">How Edit Requests work</p>
+    <p>To request changes to your hotel's information, go to <a href="/owner/hotels" class="underline hover:text-blue-800 font-medium">My Hotels</a>, select a hotel, and use the "Request Changes" form. Changes will be reviewed by the DayDreamHub admin team.</p>
+  </div>
+</OwnerLayout>

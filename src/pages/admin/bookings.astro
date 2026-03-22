@@ -1,0 +1,421 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect("/admin/login");
+
+const url = new URL(Astro.request.url);
+const statusFilter = url.searchParams.get("status") || "";
+const dateFrom = url.searchParams.get("from") || "";
+const dateTo = url.searchParams.get("to") || "";
+const [fromY, fromM, fromD] = dateFrom ? dateFrom.split('-') : ['', '', ''];
+const [toY, toM, toD] = dateTo ? dateTo.split('-') : ['', '', ''];
+const months = [
+  { val: '01', label: 'Jan' }, { val: '02', label: 'Feb' }, { val: '03', label: 'Mar' },
+  { val: '04', label: 'Apr' }, { val: '05', label: 'May' }, { val: '06', label: 'Jun' },
+  { val: '07', label: 'Jul' }, { val: '08', label: 'Aug' }, { val: '09', label: 'Sep' },
+  { val: '10', label: 'Oct' }, { val: '11', label: 'Nov' }, { val: '12', label: 'Dec' },
+];
+const curYear = new Date().getFullYear();
+const years = [curYear - 1, curYear, curYear + 1];
+const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
+const search = url.searchParams.get("search") || "";
+
+let bookings: any[] = [];
+let error = "";
+
+if (db) {
+  try {
+    let query = `SELECT b.*, h.name as hotel_name, p.name as plan_name
+      FROM bookings b
+      LEFT JOIN hotels h ON h.id = b.hotel_id
+      LEFT JOIN plans p ON p.id = b.plan_id
+      WHERE 1=1`;
+    const binds: any[] = [];
+
+    if (statusFilter) {
+      query += " AND b.status = ?";
+      binds.push(statusFilter);
+    }
+    if (search) {
+      query += " AND (b.guest_name LIKE ? OR b.guest_email LIKE ? OR h.name LIKE ?)";
+      binds.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    if (dateFrom) {
+      query += " AND b.check_in_date >= ?";
+      binds.push(dateFrom);
+    }
+    if (dateTo) {
+      query += " AND b.check_in_date <= ?";
+      binds.push(dateTo);
+    }
+
+    query += " ORDER BY b.created_at DESC LIMIT 200";
+    const result = await db.prepare(query).bind(...binds).all();
+    bookings = result?.results || [];
+  } catch (e: any) {
+    error = e.message || "Failed to load bookings";
+  }
+}
+
+const statusOptions = ["", "pending", "confirmed", "completed", "cancelled"];
+const statusColors: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  confirmed: "bg-emerald-100 text-emerald-700",
+  completed: "bg-blue-100 text-blue-700",
+  cancelled: "bg-red-100 text-red-700",
+};
+---
+
+<AdminLayout title="Bookings" activeNav="bookings">
+  <!-- Filters -->
+  <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <form method="GET" action="/admin/bookings" class="flex flex-wrap items-end gap-4">
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+        <input type="text" name="search" value={search} placeholder="Guest name, email, or hotel..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" />
+      </div>
+      <div class="min-w-[160px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+        <select name="status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
+          <option value="">All Statuses</option>
+          {statusOptions.filter((s) => s).map((s) => (
+            <option value={s} selected={s === statusFilter}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Check-in From</label>
+        <div class="flex gap-1">
+          <select id="ab-from-y" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+            <option value="">YYYY</option>
+            {years.map(y => <option value={y} selected={fromY === String(y)}>{y}</option>)}
+          </select>
+          <select id="ab-from-m" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+            <option value="">MM</option>
+            {months.map(m => <option value={m.val} selected={fromM === m.val}>{m.label}</option>)}
+          </select>
+          <select id="ab-from-d" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+            <option value="">DD</option>
+            {days.map(d => <option value={d} selected={fromD === d}>{d}</option>)}
+          </select>
+        </div>
+        <input type="hidden" id="ab-from-hidden" name="from" value={dateFrom} />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Check-in To</label>
+        <div class="flex gap-1">
+          <select id="ab-to-y" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+            <option value="">YYYY</option>
+            {years.map(y => <option value={y} selected={toY === String(y)}>{y}</option>)}
+          </select>
+          <select id="ab-to-m" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+            <option value="">MM</option>
+            {months.map(m => <option value={m.val} selected={toM === m.val}>{m.label}</option>)}
+          </select>
+          <select id="ab-to-d" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+            <option value="">DD</option>
+            {days.map(d => <option value={d} selected={toD === d}>{d}</option>)}
+          </select>
+        </div>
+        <input type="hidden" id="ab-to-hidden" name="to" value={dateTo} />
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+          Filter
+        </button>
+        <a href="/admin/bookings" class="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+          Reset
+        </a>
+      </div>
+    </form>
+  </div>
+
+  {error && (
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
+  )}
+
+  <div class="flex items-center justify-between mb-4">
+    <p class="text-sm text-slate-500">{bookings.length} booking{bookings.length !== 1 ? "s" : ""} found</p>
+    <button id="export-csv-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+      </svg>
+      Export CSV
+    </button>
+  </div>
+
+  <!-- Bookings Table -->
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200">
+            <th class="text-left px-4 py-3 font-medium text-slate-600">ID</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Guest</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Hotel</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Plan</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Check-in</th>
+            <th class="text-right px-4 py-3 font-medium text-slate-600">Price (USD)</th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Created</th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {bookings.length === 0 ? (
+            <tr>
+              <td colspan="9" class="px-4 py-12 text-center text-slate-400">No bookings found</td>
+            </tr>
+          ) : bookings.map((b: any) => (
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-4 py-3 font-mono text-slate-500">#{b.id}</td>
+              <td class="px-4 py-3">
+                <div class="font-medium text-slate-900">{b.guest_name || "-"}</div>
+                <div class="text-xs text-slate-400">{b.guest_email || ""}</div>
+                <div class="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                  <span>👤 {b.adults || 1}</span>
+                  {(b.children > 0) && <span>🧒 {b.children}</span>}
+                  {(b.infants > 0) && <span>👶 {b.infants}</span>}
+                </div>
+              </td>
+              <td class="px-4 py-3 text-slate-600">{b.hotel_name || "-"}</td>
+              <td class="px-4 py-3 text-slate-600">{b.plan_name || "-"}</td>
+              <td class="px-4 py-3 text-slate-600">{b.check_in_date || "-"}</td>
+              <td class="px-4 py-3 text-right font-mono text-slate-900">
+                {b.total_price_usd != null ? `$${Number(b.total_price_usd).toFixed(2)}` : "-"}
+              </td>
+              <td class="px-4 py-3 text-center">
+                <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[b.status] || "bg-slate-100 text-slate-600"}`}>
+                  {b.status}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{b.created_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button
+                    class="msg-btn px-2 py-1 text-xs text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors"
+                    data-id={b.id}
+                    data-email={b.guest_email || ""}
+                    data-name={b.guest_name || ""}
+                    data-hotel={b.hotel_name || ""}
+                  >
+                    ✉
+                  </button>
+                  {b.status === "pending" && (
+                    <>
+                      <button
+                        class="status-btn px-2 py-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded hover:bg-emerald-100 transition-colors"
+                        data-id={b.id}
+                        data-action="confirm"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        class="status-btn px-2 py-1 text-xs text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
+                        data-id={b.id}
+                        data-action="cancel"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  {b.status === "confirmed" && (
+                    <button
+                      class="status-btn px-2 py-1 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+                      data-id={b.id}
+                      data-action="complete"
+                    >
+                      Complete
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <!-- Send Message Modal -->
+  <div id="send-msg-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" id="msg-backdrop"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-lg">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 class="text-lg font-semibold text-slate-900">Send Message to Guest</h2>
+          <button id="msg-close" class="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+        <form id="send-msg-form" class="p-6 space-y-4">
+          <div id="msg-error" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+          <input type="hidden" name="booking_id" id="msg-booking-id" />
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">To</label>
+            <input type="text" id="msg-to-display" readonly class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-600" />
+            <input type="hidden" name="to" id="msg-to" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Subject</label>
+            <input type="text" name="subject" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="e.g. Your booking at DayDreamHub" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Message</label>
+            <textarea name="body" rows="5" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" placeholder="Write your message..."></textarea>
+          </div>
+          <div class="flex justify-end gap-3 pt-2 border-t border-slate-200">
+            <button type="button" id="msg-cancel" class="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
+            <button type="submit" id="msg-submit" class="px-5 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors">Send</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  // Date selects → hidden input
+  function syncAdminDate(prefix) {
+    var y = document.getElementById('ab-' + prefix + '-y').value;
+    var m = document.getElementById('ab-' + prefix + '-m').value;
+    var d = document.getElementById('ab-' + prefix + '-d').value;
+    document.getElementById('ab-' + prefix + '-hidden').value = (y && m && d) ? y + '-' + m + '-' + d : '';
+  }
+  ['from', 'to'].forEach(function(p) {
+    ['y', 'm', 'd'].forEach(function(part) {
+      document.getElementById('ab-' + p + '-' + part)?.addEventListener('change', function() { syncAdminDate(p); });
+    });
+  });
+
+  // Export CSV
+  document.getElementById('export-csv-btn')?.addEventListener('click', () => {
+    const rows: string[][] = [['ID','Guest Name','Guest Email','Hotel','Plan','Check-in','Price (USD)','Status','Created']];
+    document.querySelectorAll('tbody tr').forEach((tr) => {
+      const cells = tr.querySelectorAll('td');
+      if (cells.length < 8) return;
+      const id = cells[0]?.textContent?.replace('#','').trim() || '';
+      const guestName = cells[1]?.querySelector('.font-medium')?.textContent?.trim() || '';
+      const guestEmail = cells[1]?.querySelector('.text-xs')?.textContent?.trim() || '';
+      const hotel = cells[2]?.textContent?.trim() || '';
+      const plan = cells[3]?.textContent?.trim() || '';
+      const checkin = cells[4]?.textContent?.trim() || '';
+      const price = cells[5]?.textContent?.replace('$','').trim() || '';
+      const status = cells[6]?.textContent?.trim() || '';
+      const created = cells[7]?.textContent?.trim() || '';
+      rows.push([id,guestName,guestEmail,hotel,plan,checkin,price,status,created]);
+    });
+    const csv = rows.map(r => r.map(c => `"${c.replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `bookings-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  });
+
+  // Send Message modal
+  const msgModal = document.getElementById('send-msg-modal');
+  const msgForm = document.getElementById('send-msg-form') as HTMLFormElement;
+  const msgError = document.getElementById('msg-error');
+  const msgSubmit = document.getElementById('msg-submit') as HTMLButtonElement;
+
+  function openMsgModal(bookingId: string, email: string, name: string) {
+    (document.getElementById('msg-booking-id') as HTMLInputElement).value = bookingId;
+    (document.getElementById('msg-to') as HTMLInputElement).value = email;
+    (document.getElementById('msg-to-display') as HTMLInputElement).value = `${name} <${email}>`;
+    msgError?.classList.add('hidden');
+    msgForm?.reset();
+    (document.getElementById('msg-booking-id') as HTMLInputElement).value = bookingId;
+    (document.getElementById('msg-to') as HTMLInputElement).value = email;
+    (document.getElementById('msg-to-display') as HTMLInputElement).value = `${name} <${email}>`;
+    msgModal?.classList.remove('hidden');
+  }
+  function closeMsgModal() { msgModal?.classList.add('hidden'); }
+
+  document.getElementById('msg-close')?.addEventListener('click', closeMsgModal);
+  document.getElementById('msg-cancel')?.addEventListener('click', closeMsgModal);
+  document.getElementById('msg-backdrop')?.addEventListener('click', closeMsgModal);
+
+  document.querySelectorAll('.msg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      openMsgModal(
+        btn.getAttribute('data-id') || '',
+        btn.getAttribute('data-email') || '',
+        btn.getAttribute('data-name') || ''
+      );
+    });
+  });
+
+  msgForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    msgError?.classList.add('hidden');
+    msgSubmit.disabled = true;
+    msgSubmit.textContent = 'Sending...';
+
+    const formData = new FormData(msgForm);
+    const body = {
+      booking_id: formData.get('booking_id'),
+      to: formData.get('to'),
+      subject: formData.get('subject'),
+      body: formData.get('body'),
+      type: 'email',
+    };
+
+    try {
+      const res = await fetch('/api/admin/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        closeMsgModal();
+        alert('Message sent successfully!');
+      } else {
+        const d = await res.json();
+        if (msgError) { msgError.textContent = d.error || 'Failed to send'; msgError.classList.remove('hidden'); }
+      }
+    } catch {
+      if (msgError) { msgError.textContent = 'Network error'; msgError.classList.remove('hidden'); }
+    } finally {
+      msgSubmit.disabled = false;
+      msgSubmit.textContent = 'Send';
+    }
+  });
+
+  document.querySelectorAll('.status-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = Number(btn.getAttribute('data-id'));
+      const action = btn.getAttribute('data-action');
+      const actionLabel = action === 'confirm' ? 'confirm' : action === 'cancel' ? 'cancel' : 'complete';
+
+      if (!confirm(`Are you sure you want to ${actionLabel} booking #${id}?`)) return;
+
+      btn.disabled = true;
+      const origText = btn.textContent;
+      btn.textContent = '...';
+
+      try {
+        const res = await fetch('/api/admin/bookings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, action }),
+        });
+
+        if (res.ok) {
+          location.reload();
+        } else {
+          const data = await res.json();
+          alert('Failed: ' + (data.error || 'Unknown error'));
+          btn.textContent = origText;
+          btn.disabled = false;
+        }
+      } catch {
+        alert('Network error');
+        btn.textContent = origText;
+        btn.disabled = false;
+      }
+    });
+  });
+</script>

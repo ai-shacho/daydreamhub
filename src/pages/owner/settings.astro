@@ -1,0 +1,170 @@
+---
+import OwnerLayout from '../../layouts/OwnerLayout.astro';
+import { verifyOwner } from '../../lib/ownerAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const owner = await verifyOwner(Astro.request, jwtSecret);
+if (!owner) {
+  return Astro.redirect("/login?redirect=/owner/settings");
+}
+
+let userData: any = null;
+if (db) {
+  try {
+    userData = await db.prepare("SELECT id, name, email, role, created_at FROM users WHERE id = ?").bind(owner.sub).first();
+  } catch (e) {
+    console.error("Settings DB error:", e);
+  }
+}
+
+const user = userData || { name: owner.name, email: owner.email, role: owner.role };
+---
+
+<OwnerLayout title="Settings" activeNav="settings">
+  <div class="max-w-2xl">
+    <!-- Profile Section -->
+    <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+      <h3 class="text-lg font-semibold text-slate-900 mb-4">Profile Information</h3>
+      <form id="profile-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+          <input type="text" name="name" value={user.name} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+          <input type="email" name="email" value={user.email} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-500 cursor-not-allowed" disabled>
+          <p class="mt-1 text-xs text-slate-400">Email address is used to match hotels and cannot be changed here. Contact admin to update.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Role</label>
+          <input type="text" value={user.role} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-slate-50 text-slate-500 capitalize cursor-not-allowed" disabled>
+        </div>
+        <div class="pt-2">
+          <button type="submit" class="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+            Update Profile
+          </button>
+        </div>
+      </form>
+      <div id="profile-msg" class="hidden mt-3 text-sm"></div>
+    </div>
+
+    <!-- Change Password Section -->
+    <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+      <h3 class="text-lg font-semibold text-slate-900 mb-4">Change Password</h3>
+      <form id="password-form" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Current Password</label>
+          <input type="password" name="current_password" placeholder="Enter current password" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">New Password</label>
+          <input type="password" name="new_password" placeholder="Minimum 8 characters" minlength="8" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Confirm New Password</label>
+          <input type="password" name="confirm_password" placeholder="Re-enter new password" minlength="8" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" required>
+        </div>
+        <div class="pt-2">
+          <button type="submit" class="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+            Change Password
+          </button>
+        </div>
+      </form>
+      <div id="password-msg" class="hidden mt-3 text-sm"></div>
+    </div>
+
+    <!-- Notification Preferences -->
+    <div class="bg-white rounded-xl border border-slate-200 p-6">
+      <h3 class="text-lg font-semibold text-slate-900 mb-2">Notification Preferences</h3>
+      <p class="text-sm text-slate-500 mb-4">Manage email and call notification settings per hotel.</p>
+      <a href="/owner/notifications" class="inline-flex items-center gap-2 px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+        </svg>
+        Manage Notifications
+      </a>
+    </div>
+  </div>
+</OwnerLayout>
+
+<script>
+  // Profile update
+  document.getElementById('profile-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const name = (form.querySelector('[name="name"]') as HTMLInputElement).value.trim();
+    const msgEl = document.getElementById('profile-msg')!;
+
+    if (!name) {
+      msgEl.textContent = 'Name is required.';
+      msgEl.className = 'mt-3 text-sm text-red-600';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/owner/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+
+      if (res.ok) {
+        msgEl.textContent = 'Profile updated successfully.';
+        msgEl.className = 'mt-3 text-sm text-emerald-600';
+      } else {
+        const data = await res.json().catch(() => ({}));
+        msgEl.textContent = data.error || 'Failed to update profile.';
+        msgEl.className = 'mt-3 text-sm text-red-600';
+      }
+    } catch {
+      msgEl.textContent = 'Error updating profile.';
+      msgEl.className = 'mt-3 text-sm text-red-600';
+    }
+  });
+
+  // Password change
+  document.getElementById('password-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.target as HTMLFormElement;
+    const currentPassword = (form.querySelector('[name="current_password"]') as HTMLInputElement).value;
+    const newPassword = (form.querySelector('[name="new_password"]') as HTMLInputElement).value;
+    const confirmPassword = (form.querySelector('[name="confirm_password"]') as HTMLInputElement).value;
+    const msgEl = document.getElementById('password-msg')!;
+
+    if (newPassword !== confirmPassword) {
+      msgEl.textContent = 'New passwords do not match.';
+      msgEl.className = 'mt-3 text-sm text-red-600';
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      msgEl.textContent = 'Password must be at least 8 characters.';
+      msgEl.className = 'mt-3 text-sm text-red-600';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/owner/password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+      });
+
+      if (res.ok) {
+        msgEl.textContent = 'Password changed successfully.';
+        msgEl.className = 'mt-3 text-sm text-emerald-600';
+        form.reset();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        msgEl.textContent = data.error || 'Failed to change password.';
+        msgEl.className = 'mt-3 text-sm text-red-600';
+      }
+    } catch {
+      msgEl.textContent = 'Error changing password.';
+      msgEl.className = 'mt-3 text-sm text-red-600';
+    }
+  });
+</script>

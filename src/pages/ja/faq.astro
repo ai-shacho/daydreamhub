@@ -1,0 +1,114 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getLocale } from '../../lib/i18n';
+
+const locale = getLocale(Astro.url);
+
+const sections = [
+  {
+    title: 'デイユースホテルの基本情報',
+    items: [
+      { question: 'デイユースホテルとは何ですか？', answer: 'デイユースホテルとは、通常の宿泊とは異なり、日中の特定の時間帯にホテルの部屋を利用できるサービスです。短い休憩、仕事、待ち時間などに利用できます。通常、数時間から半日程度の利用で、宿泊は含まれません。' },
+    ],
+  },
+  {
+    title: '予約方法',
+    items: [
+      { question: '予約はどのようにしますか？', answer: 'ホテルを検索し、プランを選択、日程と人数を選んで予約に進みます。' },
+      { question: 'どの時間帯が利用可能ですか？', answer: '利用可能な時間帯はホテルやプランによって異なります。各プランにチェックイン・チェックアウト時間が表示されています。' },
+      { question: '家族で予約できますか？', answer: 'はい、各プランの最大人数をご確認ください。追加のゲストについては、ホテルに直接お問い合わせください。' },
+      { question: '複数の部屋を予約できますか？', answer: 'はい、複数の部屋について個別に予約を行うことができます。' },
+    ],
+  },
+  {
+    title: 'お支払いについて',
+    items: [
+      { question: 'クレジットカードは必要ですか？', answer: 'PayPalが主要な決済方法です。一部のホテルでは現地払いも可能です。' },
+      { question: 'いつ請求されますか？', answer: '事前払いと表示されているプランは予約時にお支払いが必要です。現地払いプランはチェックイン時にお支払いとなります。' },
+      { question: '事前払い予約が拒否された場合は？', answer: 'PayPalアカウントに全額返金されます。' },
+      { question: 'チェックイン時に支払えますか？', answer: '「現地払い」と表示されているプランの場合は可能です。事前払いプランはPayPalでの決済が必要です。' },
+    ],
+  },
+  {
+    title: '予約の変更・キャンセル',
+    items: [
+      { question: '予約を確認するにはどうすればよいですか？', answer: '予約後に確認メールが送信されます。これが予約の証明書となります。' },
+      { question: '予約をキャンセルできますか？', answer: 'キャンセルポリシーはホテルによって異なります。各ホテルのポリシーをご確認ください。' },
+      { question: '日程を変更できますか？', answer: '日程変更については、ホテルに直接お問い合わせください。' },
+      { question: '遅刻した場合はどうなりますか？', answer: 'ホテルにご連絡ください。遅刻により利用可能時間が短くなる場合があります。' },
+      { question: 'アーリーチェックインやレイトチェックアウトは可能ですか？', answer: '空室状況によります。ホテルに直接お問い合わせください。' },
+    ],
+  },
+  {
+    title: 'アカウントとプライバシー',
+    items: [
+      { question: 'なぜアカウントが必要ですか？', answer: '予約時に自動的にアカウントが作成され、予約管理に使用されます。' },
+      { question: 'データはどのように保護されていますか？', answer: '厳格なプライバシーポリシーに従っています。詳しくはプライバシーポリシーページをご覧ください。' },
+      { question: 'アカウントを削除できますか？', answer: 'はい、ただしアカウント削除により有効な予約はすべてキャンセルされます。' },
+      { question: 'メールの配信を停止するには？', answer: 'ニュースレターメールにある配信停止リンクをご利用ください。' },
+    ],
+  },
+];
+---
+
+<Layout title={`${locale === 'ja' ? 'よくある質問' : 'FAQ'}`} description="DayDreamHubのデイユースホテル予約に関するよくある質問">
+  <!-- Hero -->
+  <section class="bg-[#EBF8FC] py-16 sm:py-20">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+      <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">
+        よくある質問
+      </h1>
+      <p class="text-lg text-gray-600">
+        DayDreamHubでのデイユースホテル予約に関するよくある質問にお答えします。
+      </p>
+    </div>
+  </section>
+
+  <!-- FAQ Sections -->
+  <section class="py-12 sm:py-16">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6">
+      <div class="space-y-10">
+        {sections.map((section, index) => (
+          <div>
+            <h2 class="text-lg sm:text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+              <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#45A2C1] text-white text-sm font-bold flex-shrink-0">
+                {index + 1}
+              </span>
+              {section.title}
+            </h2>
+            <div class="space-y-3">
+              {section.items.map(item => (
+                <details class="group bg-white border border-gray-200 rounded-lg">
+                  <summary class="flex items-center justify-between cursor-pointer px-5 py-4 text-sm font-medium text-gray-800 hover:text-[#45A2C1] transition-colors">
+                    <span>{item.question}</span>
+                    <svg class="w-5 h-5 text-gray-400 group-open:rotate-180 transition-transform flex-shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
+                    </svg>
+                  </summary>
+                  <div class="px-5 pb-4 text-sm text-gray-600 leading-relaxed">
+                    {item.answer}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact CTA -->
+  <section class="py-12 sm:py-16 bg-gray-50">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+      <h2 class="text-lg sm:text-xl font-bold text-gray-800 mb-4">
+        まだ解決しない質問がありますか？
+      </h2>
+      <p class="text-gray-600 mb-2">
+        サポートチームまでお気軽にお問い合わせください。
+      </p>
+      <a href="mailto:customer@daydreamhub.com" class="text-[#45A2C1] hover:underline font-medium">
+        customer@daydreamhub.com
+      </a>
+    </div>
+  </section>
+</Layout>

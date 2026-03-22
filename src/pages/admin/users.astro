@@ -1,0 +1,263 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect("/admin/login");
+
+const url = new URL(Astro.request.url);
+const roleFilter = url.searchParams.get("role") || "";
+const search = url.searchParams.get("search") || "";
+
+let users: any[] = [];
+let error = "";
+
+if (db) {
+  try {
+    let query = `SELECT id, name, email, role, created_at FROM users WHERE 1=1`;
+    const binds: any[] = [];
+
+    if (roleFilter) {
+      query += " AND role = ?";
+      binds.push(roleFilter);
+    }
+    if (search) {
+      query += " AND (name LIKE ? OR email LIKE ?)";
+      binds.push(`%${search}%`, `%${search}%`);
+    }
+
+    query += " ORDER BY created_at DESC LIMIT 200";
+    const result = await db.prepare(query).bind(...binds).all();
+    users = result?.results || [];
+  } catch (e: any) {
+    error = e.message || "Failed to load users";
+  }
+}
+
+const roleOptions = ["", "user", "admin", "owner"];
+const roleColors: Record<string, string> = {
+  user: "bg-slate-100 text-slate-600",
+  admin: "bg-purple-100 text-purple-700",
+  owner: "bg-teal-100 text-teal-700",
+};
+---
+
+<AdminLayout title="Users" activeNav="users">
+  <!-- Filters -->
+  <div class="bg-white rounded-lg shadow p-4 mb-6">
+    <form method="GET" action="/admin/users" class="flex flex-wrap items-end gap-4">
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+        <input type="text" name="search" value={search} placeholder="Name or email..." class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent" />
+      </div>
+      <div class="min-w-[160px]">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Role</label>
+        <select name="role" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white">
+          <option value="">All Roles</option>
+          {roleOptions.filter((r) => r).map((r) => (
+            <option value={r} selected={r === roleFilter}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
+          ))}
+        </select>
+      </div>
+      <div class="flex gap-2">
+        <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+          Filter
+        </button>
+        <a href="/admin/users" class="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+          Reset
+        </a>
+      </div>
+    </form>
+  </div>
+
+  {error && (
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
+  )}
+
+  <div class="flex items-center justify-between mb-4">
+    <p class="text-sm text-slate-500">{users.length} user{users.length !== 1 ? "s" : ""} found</p>
+    <button id="add-user-btn" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+      + Add User
+    </button>
+  </div>
+
+  <!-- Users Table -->
+  <div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200">
+            <th class="text-left px-4 py-3 font-medium text-slate-600">ID</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Name</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Email</th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">Role</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Created</th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {users.length === 0 ? (
+            <tr>
+              <td colspan="5" class="px-4 py-12 text-center text-slate-400">No users found</td>
+            </tr>
+          ) : users.map((u: any) => (
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-4 py-3 font-mono text-slate-500">#{u.id}</td>
+              <td class="px-4 py-3 font-medium text-slate-900">{u.name || "-"}</td>
+              <td class="px-4 py-3 text-slate-600">{u.email || "-"}</td>
+              <td class="px-4 py-3 text-center">
+                <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleColors[u.role] || "bg-slate-100 text-slate-600"}`}>
+                  {u.role}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{u.created_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button
+                    class="edit-role-btn px-2 py-1 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded hover:bg-slate-100 transition-colors"
+                    data-id={u.id}
+                    data-name={u.name}
+                    data-email={u.email}
+                    data-role={u.role}
+                  >
+                    Edit
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Add/Edit User Modal -->
+  <div id="user-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" id="user-modal-backdrop"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <h2 id="user-modal-title" class="text-lg font-semibold text-slate-900">Add User</h2>
+          <button id="user-modal-close" class="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+        <form id="user-form" class="p-6 space-y-4">
+          <div id="user-form-error" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+          <input type="hidden" name="id" id="user-form-id" />
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Name *</label>
+            <input type="text" name="name" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Full name" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Email *</label>
+            <input type="email" name="email" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="user@example.com" />
+          </div>
+          <div id="password-field">
+            <label class="block text-xs font-medium text-slate-700 mb-1">Password <span id="password-required">*</span></label>
+            <input type="password" name="password" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Leave blank to keep current" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Role</label>
+            <select name="role" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+              <option value="user">User</option>
+              <option value="owner">Owner</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="flex justify-end gap-3 pt-2 border-t border-slate-200">
+            <button type="button" id="user-form-cancel" class="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Cancel</button>
+            <button type="submit" id="user-form-submit" class="px-5 py-2 text-sm font-medium text-white bg-teal-600 rounded-lg hover:bg-teal-700 transition-colors">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  const modal = document.getElementById('user-modal');
+  const form = document.getElementById('user-form') as HTMLFormElement;
+  const errorEl = document.getElementById('user-form-error');
+  const submitBtn = document.getElementById('user-form-submit') as HTMLButtonElement;
+  const title = document.getElementById('user-modal-title');
+
+  let editMode = false;
+
+  function openModal(mode: 'add' | 'edit', data?: any) {
+    editMode = mode === 'edit';
+    if (title) title.textContent = editMode ? 'Edit User' : 'Add User';
+    form?.reset();
+    errorEl?.classList.add('hidden');
+
+    if (editMode && data) {
+      (form.querySelector('input[name="id"]') as HTMLInputElement).value = data.id;
+      (form.querySelector('input[name="name"]') as HTMLInputElement).value = data.name || '';
+      (form.querySelector('input[name="email"]') as HTMLInputElement).value = data.email || '';
+      (form.querySelector('select[name="role"]') as HTMLSelectElement).value = data.role || 'user';
+      const pwField = form.querySelector('input[name="password"]') as HTMLInputElement;
+      if (pwField) { pwField.placeholder = 'Leave blank to keep current'; pwField.required = false; }
+      const reqStar = document.getElementById('password-required');
+      if (reqStar) reqStar.textContent = '(optional)';
+    } else {
+      const pwField = form.querySelector('input[name="password"]') as HTMLInputElement;
+      if (pwField) { pwField.placeholder = 'Set password'; pwField.required = true; }
+      const reqStar = document.getElementById('password-required');
+      if (reqStar) reqStar.textContent = '*';
+    }
+
+    modal?.classList.remove('hidden');
+  }
+
+  function closeModal() { modal?.classList.add('hidden'); }
+
+  document.getElementById('add-user-btn')?.addEventListener('click', () => openModal('add'));
+  document.getElementById('user-modal-close')?.addEventListener('click', closeModal);
+  document.getElementById('user-form-cancel')?.addEventListener('click', closeModal);
+  document.getElementById('user-modal-backdrop')?.addEventListener('click', closeModal);
+
+  document.querySelectorAll('.edit-role-btn').forEach((btn) => {
+    btn.addEventListener('click', () => openModal('edit', {
+      id: btn.getAttribute('data-id'),
+      name: btn.getAttribute('data-name'),
+      email: btn.getAttribute('data-email'),
+      role: btn.getAttribute('data-role'),
+    }));
+  });
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorEl?.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+
+    const fd = new FormData(form);
+    const payload: Record<string, any> = {};
+    fd.forEach((v, k) => { if (v !== '') payload[k] = v; });
+
+    const url = editMode ? '/api/admin/users' : '/api/admin/users';
+    const method = editMode ? 'PUT' : 'POST';
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        location.reload();
+      } else {
+        if (errorEl) { errorEl.textContent = result.error || 'Failed'; errorEl.classList.remove('hidden'); }
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save';
+      }
+    } catch {
+      if (errorEl) { errorEl.textContent = 'Network error'; errorEl.classList.remove('hidden'); }
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Save';
+    }
+  });
+</script>

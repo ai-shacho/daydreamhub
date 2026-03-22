@@ -1,0 +1,60 @@
+---
+import { localePath } from '../lib/i18n';
+
+interface Props {
+  post: any;
+  locale?: string;
+}
+
+const { post, locale = 'en' } = Astro.props;
+const displayTitle = locale === 'ja' && post.title_ja ? post.title_ja : post.title;
+const blogLink = localePath(`/blog/${post.slug}`, locale);
+const imageUrl = post.thumbnail_url || '/images/placeholder-hotel.jpg';
+const formattedDate = new Date(post.published_at).toLocaleDateString(
+  locale === 'ja' ? 'ja-JP' : 'en-US',
+  { year: 'numeric', month: 'long', day: 'numeric' }
+);
+const maxExcerptLength = 120;
+const truncatedExcerpt = post.excerpt
+  ? post.excerpt.length > maxExcerptLength
+    ? post.excerpt.slice(0, maxExcerptLength) + '...'
+    : post.excerpt
+  : '';
+---
+
+<article class="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition-shadow duration-300">
+  <!-- Thumbnail -->
+  <a href={blogLink}>
+    <div class="w-full aspect-[16/9] overflow-hidden">
+      <img src={imageUrl} alt={displayTitle} loading="lazy" class="w-full h-full object-cover" />
+    </div>
+  </a>
+  <!-- Content -->
+  <div class="p-4">
+    <!-- Title -->
+    <h3 class="text-gray-900 font-semibold text-base mb-2 line-clamp-2">
+      <a href={blogLink} class="hover:text-[#45A2C1] transition-colors">
+        {displayTitle}
+      </a>
+    </h3>
+    <!-- Excerpt -->
+    {truncatedExcerpt && (
+      <p class="text-sm text-gray-600 mb-3 line-clamp-3">
+        {truncatedExcerpt}
+      </p>
+    )}
+    <!-- City tag + date -->
+    <div class="flex items-center justify-between text-xs text-gray-500">
+      <div class="flex items-center gap-2">
+        {post.city && (
+          <a href={localePath(`/blog?city=${encodeURIComponent(post.city)}`, locale)} class="bg-blue-50 text-blue-600 rounded px-2 py-0.5 hover:bg-blue-100 transition-colors">
+            {post.city}
+          </a>
+        )}
+      </div>
+      <time datetime={post.published_at}>
+        {formattedDate}
+      </time>
+    </div>
+  </div>
+</article>

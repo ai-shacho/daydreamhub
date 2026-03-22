@@ -1,0 +1,157 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+<Layout title="Create Account - DayDreamHub" description="Create your DayDreamHub account to book day-use hotels.">
+  <div class="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-slate-50">
+    <div class="w-full max-w-md">
+      <div class="text-center mb-8">
+        <a href="/" class="inline-flex items-center gap-2 text-2xl font-bold text-teal-700">
+          <svg class="w-9 h-9" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="14" fill="#f59e0b"/>
+            <path d="M10 20 Q16 10 22 20" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <circle cx="16" cy="13" r="3" fill="white"/>
+          </svg>
+          DayDreamHub
+        </a>
+        <p class="text-slate-500 text-sm mt-2">Create your account</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+        <form id="register-form" class="space-y-5">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="first-name" class="block text-sm font-medium text-slate-700 mb-1.5">First Name</label>
+              <input id="first-name" name="first_name" type="text" required placeholder="John"
+                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            </div>
+            <div>
+              <label for="last-name" class="block text-sm font-medium text-slate-700 mb-1.5">Last Name</label>
+              <input id="last-name" name="last_name" type="text" required placeholder="Doe"
+                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            </div>
+          </div>
+          <div>
+            <label for="email" class="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
+            <input id="email" name="email" type="email" required autocomplete="email" placeholder="you@example.com"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="phone" class="block text-sm font-medium text-slate-700 mb-1.5">Phone (optional)</label>
+            <input id="phone" name="phone" type="tel" placeholder="+1 234 567 8900"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="password" class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
+            <input id="password" name="password" type="password" required autocomplete="new-password" placeholder="At least 8 characters"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="password2" class="block text-sm font-medium text-slate-700 mb-1.5">Confirm Password</label>
+            <input id="password2" name="password2" type="password" required placeholder="Repeat password"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div class="flex items-start gap-2">
+            <input id="agree" name="agree" type="checkbox" required class="mt-0.5 rounded" />
+            <label for="agree" class="text-sm text-slate-600">
+              I agree to the <a href="/privacy" class="text-teal-600 hover:underline">Privacy Policy</a> and <a href="/terms" class="text-teal-600 hover:underline">Terms of Service</a>
+            </label>
+          </div>
+          <div id="register-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3"></div>
+          <div id="register-success" class="hidden bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3"></div>
+          <button type="submit" id="register-btn"
+            class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl transition-colors">
+            Create Account
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-sm text-slate-500">
+            Already have an account?
+            <a href="/login" class="text-teal-600 font-medium hover:underline ml-1">Sign in</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- Hotel Owner CTA -->
+      <div class="mt-6 bg-amber-50 border border-amber-200 rounded-2xl p-6">
+        <div class="flex items-start gap-4">
+          <div class="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-xl">
+            🏨
+          </div>
+          <div class="flex-1">
+            <h3 class="text-sm font-semibold text-slate-800">Are you a hotel or property owner?</h3>
+            <p class="mt-1 text-xs text-slate-600 leading-relaxed">
+              This registration is for guests. If you'd like to list your property on DayDreamHub, please apply through our Owner Application Form.
+            </p>
+            <a
+              href="/owner-application-form"
+              class="inline-flex items-center gap-1.5 mt-3 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-lg transition-colors"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+              </svg>
+              Apply as a Property Owner
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</Layout>
+
+<script is:inline>
+document.getElementById('register-form')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('register-btn');
+  const err = document.getElementById('register-error');
+  const success = document.getElementById('register-success');
+
+  const password = document.getElementById('password').value;
+  const password2 = document.getElementById('password2').value;
+
+  err.className = 'hidden';
+  if (password !== password2) {
+    err.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
+    err.textContent = 'Passwords do not match';
+    return;
+  }
+  if (password.length < 8) {
+    err.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
+    err.textContent = 'Password must be at least 8 characters';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Creating account...';
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        first_name: document.getElementById('first-name').value,
+        last_name: document.getElementById('last-name').value,
+        email: document.getElementById('email').value,
+        phone: document.getElementById('phone').value,
+        password,
+      }),
+    });
+    if (res.ok) {
+      success.className = 'block bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3';
+      success.textContent = '✅ Account created! Redirecting...';
+      setTimeout(() => window.location.href = '/', 1500);
+    } else {
+      const data = await res.json();
+      err.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
+      err.textContent = data.error || 'Registration failed. Please try again.';
+    }
+  } catch(ex) {
+    err.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
+    err.textContent = 'Connection error. Please try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create Account';
+  }
+});
+</script>

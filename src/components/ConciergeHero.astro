@@ -1,0 +1,16 @@
+---
+interface Props {
+  locale?: string;
+  paypalClientId?: string;
+}
+const { locale = 'en', paypalClientId = '' } = Astro.props;
+---
+<section class="py-12 bg-teal-700">
+  <div class="max-w-3xl mx-auto px-4 text-center text-white">
+    <h1 class="text-3xl font-bold mb-4">AI Concierge</h1>
+    <p class="text-teal-100 mb-8">Find your perfect day-use hotel with AI assistance.</p>
+    <a href="/search" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-8 py-3 rounded-xl transition-colors">
+      Search Hotels →
+    </a>
+  </div>
+</section>

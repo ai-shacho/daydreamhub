@@ -1,0 +1,234 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect("/admin/login");
+
+const url = new URL(Astro.request.url);
+const search = url.searchParams.get("q") || "";
+
+let hotels: any[] = [];
+let error = "";
+
+if (db) {
+  try {
+    let query = `SELECT id, name, slug, city, country, is_active, ical_url
+      FROM hotels
+      WHERE 1=1`;
+    const binds: any[] = [];
+
+    if (search) {
+      query += " AND (name LIKE ? OR city LIKE ? OR CAST(id AS TEXT) = ?)";
+      binds.push(`%${search}%`, `%${search}%`, search.trim());
+    }
+
+    query += " ORDER BY name ASC LIMIT 500";
+    const res = binds.length
+      ? await db.prepare(query).bind(...binds).all()
+      : await db.prepare(query).all();
+    hotels = res?.results || [];
+  } catch (e: any) {
+    error = e.message || "Failed to load hotels";
+  }
+}
+
+const baseUrl = url.origin;
+const withIcal = hotels.filter((h: any) => h.ical_url);
+const withoutIcal = hotels.filter((h: any) => !h.ical_url);
+---
+
+<AdminLayout title="iCalendar" activeNav="ical">
+  {error && (
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
+  )}
+
+  <!-- Header -->
+  <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+    <h2 class="text-lg font-semibold text-slate-900 mb-1">iCalendar Integration</h2>
+    <p class="text-sm text-slate-500">Sync availability with external platforms (Airbnb, Booking.com, etc.) via iCalendar feeds.</p>
+    <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
+      <div class="bg-blue-50 rounded-lg p-3">
+        <div class="font-medium text-blue-800 mb-1">📥 Import</div>
+        <p class="text-blue-700">Paste an iCal URL from Airbnb/Booking.com to import blocked dates.</p>
+      </div>
+      <div class="bg-teal-50 rounded-lg p-3">
+        <div class="font-medium text-teal-800 mb-1">📤 Export</div>
+        <p class="text-teal-700">Share your booking calendar with other platforms via the export URL.</p>
+      </div>
+    </div>
+    <div class="mt-4 flex items-center gap-4 text-sm text-slate-500">
+      <span class="font-medium text-teal-700">{withIcal.length}</span> hotels with iCal URL
+      <span>·</span>
+      <span class="font-medium text-slate-500">{withoutIcal.length}</span> hotels without
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+    <form method="GET" action="/admin/ical" class="flex gap-3">
+      <input
+        type="text"
+        name="q"
+        value={search}
+        placeholder="Search by hotel name, city, or ID..."
+        class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+      />
+      <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+        Search
+      </button>
+      {search && (
+        <a href="/admin/ical" class="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+          Clear
+        </a>
+      )}
+    </form>
+  </div>
+
+  <!-- Hotel Calendar Feeds Table -->
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-200">
+      <h3 class="font-semibold text-slate-900">Hotel Calendar Feeds</h3>
+      <p class="text-xs text-slate-500 mt-0.5">Manage iCalendar import/export for each hotel</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200">
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Hotel Name</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">City</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">iCal Import URL</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Export URL</th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100" id="ical-table-body">
+          {hotels.length === 0 ? (
+            <tr>
+              <td colspan="6" class="px-4 py-12 text-center text-slate-400">No hotels found</td>
+            </tr>
+          ) : hotels.map((h: any) => (
+            <tr class="hover:bg-slate-50 transition-colors" data-hotel-id={h.id}>
+              <td class="px-4 py-3">
+                <div class="font-medium text-slate-900">{h.name}</div>
+                <div class="text-xs text-slate-400">#{h.id} · {h.slug}</div>
+              </td>
+              <td class="px-4 py-3 text-slate-600">{h.city}{h.country ? `, ${h.country}` : ""}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <input
+                    type="text"
+                    class="ical-import-input w-full max-w-xs px-2 py-1 border border-slate-300 rounded text-xs font-mono focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    data-hotel-id={h.id}
+                    value={h.ical_url || ""}
+                    placeholder="https://airbnb.com/calendar/..."
+                  />
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                {h.slug ? (
+                  <div class="flex items-center gap-2">
+                    <code class="text-xs text-slate-500 truncate max-w-[180px] block">
+                      {baseUrl}/api/ical/{h.slug}.ics
+                    </code>
+                    <button
+                      class="copy-export-btn flex-shrink-0 text-xs text-teal-600 hover:text-teal-700 underline"
+                      data-url={`${baseUrl}/api/ical/${h.slug}.ics`}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                ) : (
+                  <span class="text-slate-400 text-xs">—</span>
+                )}
+              </td>
+              <td class="px-4 py-3 text-center">
+                {h.ical_url ? (
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">✓ Set</span>
+                ) : (
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Not set</span>
+                )}
+              </td>
+              <td class="px-4 py-3 text-center">
+                <button
+                  class="save-ical-btn px-3 py-1 text-xs bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors"
+                  data-hotel-id={h.id}
+                >
+                  Save
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  // Save iCal URL
+  document.querySelectorAll('.save-ical-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const hotelId = btn.getAttribute('data-hotel-id');
+      const row = btn.closest('tr');
+      const input = row?.querySelector('.ical-import-input') as HTMLInputElement | null;
+      if (!input) return;
+
+      const icalUrl = input.value.trim();
+      btn.textContent = '...';
+      (btn as HTMLButtonElement).disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/hotels', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: Number(hotelId), ical_url: icalUrl || null }),
+        });
+
+        if (res.ok) {
+          btn.textContent = '✓ Saved';
+          btn.classList.remove('bg-teal-600', 'hover:bg-teal-700');
+          btn.classList.add('bg-emerald-600');
+          // Update status badge
+          const statusCell = row?.querySelector('td:nth-child(5)');
+          if (statusCell) {
+            statusCell.innerHTML = icalUrl
+              ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">✓ Set</span>'
+              : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Not set</span>';
+          }
+          setTimeout(() => {
+            btn.textContent = 'Save';
+            (btn as HTMLButtonElement).disabled = false;
+            btn.classList.add('bg-teal-600', 'hover:bg-teal-700');
+            btn.classList.remove('bg-emerald-600');
+          }, 2000);
+        } else {
+          const d = await res.json();
+          alert('Failed: ' + (d.error || 'Unknown error'));
+          btn.textContent = 'Save';
+          (btn as HTMLButtonElement).disabled = false;
+        }
+      } catch {
+        alert('Network error');
+        btn.textContent = 'Save';
+        (btn as HTMLButtonElement).disabled = false;
+      }
+    });
+  });
+
+  // Copy export URL
+  document.querySelectorAll('.copy-export-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const exportUrl = btn.getAttribute('data-url') || '';
+      navigator.clipboard.writeText(exportUrl).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+      });
+    });
+  });
+</script>

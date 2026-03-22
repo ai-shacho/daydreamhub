@@ -189,11 +189,29 @@ function formatDate(dateStr: string): string {
                   <!-- Footer row -->
                   <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
                     <span class="text-xs text-gray-300">Booked {formatDate(b.created_at)}</span>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 flex-wrap justify-end">
                       <a href={`/hotel/${b.hotel_slug}`}
                         class="text-xs text-teal-600 hover:text-teal-700 font-medium border border-teal-200 hover:border-teal-400 px-3 py-1.5 rounded-lg transition-colors">
                         View Hotel
                       </a>
+                      {(b.status === 'confirmed' || b.status === 'pending_confirmation') && (
+                        <button
+                          class="btn-message-hotel text-xs text-blue-600 hover:text-blue-700 font-medium border border-blue-200 hover:border-blue-400 px-3 py-1.5 rounded-lg transition-colors"
+                          data-booking-id={b.id}
+                          data-hotel-name={b.hotel_name}
+                        >
+                          💬 Message
+                        </button>
+                      )}
+                      {(b.status === 'confirmed' || b.status === 'completed') && (
+                        <button
+                          class="btn-write-review text-xs text-amber-600 hover:text-amber-700 font-medium border border-amber-200 hover:border-amber-400 px-3 py-1.5 rounded-lg transition-colors"
+                          data-booking-id={b.id}
+                          data-hotel-name={b.hotel_name}
+                        >
+                          ⭐ Review
+                        </button>
+                      )}
                       {(b.status === 'pending_confirmation' || b.status === 'confirmed') && (
                         <button
                           class="btn-cancel-booking text-xs text-red-500 hover:text-red-700 font-medium border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors"
@@ -224,6 +242,40 @@ function formatDate(dateStr: string): string {
       </a>
     </div>
   </div>
+<!-- Review modal -->
+<div id="review-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4">
+  <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+    <h3 class="text-lg font-bold text-gray-900 mb-1">Write a Review</h3>
+    <p class="text-sm text-gray-500 mb-4">Hotel: <span id="review-hotel-name" class="font-medium text-gray-700"></span></p>
+    <div class="flex gap-2 mb-4" id="star-rating">
+      {[1,2,3,4,5].map(n => (
+        <button class="star-btn text-3xl text-gray-300 hover:text-amber-400 transition-colors" data-value={n}>★</button>
+      ))}
+    </div>
+    <textarea id="review-content" rows="4" placeholder="Share your experience (optional)"
+      class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none resize-none mb-4"></textarea>
+    <div class="flex gap-3">
+      <button id="review-modal-close" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+      <button id="review-modal-confirm" class="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-bold">Submit Review</button>
+    </div>
+  </div>
+</div>
+
+<!-- Message modal -->
+<div id="message-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4">
+  <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+    <h3 class="text-lg font-bold text-gray-900 mb-1">Message the Hotel</h3>
+    <p class="text-sm text-gray-500 mb-4">Hotel: <span id="message-hotel-name" class="font-medium text-gray-700"></span></p>
+    <div id="message-thread" class="max-h-48 overflow-y-auto mb-3 space-y-2 bg-gray-50 rounded-lg p-3 hidden"></div>
+    <textarea id="message-content" rows="3" placeholder="Type your message..."
+      class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-400 outline-none resize-none mb-4"></textarea>
+    <div class="flex gap-3">
+      <button id="message-modal-close" class="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50">Close</button>
+      <button id="message-modal-send" class="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-bold">Send Message</button>
+    </div>
+  </div>
+</div>
+
 <!-- Cancel modal -->
 <div id="cancel-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 px-4">
   <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
@@ -245,6 +297,102 @@ function formatDate(dateStr: string): string {
 
 <script is:inline>
 (function() {
+  // --- Review modal ---
+  var reviewModal = document.getElementById('review-modal');
+  var reviewHotelName = document.getElementById('review-hotel-name');
+  var reviewContent = document.getElementById('review-content');
+  var reviewConfirm = document.getElementById('review-modal-confirm');
+  var reviewClose = document.getElementById('review-modal-close');
+  var currentReviewBookingId = null;
+  var currentRating = 0;
+
+  document.querySelectorAll('.star-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      currentRating = Number(btn.dataset.value);
+      document.querySelectorAll('.star-btn').forEach(function(s, i) {
+        s.classList.toggle('text-amber-400', i < currentRating);
+        s.classList.toggle('text-gray-300', i >= currentRating);
+      });
+    });
+  });
+
+  document.querySelectorAll('.btn-write-review').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      currentReviewBookingId = btn.dataset.bookingId;
+      reviewHotelName.textContent = btn.dataset.hotelName;
+      currentRating = 0;
+      reviewContent.value = '';
+      document.querySelectorAll('.star-btn').forEach(function(s) { s.classList.add('text-gray-300'); s.classList.remove('text-amber-400'); });
+      reviewModal.classList.remove('hidden'); reviewModal.classList.add('flex');
+    });
+  });
+
+  reviewClose.addEventListener('click', function() { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); });
+  reviewModal.addEventListener('click', function(e) { if (e.target === reviewModal) { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); } });
+
+  reviewConfirm.addEventListener('click', async function() {
+    if (!currentRating) { alert('Please select a star rating.'); return; }
+    reviewConfirm.textContent = 'Submitting...'; reviewConfirm.disabled = true;
+    try {
+      var res = await fetch('/api/guest/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booking_id: Number(currentReviewBookingId), rating: currentRating, content: reviewContent.value.trim() }) });
+      var data = await res.json();
+      if (data.success) { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); alert('Thank you for your review!'); }
+      else { alert(data.error || 'Failed'); }
+    } catch { alert('Error submitting review'); }
+    reviewConfirm.textContent = 'Submit Review'; reviewConfirm.disabled = false;
+  });
+
+  // --- Message modal ---
+  var msgModal = document.getElementById('message-modal');
+  var msgHotelName = document.getElementById('message-hotel-name');
+  var msgContent = document.getElementById('message-content');
+  var msgSend = document.getElementById('message-modal-send');
+  var msgClose = document.getElementById('message-modal-close');
+  var msgThread = document.getElementById('message-thread');
+  var currentMsgBookingId = null;
+
+  async function loadMessages(bookingId) {
+    try {
+      var res = await fetch('/api/guest/message?booking_id=' + bookingId);
+      var data = await res.json();
+      if (data.messages && data.messages.length > 0) {
+        msgThread.classList.remove('hidden');
+        msgThread.innerHTML = data.messages.map(function(m) {
+          var isGuest = m.sender_type === 'guest';
+          return '<div class="' + (isGuest ? 'text-right' : 'text-left') + '"><span class="inline-block px-3 py-1.5 rounded-xl text-xs max-w-[85%] ' + (isGuest ? 'bg-blue-500 text-white' : 'bg-white border text-gray-700') + '">' + m.content + '</span><div class="text-xs text-gray-300 mt-0.5">' + m.sender_name + '</div></div>';
+        }).join('');
+        msgThread.scrollTop = msgThread.scrollHeight;
+      }
+    } catch {}
+  }
+
+  document.querySelectorAll('.btn-message-hotel').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      currentMsgBookingId = btn.dataset.bookingId;
+      msgHotelName.textContent = btn.dataset.hotelName;
+      msgContent.value = '';
+      msgThread.innerHTML = ''; msgThread.classList.add('hidden');
+      msgModal.classList.remove('hidden'); msgModal.classList.add('flex');
+      await loadMessages(currentMsgBookingId);
+    });
+  });
+
+  msgClose.addEventListener('click', function() { msgModal.classList.add('hidden'); msgModal.classList.remove('flex'); });
+  msgModal.addEventListener('click', function(e) { if (e.target === msgModal) { msgModal.classList.add('hidden'); msgModal.classList.remove('flex'); } });
+
+  msgSend.addEventListener('click', async function() {
+    if (!msgContent.value.trim()) return;
+    msgSend.textContent = 'Sending...'; msgSend.disabled = true;
+    try {
+      var res = await fetch('/api/guest/message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booking_id: Number(currentMsgBookingId), content: msgContent.value.trim() }) });
+      var data = await res.json();
+      if (data.success) { msgContent.value = ''; await loadMessages(currentMsgBookingId); }
+      else { alert(data.error || 'Failed'); }
+    } catch { alert('Error sending message'); }
+    msgSend.textContent = 'Send Message'; msgSend.disabled = false;
+  });
+
+  // --- Cancel modal ---
   var modal = document.getElementById('cancel-modal');
   var hotelNameEl = document.getElementById('cancel-hotel-name');
   var reasonEl = document.getElementById('cancel-reason');

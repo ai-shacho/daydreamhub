@@ -61,6 +61,21 @@ if (db) {
     </div>
   </div>
 
+  <!-- Block Date Controls -->
+  <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 flex flex-wrap items-center gap-3">
+    <div class="text-sm font-medium text-amber-800">📵 Availability Control</div>
+    <p class="text-xs text-amber-600 flex-1">Click any date to block/unblock it. Blocked dates won't accept new bookings.</p>
+    {hotels.length > 0 && (
+      <select id="block-hotel-select" class="text-xs border border-amber-300 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">
+        {hotels.map((h: any) => <option value={h.id}>{h.name}</option>)}
+      </select>
+    )}
+    <div class="flex items-center gap-2 text-xs text-slate-500">
+      <span class="w-3 h-3 rounded-sm bg-red-200 inline-block border border-red-300"></span>Blocked
+      <span class="w-3 h-3 rounded-sm bg-white inline-block border border-slate-300 ml-2"></span>Available
+    </div>
+  </div>
+
   <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
     <!-- Day-of-week headers -->
     <div class="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
@@ -189,6 +204,40 @@ if (db) {
   const dayBookingsTitle = document.getElementById('day-bookings-title');
   const dayBookingsList = document.getElementById('day-bookings-list');
   const hotelFilter = document.getElementById('hotel-filter') as HTMLSelectElement | null;
+  const blockHotelSelect = document.getElementById('block-hotel-select') as HTMLSelectElement | null;
+
+  let blockedDates: Set<string> = new Set();
+
+  async function fetchBlockedDates() {
+    const hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
+    if (!hotelId) return;
+    try {
+      const res = await fetch(`/api/owner/blocked-dates?hotel_id=${hotelId}&month=${currentYear}-${String(currentMonth).padStart(2, '0')}`);
+      const data = await res.json();
+      blockedDates = new Set((data.blocked || []).map((b: any) => b.blocked_date));
+      renderCalendar();
+    } catch {}
+  }
+
+  async function toggleBlockDate(dateStr: string) {
+    const hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
+    if (!hotelId) return;
+    const isBlocked = blockedDates.has(dateStr);
+    try {
+      if (isBlocked) {
+        await fetch('/api/owner/blocked-dates', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hotel_id: Number(hotelId), date: dateStr }) });
+        blockedDates.delete(dateStr);
+      } else {
+        await fetch('/api/owner/blocked-dates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hotel_id: Number(hotelId), date: dateStr }) });
+        blockedDates.add(dateStr);
+      }
+      renderCalendar();
+    } catch { alert('Failed to update availability'); }
+  }
+
+  if (blockHotelSelect) {
+    blockHotelSelect.addEventListener('change', fetchBlockedDates);
+  }
 
   // Fetch bookings for the current month
   async function fetchBookings() {
@@ -206,6 +255,7 @@ if (db) {
     }
 
     renderCalendar();
+    fetchBlockedDates();
   }
 
   // Get bookings for a specific date string (YYYY-MM-DD)
@@ -242,13 +292,20 @@ if (db) {
       const isToday = dateStr === todayStr;
       const isSelected = dateStr === selectedDate;
 
-      let cellClasses = 'bg-white border border-slate-100 rounded min-h-[80px] p-2 cursor-pointer hover:bg-slate-50 transition-colors relative';
+      const isBlocked = blockedDates.has(dateStr);
+      let cellClasses = 'border border-slate-100 rounded min-h-[80px] p-2 cursor-pointer transition-colors relative';
+      if (isBlocked) cellClasses += ' bg-red-50 hover:bg-red-100';
+      else if (isSelected) cellClasses += ' bg-indigo-50 hover:bg-indigo-100';
+      else if (isToday) cellClasses += ' bg-white hover:bg-slate-50';
+      else cellClasses += ' bg-white hover:bg-slate-50';
       if (isToday) cellClasses += ' ring-2 ring-indigo-500';
-      if (isSelected) cellClasses += ' bg-indigo-50';
 
-      html += `<div class="${cellClasses}" data-date="${dateStr}">`;
-      html += `<span class="text-sm font-medium ${isToday ? 'text-indigo-600' : 'text-slate-700'}">${day}</span>`;
-
+      html += `<div class="${cellClasses}" data-date="${dateStr}" data-blocked="${isBlocked ? '1' : '0'}">`;
+      if (isBlocked) {
+        html += `<div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-30"><span class="text-red-600 text-2xl">✕</span></div>`;
+        html += `<span class="text-xs font-medium text-red-500">${day}</span>`;
+        html += `<div class="text-[9px] text-red-400 mt-0.5">Blocked</div>`;
+      } else {
       if (count > 0) {
         html += `<span class="absolute top-2 right-2 bg-indigo-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-medium">${count}</span>`;
 
@@ -267,6 +324,7 @@ if (db) {
           html += `<div class="mt-0.5 text-[10px] text-slate-400">+${count - previewMax} more</div>`;
         }
       }
+      } // end else (not blocked)
 
       html += '</div>';
     }
@@ -284,9 +342,20 @@ if (db) {
 
     // Add click handlers to day cells
     calendarGrid.querySelectorAll('[data-date]').forEach(cell => {
-      cell.addEventListener('click', () => {
+      cell.addEventListener('click', async (e) => {
         const date = cell.getAttribute('data-date');
-        if (date) showDayBookings(date);
+        if (!date) return;
+        // Right-click or shift+click = toggle block
+        if ((e as MouseEvent).shiftKey) {
+          await toggleBlockDate(date);
+        } else {
+          showDayBookings(date);
+        }
+      });
+      // Double-click = toggle block
+      cell.addEventListener('dblclick', async () => {
+        const date = cell.getAttribute('data-date');
+        if (date) await toggleBlockDate(date);
       });
     });
 

@@ -1,0 +1,73 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = Astro.locals.runtime as any;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect("/admin/login");
+---
+
+<AdminLayout title="Sales Outreach" activeNav="outreach">
+  <div class="max-w-2xl mx-auto mt-8">
+    <!-- Coming Soon Card -->
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+      <div class="bg-gradient-to-r from-teal-500 to-teal-600 px-6 py-8 text-center">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-4">
+          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <h2 class="text-2xl font-bold text-white mb-2">Sales Outreach</h2>
+        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
+          Coming Soon
+        </span>
+      </div>
+
+      <div class="px-6 py-8">
+        <p class="text-slate-600 text-center mb-8">
+          Manage hotel outreach campaigns, track contact history, and convert leads into listed properties.
+        </p>
+
+        <div class="space-y-4">
+          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+            <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-sm font-bold">1</div>
+            <div>
+              <h3 class="font-medium text-slate-900 text-sm">Lead Management</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Import and manage hotel leads with contact details, notes, and status tracking.</p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+            <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-sm font-bold">2</div>
+            <div>
+              <h3 class="font-medium text-slate-900 text-sm">Email Campaigns</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Send personalized outreach emails with templates and track open/reply rates.</p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+            <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-sm font-bold">3</div>
+            <div>
+              <h3 class="font-medium text-slate-900 text-sm">Follow-up Pipeline</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Automated follow-up scheduling and pipeline visualization from lead to onboarded property.</p>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
+            <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-sm font-bold">4</div>
+            <div>
+              <h3 class="font-medium text-slate-900 text-sm">Analytics & Reports</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Conversion metrics, response rates, and team performance dashboards.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-8 text-center">
+          <p class="text-xs text-slate-400">This feature is under development. Check back soon for updates.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>

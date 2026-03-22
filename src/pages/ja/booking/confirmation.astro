@@ -1,0 +1,124 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { getLocale, t, localePath } from '../../../lib/i18n';
+
+const locale = getLocale(Astro.url);
+const orderId = Astro.url.searchParams.get('order') || '';
+---
+
+<Layout title={`${t('booking.confirmation_title', locale)} | ${t('site.name', locale)}`} description={t('booking.confirmation_message', locale)}>
+  <div class="max-w-2xl mx-auto px-4 sm:px-6 py-16 text-center" data-order-id={orderId}>
+    <!-- State: Pending -->
+    <div id="state-pending" class="hidden">
+      <div class="mb-8">
+        <div class="w-20 h-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center">
+          <svg class="w-10 h-10 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+        </div>
+      </div>
+      <h1 class="text-3xl font-bold text-gray-900 mb-4">{t('booking.pending_title', locale)}</h1>
+      <p class="text-gray-600 text-lg mb-4">{t('booking.pending_message', locale)}</p>
+      <p class="text-gray-400 text-sm">{t('booking.pending_eta', locale)}</p>
+      <p class="text-gray-400 text-sm mt-2">{t('booking.pending_check_email', locale)}</p>
+    </div>
+
+    <!-- State: Confirmed -->
+    <div id="state-confirmed" class="hidden">
+      <div class="mb-8">
+        <div class="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center">
+          <svg class="w-10 h-10 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"></path>
+          </svg>
+        </div>
+      </div>
+      <h1 class="text-3xl font-bold text-gray-900 mb-4">{t('booking.confirmation_title', locale)}</h1>
+      <p class="text-gray-600 text-lg mb-8 max-w-md mx-auto">{t('booking.confirmation_message', locale)}</p>
+    </div>
+
+    <!-- State: Alt Choice -->
+    <div id="state-alt-choice" class="hidden">
+      <div class="mb-8">
+        <div class="w-20 h-20 mx-auto bg-amber-100 rounded-full flex items-center justify-center">
+          <svg class="w-10 h-10 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"></path>
+          </svg>
+        </div>
+      </div>
+      <h1 class="text-3xl font-bold text-gray-900 mb-4">{t('booking.alt_hotels_unavailable_title', locale)}</h1>
+      <p class="text-gray-600 text-lg mb-6">{t('booking.alt_hotels_unavailable_message', locale)}</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+        <button id="btn-retry-more" class="px-8 py-3 bg-teal-700 text-white font-medium rounded-lg hover:bg-teal-800 transition-colors">
+          {t('booking.alt_try_more', locale)}
+        </button>
+        <button id="btn-refund" class="px-8 py-3 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition-colors">
+          {t('booking.alt_refund', locale)}
+        </button>
+      </div>
+      <p class="text-gray-400 text-sm mt-4">{t('booking.alt_deadline', locale)}</p>
+    </div>
+
+    <!-- State: Cancelled / Refunded -->
+    <div id="state-cancelled" class="hidden">
+      <div class="mb-8">
+        <div class="w-20 h-20 mx-auto bg-red-100 rounded-full flex items-center justify-center">
+          <svg class="w-10 h-10 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"></path>
+          </svg>
+        </div>
+      </div>
+      <h1 class="text-3xl font-bold text-gray-900 mb-4">{t('booking.cancelled_title', locale)}</h1>
+      <p class="text-gray-600 text-lg mb-8 max-w-md mx-auto">{t('booking.cancelled_message', locale)}</p>
+    </div>
+
+    <!-- Order ID -->
+    {orderId && (
+      <div class="bg-gray-50 border border-gray-200 rounded-xl px-6 py-4 mb-8 inline-block">
+        <p class="text-sm text-gray-500 mb-1">{t('booking.order_id', locale)}</p>
+        <p class="text-lg font-mono font-semibold text-gray-800">{orderId}</p>
+      </div>
+    )}
+
+    <!-- Back to Home -->
+    <div>
+      <a href={localePath('/', locale)} class="inline-flex items-center px-8 py-3 bg-[#45A2C1] text-white font-medium rounded-lg hover:bg-[#3891AE] transition-colors duration-200">
+        <svg class="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"></path>
+        </svg>
+        {t('booking.back_home', locale)}
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Poll order status and show appropriate state
+    const container = document.querySelector('[data-order-id]') as HTMLElement;
+    const orderId = container?.dataset.orderId;
+
+    function showState(state: string) {
+      document.querySelectorAll('[id^="state-"]').forEach(el => el.classList.add('hidden'));
+      const el = document.getElementById(`state-${state}`);
+      if (el) el.classList.remove('hidden');
+    }
+
+    if (orderId) {
+      showState('pending');
+      async function pollStatus() {
+        try {
+          const res = await fetch(`/api/booking/status?order=${orderId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'confirmed') { showState('confirmed'); return; }
+            if (data.status === 'alt_choice') { showState('alt-choice'); return; }
+            if (data.status === 'cancelled' || data.status === 'refunded') { showState('cancelled'); return; }
+          }
+          setTimeout(pollStatus, 5000);
+        } catch { setTimeout(pollStatus, 5000); }
+      }
+      pollStatus();
+    } else {
+      showState('confirmed');
+    }
+  </script>
+</Layout>

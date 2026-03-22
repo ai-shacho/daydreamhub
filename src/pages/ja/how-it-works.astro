@@ -1,0 +1,205 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const env = (Astro.locals as any).runtime?.env;
+const DB = env?.DB;
+let totalHotels = 270, totalCities = 60, totalCountries = 25;
+try {
+  if (DB) {
+    const h = await DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE is_active = 1").first();
+    totalHotels = h?.c || totalHotels;
+    const ci = await DB.prepare("SELECT COUNT(DISTINCT city) as c FROM hotels WHERE is_active = 1").first();
+    totalCities = ci?.c || totalCities;
+    const co = await DB.prepare("SELECT COUNT(DISTINCT country) as c FROM hotels WHERE is_active = 1").first();
+    totalCountries = co?.c || totalCountries;
+  }
+} catch (e) {}
+---
+
+<Layout title="How DaydreamHub Works — Day-Use Hotel Booking">
+
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-teal-900 via-teal-800 to-teal-700 text-white py-20">
+    <div class="max-w-4xl mx-auto px-6 text-center">
+      <span class="inline-block bg-amber-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-wider">DaydreamHub とは</span>
+      <h1 class="text-4xl md:text-5xl font-bold mb-5 leading-tight">
+        ホテルを<span class="text-amber-400">数時間だけ</span>予約できる<br class="hidden md:block"/>世界初のデイユース特化プラットフォーム
+      </h1>
+      <p class="text-teal-100 text-lg md:text-xl max-w-2xl mx-auto mb-8">
+        チェックイン〜チェックアウトの間、ホテルの客室をデイユースとして利用。<br/>
+        空港乗り継ぎ・仕事・休息・カップルのひとときに。宿泊費の半額以下で。
+      </p>
+      <div class="flex flex-wrap justify-center gap-6 text-center">
+        <div><p class="text-3xl font-bold text-amber-400">{totalHotels}+</p><p class="text-teal-200 text-sm">登録ホテル</p></div>
+        <div class="w-px bg-white/20"></div>
+        <div><p class="text-3xl font-bold text-amber-400">{totalCities}+</p><p class="text-teal-200 text-sm">都市</p></div>
+        <div class="w-px bg-white/20"></div>
+        <div><p class="text-3xl font-bold text-amber-400">{totalCountries}+</p><p class="text-teal-200 text-sm">国・地域</p></div>
+        <div class="w-px bg-white/20"></div>
+        <div><p class="text-3xl font-bold text-amber-400">1時間〜</p><p class="text-teal-200 text-sm">短時間から利用可能</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- What is Day Use -->
+  <section class="py-16 bg-white">
+    <div class="max-w-5xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-gray-800 text-center mb-4">デイユースホテルとは？</h2>
+      <p class="text-gray-500 text-center max-w-2xl mx-auto mb-12">ホテルの客室を「泊まらずに使う」サービスです。チェックアウト後・到着前・仕事の合間など、数時間だけ快適な空間を利用できます。</p>
+      <div class="grid md:grid-cols-3 gap-6">
+        {[
+          { icon: '✈️', title: '空港乗り継ぎ', desc: 'フライトまでの数時間、空港近くのホテルでシャワー・仮眠。ラウンジより圧倒的に快適。' },
+          { icon: '💼', title: 'ワーケーション・ビジネス', desc: '会議室代わりに客室を利用。Wi-Fi完備・静かな環境で集中作業。' },
+          { icon: '💕', title: 'カップル・記念日', desc: 'ランチタイムや夕方にホテルを数時間楽しむ。宿泊より気軽でリーズナブル。' },
+          { icon: '🏃', title: '観光の休憩', desc: '荷物を預けて観光。疲れたらホテルに戻ってシャワーで気分リフレッシュ。' },
+          { icon: '🌙', title: '深夜・早朝', desc: '早朝チェックアウト後の時間つぶし。夜行バス到着後の仮眠にも。' },
+          { icon: '👨‍👩‍👧', title: 'ファミリー', desc: '観光中のお子さんのお昼寝・授乳スペースとして。親子でゆっくりできる空間。' },
+        ].map(u => (
+          <div class="bg-gray-50 rounded-2xl p-6 hover:shadow-md transition-shadow">
+            <div class="text-3xl mb-3">{u.icon}</div>
+            <h3 class="font-bold text-gray-800 mb-2">{u.title}</h3>
+            <p class="text-gray-500 text-sm leading-relaxed">{u.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="py-16 bg-teal-50">
+    <div class="max-w-4xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-gray-800 text-center mb-3">ご利用の流れ</h2>
+      <p class="text-gray-500 text-center mb-12">3ステップで簡単予約</p>
+      <div class="relative">
+        <!-- Line -->
+        <div class="hidden md:block absolute top-10 left-[calc(16.67%)] right-[calc(16.67%)] h-0.5 bg-teal-200"></div>
+        <div class="grid md:grid-cols-3 gap-8">
+          {[
+            { step: '01', icon: '🔍', title: '都市・日時を入力', desc: 'ホームページのAIチャットに都市名・日付・時間・人数を入力。どんな小さな都市でも対応。' },
+            { step: '02', icon: '🤖', title: 'AIがホテルを提案', desc: 'DaydreamHub登録ホテルを優先表示。未登録エリアはGoogleマップから実在するホテルを検索。' },
+            { step: '03', icon: '✅', title: '予約・完了', desc: 'DDH登録ホテルはサイト上で即時予約。未登録ホテルはAIが電話して空き確認（$7）。' },
+          ].map(s => (
+            <div class="text-center relative">
+              <div class="w-20 h-20 bg-teal-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4 relative z-10 shadow-lg">
+                {s.icon}
+              </div>
+              <div class="absolute top-0 right-0 bg-amber-400 text-gray-900 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">{s.step}</div>
+              <h3 class="font-bold text-gray-800 text-lg mb-2">{s.title}</h3>
+              <p class="text-gray-500 text-sm leading-relaxed">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Two Services -->
+  <section class="py-16 bg-white">
+    <div class="max-w-5xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-gray-800 text-center mb-3">2種類の予約方法</h2>
+      <p class="text-gray-500 text-center mb-10">DaydreamHub登録ホテルかどうかで方法が異なります</p>
+      <div class="grid md:grid-cols-2 gap-6">
+
+        <!-- Direct Booking -->
+        <div class="border-2 border-teal-500 rounded-2xl p-8 relative overflow-hidden">
+          <div class="absolute top-0 right-0 bg-teal-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">無料</div>
+          <div class="text-4xl mb-4">🏨</div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">DDH登録ホテル — 直接予約</h3>
+          <p class="text-gray-500 text-sm mb-4 leading-relaxed">DaydreamHubと提携しているホテルは、サイト上で即時予約が可能です。サービス手数料は<strong class="text-teal-600">一切かかりません</strong>。</p>
+          <ul class="space-y-2 text-sm text-gray-600">
+            {['✅ 追加手数料なし', '✅ 即時予約確定', '✅ オンライン決済対応', '✅ 予約確認メール自動送信', '✅ 世界60都市以上'].map(i => (
+              <li>{i}</li>
+            ))}
+          </ul>
+          <div class="mt-6">
+            <a href="/" class="inline-block bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">今すぐ検索 →</a>
+          </div>
+        </div>
+
+        <!-- AI Phone Booking -->
+        <div class="border-2 border-blue-400 rounded-2xl p-8 relative overflow-hidden">
+          <div class="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">$7</div>
+          <div class="text-4xl mb-4">📞</div>
+          <h3 class="text-xl font-bold text-gray-800 mb-2">未登録ホテル — AI電話予約代行</h3>
+          <p class="text-gray-500 text-sm mb-4 leading-relaxed">DDHに未登録のホテルでも、AIが代わりに電話してデイユース空き状況を確認します。世界中どこでも対応可能です。</p>
+          <ul class="space-y-2 text-sm text-gray-600">
+            {['📞 AIが最大3件に電話', '🌍 世界中どこでも対応', '💰 $7でAll-in（1〜3件の電話代）', '🔄 全件不成立なら全額返金', '📍 Googleマップ掲載ホテルに対応'].map(i => (
+              <li>{i}</li>
+            ))}
+          </ul>
+          <div class="mt-6">
+            <a href="/" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">AIに相談する →</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="py-16 bg-gray-50">
+    <div class="max-w-3xl mx-auto px-6 text-center">
+      <h2 class="text-3xl font-bold text-gray-800 mb-3">料金について</h2>
+      <p class="text-gray-500 mb-10">透明性のある料金体系</p>
+      <div class="grid md:grid-cols-3 gap-4 text-sm">
+        {[
+          { label: 'DaydreamHub登録ホテル予約', price: '無料', desc: 'プラットフォーム手数料なし', color: 'bg-teal-50 border-teal-200' },
+          { label: 'AI電話代行サービス（3件まで）', price: '$7', desc: '未登録ホテルへの電話確認', color: 'bg-blue-50 border-blue-200' },
+          { label: '返金保証', price: '100%', desc: '全件不成立の場合', color: 'bg-amber-50 border-amber-200' },
+        ].map(p => (
+          <div class={`${p.color} border rounded-2xl p-6`}>
+            <p class="text-gray-600 text-xs font-medium mb-2">{p.label}</p>
+            <p class="text-4xl font-bold text-gray-800 mb-1">{p.price}</p>
+            <p class="text-gray-500 text-xs">{p.desc}</p>
+          </div>
+        ))}
+      </div>
+      <p class="text-gray-400 text-xs mt-6">※ ホテルの宿泊費はチェックイン時にホテルへ直接お支払いください</p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="py-16 bg-white">
+    <div class="max-w-3xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-gray-800 text-center mb-10">よくある質問</h2>
+      <div class="space-y-4" x-data="{open: null}">
+        {[
+          { q: 'デイユースとはどういう意味ですか？', a: 'ホテルの客室を宿泊せずに数時間だけ利用するサービスです。例えば10:00〜18:00の8時間プランなど、時間単位でホテルを使えます。' },
+          { q: '最短何時間から利用できますか？', a: 'ホテルやプランによって異なりますが、1時間〜の短時間プランから8時間・半日プランまで様々です。ご希望の時間を入力してAIにご相談ください。' },
+          { q: 'DaydreamHub未登録のホテルに予約できますか？', a: 'はい、AI電話代行サービス（$7）をご利用いただくことで、Googleマップに掲載されている世界中のホテルに電話してデイユースの空き確認ができます。' },
+          { q: 'AI電話代行の$7はいつ請求されますか？', a: 'ボタンを押してPayPal決済を完了した時点です。AIが電話する前にお支払いいただきますが、全件不成立の場合は100%返金します。' },
+          { q: '予約後のキャンセルは可能ですか？', a: 'ホテルごとのキャンセルポリシーに従います。詳細は予約完了画面またはメールでご確認ください。' },
+          { q: 'ホテルをDaydreamHubに登録したい場合は？', a: '「ホテルオーナーの方へ」ページよりお申し込みください。登録・掲載料は無料です。', link: '/for-hotel-owner' },
+        ].map((item, i) => (
+          <details class="border border-gray-200 rounded-xl group">
+            <summary class="px-6 py-4 cursor-pointer font-medium text-gray-800 flex justify-between items-center hover:bg-gray-50 rounded-xl list-none">
+              {item.q}
+              <span class="text-teal-500 text-xl group-open:rotate-45 transition-transform">+</span>
+            </summary>
+            <div class="px-6 pb-4 text-gray-500 text-sm leading-relaxed">
+              {item.a}
+              {item.link && <a href={item.link} class="text-teal-600 underline ml-1">詳細はこちら</a>}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-16 bg-gradient-to-r from-teal-700 to-teal-600 text-white text-center">
+    <div class="max-w-2xl mx-auto px-6">
+      <h2 class="text-3xl font-bold mb-4">さあ、次の滞在を予約しよう</h2>
+      <p class="text-teal-100 mb-8">世界{totalCities}都市以上のデイユースホテルをAIが瞬時に検索します</p>
+      <div class="flex flex-wrap gap-4 justify-center">
+        <a href="/" class="bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold px-8 py-3 rounded-xl text-base transition-colors">
+          🔍 ホテルを検索する
+        </a>
+        <a href="/services" class="bg-white/20 hover:bg-white/30 text-white font-bold px-8 py-3 rounded-xl text-base transition-colors border border-white/30">
+          その他のサービス
+        </a>
+      </div>
+    </div>
+  </section>
+
+</Layout>

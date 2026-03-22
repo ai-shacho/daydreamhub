@@ -1,0 +1,101 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = (Astro.locals as any).runtime;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect('/admin/login');
+
+let coupons: any[] = [];
+let error = '';
+
+if (db) {
+  try {
+    const result = await db.prepare(`
+      SELECT * FROM coupons ORDER BY created_at DESC
+    `).all();
+    coupons = result?.results || [];
+  } catch (e: any) {
+    error = e.message || 'Failed to load coupons';
+  }
+}
+---
+
+<AdminLayout title="Coupons" activeNav="coupons">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h2 class="text-xl font-semibold text-slate-900">Coupons</h2>
+      <p class="text-sm text-slate-500 mt-1">{coupons.length} coupon{coupons.length !== 1 ? 's' : ''} total</p>
+    </div>
+    <button class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+      + Add Coupon
+    </button>
+  </div>
+
+  {error && (
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
+  )}
+
+  {coupons.length === 0 && !error ? (
+    <div class="bg-white rounded-xl border border-slate-200 p-12 text-center">
+      <div class="text-4xl mb-4">🎟️</div>
+      <p class="text-slate-500 font-medium">No coupons yet</p>
+      <p class="text-slate-400 text-sm mt-1">Create your first coupon to offer discounts</p>
+    </div>
+  ) : (
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200">
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Code</th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Discount</th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Type</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Uses</th>
+              <th class="text-left px-4 py-3 font-medium text-slate-600">Expires</th>
+              <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+              <th class="text-right px-4 py-3 font-medium text-slate-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {coupons.map((coupon) => (
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="px-4 py-3">
+                  <span class="font-mono font-semibold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">{coupon.code}</span>
+                </td>
+                <td class="px-4 py-3 text-slate-700 font-medium">
+                  {coupon.discount_type === 'percent' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`}
+                </td>
+                <td class="px-4 py-3 text-slate-500 capitalize">{coupon.discount_type || 'percent'}</td>
+                <td class="px-4 py-3 text-center text-slate-600">
+                  {coupon.used_count || 0}{coupon.max_uses ? `/${coupon.max_uses}` : ''}
+                </td>
+                <td class="px-4 py-3 text-slate-500">
+                  {coupon.expires_at ? new Date(coupon.expires_at).toLocaleDateString() : 'No expiry'}
+                </td>
+                <td class="px-4 py-3 text-center">
+                  {coupon.is_active ? (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                      <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>Active
+                    </span>
+                  ) : (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Inactive
+                    </span>
+                  )}
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors">
+                    ✏️ Edit
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )}
+</AdminLayout>

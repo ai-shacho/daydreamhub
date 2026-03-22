@@ -1,0 +1,271 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getLocale, t, localePath } from '../../lib/i18n';
+
+const locale = getLocale(Astro.url);
+const url = Astro.url;
+const location = url.searchParams.get('location') || '';
+const speciality = url.searchParams.get('speciality') || '';
+const roomType = url.searchParams.get('roomType') || url.searchParams.get('type') || '';
+const minPrice = parseInt(url.searchParams.get('minPrice') || '0');
+const maxPrice = parseInt(url.searchParams.get('maxPrice') || '1000');
+const adults = parseInt(url.searchParams.get('adults') || '1');
+const children = parseInt(url.searchParams.get('children') || '0');
+const infants = parseInt(url.searchParams.get('infants') || '0');
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+const perPage = 12;
+const offset = (page - 1) * perPage;
+
+let hotels: any[] = [];
+let total = 0;
+let plansMap = new Map<number, any[]>();
+let dbAvailable = false;
+
+try {
+  const runtime = (Astro.locals as any).runtime;
+  const db = runtime?.env?.DB;
+  if (db) {
+    dbAvailable = true;
+    const whereClauses = ['h.is_active = 1'];
+    const params: any[] = [];
+    if (location) {
+      whereClauses.push('(h.city LIKE ? OR h.name LIKE ? OR h.country LIKE ?)');
+      params.push(`%${location}%`, `%${location}%`, `%${location}%`);
+    }
+    if (speciality) { whereClauses.push('h.categories LIKE ?'); params.push(`%${speciality}%`); }
+    if (roomType) { whereClauses.push('h.property_type = ?'); params.push(roomType); }
+    const whereStr = whereClauses.join(' AND ');
+
+    const priceWhere: string[] = [];
+    const priceParams: any[] = [];
+    if (minPrice > 0) { priceWhere.push('p.price_usd >= ?'); priceParams.push(minPrice); }
+    if (maxPrice < 1000) { priceWhere.push('p.price_usd <= ?'); priceParams.push(maxPrice); }
+    const priceWhereStr = priceWhere.length > 0 ? ' AND ' + priceWhere.join(' AND ') : '';
+
+    const countResult = await db.prepare(
+      `SELECT COUNT(DISTINCT h.id) as count FROM hotels h
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+       WHERE ${whereStr}${priceWhereStr}`
+    ).bind(...params, ...priceParams).first();
+    total = countResult?.count || 0;
+
+    const result = await db.prepare(
+      `SELECT h.*, MIN(p.price_usd) as min_price FROM hotels h
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+       WHERE ${whereStr}${priceWhereStr}
+       GROUP BY h.id
+       ORDER BY h.created_at DESC
+       LIMIT ? OFFSET ?`
+    ).bind(...params, ...priceParams, perPage, offset).all();
+    hotels = result?.results || [];
+
+    if (hotels.length > 0) {
+      const hotelIds = hotels.map((h: any) => h.id);
+      const placeholders = hotelIds.map(() => '?').join(',');
+      const plansResult = await db.prepare(
+        `SELECT * FROM plans WHERE hotel_id IN (${placeholders}) AND is_active = 1`
+      ).bind(...hotelIds).all();
+      for (const plan of plansResult?.results || []) {
+        if (!plansMap.has(plan.hotel_id)) plansMap.set(plan.hotel_id, []);
+        plansMap.get(plan.hotel_id)!.push(plan);
+      }
+    }
+  }
+} catch (e) {
+  dbAvailable = false;
+}
+
+if (!dbAvailable) {
+  const sampleHotels = [
+    { id: 1, name: 'The Work Loft Bangkok', slug: 'work-loft-bangkok', city: 'Bangkok', country: 'Thailand', thumbnail_url: '', categories: '["workspace"]', property_type: 'hotel' },
+    { id: 2, name: 'CoWork Stay Silom', slug: 'cowork-stay-silom', city: 'Bangkok', country: 'Thailand', thumbnail_url: '', categories: '["workspace"]', property_type: 'hotel' },
+    { id: 3, name: 'Digital Nomad Hub', slug: 'digital-nomad-hub', city: 'Singapore', country: 'Singapore', thumbnail_url: '', categories: '["workspace"]', property_type: 'hotel' },
+    { id: 5, name: 'Airport Transit Hotel', slug: 'airport-transit-hotel', city: 'Singapore', country: 'Singapore', thumbnail_url: '', categories: '["transit"]', property_type: 'hotel' },
+    { id: 9, name: 'Romance Suite Bali', slug: 'romance-suite-bali', city: 'Bali', country: 'Indonesia', thumbnail_url: '', categories: '["couple","for_couple"]', property_type: 'villa' },
+    { id: 13, name: 'The Ritz-Carlton KL', slug: 'ritz-carlton-kl', city: 'Kuala Lumpur', country: 'Malaysia', thumbnail_url: '', categories: '["luxury"]', property_type: 'hotel' },
+    { id: 17, name: 'Daycation Paradise', slug: 'daycation-paradise', city: 'Bali', country: 'Indonesia', thumbnail_url: '', categories: '["daycation","personal_time"]', property_type: 'villa' },
+    { id: 18, name: 'Zen Spa Retreat', slug: 'zen-spa-retreat', city: 'Bangkok', country: 'Thailand', thumbnail_url: '', categories: '["daycation","personal_time"]', property_type: 'hotel' },
+  ];
+  const samplePlans = [
+    { id: 1, hotel_id: 1, name: '4-Hour Workspace', price_usd: 25, plan_type: 'day-use' },
+    { id: 6, hotel_id: 5, name: '6-Hour Layover', price_usd: 40, plan_type: 'day-use' },
+    { id: 10, hotel_id: 9, name: 'Romantic Half Day', price_usd: 80, plan_type: 'day-use' },
+    { id: 14, hotel_id: 13, name: 'Luxury Day Pass', price_usd: 150, plan_type: 'day-use' },
+    { id: 18, hotel_id: 17, name: 'Beach & Pool Day', price_usd: 55, plan_type: 'day-use' },
+    { id: 19, hotel_id: 18, name: 'Spa & Relax 5H', price_usd: 60, plan_type: 'day-use' },
+  ];
+  let filtered = sampleHotels;
+  if (location) {
+    const loc = location.toLowerCase();
+    filtered = filtered.filter(h => h.city.toLowerCase().includes(loc) || h.name.toLowerCase().includes(loc) || h.country.toLowerCase().includes(loc));
+  }
+  if (speciality) filtered = filtered.filter(h => h.categories.includes(speciality));
+  if (roomType) filtered = filtered.filter(h => h.property_type === roomType);
+  total = filtered.length;
+  hotels = filtered.slice(offset, offset + perPage);
+  for (const hotel of hotels) {
+    const hotelPlans = samplePlans.filter(p => p.hotel_id === hotel.id);
+    plansMap.set(hotel.id, hotelPlans);
+  }
+}
+
+const totalPages = Math.ceil(total / perPage);
+
+function buildPageUrl(pageNum: number) {
+  const params = new URLSearchParams();
+  if (location) params.set('location', location);
+  if (speciality) params.set('speciality', speciality);
+  if (roomType) params.set('roomType', roomType);
+  if (minPrice > 0) params.set('minPrice', String(minPrice));
+  if (maxPrice < 1000) params.set('maxPrice', String(maxPrice));
+  if (adults !== 1) params.set('adults', String(adults));
+  if (children > 0) params.set('children', String(children));
+  if (infants > 0) params.set('infants', String(infants));
+  if (pageNum > 1) params.set('page', String(pageNum));
+  const qs = params.toString();
+  const basePath = localePath('/search', locale);
+  return qs ? `${basePath}?${qs}` : basePath;
+}
+
+function getPageNumbers(current: number, totalPg: number) {
+  if (totalPg <= 7) return Array.from({ length: totalPg }, (_, i) => i + 1);
+  const pages: (number | string)[] = [];
+  if (current <= 4) { for (let i = 1; i <= 5; i++) pages.push(i); pages.push('...'); pages.push(totalPg); }
+  else if (current >= totalPg - 3) { pages.push(1); pages.push('...'); for (let i = totalPg - 4; i <= totalPg; i++) pages.push(i); }
+  else { pages.push(1); pages.push('...'); for (let i = current - 1; i <= current + 1; i++) pages.push(i); pages.push('...'); pages.push(totalPg); }
+  return pages;
+}
+
+const pageNumbers = getPageNumbers(page, totalPages);
+const resultsText = t('search.hotels_found', locale).replace('{count}', String(total));
+
+function getMinPrice(hotelId: number) {
+  const plans = plansMap.get(hotelId) || [];
+  if (plans.length === 0) return null;
+  return Math.min(...plans.map((p: any) => p.price_usd));
+}
+---
+
+<Layout title={`${t('search.results_title', locale)} | ${t('site.name', locale)}`} description={t('hero.tagline', locale)}>
+  <!-- Search Form -->
+  <section class="bg-gray-50 py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <form method="get" action={localePath('/search', locale)} class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">{t('search.location', locale)}</label>
+            <input type="text" name="location" value={location} placeholder={t('search.location_placeholder', locale)} class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">{t('search.speciality', locale)}</label>
+            <select name="speciality" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none">
+              <option value="">{t('search.all_types', locale)}</option>
+              <option value="workspace" selected={speciality === 'workspace'}>{t('search.workspace', locale)}</option>
+              <option value="transit" selected={speciality === 'transit'}>{t('search.transit', locale)}</option>
+              <option value="couple" selected={speciality === 'couple'}>{t('search.for_couple', locale)}</option>
+              <option value="luxury" selected={speciality === 'luxury'}>{t('search.luxury', locale)}</option>
+              <option value="daycation" selected={speciality === 'daycation'}>{t('search.daycation', locale)}</option>
+              <option value="personal" selected={speciality === 'personal'}>{t('search.personal_time', locale)}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">{t('search.room_type', locale)}</label>
+            <select name="roomType" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none">
+              <option value="">{t('search.all_sizes', locale)}</option>
+              <option value="hotel" selected={roomType === 'hotel'}>{t('search.hotel', locale)}</option>
+              <option value="villa" selected={roomType === 'villa'}>{t('search.villa', locale)}</option>
+              <option value="capsule-hotel" selected={roomType === 'capsule-hotel'}>{t('search.capsule_hotel', locale)}</option>
+              <option value="hostel" selected={roomType === 'hostel'}>{t('search.hostel', locale)}</option>
+              <option value="apartment" selected={roomType === 'apartment'}>{t('search.apartment', locale)}</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <button type="submit" class="w-full py-2 bg-[#45A2C1] text-white font-medium rounded-lg hover:bg-[#3891AE] transition-colors text-sm">
+              {t('search.button', locale)}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section class="py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6">
+      <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">{t('search.results_title', locale)}</h1>
+        <p class="text-sm text-gray-500 mt-1">{resultsText}</p>
+      </div>
+
+      {hotels.length > 0 ? (
+        <>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {hotels.map((hotel: any) => {
+              const minPrice = getMinPrice(hotel.id);
+              const displayName = locale === 'ja' && hotel.name_ja ? hotel.name_ja : hotel.name;
+              return (
+                <a href={localePath(`/hotel/${hotel.slug}`, locale)} class="group bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                  <div class="aspect-[4/3] overflow-hidden bg-gray-100">
+                    <img src={hotel.thumbnail_url || '/images/placeholder-hotel.jpg'} alt={displayName} loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  </div>
+                  <div class="p-4">
+                    <h3 class="font-semibold text-gray-900 text-sm mb-1 line-clamp-1">{displayName}</h3>
+                    <p class="text-xs text-gray-500 mb-2">{hotel.city}, {hotel.country}</p>
+                    {minPrice && <p class="text-sm font-bold text-[#45A2C1]">{t('hotel.from', locale)} ${minPrice} {t('hotel.usd', locale)}</p>}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+          {totalPages > 1 && (
+            <nav class="mt-10 flex justify-center" aria-label="Pagination">
+              <ul class="flex items-center gap-1.5">
+                <li>
+                  {page > 1 ? (
+                    <a href={buildPageUrl(page - 1)} class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                      <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                      {t('search.previous', locale)}
+                    </a>
+                  ) : (
+                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed">
+                      <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path></svg>
+                      {t('search.previous', locale)}
+                    </span>
+                  )}
+                </li>
+                {pageNumbers.map(p => (
+                  <li>
+                    {p === '...' ? <span class="inline-flex items-center justify-center w-10 h-10 text-sm text-gray-500">...</span>
+                    : p === page ? <span class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium text-white bg-[#45A2C1] rounded-lg">{p}</span>
+                    : <a href={buildPageUrl(p as number)} class="inline-flex items-center justify-center w-10 h-10 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">{p}</a>}
+                  </li>
+                ))}
+                <li>
+                  {page < totalPages ? (
+                    <a href={buildPageUrl(page + 1)} class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                      {t('search.next', locale)}
+                      <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </a>
+                  ) : (
+                    <span class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed">
+                      {t('search.next', locale)}
+                      <svg class="w-4 h-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path></svg>
+                    </span>
+                  )}
+                </li>
+              </ul>
+            </nav>
+          )}
+        </>
+      ) : (
+        <div class="text-center py-16">
+          <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"></path>
+          </svg>
+          <h2 class="text-xl font-semibold text-gray-600 mb-2">{t('search.no_results_title', locale)}</h2>
+          <p class="text-gray-400 max-w-md mx-auto">{t('search.no_results_desc', locale)}</p>
+        </div>
+      )}
+    </div>
+  </section>
+</Layout>
