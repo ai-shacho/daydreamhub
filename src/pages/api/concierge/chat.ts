@@ -15,7 +15,9 @@ function sanitizeAIText(text: string): string {
   // 2. Strip orphaned HTML attribute fragments that AI reproduces from history
   //    e.g. ..." target="_blank" class="underline text-amber-300 hover:text-amber-200">Book Now
   //    → Book Now
-  text = text.replace(/"?\s*target="_blank"\s*class="[^"]*"\s*>(.*?)(?=\n|$)/gi, (_, after) => after.trim());
+  // Orphaned HTML attribute fragments with optional preceding URL
+  // e.g.: /hotel/slug" target="_blank" class="...">Book Now
+  text = text.replace(/[^\s"]*"?\s*target="_blank"[^>]*>(.*?)(?=\n|$)/gi, (_, after) => after.trim());
   text = text.replace(/"?\s*target="_blank"/gi, '');
   text = text.replace(/\s*class="(?:underline|text-amber|hover:)[^"]*"/gi, '');
   // orphaned closing > after attribute cleanup
@@ -42,11 +44,21 @@ async function cfAiChat(env: any, messages: any[], systemPrompt: string): Promis
     { role: 'system', content: systemPrompt.slice(0, 2000) },
     ...messages.slice(-8).map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 500) })),
   ];
-  const response = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-    messages: cfMessages,
-    max_tokens: 600,
-  });
-  return response?.response || response?.result?.response || 'Sorry, I could not process your request.';
+  // リトライ最大3回
+  const models = ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1'];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const model = models[attempt % models.length];
+      const response = await env.AI.run(model, { messages: cfMessages, max_tokens: 600 });
+      const text = response?.response || response?.result?.response || '';
+      if (text.trim()) return text;
+    } catch (_e) {
+      if (attempt === 2) throw _e;
+    }
+    // 少し待ってリトライ
+    await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+  }
+  return 'I apologize, the AI service is temporarily unavailable. Please try again in a moment.';
 }
 
 // Anthropic fallback when Telnyx is unavailable
@@ -232,7 +244,8 @@ async function telnyxOrchestrate(
     `2. If hotel data is empty or says "No hotels found" → respond: "Sorry, no hotels were found for that location. / 該当するホテルが見つかりませんでした。"\n` +
     `3. NEVER invent hotel names, addresses, phone numbers, prices, or any URLs. Zero exceptions.\n` +
     `4. BOOKING LINKS — STRICT RULE:\n` +
-    `   - source:internal hotels ONLY → use the /hotel/slug path given in the data (relative path, e.g. /hotel/wellmed-bangkok)\n` +
+    `   - source:internal hotels ONLY → use MARKDOWN link format: [Book Now](/hotel/slug) using the exact slug from the data\n` +
+    `   - Example: [Book Now](/hotel/wellmed-bangkok)\n` +
     `   - source:external hotels → NO booking links whatsoever. Show only the phone number (📞). Never add any URL or link.\n` +
     `   - NEVER generate daydreamhub.com/hotel/... or daydreamhub.com/book/... or any full URL. Use ONLY the exact /hotel/slug from the data.\n` +
     `5. Do NOT output XML function_calls or tool_use tags.\n` +

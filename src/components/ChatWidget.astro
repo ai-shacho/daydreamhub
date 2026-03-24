@@ -112,6 +112,29 @@
   toggle.addEventListener('click', () => isOpen ? closeChat() : openChat());
   closeBtn.addEventListener('click', closeChat);
 
+  function renderMarkdown(text) {
+    if (!text) return '';
+    // Step 1: HTMLエスケープ（<, >, &, "）
+    let escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    // Step 2: **bold** → <strong>
+    escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Step 3: *italic* → <em>
+    escaped = escaped.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    // Step 4: [text](url) → <a href="url">text</a>
+    // urlからHTMLエスケープ文字を戻す（hrefに入れるため）
+    escaped = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, label, href) {
+      // hrefの&amp;を&に戻す
+      const cleanHref = href.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+      return '<a href="' + cleanHref + '" target="_blank" rel="noopener" class="text-teal-600 underline hover:text-teal-800 font-medium">' + label + '</a>';
+    });
+    // Step 5: 改行 → <br>
+    escaped = escaped.replace(/\n/g, '<br>');
+    return escaped;
+  }
+
   function addMessage(text, role) {
     const wrap = document.createElement('div');
     wrap.className = 'flex gap-2' + (role === 'user' ? ' flex-row-reverse' : '');
@@ -119,7 +142,7 @@
     if (role === 'assistant') {
       wrap.innerHTML = `
         <div class="w-7 h-7 bg-teal-100 rounded-full flex-shrink-0 flex items-center justify-center text-teal-600 text-xs font-bold mt-0.5">AI</div>
-        <div class="bg-slate-100 rounded-2xl rounded-tl-none px-3 py-2 text-sm text-slate-700 max-w-[85%] whitespace-pre-wrap">${text}</div>
+        <div class="bg-slate-100 rounded-2xl rounded-tl-none px-3 py-2 text-sm text-slate-700 max-w-[85%]">${renderMarkdown(text)}</div>
       `;
     } else {
       wrap.innerHTML = `
@@ -170,7 +193,8 @@
       });
       const data = await res.json();
       removeTyping();
-      addMessage(data.response || data.reply || data.message || 'Sorry, something went wrong.', 'assistant');
+      const replyText = data.response || data.reply || data.message || (data.error ? "⚠️ " + data.error : "Sorry, something went wrong. Please try again.");
+      addMessage(replyText, "assistant");
     } catch (e) {
       removeTyping();
       addMessage('Connection error. Please try again.', 'assistant');
