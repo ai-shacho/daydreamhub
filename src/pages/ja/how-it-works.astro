@@ -48,17 +48,27 @@ try {
       <p class="text-gray-500 text-center max-w-2xl mx-auto mb-12">ホテルの客室を「泊まらずに使う」サービスです。チェックアウト後・到着前・仕事の合間など、数時間だけ快適な空間を利用できます。</p>
       <div class="grid md:grid-cols-3 gap-6">
         {[
-          { icon: '✈️', title: '空港乗り継ぎ', desc: 'フライトまでの数時間、空港近くのホテルでシャワー・仮眠。ラウンジより圧倒的に快適。' },
-          { icon: '💼', title: 'ワーケーション・ビジネス', desc: '会議室代わりに客室を利用。Wi-Fi完備・静かな環境で集中作業。' },
-          { icon: '💕', title: 'カップル・記念日', desc: 'ランチタイムや夕方にホテルを数時間楽しむ。宿泊より気軽でリーズナブル。' },
-          { icon: '🏃', title: '観光の休憩', desc: '荷物を預けて観光。疲れたらホテルに戻ってシャワーで気分リフレッシュ。' },
-          { icon: '🌙', title: '深夜・早朝', desc: '早朝チェックアウト後の時間つぶし。夜行バス到着後の仮眠にも。' },
-          { icon: '👨‍👩‍👧', title: 'ファミリー', desc: '観光中のお子さんのお昼寝・授乳スペースとして。親子でゆっくりできる空間。' },
+          { img: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=600&q=80', title: '空港乗り継ぎ', desc: 'フライトまでの数時間、空港近くのホテルでシャワー・仮眠。ラウンジより圧倒的に快適。' },
+          { img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&q=80', title: 'ワーケーション・ビジネス', desc: '会議室代わりに客室を利用。Wi-Fi完備・静かな環境で集中作業。' },
+          { img: 'https://images.unsplash.com/photo-1529543544282-ea669407fca3?w=600&q=80', title: 'カップル・記念日', desc: 'ランチタイムや夕方にホテルを数時間楽しむ。宿泊より気軽でリーズナブル。' },
+          { img: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80', title: '観光の休憩', desc: '荷物を預けて観光。疲れたらホテルに戻ってシャワーで気分リフレッシュ。' },
+          { img: 'https://images.unsplash.com/photo-1455587734955-081b22074882?w=600&q=80', title: '深夜・早朝', desc: '早朝チェックアウト後の時間つぶし。夜行バス到着後の仮眠にも。' },
+          { img: 'https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=600&q=80', title: 'ファミリー', desc: '観光中のお子さんのお昼寝・授乳スペースとして。親子でゆっくりできる空間。' },
         ].map(u => (
-          <div class="bg-gray-50 rounded-2xl p-6 hover:shadow-md transition-shadow">
-            <div class="text-3xl mb-3">{u.icon}</div>
-            <h3 class="font-bold text-gray-800 mb-2">{u.title}</h3>
-            <p class="text-gray-500 text-sm leading-relaxed">{u.desc}</p>
+          <div class="group rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 bg-white">
+            <div class="relative h-48 overflow-hidden">
+              <img
+                src={u.img}
+                alt={u.title}
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                loading="lazy"
+              />
+              <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+              <h3 class="absolute bottom-3 left-4 text-white font-bold text-lg drop-shadow">{u.title}</h3>
+            </div>
+            <div class="p-5">
+              <p class="text-gray-500 text-sm leading-relaxed">{u.desc}</p>
+            </div>
           </div>
         ))}
       </div>
@@ -101,34 +111,44 @@ try {
       <div class="grid md:grid-cols-2 gap-6">
 
         <!-- Direct Booking -->
-        <div class="border-2 border-teal-500 rounded-2xl p-8 relative overflow-hidden">
-          <div class="absolute top-0 right-0 bg-teal-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">無料</div>
-          <div class="text-4xl mb-4">🏨</div>
-          <h3 class="text-xl font-bold text-gray-800 mb-2">DDH登録ホテル — 直接予約</h3>
-          <p class="text-gray-500 text-sm mb-4 leading-relaxed">DaydreamHubと提携しているホテルは、サイト上で即時予約が可能です。サービス手数料は<strong class="text-teal-600">一切かかりません</strong>。</p>
-          <ul class="space-y-2 text-sm text-gray-600">
-            {['✅ 追加手数料なし', '✅ 即時予約確定', '✅ オンライン決済対応', '✅ 予約確認メール自動送信', '✅ 世界60都市以上'].map(i => (
-              <li>{i}</li>
-            ))}
-          </ul>
-          <div class="mt-6">
-            <a href="/" class="inline-block bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">今すぐ検索 →</a>
+        <div class="border-2 border-teal-500 rounded-2xl overflow-hidden relative">
+          <div class="absolute top-0 right-0 bg-teal-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">無料</div>
+          <div class="relative h-44 overflow-hidden">
+            <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80" alt="DDH登録ホテル" class="w-full h-full object-cover" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            <h3 class="absolute bottom-4 left-6 text-xl font-bold text-white">DDH登録ホテル — 直接予約</h3>
+          </div>
+          <div class="p-8">
+            <p class="text-gray-500 text-sm mb-4 leading-relaxed">DaydreamHubと提携しているホテルは、サイト上で即時予約が可能です。サービス手数料は<strong class="text-teal-600">一切かかりません</strong>。</p>
+            <ul class="space-y-2 text-sm text-gray-600">
+              {['✅ 追加手数料なし', '✅ 即時予約確定', '✅ オンライン決済対応', '✅ 予約確認メール自動送信', '✅ 世界60都市以上'].map(i => (
+                <li>{i}</li>
+              ))}
+            </ul>
+            <div class="mt-6">
+              <a href="/ja/search" class="inline-block bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">今すぐ検索 →</a>
+            </div>
           </div>
         </div>
 
         <!-- AI Phone Booking -->
-        <div class="border-2 border-blue-400 rounded-2xl p-8 relative overflow-hidden">
-          <div class="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">$7</div>
-          <div class="text-4xl mb-4">📞</div>
-          <h3 class="text-xl font-bold text-gray-800 mb-2">未登録ホテル — AI電話予約代行</h3>
-          <p class="text-gray-500 text-sm mb-4 leading-relaxed">DDHに未登録のホテルでも、AIが代わりに電話してデイユース空き状況を確認します。世界中どこでも対応可能です。</p>
-          <ul class="space-y-2 text-sm text-gray-600">
-            {['📞 AIが最大3件に電話', '🌍 世界中どこでも対応', '💰 $7でAll-in（1〜3件の電話代）', '🔄 全件不成立なら全額返金', '📍 Googleマップ掲載ホテルに対応'].map(i => (
-              <li>{i}</li>
-            ))}
-          </ul>
-          <div class="mt-6">
-            <a href="/" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">AIに相談する →</a>
+        <div class="border-2 border-blue-400 rounded-2xl overflow-hidden relative">
+          <div class="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">$7</div>
+          <div class="relative h-44 overflow-hidden">
+            <img src="https://images.unsplash.com/photo-1593642533144-3d62aa4783ec?w=800&q=80" alt="AI電話予約代行" class="w-full h-full object-cover" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            <h3 class="absolute bottom-4 left-6 text-xl font-bold text-white">未登録ホテル — AI電話予約代行</h3>
+          </div>
+          <div class="p-8">
+            <p class="text-gray-500 text-sm mb-4 leading-relaxed">DDHに未登録のホテルでも、AIが代わりに電話してデイユース空き状況を確認します。世界中どこでも対応可能です。</p>
+            <ul class="space-y-2 text-sm text-gray-600">
+              {['AIが最大3件に電話', '世界中どこでも対応', '$7でAll-in（1〜3件の電話代）', '全件不成立なら全額返金', 'Googleマップ掲載ホテルに対応'].map(i => (
+                <li>✓ {i}</li>
+              ))}
+            </ul>
+            <div class="mt-6">
+              <a href="/ja/concierge" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">AIに相談する →</a>
+            </div>
           </div>
         </div>
 
@@ -192,11 +212,11 @@ try {
       <h2 class="text-3xl font-bold mb-4">さあ、次の滞在を予約しよう</h2>
       <p class="text-teal-100 mb-8">世界{totalCities}都市以上のデイユースホテルをAIが瞬時に検索します</p>
       <div class="flex flex-wrap gap-4 justify-center">
-        <a href="/" class="bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold px-8 py-3 rounded-xl text-base transition-colors">
+        <a href="/ja/search" class="bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold px-8 py-3 rounded-xl text-base transition-colors">
           🔍 ホテルを検索する
         </a>
-        <a href="/services" class="bg-white/20 hover:bg-white/30 text-white font-bold px-8 py-3 rounded-xl text-base transition-colors border border-white/30">
-          その他のサービス
+        <a href="/ja/faq" class="bg-white/20 hover:bg-white/30 text-white font-bold px-8 py-3 rounded-xl text-base transition-colors border border-white/30">
+          よくある質問
         </a>
       </div>
     </div>

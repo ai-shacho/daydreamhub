@@ -1,6 +1,27 @@
 import type { APIRoute } from 'astro';
 
+// Simple in-memory rate limiter (resets per Worker instance, but sufficient to slow scrapers)
+const rateLimit = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 20; // max 20 requests per minute per IP
+
 export const GET: APIRoute = async ({ request, locals }) => {
+  // IP-based rate limiting
+  const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('x-forwarded-for') || 'unknown';
+  const now = Date.now();
+  const entry = rateLimit.get(ip);
+  if (entry && now < entry.resetAt) {
+    entry.count++;
+    if (entry.count > RATE_LIMIT_MAX) {
+      return new Response(JSON.stringify({ error: 'Too many requests. Please try again later.' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
+      });
+    }
+  } else {
+    rateLimit.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
@@ -11,7 +32,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get('page') || '1');
-  const perPage = parseInt(url.searchParams.get('perPage') || '20');
+  const perPage = Math.min(parseInt(url.searchParams.get('perPage') || '20'), 50); // max 50 per request
   const search = url.searchParams.get('search') || '';
   const city = url.searchParams.get('city') || '';
   const country = url.searchParams.get('country') || '';
@@ -44,7 +65,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
     const hotels = await db
       .prepare(
-        `SELECT id, name, name_ja, slug, city, country, property_type, thumbnail_url, rating, is_active
+        `SELECT id, name, name_ja, slug, city, country, property_type, thumbnail_url, rating
          FROM hotels ${whereClause}
          ORDER BY name ASC
          LIMIT ? OFFSET ?`

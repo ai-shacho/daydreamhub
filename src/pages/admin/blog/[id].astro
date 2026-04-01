@@ -1,0 +1,316 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../../lib/adminAuth';
+
+const runtime = (Astro.locals as any).runtime;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect('/admin/login');
+
+const { id } = Astro.params;
+let post: any = null;
+let error = '';
+let success = false;
+
+if (!id) return new Response('Not found', { status: 404 });
+
+// Handle POST (save)
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const title = formData.get('title') as string;
+    const title_ja = formData.get('title_ja') as string;
+    const slug = formData.get('slug') as string;
+    const excerpt = formData.get('excerpt') as string;
+    const city = formData.get('city') as string;
+    const thumbnail_url = formData.get('thumbnail_url') as string;
+    const content = formData.get('content') as string;
+    const content_ja = formData.get('content_ja') as string;
+    const published_at_raw = formData.get('published_at') as string;
+    const published_at = published_at_raw ? published_at_raw.replace('T', ' ') + ':00' : null;
+
+    if (db) {
+      const result = await db.prepare(`
+        UPDATE blog_posts
+        SET title = ?, title_ja = ?, slug = ?, excerpt = ?, city = ?,
+            thumbnail_url = ?, content = ?, content_ja = ?, published_at = ?
+        WHERE id = ?
+      `).bind(title, title_ja, slug, excerpt, city, thumbnail_url, content, content_ja, published_at, id).run();
+
+      if (result.meta.changes === 0) {
+        error = 'Blog post not found or no changes made';
+      } else {
+        success = true;
+      }
+    } else {
+      error = 'Database not available';
+    }
+  } catch (e: any) {
+    error = e.message || 'Failed to save';
+  }
+}
+
+// Load post
+if (db) {
+  try {
+    post = await db.prepare(
+      `SELECT id, title, title_ja, slug, excerpt, city, thumbnail_url, content, content_ja, published_at FROM blog_posts WHERE id = ?`
+    ).bind(id).first();
+  } catch (e: any) {
+    error = e.message || 'Failed to load post';
+  }
+}
+
+if (!post) return new Response('Blog post not found', { status: 404 });
+
+// Format published_at for datetime-local input (YYYY-MM-DDTHH:MM)
+const publishedAtValue = post.published_at ? post.published_at.slice(0, 16).replace(' ', 'T') : '';
+
+// Escape content for safe embedding in JS
+const contentEscaped = JSON.stringify(post.content || '');
+const contentJaEscaped = JSON.stringify(post.content_ja || '');
+---
+
+<AdminLayout title={`Edit: ${post.title || 'Blog Post'}`} activeNav="blog">
+  <!-- Jodit Editor CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jodit/3.24.6/jodit.min.css" />
+
+  <!-- Breadcrumb -->
+  <nav class="flex items-center gap-2 text-sm text-slate-500 mb-6">
+    <a href="/admin/blog" class="hover:text-teal-600">Blog Posts</a>
+    <span>›</span>
+    <span class="text-slate-900 font-medium">Edit #{post.id}</span>
+  </nav>
+
+  {success && (
+    <div id="success-msg" class="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg mb-4 text-sm font-medium">
+      ✅ 保存しました / Saved successfully
+    </div>
+  )}
+
+  {error && (
+    <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
+  )}
+
+  <form method="POST" id="blog-form" class="space-y-6">
+    <!-- Basic Info -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-semibold text-slate-900 mb-4">Basic Info</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            Title (English) <span class="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            name="title"
+            value={post.title || ''}
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            placeholder="English title"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">
+            Title (Japanese)
+          </label>
+          <input
+            type="text"
+            name="title_ja"
+            value={post.title_ja || ''}
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            placeholder="日本語タイトル"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Slug</label>
+          <input
+            type="text"
+            name="slug"
+            value={post.slug || ''}
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            placeholder="url-slug"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">City</label>
+          <input
+            type="text"
+            name="city"
+            value={post.city || ''}
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            placeholder="Tokyo"
+          />
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Thumbnail URL</label>
+          <div class="flex gap-2">
+            <input
+              type="url"
+              name="thumbnail_url"
+              id="thumbnail_url"
+              value={post.thumbnail_url || ''}
+              class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              placeholder="https://example.com/image.jpg"
+            />
+          </div>
+        </div>
+        {post.thumbnail_url && (
+          <div class="md:col-span-2">
+            <img id="thumb-preview" src={post.thumbnail_url} alt="Thumbnail preview" class="h-32 object-cover rounded-lg border border-slate-200" />
+          </div>
+        )}
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Excerpt</label>
+          <textarea
+            name="excerpt"
+            rows="3"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-y"
+            placeholder="Short description..."
+          >{post.excerpt || ''}</textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Published At</label>
+          <input
+            type="datetime-local"
+            name="published_at"
+            value={publishedAtValue}
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+          />
+          <p class="text-xs text-slate-400 mt-1">Leave blank to keep as draft</p>
+        </div>
+        <div class="flex items-end">
+          <a
+            href={`/blog/${post.slug}`}
+            target="_blank"
+            class="inline-flex items-center gap-1 px-3 py-2 text-sm text-teal-600 border border-teal-200 rounded-lg hover:bg-teal-50 transition-colors"
+          >
+            👁 Preview
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Editors -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-semibold text-slate-900 mb-2">Content (English)</h2>
+      <p class="text-xs text-slate-400 mb-3">ビジュアルエディタで編集できます。HTMLの直接編集も可能です。</p>
+      <!-- Hidden input for form submission -->
+      <input type="hidden" name="content" id="content-hidden" />
+      <!-- Jodit editor target -->
+      <div id="editor-en" class="min-h-[400px]"></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <h2 class="text-base font-semibold text-slate-900 mb-2">Content (Japanese)</h2>
+      <p class="text-xs text-slate-400 mb-3">日本語コンテンツをビジュアルエディタで編集できます。</p>
+      <input type="hidden" name="content_ja" id="content-ja-hidden" />
+      <div id="editor-ja" class="min-h-[400px]"></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center justify-between sticky bottom-4 bg-white border border-slate-200 rounded-xl shadow-md px-6 py-4">
+      <a href="/admin/blog" class="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+        ← 一覧に戻る
+      </a>
+      <div class="flex items-center gap-3">
+        <span id="save-status" class="text-sm text-slate-400"></span>
+        <button
+          type="submit"
+          id="save-btn"
+          class="px-6 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2"
+        >
+          💾 保存する
+        </button>
+      </div>
+    </div>
+  </form>
+</AdminLayout>
+
+<!-- Jodit Editor JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jodit/3.24.6/jodit.min.js"></script>
+
+<script define:vars={{ contentEscaped, contentJaEscaped }}>
+  // Wait for Jodit to load
+  window.addEventListener('DOMContentLoaded', () => {
+    const Jodit = window.Jodit;
+    if (!Jodit) {
+      console.error('Jodit not loaded');
+      return;
+    }
+
+    const commonConfig = {
+      height: 500,
+      language: 'en',
+      allowResizeY: true,
+      allowResizeX: false,
+      showCharsCounter: false,
+      showWordsCounter: false,
+      showXPathInStatusbar: false,
+      askBeforePasteHTML: false,
+      askBeforePasteFromWord: false,
+      defaultActionOnPaste: 'insert_as_html',
+      buttons: [
+        'bold', 'italic', 'underline', 'strikethrough', '|',
+        'ul', 'ol', '|',
+        'outdent', 'indent', '|',
+        'font', 'fontsize', 'brush', '|',
+        'paragraph', '|',
+        'image', 'link', '|',
+        'align', '|',
+        'undo', 'redo', '|',
+        'hr', 'table', '|',
+        'source'
+      ],
+      uploader: { insertImageAsBase64URI: true },
+      cleanHTML: {
+        denyTags: false,
+        allowTags: false,
+        removeEmptyElements: false,
+      },
+      processPasteHTML: true,
+      enter: 'p',
+    };
+
+    // Initialize English editor
+    const editorEn = Jodit.make('#editor-en', commonConfig);
+    editorEn.value = JSON.parse(contentEscaped);
+
+    // Initialize Japanese editor
+    const editorJa = Jodit.make('#editor-ja', commonConfig);
+    editorJa.value = JSON.parse(contentJaEscaped);
+
+    // On form submit, copy editor values to hidden inputs
+    const form = document.getElementById('blog-form');
+    const saveBtn = document.getElementById('save-btn');
+    const saveStatus = document.getElementById('save-status');
+
+    form.addEventListener('submit', (e) => {
+      document.getElementById('content-hidden').value = editorEn.value;
+      document.getElementById('content-ja-hidden').value = editorJa.value;
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中...';
+    });
+
+    // Auto-hide success message
+    const successMsg = document.getElementById('success-msg');
+    if (successMsg) {
+      setTimeout(() => {
+        successMsg.style.opacity = '0';
+        successMsg.style.transition = 'opacity 0.5s';
+        setTimeout(() => successMsg.remove(), 500);
+      }, 3000);
+    }
+
+    // Thumbnail preview update
+    const thumbInput = document.getElementById('thumbnail_url');
+    const thumbPreview = document.getElementById('thumb-preview');
+    if (thumbInput) {
+      thumbInput.addEventListener('change', () => {
+        if (thumbPreview && thumbInput.value) {
+          thumbPreview.src = thumbInput.value;
+        }
+      });
+    }
+  });
+</script>

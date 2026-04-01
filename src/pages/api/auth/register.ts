@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { sendWelcomeEmail } from '../../../lib/email';
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -54,6 +55,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
       )
       .bind(name, email, passwordHash, 'user')
       .run();
+
+    // 登録完了メールを送信（失敗しても登録自体は成功扱い）
+    const resendKey = env?.RESEND_API_KEY;
+    if (resendKey) {
+      sendWelcomeEmail(resendKey, { name, email }).catch(() => {});
+    }
 
     return new Response(JSON.stringify({ ok: true }), { status: 201, headers: json });
   } catch (e: any) {

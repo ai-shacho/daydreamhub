@@ -30,3 +30,7 @@
 .wp-blog-content mark {
   background-color: transparent;
 }
+
+/* Hide scrollbar for category horizontal scroll */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

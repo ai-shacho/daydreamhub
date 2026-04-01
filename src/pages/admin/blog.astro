@@ -41,7 +41,7 @@ if (db) {
       binds.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    query += " ORDER BY created_at DESC LIMIT 200";
+    query += " ORDER BY published_at DESC LIMIT 200";
     const result = await db.prepare(query).bind(...binds).all();
     posts = result?.results || [];
   } catch (e: any) {
@@ -51,6 +51,17 @@ if (db) {
 ---
 
 <AdminLayout title="Blog Posts" activeNav="blog">
+  <!-- Header with New Blog Button -->
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-slate-900">Blog Posts</h1>
+    <a
+      href="/admin/blog/new"
+      class="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2"
+    >
+      ✏️ New Blog Post
+    </a>
+  </div>
+
   <!-- Filters -->
   <div class="bg-white rounded-lg shadow p-4 mb-6">
     <form method="GET" action="/admin/blog" class="flex flex-wrap items-end gap-4">
@@ -131,18 +142,26 @@ if (db) {
               <td class="px-4 py-3 text-slate-500 text-xs">{p.published_at?.slice(0, 16) || "-"}</td>
               <td class="px-4 py-3 text-slate-500 text-xs font-mono">/{p.slug}</td>
               <td class="px-4 py-3 text-center">
-                <button
-                  class="publish-toggle-btn px-3 py-1 text-xs font-medium rounded border transition-colors"
-                  data-id={p.id}
-                  data-published={p.published_at ? "1" : "0"}
-                  class:list={[
-                    p.published_at
-                      ? "text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100"
-                      : "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
-                  ]}
-                >
-                  {p.published_at ? "Unpublish" : "Publish"}
-                </button>
+                <div class="flex items-center justify-center gap-2">
+                  <a
+                    href={`/admin/blog/${p.id}`}
+                    class="px-3 py-1 text-xs font-medium rounded border text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 transition-colors"
+                  >
+                    Edit
+                  </a>
+                  <button
+                    class="publish-toggle-btn px-3 py-1 text-xs font-medium rounded border transition-colors"
+                    data-id={p.id}
+                    data-published={p.published_at ? "1" : "0"}
+                    class:list={[
+                      p.published_at
+                        ? "text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100"
+                        : "text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                    ]}
+                  >
+                    {p.published_at ? "Unpublish" : "Publish"}
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

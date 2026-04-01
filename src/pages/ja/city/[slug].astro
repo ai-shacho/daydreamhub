@@ -52,6 +52,11 @@ try {
   dbAvailable = false;
 }
 
+// ホテルが0件の都市は404を返す
+if (dbAvailable && hotels.length === 0) {
+  return Astro.redirect('/404', 404);
+}
+
 if (!dbAvailable) {
   const sampleHotels = [
     { id: 1, name: 'The Work Loft Bangkok', slug: 'work-loft-bangkok', city: 'Bangkok', country: 'Thailand', thumbnail_url: '', categories: '["workspace"]', property_type: 'hotel' },

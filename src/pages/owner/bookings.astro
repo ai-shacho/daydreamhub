@@ -108,43 +108,31 @@ const statusLabels: Record<string, string> = {
           ))}
         </select>
       </div>
-      <!-- From date: 3 selects, combined by JS into hidden input -->
+      <!-- From date: flatpickr calendar -->
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
-        <div class="flex gap-1 items-center">
-          <select id="from-y" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-            <option value="">YYYY</option>
-            {years.map(y => <option value={y} selected={fromY === String(y)}>{y}</option>)}
-          </select>
-          <select id="from-m" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-            <option value="">MM</option>
-            {months.map(m => <option value={m.val} selected={fromM === m.val}>{m.label}</option>)}
-          </select>
-          <select id="from-d" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-            <option value="">DD</option>
-            {days.map(d => <option value={d} selected={fromD === d}>{d}</option>)}
-          </select>
-        </div>
-        <input type="hidden" id="from-hidden" name="from" value={dateFrom} />
+        <input
+          type="text"
+          id="from-date-picker"
+          name="from"
+          value={dateFrom}
+          placeholder="Select date"
+          readonly
+          class="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-36 cursor-pointer"
+        />
       </div>
-      <!-- To date: 3 selects -->
+      <!-- To date: flatpickr calendar -->
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
-        <div class="flex gap-1 items-center">
-          <select id="to-y" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-            <option value="">YYYY</option>
-            {years.map(y => <option value={y} selected={toY === String(y)}>{y}</option>)}
-          </select>
-          <select id="to-m" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-            <option value="">MM</option>
-            {months.map(m => <option value={m.val} selected={toM === m.val}>{m.label}</option>)}
-          </select>
-          <select id="to-d" class="px-2 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white">
-            <option value="">DD</option>
-            {days.map(d => <option value={d} selected={toD === d}>{d}</option>)}
-          </select>
-        </div>
-        <input type="hidden" id="to-hidden" name="to" value={dateTo} />
+        <input
+          type="text"
+          id="to-date-picker"
+          name="to"
+          value={dateTo}
+          placeholder="Select date"
+          readonly
+          class="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white w-36 cursor-pointer"
+        />
       </div>
       <div class="flex gap-2">
         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
@@ -426,4 +414,27 @@ const statusLabels: Record<string, string> = {
     } catch { alert('Error'); }
     sendBtn.textContent = 'Send'; sendBtn.disabled = false;
   });
+</script>
+
+<!-- flatpickr for date filters -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+<script is:inline>
+(function() {
+  var fpScript = document.createElement('script');
+  fpScript.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+  fpScript.onload = function() {
+    if (typeof flatpickr === 'undefined') return;
+    flatpickr('#from-date-picker', {
+      dateFormat: 'Y-m-d',
+      allowInput: false,
+      disableMobile: true,
+    });
+    flatpickr('#to-date-picker', {
+      dateFormat: 'Y-m-d',
+      allowInput: false,
+      disableMobile: true,
+    });
+  };
+  document.head.appendChild(fpScript);
+})();
 </script>

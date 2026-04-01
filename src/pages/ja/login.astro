@@ -1,0 +1,92 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const redirectTo = Astro.url.searchParams.get('redirect') || '/ja/';
+---
+<Layout
+  title="ログイン - DayDreamHub"
+  description="DayDreamHubアカウントにサインインしてください。"
+>
+  <div class="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-slate-50">
+    <div class="w-full max-w-md">
+      <div class="text-center mb-8">
+        <a href="/ja/" class="inline-flex items-center gap-2 text-2xl font-bold text-teal-700">
+          <svg class="w-9 h-9" viewBox="0 0 32 32" fill="none">
+            <circle cx="16" cy="16" r="14" fill="#f59e0b"/>
+            <path d="M10 20 Q16 10 22 20" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <circle cx="16" cy="13" r="3" fill="white"/>
+          </svg>
+          DayDreamHub
+        </a>
+        <p class="text-slate-500 text-sm mt-2">アカウントにサインイン</p>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+        <form id="login-form" class="space-y-5">
+          <div>
+            <label for="email" class="block text-sm font-medium text-slate-700 mb-1.5">メールアドレス</label>
+            <input id="email" name="email" type="email" required autocomplete="email"
+              placeholder="you@example.com"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label for="password" class="block text-sm font-medium text-slate-700">パスワード</label>
+              <a href="/auth/reset-password" class="text-xs text-teal-600 hover:underline">パスワードをお忘れですか？</a>
+            </div>
+            <input id="password" name="password" type="password" required autocomplete="current-password"
+              placeholder="••••••••"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div id="login-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3"></div>
+          <button type="submit" id="login-btn"
+            class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl transition-colors">
+            ログイン
+          </button>
+        </form>
+
+        <div class="mt-6 text-center">
+          <p class="text-sm text-slate-500">
+            アカウントをお持ちでない方は
+            <a href="/ja/register" class="text-teal-600 font-medium hover:underline ml-1">新規登録</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script is:inline define:vars={{ redirectTo }}>
+document.getElementById('login-form')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+
+  btn.disabled = true;
+  btn.textContent = 'ログイン中...';
+  err.className = 'hidden';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.ok) {
+      window.location.href = redirectTo || '/ja/';
+    } else {
+      const data = await res.json();
+      err.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
+      err.textContent = data.error || 'メールアドレスまたはパスワードが正しくありません';
+    }
+  } catch(ex) {
+    err.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
+    err.textContent = '接続エラーが発生しました。もう一度お試しください。';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'ログイン';
+  }
+});
+</script>

@@ -48,17 +48,27 @@ try {
       <p class="text-gray-500 text-center max-w-2xl mx-auto mb-12">A day-use hotel lets you book a room for a few hours — no overnight stay required. Perfect for after checkout, before arrival, or any time you need a comfortable private space.</p>
       <div class="grid md:grid-cols-3 gap-6">
         {[
-          { icon: '✈️', title: 'Airport Layover', desc: 'Use a hotel near the airport for a shower or nap between flights. Far more comfortable than a lounge.' },
-          { icon: '💼', title: 'Work & Meetings', desc: 'Use a hotel room as a quiet office or meeting space. Full Wi-Fi, privacy, and focus.' },
-          { icon: '💕', title: 'Couples & Romance', desc: 'Enjoy a few hours at a hotel for a lunch date or anniversary. Affordable and intimate.' },
-          { icon: '🏃', title: 'Sightseeing Break', desc: 'Drop off luggage and explore. Come back to freshen up with a shower during your tour.' },
-          { icon: '🌙', title: 'Late Night / Early Morning', desc: 'Need a rest after an early checkout or night bus? Day-use has you covered.' },
-          { icon: '👨‍👩‍👧', title: 'Families', desc: 'A quiet space for children to nap or for nursing during a long day of sightseeing.' },
+          { img: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=600&q=80', title: 'Airport Layover', desc: 'Use a hotel near the airport for a shower or nap between flights. Far more comfortable than a lounge.' },
+          { img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&q=80', title: 'Work & Meetings', desc: 'Use a hotel room as a quiet office or meeting space. Full Wi-Fi, privacy, and focus.' },
+          { img: 'https://images.unsplash.com/photo-1529543544282-ea669407fca3?w=600&q=80', title: 'Couples & Romance', desc: 'Enjoy a few hours at a hotel for a lunch date or anniversary. Affordable and intimate.' },
+          { img: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80', title: 'Sightseeing Break', desc: 'Drop off luggage and explore. Come back to freshen up with a shower during your tour.' },
+          { img: 'https://images.unsplash.com/photo-1455587734955-081b22074882?w=600&q=80', title: 'Late Night / Early Morning', desc: 'Need a rest after an early checkout or night bus? Day-use has you covered.' },
+          { img: 'https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=600&q=80', title: 'Families', desc: 'A quiet space for children to nap or for nursing during a long day of sightseeing.' },
         ].map(u => (
-          <div class="bg-gray-50 rounded-2xl p-6 hover:shadow-md transition-shadow">
-            <div class="text-3xl mb-3">{u.icon}</div>
-            <h3 class="font-bold text-gray-800 mb-2">{u.title}</h3>
-            <p class="text-gray-500 text-sm leading-relaxed">{u.desc}</p>
+          <div class="group rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 bg-white">
+            <div class="relative h-48 overflow-hidden">
+              <img
+                src={u.img}
+                alt={u.title}
+                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                loading="lazy"
+              />
+              <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+              <h3 class="absolute bottom-3 left-4 text-white font-bold text-lg drop-shadow">{u.title}</h3>
+            </div>
+            <div class="p-5">
+              <p class="text-gray-500 text-sm leading-relaxed">{u.desc}</p>
+            </div>
           </div>
         ))}
       </div>
@@ -100,34 +110,44 @@ try {
       <div class="grid md:grid-cols-2 gap-6">
 
         <!-- Direct Booking -->
-        <div class="border-2 border-teal-500 rounded-2xl p-8 relative overflow-hidden">
-          <div class="absolute top-0 right-0 bg-teal-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">Free</div>
-          <div class="text-4xl mb-4">🏨</div>
-          <h3 class="text-xl font-bold text-gray-800 mb-2">Listed Hotels — Book Directly</h3>
-          <p class="text-gray-500 text-sm mb-4 leading-relaxed">Hotels partnered with DaydreamHub can be booked instantly online. <strong class="text-teal-600">No service fee whatsoever.</strong></p>
-          <ul class="space-y-2 text-sm text-gray-600">
-            {['✅ Zero platform fee', '✅ Instant booking confirmation', '✅ Secure online payment', '✅ Automatic confirmation email', '✅ 60+ cities worldwide'].map(i => (
-              <li>{i}</li>
-            ))}
-          </ul>
-          <div class="mt-6">
-            <a href="/" class="inline-block bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">Search Hotels →</a>
+        <div class="border-2 border-teal-500 rounded-2xl overflow-hidden relative">
+          <div class="absolute top-0 right-0 bg-teal-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">Free</div>
+          <div class="relative h-44 overflow-hidden">
+            <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80" alt="Listed Hotels" class="w-full h-full object-cover" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            <h3 class="absolute bottom-4 left-6 text-xl font-bold text-white">Listed Hotels — Book Directly</h3>
+          </div>
+          <div class="p-8">
+            <p class="text-gray-500 text-sm mb-4 leading-relaxed">Hotels partnered with DaydreamHub can be booked instantly online. <strong class="text-teal-600">No service fee whatsoever.</strong></p>
+            <ul class="space-y-2 text-sm text-gray-600">
+              {['✅ Zero platform fee', '✅ Instant booking confirmation', '✅ Secure online payment', '✅ Automatic confirmation email', '✅ 60+ cities worldwide'].map(i => (
+                <li>{i}</li>
+              ))}
+            </ul>
+            <div class="mt-6">
+              <a href="/search" class="inline-block bg-teal-600 hover:bg-teal-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">Search Hotels →</a>
+            </div>
           </div>
         </div>
 
         <!-- AI Phone Booking -->
-        <div class="border-2 border-blue-400 rounded-2xl p-8 relative overflow-hidden">
-          <div class="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">$7</div>
-          <div class="text-4xl mb-4">📞</div>
-          <h3 class="text-xl font-bold text-gray-800 mb-2">Unlisted Hotels — AI Phone Booking</h3>
-          <p class="text-gray-500 text-sm mb-4 leading-relaxed">Even if a hotel isn't on DDH, our AI will call on your behalf to check day-use availability. Works anywhere in the world.</p>
-          <ul class="space-y-2 text-sm text-gray-600">
-            {['📞 AI calls up to 3 hotels', '🌍 Works anywhere in the world', '💰 Flat $7 fee (covers 1–3 calls)', '🔄 Full refund if all attempts fail', '📍 Any hotel listed on Google Maps'].map(i => (
-              <li>{i}</li>
-            ))}
-          </ul>
-          <div class="mt-6">
-            <a href="/" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">Ask the AI →</a>
+        <div class="border-2 border-blue-400 rounded-2xl overflow-hidden relative">
+          <div class="absolute top-0 right-0 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg z-10">$7</div>
+          <div class="relative h-44 overflow-hidden">
+            <img src="https://images.unsplash.com/photo-1593642533144-3d62aa4783ec?w=800&q=80" alt="AI Phone Booking" class="w-full h-full object-cover" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            <h3 class="absolute bottom-4 left-6 text-xl font-bold text-white">Unlisted Hotels — AI Phone Booking</h3>
+          </div>
+          <div class="p-8">
+            <p class="text-gray-500 text-sm mb-4 leading-relaxed">Even if a hotel isn't on DDH, our AI will call on your behalf to check day-use availability. Works anywhere in the world.</p>
+            <ul class="space-y-2 text-sm text-gray-600">
+              {['AI calls up to 3 hotels', 'Works anywhere in the world', 'Flat $7 fee (covers 1–3 calls)', 'Full refund if all attempts fail', 'Any hotel listed on Google Maps'].map(i => (
+                <li>✓ {i}</li>
+              ))}
+            </ul>
+            <div class="mt-6">
+              <a href="/concierge" class="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2.5 rounded-lg text-sm transition-colors">Ask the AI →</a>
+            </div>
           </div>
         </div>
 
@@ -191,11 +211,11 @@ try {
       <h2 class="text-3xl font-bold mb-4">Ready to book your next stay?</h2>
       <p class="text-teal-100 mb-8">Our AI instantly searches day-use hotels across {totalCities}+ cities worldwide</p>
       <div class="flex flex-wrap gap-4 justify-center">
-        <a href="/" class="bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold px-8 py-3 rounded-xl text-base transition-colors">
+        <a href="/search" class="bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold px-8 py-3 rounded-xl text-base transition-colors">
           🔍 Search Hotels
         </a>
-        <a href="/services" class="bg-white/20 hover:bg-white/30 text-white font-bold px-8 py-3 rounded-xl text-base transition-colors border border-white/30">
-          Our Services
+        <a href="/how-it-works#faq" class="bg-white/20 hover:bg-white/30 text-white font-bold px-8 py-3 rounded-xl text-base transition-colors border border-white/30">
+          FAQ
         </a>
       </div>
     </div>

@@ -4,7 +4,7 @@
 ---
 
 <!-- Chat Button (floating, bottom-right) -->
-<div id="chat-widget" class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+<div id="chat-widget" class="fixed bottom-[76px] md:bottom-6 right-6 z-[1100] flex flex-col items-end gap-3">
   <!-- Chat Panel -->
   <div
     id="chat-panel"
@@ -114,25 +114,36 @@
 
   function renderMarkdown(text) {
     if (!text) return '';
-    // Step 1: HTMLエスケープ（<, >, &, "）
-    let escaped = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    // Step 2: **bold** → <strong>
-    escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // Step 3: *italic* → <em>
-    escaped = escaped.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    // Step 4: [text](url) → <a href="url">text</a>
-    // urlからHTMLエスケープ文字を戻す（hrefに入れるため）
-    escaped = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, label, href) {
-      // hrefの&amp;を&に戻す
-      const cleanHref = href.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
-      return '<a href="' + cleanHref + '" target="_blank" rel="noopener" class="text-teal-600 underline hover:text-teal-800 font-medium">' + label + '</a>';
+    let out = text;
+
+    // 1. **bold** → <strong>
+    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // 2. [label](url) → <a> — handles /hotel/slug, hotel/slug, and mixed HTML-in-URL cases
+    out = out.replace(/\[([^\]\n]+)\]\(([^)]+)\)/gi, function(_, label, rawHref) {
+      var finalHref = rawHref.trim();
+      // If href contains an embedded <a> tag (AI mixing Markdown + HTML), extract the real URL
+      if (finalHref.indexOf('<a') !== -1 || finalHref.indexOf('href=') !== -1) {
+        var hrefMatch = finalHref.match(/href=["']([^"']+)["']/);
+        finalHref = hrefMatch ? hrefMatch[1] : finalHref.replace(/<[^>]+>/g, '').trim();
+      }
+      // Strip any trailing HTML attribute garbage (e.g. /hotel/slug" target="_blank" class="...")
+      finalHref = finalHref.replace(/"[^"]*$/, '').replace(/'\s*[a-z].*$/, '').trim();
+      // Ensure relative hotel links start with /
+      if (!finalHref.startsWith('/') && !finalHref.startsWith('http')) {
+        finalHref = '/' + finalHref;
+      }
+      return '<a href="' + finalHref + '" class="text-teal-600 underline hover:text-teal-800 font-semibold">' + label + '</a>';
     });
-    // Step 5: 改行 → <br>
-    escaped = escaped.replace(/\n/g, '<br>');
-    return escaped;
+
+    // 3. Bare /hotel/slug paths → link (fallback)
+    out = out.replace(/(^|[\s—–-])(\/hotel\/[a-z0-9-]+)(?=[\s—–\n,.]|$)/gm, function(_, pre, path) {
+      return pre + '<a href="' + path + '" class="text-teal-600 underline hover:text-teal-800 font-semibold">予約する</a>';
+    });
+
+    // 4. \n → <br>
+    out = out.replace(/\n/g, '<br>');
+    return out;
   }
 
   function addMessage(text, role) {

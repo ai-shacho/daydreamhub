@@ -8,17 +8,18 @@ interface Props {
 
 const { post, locale = 'en' } = Astro.props;
 const displayTitle = locale === 'ja' && post.title_ja ? post.title_ja : post.title;
+const displayExcerpt = locale === 'ja' && (post.excerpt_ja || post.title_ja) ? (post.excerpt_ja || post.excerpt) : post.excerpt;
 const blogLink = localePath(`/blog/${post.slug}`, locale);
-const imageUrl = post.thumbnail_url || '/images/placeholder-hotel.jpg';
+const imageUrl = post.thumbnail_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80';
 const formattedDate = new Date(post.published_at).toLocaleDateString(
   locale === 'ja' ? 'ja-JP' : 'en-US',
   { year: 'numeric', month: 'long', day: 'numeric' }
 );
 const maxExcerptLength = 120;
-const truncatedExcerpt = post.excerpt
-  ? post.excerpt.length > maxExcerptLength
-    ? post.excerpt.slice(0, maxExcerptLength) + '...'
-    : post.excerpt
+const truncatedExcerpt = displayExcerpt
+  ? displayExcerpt.length > maxExcerptLength
+    ? displayExcerpt.slice(0, maxExcerptLength) + '...'
+    : displayExcerpt
   : '';
 ---
 

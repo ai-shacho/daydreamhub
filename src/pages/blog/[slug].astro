@@ -185,7 +185,29 @@ const formattedDate = post
   : '';
 ---
 
-<Layout title={post ? displayTitle : t('blog.not_found', locale)} description={post?.excerpt || ''}>
+<Layout
+  title={post ? displayTitle : t('blog.not_found', locale)}
+  description={post?.excerpt || ''}
+  ogImage={post?.thumbnail_url || undefined}
+  ogType="article"
+  ogPublishedTime={post?.published_at}
+>
+  {post && (
+    <script slot="head" type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": displayTitle,
+      "description": post.excerpt || '',
+      "image": post.thumbnail_url || null,
+      "url": `https://www.daydreamhub.com/blog/${post.slug}`,
+      "datePublished": post.published_at,
+      "publisher": {
+        "@type": "Organization",
+        "name": "DayDreamHub",
+        "url": "https://www.daydreamhub.com"
+      }
+    })} />
+  )}
 
   {post ? (
     <article>
@@ -229,6 +251,25 @@ const formattedDate = post
         {displayContent && (
           <div class="prose prose-lg max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-[#45A2C1] prose-a:no-underline hover:prose-a:underline prose-li:text-gray-600 prose-img:rounded-lg wp-blog-content" set:html={displayContent} />
         )}
+        <script is:inline>
+          // Apply lazy loading, async decoding, and max-width to all article images
+          document.querySelectorAll('article img').forEach(function(img) {
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.style.maxWidth = '100%';
+            img.style.height = 'auto';
+          });
+          // wp-content image fallback: show placeholder if image fails to load
+          document.querySelectorAll('article img').forEach(function(img) {
+            img.addEventListener('error', function() {
+              if (!this.dataset.fallbackAttempted) {
+                this.dataset.fallbackAttempted = 'true';
+                this.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=70';
+                this.style.opacity = '0.7';
+              }
+            });
+          });
+        </script>
 
         <!-- Back to blog -->
         <div class="mt-10 pt-6 border-t border-gray-200">

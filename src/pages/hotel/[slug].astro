@@ -14,6 +14,7 @@ let avgRating = 0;
 let reviewCount = 0;
 let ratingDistribution: Record<number, number> = {};
 let dbAvailable = false;
+let nearbyHotels: any[] = [];
 
 try {
   const runtime = (Astro.locals as any).runtime;
@@ -46,6 +47,18 @@ try {
       for (const row of distResult?.results || []) {
         ratingDistribution[row.rating] = row.count;
       }
+
+      // Nearby hotels (same city, excluding current)
+      const nearbyResult = await db.prepare(
+        `SELECT h.id, h.name, h.slug, h.city, h.thumbnail_url, h.rating, MIN(p.price_usd) as min_price
+         FROM hotels h
+         LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+         WHERE h.city = ? AND h.id != ? AND h.is_active = 1
+         GROUP BY h.id
+         ORDER BY h.rating DESC
+         LIMIT 4`
+      ).bind(hotel.city, hotel.id).all();
+      nearbyHotels = nearbyResult?.results || [];
     }
   }
 } catch (e) {
@@ -78,8 +91,14 @@ if (!hotel) {
   Astro.response.status = 404;
 }
 
-const displayName = hotel ? (locale === 'ja' && hotel.name_ja ? hotel.name_ja : hotel.name) : '';
+function decodeHtmlEntities(str: string): string {
+  if (!str) return str;
+  return str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+const displayName = hotel ? decodeHtmlEntities(locale === 'ja' && hotel.name_ja ? hotel.name_ja : hotel.name) : '';
 const displayDescription = hotel ? (locale === 'ja' && hotel.description_ja ? hotel.description_ja : hotel.description || '') : '';
+const siteUrl = 'https://www.daydreamhub.com';
 
 let categories: string[] = [];
 if (hotel) {
@@ -154,14 +173,52 @@ function renderStars(rating: number) {
   const hasHalf = clamped % 1 >= 0.5;
   return '\u2605'.repeat(full) + (hasHalf ? '\u2606' : '') + '\u2606'.repeat(5 - full - (hasHalf ? 1 : 0));
 }
+
+// Group plans by room_type
+const plansByRoomType: Record<string, typeof plans> = {};
+for (const plan of plans) {
+  const rt = (plan.room_type as string) || '';
+  if (!plansByRoomType[rt]) plansByRoomType[rt] = [];
+  plansByRoomType[rt].push(plan);
+}
+const roomTypes = Object.keys(plansByRoomType);
+
+// Group hotel_images by room_type
+const imagesByRoomType: Record<string, string[]> = {};
+for (const img of images) {
+  const rt = (img as any).room_type || '';
+  if (!imagesByRoomType[rt]) imagesByRoomType[rt] = [];
+  imagesByRoomType[rt].push((img as any).image_url);
+}
 ---
 
 <Layout
   title={hotel ? `${displayName} | ${t('site.name', locale)}` : t('hotel.not_found', locale)}
   description={hotel ? displayDescription.slice(0, 160) : t('hotel.not_found_desc', locale)}
   ogImage={hotel?.thumbnail_url || undefined}
-  canonicalUrl={hotel ? `https://www.daydreamhub.com/hotel/${hotel.slug}` : undefined}
+  canonicalUrl={hotel ? `${siteUrl}/hotel/${hotel.slug}` : undefined}
 >
+  {hotel && (
+    <script slot="head" type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "LodgingBusiness",
+      "name": displayName,
+      "description": displayDescription?.substring(0, 200),
+      "url": `${siteUrl}/hotel/${hotel.slug}`,
+      "image": hotel.thumbnail_url || null,
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": hotel.city,
+        "addressCountry": hotel.country
+      },
+      ...(hotel.avg_rating ? { "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": hotel.avg_rating,
+        "bestRating": 5,
+        "ratingCount": hotel.review_count || 1
+      }} : {})
+    })} />
+  )}
 
   {hotel ? (
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
@@ -241,7 +298,7 @@ function renderStars(rating: number) {
             <div class="flex flex-shrink-0 items-center gap-2">
               <!-- View on Map button -->
               <a
-                href={`/map?city=${encodeURIComponent(hotel.city)}`}
+                href={`/map?hotel=${hotel.slug}${hotel.latitude && hotel.longitude ? `&lat=${hotel.latitude}&lng=${hotel.longitude}` : `&city=${encodeURIComponent(hotel.city)}`}`}
                 class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-200 bg-teal-50 hover:bg-teal-100 transition-colors text-sm font-medium text-teal-700"
                 title="View on Map"
               >
@@ -265,7 +322,7 @@ function renderStars(rating: number) {
             </div>
           </div>
 
-          {(avgRating > 0 || (hotel.rating && hotel.rating <= 5)) && (
+          {(avgRating > 0 || (hotel.rating > 0 && hotel.rating <= 5)) && (
             <div class="flex items-center gap-2 mb-3">
               <span class="text-yellow-500 text-lg tracking-wide">{renderStars(avgRating > 0 ? avgRating : hotel.rating || 0)}</span>
               <span class="text-sm text-gray-500">{Math.min(avgRating > 0 ? avgRating : hotel.rating || 0, 5).toFixed(1)}</span>
@@ -337,9 +394,35 @@ function renderStars(rating: number) {
       <!-- Cancellation Policy -->
       <section class="mb-10">
         <h2 class="text-xl font-bold text-slate-900 mb-4">Cancellation Policy</h2>
-        <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-          {hotel.cancellation_policy || 'Please contact the hotel directly for cancellation policy details.'}
-        </div>
+        {(() => {
+          const hotelPolicy = hotel.cancellation_policy?.trim();
+          const planPolicies = [...new Set(
+            plans.map((p: any) => (p.cancellation_policy || '').trim()).filter(Boolean)
+          )];
+          if (hotelPolicy) {
+            return (
+              <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                {hotelPolicy}
+              </div>
+            );
+          } else if (planPolicies.length > 0) {
+            return (
+              <div class="space-y-3">
+                {planPolicies.map((p: string) => (
+                  <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                    {p}
+                  </div>
+                ))}
+              </div>
+            );
+          } else {
+            return (
+              <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed">
+                Please contact the hotel directly for cancellation policy details.
+              </div>
+            );
+          }
+        })()}
       </section>
 
       <!-- Available Plans Section -->
@@ -348,51 +431,91 @@ function renderStars(rating: number) {
           <h2 class="text-xl font-bold text-slate-900 mb-4">
             {t('hotel.available_plans', locale)}
           </h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {plans.map((plan: any) => {
-              const planName = locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name;
-              const timeSlot = plan.check_in_time && plan.check_out_time ? `${plan.check_in_time} - ${plan.check_out_time}` : '';
-              const bookingLink = localePath(`/booking/${plan.id}`, locale);
+          {roomTypes.map(rt => {
+              const rtImageUrl = (plansByRoomType[rt][0] as any)?.room_type_image_url || '';
+              const rtImages = imagesByRoomType[rt] || (rtImageUrl ? [rtImageUrl] : []);
               return (
-                <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow duration-200">
-                  <h3 class="text-base font-semibold text-gray-900 leading-snug mb-3">{planName}</h3>
-                  <p class="text-[#45A2C1] font-bold text-xl mb-3">
-                    ${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
-                  </p>
-                  <div class="space-y-1.5 mb-4">
-                    {timeSlot && (
-                      <div class="flex items-center text-sm text-gray-600">
-                        <svg class="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                        </svg>
-                        <span>{timeSlot}</span>
-                      </div>
-                    )}
-                    {plan.max_guests && (
-                      <div class="flex items-center text-sm text-gray-600">
-                        <svg class="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
-                        </svg>
-                        <span>{t('hotel.max_guests', locale)}: {plan.max_guests} {t('hotel.guests_unit', locale)}</span>
-                      </div>
-                    )}
-                    {plan.cancellation_hours === 0 ? (
-                      <div class="inline-flex items-center gap-1 text-xs font-medium bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                        ❌ Non-refundable
-                      </div>
-                    ) : (
-                      <div class="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                        ✅ Free cancellation up to {plan.cancellation_hours ?? 24}h before check-in
+              <div class="mb-8">
+                {rt && (
+                  <div class="mb-3 pb-2 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2 mb-3">
+                      <svg class="w-5 h-5 text-teal-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                      </svg>
+                      {rt}
+                    </h3>
+                    {rtImages.length > 0 && (
+                      <div class="flex gap-2 overflow-x-auto pb-2 mb-1">
+                        {rtImages.map((url: string, i: number) => (
+                          <img
+                            src={url}
+                            alt={`${rt} ${i + 1}`}
+                            class="flex-shrink-0 h-40 w-60 object-cover rounded-lg hover:opacity-90 transition-opacity"
+                            loading="lazy"
+                          />
+                        ))}
                       </div>
                     )}
                   </div>
-                  <a href={bookingLink} class="block w-full text-center bg-[#45A2C1] text-white font-medium py-2.5 rounded-lg hover:bg-[#3891AE] transition-colors duration-200">
-                    {t('hotel.book_now', locale)}
-                  </a>
+                )}
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {plansByRoomType[rt].map((plan: any) => {
+                    const planName = locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name;
+                    const timeSlot = plan.check_in_time && plan.check_out_time ? `${plan.check_in_time} - ${plan.check_out_time}` : '';
+                    const bookingLink = localePath(`/booking/${plan.id}`, locale);
+                    return (
+                      <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow duration-200">
+                        <h3 class="text-base font-semibold text-gray-900 leading-snug mb-3">{planName}</h3>
+                        <p class="text-[#45A2C1] font-bold text-xl mb-3">
+                          <span data-usd={plan.price_usd}>${plan.price_usd}</span> <span class="text-sm font-normal text-gray-500" data-currency-label>USD</span>
+                        </p>
+                        <div class="space-y-1.5 mb-4">
+                          {timeSlot && (
+                            <div class="flex items-center text-sm text-gray-600">
+                              <svg class="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                              </svg>
+                              <span>{timeSlot}</span>
+                            </div>
+                          )}
+                          {plan.max_guests && (
+                            <div class="flex items-center text-sm text-gray-600">
+                              <svg class="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                              </svg>
+                              <span>{t('hotel.max_guests', locale)}: {plan.max_guests} {t('hotel.guests_unit', locale)}</span>
+                            </div>
+                          )}
+                        </div>
+                        {/* Date picker + Book Now */}
+                        <div class="mb-3">
+                          <label class="block text-xs text-gray-500 mb-1">
+                            {locale === 'ja' ? '日付を選択' : 'Select Date'} <span class="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            class="plan-date-input w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none"
+                            placeholder={locale === 'ja' ? '日付を選択してください' : 'Select a date'}
+                            data-legend="true"
+                            readonly
+                            data-plan-id={plan.id}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          class="book-now-btn block w-full text-center bg-[#45A2C1] text-white font-medium py-2.5 rounded-lg hover:bg-[#3891AE] transition-colors duration-200"
+                          data-plan-id={plan.id}
+                          data-href={bookingLink}
+                        >
+                          {t('hotel.book_now', locale)}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
+              </div>
               );
             })}
-          </div>
         </section>
       )}
 
@@ -426,6 +549,34 @@ function renderStars(rating: number) {
           </div>
         </section>
       )}
+      {/* Nearby hotels */}
+      {nearbyHotels.length > 0 && (
+        <section class="max-w-5xl mx-auto px-4 py-10 border-t border-gray-100">
+          <h2 class="text-xl font-bold text-gray-900 mb-5">
+            {locale === 'ja' ? `${hotel.city}の他のホテル` : `More Hotels in ${hotel.city}`}
+          </h2>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {nearbyHotels.map((h: any) => (
+              <a href={localePath(`/hotel/${h.slug}`, locale)} class="group block rounded-xl overflow-hidden border border-gray-100 hover:shadow-md transition-shadow">
+                <div class="aspect-video bg-slate-100 overflow-hidden">
+                  <img
+                    src={h.thumbnail_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=70&fm=webp'}
+                    alt={h.name}
+                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    onerror="this.src='https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=70&fm=webp'"
+                  />
+                </div>
+                <div class="p-3">
+                  <p class="text-sm font-semibold text-gray-900 truncate">{h.name}</p>
+                  <p class="text-xs text-gray-500 mt-0.5">{h.city}</p>
+                  {h.min_price && <p class="text-sm font-bold text-teal-600 mt-1">from ${h.min_price}</p>}
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   ) : (
     <!-- 404: Hotel Not Found -->
@@ -447,17 +598,119 @@ function renderStars(rating: number) {
 
 </Layout>
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+<style is:global>
+  /* ブロック済み日付（ddh-blocked クラスを付与） — 予約不可を明確に表示 */
+  .flatpickr-day.ddh-blocked,
+  .flatpickr-day.ddh-blocked:hover {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    opacity: 1 !important;
+    cursor: not-allowed !important;
+    position: relative;
+    text-decoration: line-through !important;
+    border: 1px solid #fca5a5 !important;
+    border-radius: 4px !important;
+  }
+  /* × マーク */
+  .flatpickr-day.ddh-blocked::before {
+    content: '✕';
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #dc2626;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+</style>
 <script is:inline>
 (function() {
+  // Gallery thumbnails
   var mainImg = document.getElementById('gallery-main');
-  if (!mainImg) return;
-  document.querySelectorAll('.gallery-thumb').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      mainImg.src = this.dataset.src;
-      document.querySelectorAll('.gallery-thumb').forEach(function(b) {
-        b.className = b.className.replace('border-teal-500', 'border-transparent');
+  if (mainImg) {
+    document.querySelectorAll('.gallery-thumb').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        mainImg.src = this.dataset.src;
+        document.querySelectorAll('.gallery-thumb').forEach(function(b) {
+          b.className = b.className.replace('border-teal-500', 'border-transparent');
+        });
+        this.className = this.className.replace('border-transparent', 'border-teal-500');
       });
-      this.className = this.className.replace('border-transparent', 'border-teal-500');
+    });
+  }
+
+  // Load flatpickr and init date inputs with blocked dates
+  var fpScript = document.createElement('script');
+  fpScript.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+  fpScript.onload = function() {
+    if (typeof flatpickr === 'undefined') return;
+
+    document.querySelectorAll('.plan-date-input').forEach(function(input) {
+      var planId = input.dataset.planId;
+      // Fetch blocked dates for this plan
+      fetch('/api/availability?planId=' + planId)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var blocked = data.blocked || [];
+          var isJa = document.documentElement.lang === 'ja';
+          flatpickr(input, {
+            minDate: 'today',
+            dateFormat: 'Y-m-d',
+            locale: isJa ? 'ja' : 'en',
+            disable: blocked,
+            onDayCreate: function(dObj, dStr, fp, dayElem) {
+              var _d = dayElem.dateObj;
+              var dateStr = _d.getFullYear() + '-' + String(_d.getMonth()+1).padStart(2,'0') + '-' + String(_d.getDate()).padStart(2,'0');
+              if (blocked.includes(dateStr)) {
+                dayElem.classList.add('ddh-blocked');
+                dayElem.title = isJa ? '予約不可' : 'Unavailable';
+              }
+            },
+            onOpen: function(selectedDates, dateStr, instance) {
+              // 凡例を1回だけ追加
+              var cal = instance.calendarContainer;
+              if (cal && !cal.querySelector('.ddh-cal-legend') && blocked.length > 0) {
+                var legend = document.createElement('div');
+                legend.className = 'ddh-cal-legend';
+                legend.style.cssText = 'padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:11px;color:#6b7280;border-top:1px solid #f3f4f6;';
+                legend.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#fee2e2;border:1px solid #fca5a5;border-radius:4px;color:#dc2626;font-size:10px;">✕</span>'
+                  + '<span>' + (isJa ? '予約不可' : 'Unavailable') + '</span>'
+                  + '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#fff;border:1px solid #d1d5db;border-radius:4px;margin-left:8px;"></span>'
+                  + '<span>' + (isJa ? '予約可能' : 'Available') + '</span>';
+                cal.appendChild(legend);
+              }
+            }
+          });
+        })
+        .catch(function() {
+          // フォールバック: blocked dates なしで初期化
+          flatpickr(input, {
+            minDate: 'today',
+            dateFormat: 'Y-m-d',
+            locale: document.documentElement.lang === 'ja' ? 'ja' : 'en'
+          });
+        });
+    });
+  };
+  document.head.appendChild(fpScript);
+
+  // Book Now button handler
+  document.querySelectorAll('.book-now-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var planId = btn.dataset.planId;
+      var dateInput = document.querySelector('.plan-date-input[data-plan-id="' + planId + '"]');
+      if (!dateInput || !dateInput.value) {
+        if (dateInput) {
+          dateInput.style.borderColor = '#ef4444';
+          dateInput.focus();
+        }
+        return;
+      }
+      window.location.href = btn.dataset.href + '?date=' + dateInput.value;
     });
   });
 })();

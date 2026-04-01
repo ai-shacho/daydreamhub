@@ -1,0 +1,219 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="物件掲載申込 - DayDreamHub" description="DayDreamHubにホテル・物件を掲載申込して、アジア全域の旅行者にアプローチしましょう。">
+
+<div class="bg-teal-50 py-10 sm:py-14">
+  <div class="max-w-2xl mx-auto px-4 sm:px-6 text-center">
+    <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-3">オーナー申込フォーム</h1>
+    <p class="text-gray-600">以下のフォームにご記入ください。内容確認後、掲載設定のためご連絡いたします。</p>
+  </div>
+</div>
+
+<div class="max-w-2xl mx-auto px-4 sm:px-6 py-10">
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+    <form id="owner-application-form" class="space-y-8">
+
+      <!-- 物件情報 -->
+      <div>
+        <h2 class="text-base font-semibold text-teal-700 uppercase tracking-wide mb-4 pb-2 border-b border-gray-100">物件情報</h2>
+        <div class="space-y-4">
+          <div>
+            <label for="hotel_name" class="block text-sm font-medium text-slate-700 mb-1.5">ホテル名 <span class="text-red-500">*</span></label>
+            <input id="hotel_name" name="hotel_name" type="text" required placeholder="ホテル・物件名を入力してください"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="booking_email" class="block text-sm font-medium text-slate-700 mb-1.5">予約管理用メールアドレス <span class="text-red-500">*</span></label>
+            <p class="text-xs text-gray-500 mb-1.5">このアドレスに予約通知を送信します。予約管理用メールアドレスをご入力ください。</p>
+            <input id="booking_email" name="booking_email" type="email" required placeholder="reservations@yourhotel.com"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="hotel_phone" class="block text-sm font-medium text-slate-700 mb-1.5">ホテル電話番号 <span class="text-red-500">*</span></label>
+            <p class="text-xs text-gray-500 mb-1.5">国番号を含めてご入力ください（例: +81-3-1234-5678）。</p>
+            <input id="hotel_phone" name="hotel_phone" type="tel" required placeholder="+81-3-1234-5678"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="site_url" class="block text-sm font-medium text-slate-700 mb-1.5">ウェブサイトURL <span class="text-gray-400">（任意）</span></label>
+            <p class="text-xs text-gray-500 mb-1.5">未入力の場合、フォームの電話番号でご連絡します。</p>
+            <input id="site_url" name="site_url" type="url" placeholder="https://yourhotel.com"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="management_company" class="block text-sm font-medium text-slate-700 mb-1.5">運営会社名 <span class="text-gray-400">（任意）</span></label>
+            <input id="management_company" name="management_company" type="text" placeholder="法人の場合は会社名を入力"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 担当者情報 -->
+      <div>
+        <h2 class="text-base font-semibold text-teal-700 uppercase tracking-wide mb-4 pb-2 border-b border-gray-100">担当者情報</h2>
+        <div class="space-y-4">
+          <div>
+            <label for="contact_name" class="block text-sm font-medium text-slate-700 mb-1.5">担当者名 <span class="text-red-500">*</span></label>
+            <input id="contact_name" name="contact_name" type="text" required placeholder="お名前（フルネーム）"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="contact_email" class="block text-sm font-medium text-slate-700 mb-1.5">担当者メールアドレス <span class="text-red-500">*</span></label>
+            <input id="contact_email" name="contact_email" type="email" required placeholder="contact@example.com"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="contact_phone" class="block text-sm font-medium text-slate-700 mb-1.5">担当者直通電話 <span class="text-red-500">*</span></label>
+            <input id="contact_phone" name="contact_phone" type="tel" required placeholder="+81-90-1234-5678"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="contact_method" class="block text-sm font-medium text-slate-700 mb-1.5">メール以外の連絡手段 <span class="text-red-500">*</span></label>
+            <select id="contact_method" name="contact_method" required
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all bg-white">
+              <option value="">選択してください</option>
+              <option value="WhatsApp">WhatsApp</option>
+              <option value="Messenger">Messenger</option>
+              <option value="LINE">LINE</option>
+              <option value="Other SNS">その他SNS</option>
+              <option value="Phone">電話のみ</option>
+            </select>
+          </div>
+          <div>
+            <label for="messenger_url" class="block text-sm font-medium text-slate-700 mb-1.5">Messenger URL</label>
+            <input id="messenger_url" name="messenger_url" type="url" placeholder="https://m.me/yourpage"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="whatsapp_url" class="block text-sm font-medium text-slate-700 mb-1.5">WhatsApp URL</label>
+            <input id="whatsapp_url" name="whatsapp_url" type="url" placeholder="https://wa.me/your_number"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="line_url" class="block text-sm font-medium text-slate-700 mb-1.5">LINE URL</label>
+            <input id="line_url" name="line_url" type="url" placeholder="https://line.me/ti/p/..."
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div>
+            <label for="other_sns_url" class="block text-sm font-medium text-slate-700 mb-1.5">その他SNS URL</label>
+            <input id="other_sns_url" name="other_sns_url" type="url" placeholder="https://..."
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+        </div>
+      </div>
+
+      <!-- DayDreamHubからの支払い -->
+      <div>
+        <h2 class="text-base font-semibold text-teal-700 uppercase tracking-wide mb-4 pb-2 border-b border-gray-100">DayDreamHubからの支払い方法</h2>
+        <div class="space-y-4">
+          <div>
+            <label for="payment_method" class="block text-sm font-medium text-slate-700 mb-1.5">希望する支払い方法 <span class="text-red-500">*</span></label>
+            <select id="payment_method" name="payment_method" required
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all bg-white">
+              <option value="">選択してください</option>
+              <option value="PayPal">PayPal</option>
+              <option value="Wise">Wise</option>
+              <option value="Payoneer">Payoneer</option>
+              <option value="VCC">VCC（バーチャルクレジットカード）</option>
+            </select>
+          </div>
+          <div id="payment-account-fields" class="space-y-4">
+            <div>
+              <label for="paypal_account" class="block text-sm font-medium text-slate-700 mb-1.5">PayPalアカウント</label>
+              <input id="paypal_account" name="paypal_account" type="text" placeholder="PayPalのメールアドレスまたはアカウントID"
+                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            </div>
+            <div>
+              <label for="wise_account" class="block text-sm font-medium text-slate-700 mb-1.5">Wiseアカウント</label>
+              <input id="wise_account" name="wise_account" type="text" placeholder="WiseのメールアドレスまたはアカウントID"
+                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            </div>
+            <div>
+              <label for="payoneer_account" class="block text-sm font-medium text-slate-700 mb-1.5">Payoneerアカウント</label>
+              <input id="payoneer_account" name="payoneer_account" type="text" placeholder="PayoneerのメールアドレスまたはアカウントID"
+                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            </div>
+          </div>
+          <div id="vcc-notice" class="hidden bg-teal-50 border border-teal-200 text-teal-700 text-sm rounded-lg px-4 py-3">
+            ✅ VCC（バーチャルクレジットカード）を選択しました。予約リクエストを承認いただいた後、支払い処理用のVCC情報をお送りします。
+          </div>
+        </div>
+      </div>
+
+      <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3"></div>
+      <div id="form-success" class="hidden bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3"></div>
+
+      <button type="submit" id="submit-btn"
+        class="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 rounded-xl transition-colors text-base">
+        申込を送信する
+      </button>
+
+      <p class="text-center text-xs text-gray-400">
+        送信することで、
+        <a href="/ja/privacy-policy" class="text-teal-600 hover:underline">プライバシーポリシー</a>および
+        <a href="/ja/terms" class="text-teal-600 hover:underline">利用規約</a>に同意したものとみなされます。
+      </p>
+    </form>
+  </div>
+</div>
+
+</Layout>
+
+<script is:inline>
+// VCCトグル
+document.getElementById('payment_method')?.addEventListener('change', function () {
+  const isVCC = this.value === 'VCC';
+  document.getElementById('payment-account-fields').style.display = isVCC ? 'none' : '';
+  document.getElementById('vcc-notice').className = isVCC
+    ? 'block bg-teal-50 border border-teal-200 text-teal-700 text-sm rounded-lg px-4 py-3'
+    : 'hidden bg-teal-50 border border-teal-200 text-teal-700 text-sm rounded-lg px-4 py-3';
+});
+
+document.getElementById('owner-application-form')?.addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  const errEl = document.getElementById('form-error');
+  const successEl = document.getElementById('form-success');
+
+  errEl.className = 'hidden';
+  successEl.className = 'hidden';
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+
+  const fields = [
+    'hotel_name', 'booking_email', 'hotel_phone', 'site_url', 'management_company',
+    'contact_name', 'contact_email', 'contact_phone', 'contact_method',
+    'messenger_url', 'whatsapp_url', 'line_url', 'other_sns_url',
+    'payment_method', 'paypal_account', 'wise_account', 'payoneer_account',
+  ];
+  const body = {};
+  for (const f of fields) {
+    body[f] = document.getElementById(f)?.value || '';
+  }
+
+  try {
+    const res = await fetch('/api/owner-application', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      successEl.className = 'block bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3';
+      successEl.textContent = '✅ 申込を受け付けました。近日中にご連絡いたします。';
+      document.getElementById('owner-application-form').reset();
+    } else {
+      errEl.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
+      errEl.textContent = data.error || '送信に失敗しました。もう一度お試しください。';
+    }
+  } catch {
+    errEl.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3';
+    errEl.textContent = '接続エラーが発生しました。もう一度お試しください。';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '申込を送信する';
+  }
+});
+</script>

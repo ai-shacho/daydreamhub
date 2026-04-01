@@ -1,0 +1,277 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const runtime = (Astro.locals as any).runtime;
+const db = runtime?.env?.DB;
+
+let hotels: any[] = [];
+let allCities: string[] = [];
+
+if (db) {
+  try {
+    const result = await db.prepare(`
+      SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country,
+             h.thumbnail_url, h.categories, h.latitude, h.longitude,
+             MIN(p.price_usd) as min_price
+      FROM hotels h
+      LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+      WHERE h.is_active = 1
+      GROUP BY h.id
+      ORDER BY h.name
+    `).all();
+    hotels = result?.results || [];
+
+    const cityResult = await db.prepare(
+      "SELECT DISTINCT city FROM hotels WHERE city != '' AND is_active = 1 ORDER BY city"
+    ).all();
+    allCities = (cityResult?.results || []).map((r: any) => r.city);
+  } catch(e) {
+    console.error('Map DB error:', e);
+  }
+}
+
+const cityCoords: Record<string, [number, number]> = {"Bangkok": [13.7563, 100.5018], "Bangkok, Thailand": [13.7563, 100.5018], "Singapore": [1.3521, 103.8198], "Kuala Lumpur": [3.139, 101.6869], "Petaling Jaya": [3.1073, 101.6067], "Jakarta": [-6.2088, 106.8456], "Bali": [-8.3405, 115.092], "Ubud": [-8.5069, 115.2625], "Seminyak": [-8.6913, 115.1683], "Denpasar": [-8.6705, 115.2126], "Phuket": [7.8804, 98.3923], "Koh Samui": [9.512, 100.0136], "Manila": [14.5995, 120.9842], "Makati": [14.5547, 121.0244], "Cebu": [10.3157, 123.8854], "Cebu City": [10.3157, 123.8854], "Ho Chi Minh City": [10.8231, 106.6297], "Ho Chi Minh": [10.8231, 106.6297], "Hanoi": [21.0285, 105.8542], "Da Nang": [16.0544, 108.2022], "Vientiane": [17.9757, 102.6331], "Luang Prabang": [19.8856, 102.1347], "Hong Kong": [22.3193, 114.1694], "Tokyo": [35.6762, 139.6503], "Kyoto": [35.0116, 135.7681], "Osaka": [34.6937, 135.5023], "Fukuoka": [33.5902, 130.4017], "New Delhi": [28.6139, 77.209], "Colombo": [6.9271, 79.8612], "Tashkent": [41.2995, 69.2401], "Tbilisi": [41.7151, 44.8271], "Almaty": [43.222, 76.8512], "Dubai": [25.2048, 55.2708], "Doha": [25.2854, 51.531], "Manama": [26.2285, 50.586], "Riyadh": [24.6877, 46.7219], "Nairobi": [-1.2921, 36.8219], "Kigali": [-1.9403, 29.8739], "Abuja": [9.0579, 7.4951], "Cairo": [30.0444, 31.2357], "Cape Town": [-33.9249, 18.4241], "London": [51.5074, -0.1278], "Paris": [48.8566, 2.3522], "Berlin": [52.52, 13.405], "Amsterdam": [52.3676, 4.9041], "Rome": [41.9028, 12.4964], "Barcelona": [41.3851, 2.1734], "Istanbul": [41.0082, 28.9784], "Prague": [50.0755, 14.4378], "Sydney": [-33.8688, 151.2093], "Melbourne": [-37.8136, 144.9631], "Auckland": [-36.8485, 174.7633], "New York": [40.7128, -74.006], "Los Angeles": [34.0522, -118.2437], "Toronto": [43.6532, -79.3832], "Vancouver": [49.2827, -123.1207]};
+
+const dbCityCounts: Record<string, number> = {};
+for (const h of hotels) {
+  dbCityCounts[h.city] = (dbCityCounts[h.city] || 0) + 1;
+}
+
+const citiesArray = Object.entries(dbCityCounts)
+  .map(([name, count]) => {
+    const coords = cityCoords[name];
+    if (!coords) return null;
+    return {
+      name,
+      nameDisplay: name,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      country: hotels.find((h: any) => h.city === name)?.country || '',
+      hotelCount: count,
+      lat: coords[0],
+      lng: coords[1],
+    };
+  })
+  .filter(Boolean);
+
+const mapHotels = hotels.map((h: any) => ({
+  id: h.id,
+  name: h.name_ja || h.name,
+  slug: h.slug,
+  city: h.city,
+  country: h.country,
+  lat: h.latitude || null,
+  lng: h.longitude || null,
+  thumbnail: h.thumbnail_url || '',
+  categories: h.categories || '[]',
+  minPrice: h.min_price || null,
+}));
+
+const mapData = {
+  hotels: mapHotels,
+  cities: citiesArray,
+  cityCoords,
+};
+
+const translations = {
+  viewDetails: '詳細を見る',
+  fromPrice: '${price}~',
+  hotelsCount: '{count}件のホテル',
+  hotelFrom: '料金',
+};
+---
+
+<Layout title="ホテルマップ - DayDreamHub" description="インタラクティブマップでデイユースホテルを探す。都市・カテゴリーで絞り込み。">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { width: 100%; height: calc(100vh - 64px); }
+    .leaflet-container { font-family: inherit; }
+  </style>
+
+  <div class="relative" style="height: calc(100vh - 64px); min-height: 500px;">
+    <!-- Filter Panel -->
+    <div class="absolute top-4 left-4 z-[1000] bg-white rounded-xl shadow-lg p-4 w-72 max-w-[calc(100vw-2rem)]" id="filter-panel">
+      <h2 class="text-lg font-bold text-teal-700 mb-3">ホテルマップ</h2>
+
+      <!-- City Filter -->
+      <div class="mb-3">
+        <label for="filter-city" class="block text-sm font-medium text-slate-600 mb-1">都市で絞り込む</label>
+        <select id="filter-city" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+          <option value="">すべての都市</option>
+          {allCities.map((city: string) => (
+            <option value={city}>{city}</option>
+          ))}
+        </select>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="mb-3">
+        <label for="filter-category" class="block text-sm font-medium text-slate-600 mb-1">カテゴリー</label>
+        <select id="filter-category" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+          <option value="">すべてのカテゴリー</option>
+          <option value="daycation">デイケーション</option>
+          <option value="for_couple">カップル向け</option>
+          <option value="for_work">ワーク向け</option>
+          <option value="workspace">ワークスペース</option>
+          <option value="luxury">ラグジュアリー</option>
+          <option value="personal_time">パーソナルタイム</option>
+          <option value="transit_use">トランジット／乗り継ぎ</option>
+        </select>
+      </div>
+
+      <!-- Results count -->
+      <div id="results-count" class="text-xs text-slate-500"></div>
+    </div>
+
+    <!-- Mobile toggle button -->
+    <button id="toggle-panel" class="absolute top-4 right-4 z-[1000] lg:hidden bg-white shadow-lg rounded-full w-10 h-10 flex items-center justify-center text-teal-700 hover:bg-teal-50 transition-colors" aria-label="フィルターパネルを切り替え">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+      </svg>
+    </button>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+  </div>
+</Layout>
+
+<script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script is:inline define:vars={{ mapData, translations }}>
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+      const map = L.map('map', { zoomControl: true }).setView([13.7, 105.0], 5);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        maxZoom: 19,
+      }).addTo(map);
+
+      const hotelIcon = L.divIcon({
+        html: '<div style="background-color: #0f766e; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V7a2 2 0 012-2h14a2 2 0 012 2v14"/><path d="M3 11h18"/><path d="M9 21V11"/><path d="M15 21V11"/></svg></div>',
+        className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32],
+      });
+
+      const cityIcon = L.divIcon({
+        html: '<div style="background-color: #f59e0b; color: white; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg></div>',
+        className: '', iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36],
+      });
+
+      let hotelMarkers = [];
+      let cityMarkers = [];
+      const hotelLayer = L.layerGroup().addTo(map);
+      const cityLayer = L.layerGroup().addTo(map);
+      const basePath = '/ja';
+
+      function createHotelMarkers(filteredHotels) {
+        hotelLayer.clearLayers();
+        hotelMarkers = [];
+        for (const hotel of filteredHotels) {
+          let lat = hotel.lat;
+          let lng = hotel.lng;
+          if (!lat || !lng) {
+            const coords = mapData.cityCoords[hotel.city];
+            if (coords) {
+              lat = coords[0] + (Math.random() - 0.5) * 0.01;
+              lng = coords[1] + (Math.random() - 0.5) * 0.01;
+            }
+          }
+          if (!lat || !lng) continue;
+          const priceStr = hotel.minPrice ? translations.fromPrice.replace('${price}', hotel.minPrice) : '';
+          const thumbnailHtml = hotel.thumbnail
+            ? '<img src="' + hotel.thumbnail + '" alt="' + hotel.name + '" style="width:100%;height:100px;object-fit:cover;border-radius:8px 8px 0 0;margin-bottom:8px;" />' : '';
+          const popupContent = '<div style="min-width:200px;max-width:260px;font-family:system-ui,sans-serif;">' +
+            thumbnailHtml + '<div style="padding:0 4px 4px;">' +
+            '<h3 style="margin:0 0 4px;font-size:14px;font-weight:700;color:#0f766e;">' + hotel.name + '</h3>' +
+            '<p style="margin:0 0 4px;font-size:12px;color:#64748b;">' + hotel.city + ', ' + hotel.country + '</p>' +
+            (priceStr ? '<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#d97706;">' + priceStr + '</p>' : '') +
+            '<a href="' + basePath + '/hotel/' + hotel.slug + '" style="display:inline-block;background:#0f766e;color:white;padding:6px 16px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">' + translations.viewDetails + '</a>' +
+            '</div></div>';
+          const marker = L.marker([lat, lng], { icon: hotelIcon }).bindPopup(popupContent, { maxWidth: 280 });
+          marker._hotelData = hotel;
+          hotelMarkers.push(marker);
+          hotelLayer.addLayer(marker);
+        }
+      }
+
+      function createCityMarkers(filterCity, filterCategory) {
+        cityLayer.clearLayers();
+        cityMarkers = [];
+        for (const city of mapData.cities) {
+          if (!city.lat || !city.lng) continue;
+          if (filterCity && city.name !== filterCity) continue;
+          let cityHotelCount = 0;
+          for (const hotel of mapData.hotels) {
+            if (hotel.city !== city.name) continue;
+            if (filterCategory) {
+              try { const cats = JSON.parse(hotel.categories || '[]'); if (!cats.includes(filterCategory)) continue; } catch { continue; }
+            }
+            cityHotelCount++;
+          }
+          const hasHotelWithCoords = mapData.hotels.some(h => h.city === city.name && h.lat && h.lng);
+          if (hasHotelWithCoords) continue;
+          if (cityHotelCount === 0 && !filterCity) continue;
+          const countText = translations.hotelsCount.replace('{count}', cityHotelCount);
+          const popupContent = '<div style="min-width:160px;font-family:system-ui,sans-serif;padding:4px;">' +
+            '<h3 style="margin:0 0 4px;font-size:15px;font-weight:700;color:#d97706;">' + city.nameDisplay + '</h3>' +
+            '<p style="margin:0 0 4px;font-size:12px;color:#64748b;">' + city.country + '</p>' +
+            '<p style="margin:0 0 8px;font-size:13px;color:#334155;">' + countText + '</p>' +
+            '<a href="' + basePath + '/city/' + city.slug + '" style="display:inline-block;background:#f59e0b;color:white;padding:6px 16px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">' + translations.viewDetails + '</a>' +
+            '</div>';
+          const marker = L.marker([city.lat, city.lng], { icon: cityIcon }).bindPopup(popupContent, { maxWidth: 240 });
+          cityMarkers.push(marker);
+          cityLayer.addLayer(marker);
+        }
+      }
+
+      function applyFilters() {
+        const cityFilter = document.getElementById('filter-city').value;
+        const categoryFilter = document.getElementById('filter-category').value;
+        let filtered = mapData.hotels;
+        if (cityFilter) filtered = filtered.filter(h => h.city === cityFilter);
+        if (categoryFilter) {
+          filtered = filtered.filter(h => {
+            try { const cats = JSON.parse(h.categories || '[]'); return cats.includes(categoryFilter); } catch { return false; }
+          });
+        }
+        createHotelMarkers(filtered);
+        createCityMarkers(cityFilter, categoryFilter);
+        const countEl = document.getElementById('results-count');
+        if (countEl) countEl.textContent = translations.hotelsCount.replace('{count}', filtered.length);
+        if (cityFilter) {
+          const coords = mapData.cityCoords[cityFilter];
+          if (coords) map.setView([coords[0], coords[1]], 12, { animate: true });
+        }
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const cityParam = urlParams.get('city');
+      if (cityParam) {
+        const citySelect = document.getElementById('filter-city');
+        const options = Array.from(citySelect.options);
+        const match = options.find(o => o.value.toLowerCase() === cityParam.toLowerCase());
+        if (match) citySelect.value = match.value;
+      }
+
+      createHotelMarkers(mapData.hotels);
+      createCityMarkers('', '');
+      document.getElementById('results-count').textContent =
+        translations.hotelsCount.replace('{count}', mapData.hotels.length);
+
+      if (cityParam) applyFilters();
+
+      document.getElementById('filter-city').addEventListener('change', applyFilters);
+      document.getElementById('filter-category').addEventListener('change', applyFilters);
+
+      const toggleBtn = document.getElementById('toggle-panel');
+      const panel = document.querySelector('.absolute.top-4.left-4');
+      let panelVisible = true;
+      if (toggleBtn && panel) {
+        if (window.innerWidth < 768) { panel.classList.add('hidden'); panelVisible = false; }
+        toggleBtn.addEventListener('click', function() {
+          panelVisible = !panelVisible;
+          if (panelVisible) panel.classList.remove('hidden');
+          else panel.classList.add('hidden');
+        });
+      }
+    });
+})();
+</script>

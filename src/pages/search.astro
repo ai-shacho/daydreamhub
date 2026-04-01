@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { getAirportCoords, haversineKm } from '../lib/airports';
+import { getAirportCoords, haversineKm, nearestAirport } from '../lib/airports';
 
 // Get D1 database binding
 const DB = (Astro.locals as any).runtime?.env?.DB;
@@ -14,7 +14,8 @@ const country = url.searchParams.get('country') || '';
 const ratingMin = url.searchParams.get('rating') || '';
 const amenityFilter = url.searchParams.get('amenity') || '';
 const cityFilter = url.searchParams.get('city') || '';
-const sortBy = url.searchParams.get('sort') || 'default'; // default | price_asc | price_desc | airport_distance
+const sortBy = url.searchParams.get('sort') || 'default'; // default | price_asc | price_desc | airport_distance | rating_desc
+const checkinParam = url.searchParams.get('checkin') || '';
 const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
 const perPage = 12;
 const offset = (page - 1) * perPage;
@@ -81,7 +82,9 @@ if (DB) {
       ? 'ORDER BY min_price ASC NULLS LAST'
       : sortBy === 'price_desc'
         ? 'ORDER BY min_price DESC NULLS LAST'
-        : 'ORDER BY h.id DESC';
+        : sortBy === 'rating_desc'
+          ? 'ORDER BY h.rating DESC NULLS LAST'
+          : 'ORDER BY h.rating DESC NULLS LAST, min_price ASC NULLS LAST';
 
     let fetchLimit = perPage;
     let fetchOffset = offset;
@@ -103,11 +106,85 @@ if (DB) {
     ).bind(...params, fetchLimit, fetchOffset).all();
     let allResults: any[] = result?.results || [];
 
+    // Inline airport list & nearest-airport calc (avoid module bundling issues)
+    const _airports = [
+      // Southeast Asia
+      { code:'BKK', lat:13.6811, lng:100.7472 }, { code:'DMK', lat:13.9126, lng:100.6067 },
+      { code:'DPS', lat:-8.7482, lng:115.1671 }, { code:'CGK', lat:-6.1256, lng:106.6559 },
+      { code:'KUL', lat:2.7456, lng:101.7072 },  { code:'SIN', lat:1.3644, lng:103.9915 },
+      { code:'MNL', lat:14.5086, lng:121.0194 }, { code:'CEB', lat:10.3075, lng:123.9792 },
+      { code:'SGN', lat:10.8188, lng:106.6520 }, { code:'HAN', lat:21.2187, lng:105.8072 },
+      { code:'DAD', lat:16.0439, lng:108.1993 }, { code:'HKT', lat:8.1132, lng:98.3161 },
+      { code:'USM', lat:9.5479, lng:100.0623 },  { code:'PNH', lat:11.5466, lng:104.8440 },
+      { code:'RGN', lat:16.9073, lng:96.1332 },
+      // East Asia
+      { code:'HND', lat:35.5494, lng:139.7798 }, { code:'NRT', lat:35.7720, lng:140.3929 },
+      { code:'KIX', lat:34.4347, lng:135.2440 }, { code:'ICN', lat:37.4691, lng:126.4510 },
+      { code:'PEK', lat:40.0799, lng:116.6031 }, { code:'PVG', lat:31.1443, lng:121.8083 },
+      { code:'HKG', lat:22.3080, lng:113.9185 }, { code:'TPE', lat:25.0777, lng:121.2328 },
+      // South Asia
+      { code:'BOM', lat:19.0896, lng:72.8656 },  { code:'DEL', lat:28.5562, lng:77.1000 },
+      { code:'CMB', lat:7.1806, lng:79.8841 },   { code:'CCU', lat:22.6547, lng:88.4467 },
+      { code:'MAA', lat:12.9941, lng:80.1709 },
+      // Middle East
+      { code:'DXB', lat:25.2528, lng:55.3644 },  { code:'AUH', lat:24.4330, lng:54.6511 },
+      { code:'DOH', lat:25.2731, lng:51.6081 },  { code:'BAH', lat:26.2708, lng:50.6336 },
+      { code:'KWI', lat:29.2267, lng:47.9689 },  { code:'MCT', lat:23.5933, lng:58.2844 },
+      { code:'AMM', lat:31.7226, lng:35.9932 },  { code:'BEY', lat:33.8209, lng:35.4884 },
+      // Africa
+      { code:'NBO', lat:-1.3192, lng:36.9275 },  { code:'CAI', lat:30.1219, lng:31.4056 },
+      { code:'JNB', lat:-26.1392, lng:28.2460 }, { code:'CPT', lat:-33.9648, lng:18.6017 },
+      { code:'LOS', lat:6.5774, lng:3.3215 },    { code:'ABV', lat:9.0068, lng:7.2632 },
+      { code:'ACC', lat:5.6052, lng:-0.1668 },   { code:'DKR', lat:14.7397, lng:-17.4902 },
+      { code:'CMN', lat:33.3675, lng:-7.5900 },  { code:'TUN', lat:36.8510, lng:10.2272 },
+      { code:'ADD', lat:8.9779, lng:38.7993 },   { code:'DAR', lat:-6.8781, lng:39.2026 },
+      // Europe
+      { code:'LHR', lat:51.4775, lng:-0.4614 },  { code:'CDG', lat:49.0097, lng:2.5479 },
+      { code:'AMS', lat:52.3086, lng:4.7639 },   { code:'FRA', lat:50.0379, lng:8.5622 },
+      { code:'MAD', lat:40.4936, lng:-3.5668 },  { code:'FCO', lat:41.8003, lng:12.2389 },
+      { code:'IST', lat:41.2753, lng:28.7519 },  { code:'VIE', lat:48.1103, lng:16.5697 },
+      { code:'ZRH', lat:47.4647, lng:8.5492 },   { code:'BHX', lat:52.4539, lng:-1.7480 },
+      // Americas
+      { code:'JFK', lat:40.6413, lng:-73.7781 }, { code:'LAX', lat:33.9425, lng:-118.4081 },
+      { code:'ORD', lat:41.9742, lng:-87.9073 }, { code:'MIA', lat:25.7959, lng:-80.2870 },
+      { code:'YYZ', lat:43.6777, lng:-79.6248 }, { code:'YYC', lat:51.1315, lng:-114.0105 },
+      { code:'GRU', lat:-23.4356, lng:-46.4731 },{ code:'BOG', lat:4.7016, lng:-74.1469 },
+      { code:'MEX', lat:19.4363, lng:-99.0721 }, { code:'LIM', lat:-12.0219, lng:-77.1143 },
+      // Oceania
+      { code:'SYD', lat:-33.9399, lng:151.1753 },{ code:'MEL', lat:-37.6690, lng:144.8410 },
+      { code:'BNE', lat:-27.3842, lng:153.1175 },{ code:'AKL', lat:-37.0082, lng:174.7850 },
+      { code:'PER', lat:-31.9403, lng:115.9669 },
+    ];
+    function _hvKm(la1: number, lo1: number, la2: number, lo2: number): number {
+      const R = 6371, p = Math.PI / 180;
+      const dLa = (la2 - la1) * p;
+      const dLo = (lo2 - lo1) * p;
+      const sLa = Math.sin(dLa / 2);
+      const sLo = Math.sin(dLo / 2);
+      const a = sLa * sLa + Math.cos(la1 * p) * Math.cos(la2 * p) * sLo * sLo;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+    function _nearestAp(lat: number, lng: number) {
+      let best: {code:string;km:number}|null = null;
+      for (const ap of _airports) {
+        const km = _hvKm(lat, lng, ap.lat, ap.lng);
+        if (!best || km < best.km) best = {code:ap.code, km};
+      }
+      return best;
+    }
+
+    // Always compute nearest airport for each hotel from coordinates
+    allResults = allResults.map((h: any) => {
+      if (h.latitude == null || h.longitude == null) return { ...h, _airport_km: null, _airport_code: null };
+      const ap = _nearestAp(Number(h.latitude), Number(h.longitude));
+      return { ...h, _airport_km: ap?.km ?? null, _airport_code: ap?.code ?? null };
+    });
+
     if (isAirportSort) {
-      // Determine airport from location/city filter
+      // Sort by airport distance
       const targetCity = cityFilter || location;
       let airportCoords = getAirportCoords(targetCity);
-      // Fallback: use city of first result
       if (!airportCoords && allResults.length > 0) {
         airportCoords = getAirportCoords(allResults[0].city);
       }
@@ -122,10 +199,9 @@ if (DB) {
           }))
           .sort((a: any, b: any) => a._airport_km - b._airport_km);
       }
-      hotels = allResults.slice(offset, offset + perPage);
-    } else {
-      hotels = allResults;
     }
+
+    hotels = isAirportSort ? allResults.slice(offset, offset + perPage) : allResults;
 
     // Get filter options
     const countriesResult = await DB.prepare(
@@ -152,16 +228,9 @@ if (DB) {
   }
 }
 
-// Fallback property types — merge DB values with comprehensive defaults
-const fallbackPropertyTypes = ['Hotel', 'Villa', 'Resort', 'Hostel', 'Apartment', 'Guest House', 'B&B', 'Ryokan', 'Boutique Hotel', 'Cottage', 'Entire Home', 'Private Room', 'Shared Room'];
-if (allPropertyTypes.length === 0) {
-  allPropertyTypes = fallbackPropertyTypes;
-} else {
-  const dbSet = new Set(allPropertyTypes);
-  for (const ft of fallbackPropertyTypes) {
-    if (!dbSet.has(ft)) allPropertyTypes.push(ft);
-  }
-}
+// Fixed property types — matches "Search by Room Type" on the top page
+const fallbackPropertyTypes = ['Hotel', 'Villa', 'Resort', 'Apartment', 'Clinic', 'Spa', 'Wellness', 'Coworking Space', 'Cafe & Lounge', 'Hostel'];
+allPropertyTypes = fallbackPropertyTypes;
 
 const totalPages = Math.ceil(totalCount / perPage);
 
@@ -219,25 +288,40 @@ const regionGroups = [
 ];
 
 // Assign countries to their groups, leftover to Other
+// Case-insensitive matching: DB may store "japan" while region list has "Japan"
 function getGroupedCountries(available: string[]) {
-  const assigned = new Set<string>();
+  // Normalize: map lowercase → canonical display name (first seen wins)
+  const normalizeMap = new Map<string, string>();
+  for (const c of available) {
+    if (c) normalizeMap.set(c.toLowerCase(), c.charAt(0).toUpperCase() + c.slice(1));
+  }
+  const availableLower = new Set(normalizeMap.keys());
+
+  const assignedLower = new Set<string>();
   const groups: { label: string; countries: string[] }[] = [];
 
   for (const rg of regionGroups) {
-    const matched = rg.countries.filter(c => available.includes(c));
-    matched.forEach(c => assigned.add(c));
+    // Match region list entries case-insensitively against available DB countries
+    const matched = rg.countries
+      .filter(c => availableLower.has(c.toLowerCase()))
+      .map(c => {
+        const key = c.toLowerCase();
+        assignedLower.add(key);
+        // Use DB's capitalized version if available, else fall back to region list entry
+        return normalizeMap.get(key) || c;
+      });
     if (matched.length > 0) {
       groups.push({ label: rg.label, countries: matched });
     }
   }
 
-  const other = available.filter(c => !assigned.has(c) && c);
+  const other = [...normalizeMap.values()].filter(c => !assignedLower.has(c.toLowerCase()));
   if (other.length > 0) {
     const existingOther = groups.find(g => g.label === 'Other');
     if (existingOther) {
       existingOther.countries.push(...other);
     } else {
-      groups.push({ label: 'Other', countries: other });
+      groups.push({ label: 'Other', countries: other.sort() });
     }
   }
 
@@ -370,10 +454,25 @@ function buildUrl(overrides: Record<string, string>) {
 
   <!-- Results section -->
   <section class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- Mobile filter toggle -->
+    <div class="lg:hidden mb-4">
+      <button id="filter-toggle-btn" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm w-full justify-between">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+          Filters
+          {(propertyType || country || cityFilter || amenityFilter || ratingMin) && (
+            <span class="bg-teal-600 text-white text-xs rounded-full px-1.5 py-0.5">Active</span>
+          )}
+        </span>
+        <svg id="filter-toggle-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+    </div>
+
     <div class="flex flex-col lg:flex-row gap-6">
 
       <!-- Sidebar filters -->
-      <aside class="w-full lg:w-[280px] shrink-0">
+      <aside id="filter-sidebar" class="w-full lg:w-[280px] shrink-0 hidden lg:block">
         <div class="lg:sticky lg:top-20 space-y-5">
           <form method="get" action="/search" id="filter-form">
             <!-- Carry search bar values -->
@@ -443,12 +542,8 @@ function buildUrl(overrides: Record<string, string>) {
                 onchange="this.form.submit()"
               >
                 <option value="">All Countries</option>
-                {groupedCountries.map(group => (
-                  <optgroup label={group.label}>
-                    {group.countries.map(c => (
-                      <option value={c} selected={country === c}>{c}</option>
-                    ))}
-                  </optgroup>
+                {allCountries.slice().sort((a, b) => a.localeCompare(b)).map(c => (
+                  <option value={c} selected={country === c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
                 ))}
               </select>
               {country && (
@@ -465,12 +560,8 @@ function buildUrl(overrides: Record<string, string>) {
                 onchange="this.form.submit()"
               >
                 <option value="">All Cities</option>
-                {groupedCities.map(group => (
-                  <optgroup label={group.label}>
-                    {group.cities.map(c => (
-                      <option value={c} selected={cityFilter === c}>{c}</option>
-                    ))}
-                  </optgroup>
+                {allCities.slice().sort((a, b) => a.localeCompare(b)).map(c => (
+                  <option value={c} selected={cityFilter === c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
                 ))}
               </select>
               {cityFilter && (
@@ -506,8 +597,8 @@ function buildUrl(overrides: Record<string, string>) {
       <!-- Main results area -->
       <div class="flex-1 min-w-0">
         <!-- Results header -->
-        <div class="flex items-center justify-between mb-4">
-          <p class="text-sm text-gray-600">
+        <div class="flex flex-wrap items-center gap-3 mb-2">
+          <p class="text-sm text-gray-600 flex-1 min-w-0">
             {totalCount > 0 ? (
               <span>Showing <strong>{offset + 1}</strong>-<strong>{Math.min(offset + perPage, totalCount)}</strong> of <strong>{totalCount}</strong> properties</span>
             ) : (
@@ -519,14 +610,15 @@ function buildUrl(overrides: Record<string, string>) {
           </p>
 
           <!-- Sort selector -->
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 shrink-0">
             <select
               id="sort-select"
               class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
             >
-              <option value="default" selected={sortBy === 'default'}>Sort: Default</option>
-              <option value="price_asc" selected={sortBy === 'price_asc'}>Price: Low → High</option>
-              <option value="price_desc" selected={sortBy === 'price_desc'}>Price: High → Low</option>
+              <option value="default" selected={sortBy === 'default'}>Sort: Recommended</option>
+              <option value="price_asc" selected={sortBy === 'price_asc'}>Price: Low to High</option>
+              <option value="price_desc" selected={sortBy === 'price_desc'}>Price: High to Low</option>
+              <option value="rating_desc" selected={sortBy === 'rating_desc'}>Rating: Highest</option>
               <option value="airport_distance" selected={sortBy === 'airport_distance'}>Distance from Airport</option>
             </select>
           </div>
@@ -545,6 +637,32 @@ function buildUrl(overrides: Record<string, string>) {
           </div>
         </div>
 
+        <!-- Search condition summary badges -->
+        {(location || checkinParam || cityFilter || country) && (
+          <div class="flex flex-wrap gap-2 mb-4">
+            {location && (
+              <span class="inline-flex items-center gap-1 px-3 py-1 bg-teal-50 text-teal-700 text-xs rounded-full border border-teal-200">
+                📍 {location}
+              </span>
+            )}
+            {cityFilter && !location && (
+              <span class="inline-flex items-center gap-1 px-3 py-1 bg-teal-50 text-teal-700 text-xs rounded-full border border-teal-200">
+                📍 {cityFilter}
+              </span>
+            )}
+            {country && (
+              <span class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-200">
+                🌏 {country}
+              </span>
+            )}
+            {checkinParam && (
+              <span class="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200">
+                📅 {checkinParam}
+              </span>
+            )}
+          </div>
+        )}
+
         <!-- Hotel cards grid -->
         <div id="hotel-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
           {hotels.length > 0 ? (
@@ -560,9 +678,12 @@ function buildUrl(overrides: Record<string, string>) {
                       loading="lazy"
                     />
                   ) : (
-                    <div class="w-full h-full flex items-center justify-center text-gray-300">
-                      <svg class="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-                    </div>
+                    <img
+                      src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80"
+                      alt={hotel.name}
+                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      loading="lazy"
+                    />
                   )}
                   {hotel.property_type && (
                     <span class="absolute top-2 left-2 bg-white/90 backdrop-blur-sm text-xs font-medium text-gray-700 px-2 py-1 rounded-md">
@@ -574,11 +695,19 @@ function buildUrl(overrides: Record<string, string>) {
                 <!-- Card body -->
                 <div class="p-4">
                   <h3 class="font-semibold text-gray-900 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">
-                    {hotel.name}
+                    {/* Show English name: if name === name_ja (data error), fallback logic */}
+                    {hotel.name_ja && hotel.name === hotel.name_ja ? (hotel.name_ja) : hotel.name}
                   </h3>
                   <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     {hotel.city}{hotel.country ? `, ${hotel.country}` : ''}
+                    {hotel._airport_km != null && hotel._airport_code != null && hotel._airport_km < 500 && (
+                      <span class="ml-1 text-gray-400">·</span>
+                      <span class="flex items-center gap-0.5 text-gray-400">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                        {hotel._airport_km < 1 ? `${Math.round(hotel._airport_km * 1000)}m` : `${hotel._airport_km.toFixed(1)}km`} from {hotel._airport_code}
+                      </span>
+                    )}
                   </p>
 
                   {hotel.rating > 0 && (
@@ -601,7 +730,7 @@ function buildUrl(overrides: Record<string, string>) {
                       {hotel.min_price != null ? (
                         <div>
                           <span class="text-xs text-gray-400">from</span>
-                          <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
+                          <span class="text-lg font-bold text-teal-700 ml-1" data-usd={hotel.min_price}>${hotel.min_price}</span>
                         </div>
                       ) : (
                         <span class="text-xs text-gray-400">Price on request</span>
@@ -682,6 +811,22 @@ function buildUrl(overrides: Record<string, string>) {
 
     </div>
   </section>
+
+  <!-- Mobile filter toggle script -->
+  <script is:inline>
+    (function() {
+      var btn = document.getElementById('filter-toggle-btn');
+      var sidebar = document.getElementById('filter-sidebar');
+      var icon = document.getElementById('filter-toggle-icon');
+      if (!btn || !sidebar) return;
+      btn.addEventListener('click', function() {
+        var hidden = sidebar.classList.toggle('hidden');
+        if (icon) {
+          icon.style.transform = hidden ? '' : 'rotate(180deg)';
+        }
+      });
+    })();
+  </script>
 
   <!-- Sort select script -->
   <script is:inline>

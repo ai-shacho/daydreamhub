@@ -6,7 +6,7 @@ const locale = getLocale(Astro.url);
 
 const steps = [
   { number: 1, title: 'お申し込み', description: '施設情報を記載した申込フォームを送信してください。' },
-  { number: 2, title: '本人確認', description: '確認のための身分証明書を提出してください。' },
+  { number: 2, title: '本人確認', description: '個人オーナー、またはアポイントなしで登録される法人の場合は必須。身分証明書または法人書類をご提出ください。' },
   { number: 3, title: '登録完了', description: '承認後、メールにてログイン情報をお届けします。' },
   { number: 4, title: '掲載開始', description: 'ログインしてお部屋を掲載し、ゲストをお迎えしましょう。' },
 ];
@@ -111,10 +111,7 @@ const steps = [
         お部屋を掲載する
       </a>
       <p class="mt-6 text-gray-500 text-sm">
-        お電話でのお問い合わせ：
-        <a href="tel:+81-90-2202-8701" class="text-[#45A2C1] hover:underline font-medium">
-          +81-90-2202-8701
-        </a>
+        お問い合わせは<a href="/ja/contact" class="text-[#45A2C1] hover:underline font-medium">こちらのフォーム</a>からどうぞ。
       </p>
     </div>
   </section>

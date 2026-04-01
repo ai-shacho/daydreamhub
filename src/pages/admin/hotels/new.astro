@@ -1,0 +1,219 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../../lib/adminAuth';
+
+const runtime = (Astro.locals as any).runtime;
+const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect('/admin/login');
+
+const PROPERTY_TYPES = ['hotel','villa','resort','apartment','clinic','spa','wellness','coworking','cafe','hostel'];
+---
+
+<AdminLayout title="Add New Hotel" activeNav="hotels">
+  <div class="max-w-2xl mx-auto px-4 py-8">
+
+    <div class="flex items-center gap-3 mb-6">
+      <a href="/admin/hotels" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+      </a>
+      <h1 class="text-xl font-bold text-slate-900">Add New Hotel</h1>
+    </div>
+
+    <div id="form-message" class="hidden mb-4 px-4 py-3 rounded-lg text-sm"></div>
+
+    <form id="new-hotel-form" class="space-y-5 bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+      <input type="hidden" name="is_active" value="0" />
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Hotel Name <span class="text-red-500">*</span></label>
+          <input type="text" name="name" required placeholder="e.g. The Grand Bangkok" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Hotel Name (Japanese)</label>
+          <input type="text" name="name_ja" placeholder="e.g. ザ グランド バンコク" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Slug <span class="text-red-500">*</span></label>
+          <input type="text" name="slug" required placeholder="e.g. grand-bangkok" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-500" />
+          <p class="text-xs text-gray-400 mt-1">Lowercase letters, numbers, and hyphens only. Used in the URL.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">City <span class="text-red-500">*</span></label>
+          <input type="text" name="city" required placeholder="e.g. Bangkok" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Country <span class="text-red-500">*</span></label>
+          <input type="text" name="country" required placeholder="e.g. Thailand" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Address</label>
+          <input type="text" name="address" placeholder="e.g. 123 Sukhumvit Rd, Bangkok" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Property Type</label>
+          <select name="property_type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+            {PROPERTY_TYPES.map(pt => <option value={pt}>{pt.charAt(0).toUpperCase() + pt.slice(1)}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+          <input type="text" name="phone" placeholder="+66-2-123-4567" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+          <input type="email" name="email" placeholder="info@hotel.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Thumbnail</label>
+          <!-- preview -->
+          <div id="thumb-preview-wrap" class="hidden mb-2">
+            <img id="thumb-preview-img" src="" alt="Preview" class="w-40 h-28 object-cover rounded-lg border border-slate-200" />
+          </div>
+          <!-- upload button -->
+          <div class="flex items-center gap-3 flex-wrap">
+            <label for="thumb-file-input" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              Upload Image
+            </label>
+            <input type="file" id="thumb-file-input" accept="image/*" class="hidden" />
+            <span class="text-slate-400 text-xs">or</span>
+            <input type="url" id="thumb-url-input" placeholder="https://images.unsplash.com/..." class="flex-1 min-w-[200px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+          </div>
+          <p id="thumb-status" class="mt-1.5 text-xs hidden"></p>
+          <!-- hidden field submitted with form -->
+          <input type="hidden" id="thumbnail_url_hidden" name="thumbnail_url" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Description (English)</label>
+          <textarea name="description" rows="3" placeholder="Brief description of the hotel..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Description (Japanese)</label>
+          <textarea name="description_ja" rows="3" placeholder="ホテルの概要説明（日本語）..." class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"></textarea>
+        </div>
+      </div>
+
+      <div class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+        💡 このホテルはオーナーアカウントに移行するまで一般公開されません。<br />
+        <span class="text-blue-600">(This hotel will not be publicly visible until assigned to an owner.)</span>
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors">
+          + Add Hotel
+        </button>
+        <a href="/admin/hotels" class="px-5 py-2.5 border border-gray-300 text-gray-600 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</AdminLayout>
+
+<script is:inline>
+// ── Thumbnail upload ──────────────────────────────────────────────────────
+(function() {
+  var fileInput  = document.getElementById('thumb-file-input');
+  var urlInput   = document.getElementById('thumb-url-input');
+  var hiddenUrl  = document.getElementById('thumbnail_url_hidden');
+  var previewWrap= document.getElementById('thumb-preview-wrap');
+  var previewImg = document.getElementById('thumb-preview-img');
+  var statusEl   = document.getElementById('thumb-status');
+  var MAX_BYTES  = 2 * 1024 * 1024; // 2MB
+
+  function showPreview(src) {
+    if (!src) { previewWrap.classList.add('hidden'); return; }
+    previewImg.src = src;
+    previewWrap.classList.remove('hidden');
+  }
+
+  // File selected → convert to base64 data URL
+  fileInput?.addEventListener('change', function() {
+    var file = this.files[0];
+    if (!file) return;
+    if (file.size > MAX_BYTES) {
+      statusEl.textContent = '❌ 画像は2MB以内にしてください。';
+      statusEl.classList.remove('hidden');
+      return;
+    }
+    statusEl.textContent = '読み込み中...';
+    statusEl.classList.remove('hidden');
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var dataUrl = ev.target.result;
+      hiddenUrl.value = dataUrl;
+      urlInput.value = '';
+      showPreview(dataUrl);
+      statusEl.textContent = '✅ 画像をセットしました。';
+      setTimeout(function() { statusEl.classList.add('hidden'); }, 2000);
+    };
+    reader.onerror = function() {
+      statusEl.textContent = '❌ 読み込みに失敗しました。';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // URL pasted → use as-is
+  urlInput?.addEventListener('input', function() {
+    var v = this.value.trim();
+    hiddenUrl.value = v;
+    showPreview(v);
+  });
+})();
+
+// Auto-generate slug from name
+document.querySelector('[name="name"]')?.addEventListener('input', function() {
+  const slugField = document.querySelector('[name="slug"]');
+  if (slugField && !slugField.dataset.manual) {
+    slugField.value = this.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+});
+document.querySelector('[name="slug"]')?.addEventListener('input', function() {
+  this.dataset.manual = 'true';
+});
+
+document.getElementById('new-hotel-form')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const form = this;
+  const msgEl = document.getElementById('form-message');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  const body = {};
+  new FormData(form).forEach((val, key) => { if (val) body[key] = val; });
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = '保存中...';
+
+  try {
+    const res = await fetch('/api/admin/hotels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      msgEl.textContent = '✅ Hotel added successfully!';
+      msgEl.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-green-50 border border-green-200 text-green-700';
+      msgEl.classList.remove('hidden');
+      if (data.id) {
+        setTimeout(() => window.location.href = `/admin/hotels/${data.id}`, 1200);
+      }
+    } else {
+      msgEl.textContent = '❌ ' + (data.error || 'Failed to add hotel');
+      msgEl.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-red-50 border border-red-200 text-red-700';
+      msgEl.classList.remove('hidden');
+    }
+  } catch (err) {
+    msgEl.textContent = '❌ Network error. Please try again.';
+    msgEl.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-red-50 border border-red-200 text-red-700';
+    msgEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = '+ Add Hotel';
+  }
+});
+</script>

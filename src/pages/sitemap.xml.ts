@@ -4,7 +4,7 @@ export const GET: APIRoute = async ({ locals }) => {
   const db = (locals as any).runtime?.env?.DB;
   const siteUrl = 'https://www.daydreamhub.com';
 
-  // 静的ページ
+  // 静的ページ（EN）
   const staticPages = [
     { url: '/', priority: '1.0', changefreq: 'daily' },
     { url: '/search', priority: '0.9', changefreq: 'daily' },
@@ -14,26 +14,44 @@ export const GET: APIRoute = async ({ locals }) => {
     { url: '/faq', priority: '0.6', changefreq: 'monthly' },
   ];
 
-  // 動的ページ（ホテル）
+  // 静的ページ（JA）
+  const staticJaPages = [
+    { url: '/ja/', priority: '0.9', changefreq: 'daily' },
+    { url: '/ja/search', priority: '0.8', changefreq: 'daily' },
+    { url: '/ja/blog', priority: '0.7', changefreq: 'weekly' },
+  ];
+
+  // 動的ページ（ホテル）※ updated_at カラムは存在しないため除外
   let hotelPages: any[] = [];
   if (db) {
     try {
       const result = await db.prepare(
-        "SELECT slug, updated_at FROM hotels WHERE is_active=1 AND slug IS NOT NULL AND slug != ''"
+        "SELECT slug FROM hotels WHERE is_active=1 AND slug IS NOT NULL AND slug != ''"
       ).all();
       hotelPages = result?.results || [];
-    } catch {}
+    } catch(e) { console.error('sitemap hotel query error:', e); }
   }
 
-  // ブログ記事
+  // ブログ記事 ※ published_at を lastmod に使用
   let blogPages: any[] = [];
   if (db) {
     try {
       const result = await db.prepare(
-        "SELECT slug, updated_at FROM blog_posts ORDER BY published_at DESC"
+        "SELECT slug, published_at FROM blog_posts ORDER BY published_at DESC"
       ).all();
       blogPages = result?.results || [];
-    } catch {}
+    } catch(e) { console.error('sitemap blog query error:', e); }
+  }
+
+  // 都市ページ
+  let cityPages: any[] = [];
+  if (db) {
+    try {
+      const result = await db.prepare(
+        "SELECT DISTINCT REPLACE(REPLACE(LOWER(city), ' ', '-'), '_', '-') as city_slug FROM hotels WHERE is_active=1 AND city IS NOT NULL AND city != ''"
+      ).all();
+      cityPages = result?.results || [];
+    } catch(e) { console.error('sitemap city query error:', e); }
   }
 
   const now = new Date().toISOString().split('T')[0];
@@ -46,17 +64,41 @@ ${staticPages.map(p => `  <url>
     <changefreq>${p.changefreq}</changefreq>
     <priority>${p.priority}</priority>
   </url>`).join('\n')}
+${staticJaPages.map(p => `  <url>
+    <loc>${siteUrl}${p.url}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>${p.changefreq}</changefreq>
+    <priority>${p.priority}</priority>
+  </url>`).join('\n')}
 ${hotelPages.map((h: any) => `  <url>
     <loc>${siteUrl}/hotel/${h.slug}</loc>
-    <lastmod>${h.updated_at ? h.updated_at.split('T')[0] : now}</lastmod>
+    <lastmod>${now}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>`).join('\n')}
+${hotelPages.map((h: any) => `  <url>
+    <loc>${siteUrl}/ja/hotel/${h.slug}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>`).join('\n')}
 ${blogPages.map((b: any) => `  <url>
     <loc>${siteUrl}/blog/${b.slug}</loc>
-    <lastmod>${b.updated_at ? b.updated_at.split('T')[0] : now}</lastmod>
+    <lastmod>${b.published_at ? b.published_at.split(' ')[0] : now}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
+  </url>`).join('\n')}
+${blogPages.map((b: any) => `  <url>
+    <loc>${siteUrl}/ja/blog/${b.slug}</loc>
+    <lastmod>${b.published_at ? b.published_at.split(' ')[0] : now}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>`).join('\n')}
+${cityPages.map((c: any) => `  <url>
+    <loc>${siteUrl}/city/${c.city_slug}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
   </url>`).join('\n')}
 </urlset>`;
 

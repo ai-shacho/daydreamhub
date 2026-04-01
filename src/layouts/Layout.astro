@@ -7,9 +7,11 @@ interface Props {
   description?: string;
   ogImage?: string;
   canonicalUrl?: string;
+  ogType?: string;
+  ogPublishedTime?: string;
 }
 
-const { title, description = "Day-use hotel booking platform - Find hourly hotels worldwide", ogImage, canonicalUrl } = Astro.props;
+const { title, description = "Day-use hotel booking platform - Find hourly hotels worldwide", ogImage, canonicalUrl, ogType, ogPublishedTime } = Astro.props;
 const siteUrl = 'https://www.daydreamhub.com';
 const resolvedOgImage = ogImage || `${siteUrl}/og-default.jpg`;
 const resolvedCanonical = canonicalUrl || `${siteUrl}${Astro.url.pathname}`;
@@ -71,22 +73,44 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={isJa ? "ja" : "en"}>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content={description} />
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <!-- Canonical -->
   <link rel="canonical" href={resolvedCanonical} />
   <!-- OGP (Facebook/LINE/Slack等) -->
-  <meta property="og:type" content="website" />
+  <meta property="og:type" content={ogType || "website"} />
   <meta property="og:url" content={resolvedCanonical} />
   <meta property="og:title" content={title} />
   <meta property="og:description" content={description} />
   <meta property="og:image" content={resolvedOgImage} />
   <meta property="og:site_name" content="DayDreamHub" />
+  {ogPublishedTime && <meta property="article:published_time" content={ogPublishedTime} />}
+  <!-- hreflang -->
+  <link rel="alternate" hreflang="en" href={`${siteUrl}${enPath}`} />
+  <link rel="alternate" hreflang="ja" href={`${siteUrl}${jaPath}`} />
+  <link rel="alternate" hreflang="x-default" href={`${siteUrl}${enPath}`} />
+  <!-- WebSite JSON-LD (top page only) -->
+  {currentPath === '/' && (
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "DayDreamHub",
+      "url": siteUrl,
+      "description": "Day-use hotel booking platform - Find hourly hotels worldwide",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": `${siteUrl}/search?location={search_term_string}`,
+        "query-input": "required name=search_term_string"
+      }
+    })} />
+  )}
+  <slot name="head" />
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content={title} />
@@ -114,61 +138,51 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
 <body class="min-h-screen flex flex-col bg-gray-50">
 
   <!-- Header -->
-  <header class="bg-teal-700 text-white sticky top-0 z-[1100] shadow-md">
+  <header class="bg-white text-gray-800 sticky top-0 z-[1100] shadow-sm border-b border-gray-100">
     <div class="max-w-7xl mx-auto px-4">
       <!-- Top bar -->
       <div class="flex items-center justify-between h-16">
         <!-- Logo -->
-        <a href="/" class="flex items-center gap-2 font-bold text-xl tracking-tight">
-          <svg class="w-8 h-8" viewBox="0 0 32 32" fill="none">
-            <circle cx="16" cy="16" r="14" fill="#f59e0b"/>
-            <path d="M10 20 Q16 10 22 20" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-            <circle cx="16" cy="13" r="3" fill="white"/>
-          </svg>
-          DayDreamHub
+        <a href="/" class="flex items-center">
+          <img src="/logo-transparent.png" alt="DayDreamHub" class="h-10 w-auto" />
         </a>
 
         <!-- Nav links (desktop) -->
         <nav class="hidden md:flex items-center gap-1">
-          <a href="/search" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/search' ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
+          <a href="/search" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/search' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
               Search
             </span>
           </a>
-          <a href="/wishlist" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/wishlist' ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
+          <a href="/wishlist" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/wishlist' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
               Wishlist
             </span>
           </a>
-          <a href="/map" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/map' ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
+          <a href="/map" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/map' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
               Map
             </span>
           </a>
-          <a href="/blog" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath.startsWith('/blog') ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
+          <a href={isJa ? '/ja/blog' : '/blog'} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", (currentPath.startsWith('/blog') || currentPath.startsWith('/ja/blog')) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
               Blog
             </span>
           </a>
-          <a href="/how-it-works" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/how-it-works' ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
+          <a href="/how-it-works" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/how-it-works' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               How it Works
             </span>
           </a>
-          <a href="/services" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/services' ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
-            <span class="inline-flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-              Services
-            </span>
-          </a>
+          <!-- SERVICES_NAV_REMOVED -->
           <!-- More dropdown -->
           <div class="relative" id="more-menu-wrapper">
-            <button id="more-menu-btn" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5", ['/about','/faq','/for-hotel-owner','/for-ai-agents'].includes(currentPath) ? 'bg-teal-600 text-white' : 'text-teal-100 hover:bg-teal-600 hover:text-white']}>
+            <button id="more-menu-btn" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5", ['/about','/faq','/for-hotel-owner'].includes(currentPath) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
               More
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
@@ -178,47 +192,72 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
               <a href="/contact" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/contact' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>Contact Us</a>
               <div class="border-t border-gray-100 my-1"></div>
               <a href="/for-hotel-owner" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/for-hotel-owner' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>For Property Owner</a>
-              <a href="/for-ai-agents" class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === '/for-ai-agents' ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>For AI Agents</a>
+              <a href="/owner" class:list={["flex items-center gap-2 px-4 py-2.5 text-sm transition-colors", currentPath.startsWith('/owner') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3.75h.75m-.75 3.75h.75m3-7.5h.75m-.75 3.75h.75m-.75 3.75h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
+                </svg>
+                Owner Login
+              </a>
+              <!-- FOR_AI_AGENTS_REMOVED -->
             </div>
           </div>
         </nav>
 
         <!-- Right side controls -->
         <div class="flex items-center gap-2">
-          <!-- Currency selector -->
-          <select id="currency-selector" class="bg-teal-600 text-white text-xs border border-teal-500 rounded-md px-2 py-1.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400">
-            <option value="USD">USD $</option>
-            <option value="EUR">EUR &euro;</option>
-            <option value="JPY">JPY &yen;</option>
-            <option value="THB">THB &#3647;</option>
-            <option value="GBP">GBP &pound;</option>
-            <option value="AUD">AUD $</option>
-            <option value="MYR">MYR RM</option>
-            <option value="SGD">SGD $</option>
-            <option value="IDR">IDR Rp</option>
-            <option value="VND">VND &#8363;</option>
-            <option value="PHP">PHP &#8369;</option>
-            <option value="KRW">KRW &#8361;</option>
-            <option value="AED">AED &#1583;.&#1573;</option>
-            <option value="INR">INR &#8377;</option>
-          </select>
-
-          <!-- Language toggle -->
-          <div class="hidden sm:flex items-center bg-teal-600 rounded-md overflow-hidden border border-teal-500">
-            <a href={enPath} class={`px-2 py-1.5 text-xs font-medium ${!isJa ? 'bg-teal-500 text-white' : 'text-teal-200 hover:text-white'}`}>EN</a>
-            <a href={jaPath} class={`px-2 py-1.5 text-xs font-medium ${isJa ? 'bg-teal-500 text-white' : 'text-teal-200 hover:text-white'}`}>JP</a>
+          <!-- Currency selector (custom dropdown) -->
+          <div class="hidden sm:flex items-center relative">
+            <button id="currency-btn" class="flex items-center gap-1 text-gray-600 hover:text-gray-900 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors text-xs font-medium">
+              <span id="currency-btn-label">USD $</span>
+              <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div id="currency-dropdown" class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50 w-28 hidden max-h-72 overflow-y-auto">
+              {[
+                {v:'USD',l:'USD $'},{v:'EUR',l:'EUR €'},{v:'JPY',l:'JPY ¥'},
+                {v:'THB',l:'THB ฿'},{v:'GBP',l:'GBP £'},{v:'AUD',l:'AUD $'},
+                {v:'MYR',l:'MYR RM'},{v:'SGD',l:'SGD $'},{v:'IDR',l:'IDR Rp'},
+                {v:'VND',l:'VND ₫'},{v:'PHP',l:'PHP ₱'},{v:'KRW',l:'KRW ₩'},
+                {v:'AED',l:'AED د.إ'},{v:'INR',l:'INR ₹'}
+              ].map(c => (
+                <button data-currency={c.v} class="currency-option w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center justify-between">
+                  {c.l}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <!-- List Your Property CTA -->
-          <a href="/for-hotel-owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:text-amber-200 border border-amber-400/40 hover:border-amber-400 px-3 py-1.5 rounded-md transition-colors">
-            🏨 List Your Property
-          </a>
+          <!-- Language toggle -->
+          <div class="hidden sm:flex items-center relative">
+            <button id="lang-toggle-btn" class="flex items-center gap-1 text-gray-600 hover:text-gray-900 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors text-xs font-medium">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+              {isJa ? 'JP' : 'EN'}
+            </button>
+            <div id="lang-dropdown" class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50 w-28 hidden">
+              <a href={enPath} class={`flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 ${!isJa ? 'text-teal-600 font-semibold' : 'text-gray-700'}`}>🇺🇸 English</a>
+              <a href={jaPath} class={`flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 ${isJa ? 'text-teal-600 font-semibold' : 'text-gray-700'}`}>🇯🇵 日本語</a>
+            </div>
+          </div>
+
+          <!-- Owner Portal / Admin Panel CTA -->
+          {currentUser?.role === 'admin' ? (
+            <a href="/admin" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-700 border border-purple-400/50 hover:border-purple-500 px-3 py-1.5 rounded-md transition-colors">
+              ⚙️ Admin Panel
+            </a>
+          ) : (currentUser && (currentUser.role === 'owner' || currentUser.role === 'staff')) ? (
+            <a href="/owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
+              🏨 Owner Portal
+            </a>
+          ) : (
+            <a href="/for-hotel-owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
+              🏨 List Your Property
+            </a>
+          )}
 
           <!-- Auth buttons -->
           <div class="hidden sm:flex items-center gap-2 ml-2" id="auth-area">
             {currentUser ? (
               <div class="relative" id="user-menu-wrap">
-                <button id="user-menu-btn" class="flex items-center gap-1.5 text-xs font-medium text-teal-100 hover:text-white px-3 py-1.5 rounded-md hover:bg-teal-600 transition-colors">
+                <button id="user-menu-btn" class="flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                   <span class="max-w-[80px] truncate">{currentUser.name}</span>
                   <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -248,14 +287,14 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
               </div>
             ) : (
               <>
-                <a href="/login" class="text-xs font-medium text-teal-100 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-teal-600">Login</a>
+                <a href="/login" class="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">Login</a>
                 <a href="/register" class="text-xs font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 px-3 py-1.5 rounded-md transition-colors">Register</a>
               </>
             )}
           </div>
 
           <!-- Mobile menu button -->
-          <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-teal-600 transition-colors" aria-label="Menu">
+          <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-800" aria-label="Menu">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
           </button>
         </div>
@@ -263,46 +302,52 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
     </div>
 
     <!-- Mobile menu -->
-    <div id="mobile-menu" class="md:hidden hidden border-t border-teal-600">
+    <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 bg-white">
       <div class="px-4 py-3 space-y-1">
-        <a href="/search" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Search</a>
-        <a href="/wishlist" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Wishlist</a>
-        <a href="/map" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Map</a>
-        <a href="/blog" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Blog</a>
-        <a href="/how-it-works" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">How it Works</a>
-        <a href="/services" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Services</a>
+        <a href="/search" class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Search</a>
+        <a href="/wishlist" class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Wishlist</a>
+        <a href="/map" class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Map</a>
+        <a href={isJa ? '/ja/blog' : '/blog'} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? 'ブログ' : 'Blog'}</a>
+        <a href="/how-it-works" class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">How it Works</a>
+        <!-- SERVICES_MOBILE_REMOVED -->
         <div class="pt-1 pb-0.5">
-          <p class="px-3 py-1 text-xs font-semibold text-teal-400 uppercase tracking-wider">More</p>
-          <a href="/about" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">About Us</a>
-          <a href="/faq" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">FAQ</a>
-          <a href="/contact" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">Contact Us</a>
-          <a href="/for-hotel-owner" class="block px-3 py-2 rounded-lg text-sm font-medium text-amber-300 hover:bg-teal-600">🏨 List Your Property</a>
-          <a href="/for-ai-agents" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-100 hover:bg-teal-600">For AI Agents</a>
+          <p class="px-3 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">More</p>
+          <a href="/about" class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">About Us</a>
+          <a href="/faq" class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">FAQ</a>
+          <a href="/contact" class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Contact Us</a>
+          {currentUser?.role === 'admin' ? (
+            <a href="/admin" class="block px-3 py-2 rounded-lg text-sm font-medium text-purple-600 hover:bg-gray-100">⚙️ Admin Panel</a>
+          ) : (currentUser && (currentUser.role === 'owner' || currentUser.role === 'staff')) ? (
+            <a href="/owner" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-600 hover:bg-gray-100">🏨 Owner Portal</a>
+          ) : (
+            <a href="/for-hotel-owner" class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-600 hover:bg-gray-100">🏨 List Your Property</a>
+          )}
+          <!-- FOR_AI_AGENTS_MOBILE_REMOVED -->
         </div>
-        <hr class="border-teal-600" />
+        <hr class="border-gray-200" />
         {currentUser ? (
           <div class="pt-1">
             <div class="px-3 py-2">
-              <p class="text-sm font-medium text-white">{currentUser.name}</p>
-              <p class="text-xs text-teal-300">{currentUser.email}</p>
+              <p class="text-sm font-medium text-gray-800">{currentUser.name}</p>
+              <p class="text-xs text-gray-500">{currentUser.email}</p>
             </div>
-            <a href="/mypage" class="block px-3 py-2 text-sm text-teal-100 hover:text-white">📋 My Bookings</a>
+            <a href="/mypage" class="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900">📋 My Bookings</a>
             {(currentUser.role === 'admin' || currentUser.role === 'owner' || currentUser.role === 'staff') && (
-              <a href="/owner" class="block px-3 py-2 text-sm text-teal-100 hover:text-white">🏨 Owner Portal</a>
+              <a href="/owner" class="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900">🏨 Owner Portal</a>
             )}
             <button id="logout-btn-mobile" class="w-full text-left px-3 py-2 text-sm text-red-400 hover:text-red-300">Sign Out</button>
           </div>
         ) : (
           <div class="flex items-center gap-2 pt-1">
-            <a href="/login" class="text-sm text-teal-100 hover:text-white px-3 py-2">Login</a>
+            <a href="/login" class="text-sm text-gray-600 hover:text-gray-900 px-3 py-2">Login</a>
             <a href="/register" class="text-sm bg-amber-500 text-gray-900 px-3 py-2 rounded-md">Register</a>
           </div>
         )}
         <!-- Language toggle (mobile) -->
-        <div class="flex items-center gap-2 px-3 py-2 border-t border-teal-600 mt-1">
-          <span class="text-xs text-teal-400 font-medium">Language:</span>
-          <a href={enPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${!isJa ? 'bg-teal-500 text-white' : 'text-teal-200 hover:text-white hover:bg-teal-600'}`}>EN</a>
-          <a href={jaPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${isJa ? 'bg-teal-500 text-white' : 'text-teal-200 hover:text-white hover:bg-teal-600'}`}>JP</a>
+        <div class="flex items-center gap-2 px-3 py-2 border-t border-gray-200 mt-1">
+          <span class="text-xs text-gray-400 font-medium">Language:</span>
+          <a href={enPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${!isJa ? 'bg-teal-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>EN</a>
+          <a href={jaPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${isJa ? 'bg-teal-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>JP</a>
         </div>
       </div>
     </div>
@@ -339,9 +384,6 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
   <footer class="bg-gray-900 text-gray-300 mt-auto">
     <div class="max-w-7xl mx-auto px-4 py-12">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
-        <!-- Blog Categories -->
-=======
-
         <!-- Blog Categories (dynamic cities) -->
         <div>
           <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'ブログカテゴリ' : 'Blog Categories'}</h3>
@@ -375,8 +417,6 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
 
         <!-- Contact -->
         <div>
-          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">Contact</h3>
-=======
           <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'お問い合わせ' : 'Contact'}</h3>
           <ul class="space-y-2.5 text-sm">
             <li class="flex items-start gap-2 text-gray-400">
@@ -393,13 +433,6 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
             </li>
             <li class="flex items-start gap-2 text-gray-400">
               <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              <span>Mon - Fri: 9:00 - 18:00 (JST)</span>
-            </li>
-          </ul>
-          <div class="mt-4 space-y-1.5 text-sm">
-            <a href="/terms" class="block text-gray-500 hover:text-white transition-colors">Terms of Service</a>
-            <a href="/privacy-policy" class="block text-gray-500 hover:text-white transition-colors">Privacy Policy</a>
-=======
               <span>{isJa ? '月〜金：9:00〜18:00（JST）' : 'Mon - Fri: 9:00 - 18:00 (JST)'}</span>
             </li>
           </ul>
@@ -407,31 +440,20 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
             <a href="/contact" class="block text-teal-400 hover:text-white transition-colors font-medium">{isJa ? '📧 お問い合わせフォーム' : '📧 Contact Form'}</a>
             <a href="/mypage" class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'マイページ（予約確認）' : 'My Bookings'}</a>
             <a href="/terms" class="block text-gray-500 hover:text-white transition-colors">{isJa ? '利用規約' : 'Terms of Service'}</a>
-            <a href="/privacy-policy" class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'プライバシーポリシー' : 'Privacy Policy'}</a>
+            <a href={isJa ? '/ja/privacy-policy' : '/privacy-policy'} class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'プライバシーポリシー' : 'Privacy Policy'}</a>
           </div>
         </div>
 
         <!-- Quick Links -->
         <div>
-          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">Quick Links</h3>
-          <ul class="space-y-2 text-sm">
-            <li><a href="/about" class="hover:text-white transition-colors">About Us</a></li>
-            <li><a href="/faq" class="hover:text-white transition-colors">FAQ</a></li>
-            <li><a href="/how-it-works" class="hover:text-white transition-colors">How it Works</a></li>
-            <li><a href="/services" class="hover:text-white transition-colors">Services</a></li>
-            <li><a href="/for-hotel-owner" class="hover:text-white transition-colors">For Property Owner</a></li>
-            <li><a href="/for-ai-agents" class="hover:text-white transition-colors">For AI Agents</a></li>
-            <li><a href="/map" class="hover:text-white transition-colors">Map View</a></li>
-            <li><a href="/wishlist" class="hover:text-white transition-colors">Wishlist</a></li>
-=======
           <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'クイックリンク' : 'Quick Links'}</h3>
           <ul class="space-y-2 text-sm">
             <li><a href={isJa ? '/ja/about' : '/about'} class="hover:text-white transition-colors">{isJa ? '私たちについて' : 'About Us'}</a></li>
             <li><a href={isJa ? '/ja/faq' : '/faq'} class="hover:text-white transition-colors">FAQ</a></li>
             <li><a href={isJa ? '/ja/how-it-works' : '/how-it-works'} class="hover:text-white transition-colors">{isJa ? '使い方' : 'How it Works'}</a></li>
-            <li><a href={isJa ? '/ja/services' : '/services'} class="hover:text-white transition-colors">{isJa ? 'サービス' : 'Services'}</a></li>
+            <!-- SERVICES_FOOTER_REMOVED: <li><a href="/services">Services</a></li> -->
             <li><a href={isJa ? '/ja/for-hotel-owner' : '/for-hotel-owner'} class="hover:text-white transition-colors">{isJa ? '施設オーナー様へ' : 'For Property Owner'}</a></li>
-            <li><a href="/for-ai-agents" class="hover:text-white transition-colors">{isJa ? 'AIエージェント向け' : 'For AI Agents'}</a></li>
+            <!-- FOR_AI_AGENTS_FOOTER_REMOVED -->
             <li><a href="/map" class="hover:text-white transition-colors">{isJa ? 'マップ表示' : 'Map View'}</a></li>
             <li><a href="/wishlist" class="hover:text-white transition-colors">{isJa ? 'ウィッシュリスト' : 'Wishlist'}</a></li>
           </ul>
@@ -439,8 +461,6 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
       </div>
 
       <div class="border-t border-gray-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
-        <span>&copy; {new Date().getFullYear()} DayDreamHub. All Rights Reserved.</span>
-=======
         <span>&copy; {new Date().getFullYear()} DayDreamHub. {isJa ? 'All Rights Reserved.' : 'All Rights Reserved.'}</span>
         <div class="flex gap-4">
           <a href="#" class="text-gray-500 hover:text-white transition-colors" aria-label="Twitter">
@@ -526,6 +546,15 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
       document.getElementById('mobile-menu')?.classList.toggle('hidden');
     });
 
+    // Language dropdown toggle (click-based, not hover)
+    const langBtn = document.getElementById('lang-toggle-btn');
+    const langDropdown = document.getElementById('lang-dropdown');
+    langBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      langDropdown?.classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => langDropdown?.classList.add('hidden'));
+
     // More dropdown toggle
     const moreBtn = document.getElementById('more-menu-btn');
     const moreDropdown = document.getElementById('more-dropdown');
@@ -609,19 +638,88 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
       });
     }
 
-    const currencySelector = document.getElementById('currency-selector') as HTMLSelectElement | null;
-    if (currencySelector) {
-      // Restore saved currency
-      const saved = localStorage.getItem(CURRENCY_KEY) || 'USD';
-      currencySelector.value = saved;
-      if (saved !== 'USD') applyConversion(saved);
+    // Custom currency dropdown
+    const currencyBtn = document.getElementById('currency-btn');
+    const currencyDropdown = document.getElementById('currency-dropdown');
+    const currencyBtnLabel = document.getElementById('currency-btn-label');
+    const CURRENCY_LABELS: Record<string, string> = {
+      USD:'USD $', EUR:'EUR €', JPY:'JPY ¥', THB:'THB ฿', GBP:'GBP £',
+      AUD:'AUD $', MYR:'MYR RM', SGD:'SGD $', IDR:'IDR Rp', VND:'VND ₫',
+      PHP:'PHP ₱', KRW:'KRW ₩', AED:'AED د.إ', INR:'INR ₹'
+    };
 
-      currencySelector.addEventListener('change', () => {
-        const currency = currencySelector.value;
-        localStorage.setItem(CURRENCY_KEY, currency);
-        applyConversion(currency);
+    function setActiveCurrency(currency: string) {
+      if (currencyBtnLabel) currencyBtnLabel.textContent = CURRENCY_LABELS[currency] || currency;
+      document.querySelectorAll<HTMLElement>('.currency-option').forEach(opt => {
+        const isActive = opt.dataset.currency === currency;
+        opt.classList.toggle('text-teal-600', isActive);
+        opt.classList.toggle('font-semibold', isActive);
       });
     }
+
+    // Restore saved currency
+    const saved = localStorage.getItem(CURRENCY_KEY) || 'USD';
+    setActiveCurrency(saved);
+    if (saved !== 'USD') applyConversion(saved);
+
+    currencyBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currencyDropdown?.classList.toggle('hidden');
+    });
+    document.addEventListener('click', () => currencyDropdown?.classList.add('hidden'));
+
+    document.querySelectorAll<HTMLElement>('.currency-option').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currency = opt.dataset.currency || 'USD';
+        localStorage.setItem(CURRENCY_KEY, currency);
+        setActiveCurrency(currency);
+        applyConversion(currency);
+        currencyDropdown?.classList.add('hidden');
+      });
+    });
+
+    // ===== Password visibility toggle =====
+    (function() {
+      const EYE_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+      const EYE_OFF_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+      function attachToggle(input: HTMLInputElement) {
+        const parent = input.parentElement;
+        if (!parent || parent.querySelector('.ddh-pw-toggle')) return;
+        // ラップ div（相対位置）
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative;display:block;';
+        parent.insertBefore(wrap, input);
+        wrap.appendChild(input);
+        // トグルボタン
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ddh-pw-toggle';
+        btn.setAttribute('aria-label', 'Show/hide password');
+        btn.style.cssText = 'position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af;padding:4px;display:flex;align-items:center;z-index:2;';
+        btn.innerHTML = EYE_SVG;
+        wrap.appendChild(btn);
+        // パディング確保
+        input.style.paddingRight = '38px';
+        btn.addEventListener('click', function() {
+          const show = input.type === 'password';
+          input.type = show ? 'text' : 'password';
+          btn.innerHTML = show ? EYE_OFF_SVG : EYE_SVG;
+          btn.style.color = show ? '#0d9488' : '#9ca3af';
+        });
+      }
+
+      function initToggles() {
+        (document.querySelectorAll('input[type="password"]') as NodeListOf<HTMLInputElement>).forEach(attachToggle);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initToggles);
+      } else {
+        initToggles();
+      }
+    })();
   </script>
 
   <CookieBanner />

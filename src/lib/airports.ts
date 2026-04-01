@@ -151,3 +151,72 @@ export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: numb
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+// Airport list with codes for "nearest airport" lookup
+export const airportList: Array<{ code: string; name: string; lat: number; lng: number }> = [
+  // Southeast Asia
+  { code: 'BKK', name: 'BKK', lat: 13.6811, lng: 100.7472 },
+  { code: 'DMK', name: 'DMK', lat: 13.9126, lng: 100.6067 },
+  { code: 'DPS', name: 'DPS', lat: -8.7482, lng: 115.1671 },
+  { code: 'CGK', name: 'CGK', lat: -6.1256, lng: 106.6559 },
+  { code: 'KUL', name: 'KUL', lat: 2.7456, lng: 101.7072 },
+  { code: 'SIN', name: 'SIN', lat: 1.3644, lng: 103.9915 },
+  { code: 'MNL', name: 'MNL', lat: 14.5086, lng: 121.0194 },
+  { code: 'CEB', name: 'CEB', lat: 10.3075, lng: 123.9792 },
+  { code: 'SGN', name: 'SGN', lat: 10.8188, lng: 106.6520 },
+  { code: 'HAN', name: 'HAN', lat: 21.2187, lng: 105.8072 },
+  { code: 'DAD', name: 'DAD', lat: 16.0439, lng: 108.1993 },
+  { code: 'HKT', name: 'HKT', lat: 8.1132, lng: 98.3161 },
+  { code: 'USM', name: 'USM', lat: 9.5479, lng: 100.0623 },
+  { code: 'PNH', name: 'PNH', lat: 11.5466, lng: 104.8440 },
+  { code: 'RGN', name: 'RGN', lat: 16.9073, lng: 96.1332 },
+  // East Asia
+  { code: 'HND', name: 'HND', lat: 35.5494, lng: 139.7798 },
+  { code: 'NRT', name: 'NRT', lat: 35.7720, lng: 140.3929 },
+  { code: 'KIX', name: 'KIX', lat: 34.4347, lng: 135.2440 },
+  { code: 'ICN', name: 'ICN', lat: 37.4691, lng: 126.4510 },
+  { code: 'PEK', name: 'PEK', lat: 40.0799, lng: 116.6031 },
+  { code: 'PVG', name: 'PVG', lat: 31.1443, lng: 121.8083 },
+  { code: 'HKG', name: 'HKG', lat: 22.3080, lng: 113.9185 },
+  { code: 'TPE', name: 'TPE', lat: 25.0777, lng: 121.2328 },
+  // South Asia
+  { code: 'BOM', name: 'BOM', lat: 19.0896, lng: 72.8656 },
+  { code: 'DEL', name: 'DEL', lat: 28.5562, lng: 77.1000 },
+  { code: 'CMB', name: 'CMB', lat: 7.1806, lng: 79.8841 },
+  // Middle East
+  { code: 'DXB', name: 'DXB', lat: 25.2528, lng: 55.3644 },
+  { code: 'AUH', name: 'AUH', lat: 24.4330, lng: 54.6511 },
+  { code: 'DOH', name: 'DOH', lat: 25.2731, lng: 51.6081 },
+  { code: 'BAH', name: 'BAH', lat: 26.2708, lng: 50.6336 },
+  { code: 'KWI', name: 'KWI', lat: 29.2267, lng: 47.9689 },
+  { code: 'MCT', name: 'MCT', lat: 23.5933, lng: 58.2844 },
+  // Africa
+  { code: 'NBO', name: 'NBO', lat: -1.3192, lng: 36.9275 },
+  { code: 'CAI', name: 'CAI', lat: 30.1219, lng: 31.4056 },
+  { code: 'JNB', name: 'JNB', lat: -26.1392, lng: 28.2460 },
+  // Europe
+  { code: 'LHR', name: 'LHR', lat: 51.4775, lng: -0.4614 },
+  { code: 'CDG', name: 'CDG', lat: 49.0097, lng: 2.5479 },
+  { code: 'AMS', name: 'AMS', lat: 52.3086, lng: 4.7639 },
+  { code: 'FRA', name: 'FRA', lat: 50.0379, lng: 8.5622 },
+  { code: 'BHX', name: 'BHX', lat: 52.4539, lng: -1.7480 },
+  // Americas
+  { code: 'JFK', name: 'JFK', lat: 40.6413, lng: -73.7781 },
+  { code: 'LAX', name: 'LAX', lat: 33.9425, lng: -118.4081 },
+  // Oceania
+  { code: 'SYD', name: 'SYD', lat: -33.9399, lng: 151.1753 },
+  { code: 'MEL', name: 'MEL', lat: -37.6690, lng: 144.8410 },
+  { code: 'AKL', name: 'AKL', lat: -37.0082, lng: 174.7850 },
+];
+
+// Find nearest airport from hotel coordinates
+export function nearestAirport(hotelLat: number, hotelLng: number): { code: string; km: number } | null {
+  let best: { code: string; km: number } | null = null;
+  for (const ap of airportList) {
+    const km = haversineKm(hotelLat, hotelLng, ap.lat, ap.lng);
+    if (!best || km < best.km) {
+      best = { code: ap.code, km };
+    }
+  }
+  return best;
+}

@@ -1,158 +1,147 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { getLocale, t, localePath } from '../../lib/i18n';
-
-const locale = getLocale(Astro.url);
 ---
 
-<Layout title={t('nav.about', locale)} description="DayDreamHub - アジア初のデイユースホテル予約サイト">
-  <!-- Hero -->
-  <section class="bg-[#EBF8FC] py-16 sm:py-20">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-      <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-6">
-        DayDreamHubとは？
-      </h1>
-      <p class="text-lg text-gray-600 leading-relaxed max-w-2xl mx-auto">
-        DayDreamHubは、アジア初のデイユース（日帰り利用）に特化したホテル予約サイトです。
-        トランジット、ビジネス、旅行など、数時間だけ快適な空間を利用したい方に最適なホテルを簡単に見つけることができます。
+<Layout title="私たちについて - DayDreamHub" description="DayDreamHubはアジア初のデイユースホテル予約プラットフォームです。ミッション、チーム、そして短時間滞在旅行の未来についてご紹介します。">
+
+<!-- Hero -->
+<section class="relative overflow-hidden">
+  <div class="absolute inset-0">
+    <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=600&fit=crop" alt="Luxury hotel pool" class="w-full h-full object-cover" loading="eager">
+    <div class="absolute inset-0 bg-gradient-to-r from-teal-900/80 to-teal-800/60"></div>
+  </div>
+  <div class="relative max-w-5xl mx-auto px-4 sm:px-6 py-24 sm:py-32 text-center">
+    <p class="text-teal-200 text-sm font-semibold tracking-widest uppercase mb-4">アジア初のデイユースホテルプラットフォーム</p>
+    <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+      あなただけの空間を、<br class="hidden sm:block">数時間だけ
+    </h1>
+    <p class="text-lg sm:text-xl text-teal-100 leading-relaxed max-w-2xl mx-auto mb-8">
+      DayDreamHubは、アジア初のデイユースホテル予約プラットフォームです。
+      トランジット中の休憩、静かなビジネス環境、あるいは数時間のラグジュアリー体験 -- すべてを簡単に予約できます。
+    </p>
+    <a href="/ja/" class="btn-primary text-base sm:text-lg px-8 py-3.5 inline-block shadow-lg hover:shadow-xl transition-shadow">
+      ホテルを探す
+    </a>
+  </div>
+</section>
+
+<!-- Stats -->
+<section class="py-14 sm:py-20 bg-white">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-4 text-center">
+      なぜDayDreamHub？
+    </h2>
+    <p class="text-gray-500 text-center max-w-2xl mx-auto mb-12">
+      アジア全域で最大規模のデイユースホテルネットワークを構築中。旅行者に上質な短時間滞在体験を提供します。
+    </p>
+    <div class="grid grid-cols-2 gap-6 sm:gap-8 max-w-lg mx-auto">
+      <div class="text-center p-6 rounded-2xl bg-teal-50 border border-teal-100">
+        <div class="text-4xl sm:text-5xl font-bold text-teal-700 mb-2">247+</div>
+        <div class="text-gray-600 font-medium">ホテル数</div>
+        <p class="text-gray-400 text-xs mt-1">厳選された施設</p>
+      </div>
+      <div class="text-center p-6 rounded-2xl bg-teal-50 border border-teal-100">
+        <div class="text-4xl sm:text-5xl font-bold text-teal-700 mb-2">106+</div>
+        <div class="text-gray-600 font-medium">都市数</div>
+        <p class="text-gray-400 text-xs mt-1">対応デスティネーション</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Mission -->
+<section class="py-14 sm:py-20 bg-gray-50">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6">
+    <div class="bg-white border border-gray-100 rounded-2xl p-8 sm:p-12 shadow-sm text-center">
+      <div class="w-16 h-16 bg-teal-50 rounded-full flex items-center justify-center mx-auto mb-6">
+        <svg class="w-8 h-8 text-teal-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z"></path>
+        </svg>
+      </div>
+      <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-4">私たちのミッション</h2>
+      <p class="text-gray-600 text-lg sm:text-xl leading-relaxed italic mb-4">
+        「ちょっとだけ、いつもよりワンランク上の空間を気軽に使えたらいいのに。」
+      </p>
+      <p class="text-gray-500 text-sm leading-relaxed max-w-xl mx-auto">
+        トランジットの待ち時間、会議の合間、あるいは少しの休息のひとときに --
+        誰もが必要な時に快適でプライベートな空間を利用できるべきだと私たちは考えています。DayDreamHubがアジア全域でそれを実現します。
       </p>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Mission -->
-  <section class="py-12 sm:py-16">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6">
-      <div class="bg-white border border-gray-100 rounded-2xl p-8 sm:p-10 shadow-sm text-center">
-        <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">私たちのミッション</h2>
-        <p class="text-gray-600 text-lg leading-relaxed italic">
-          「ちょっとだけ、いつもよりワンランク上の空間を気軽に使えたらいいのに。」
-        </p>
-        <p class="text-gray-500 mt-4 text-sm">
-          トランジットの待ち時間、会議の合間、あるいは少しの休息の時間 --
-          誰もが必要な時に快適でプライベートな空間を利用できるべきだと、私たちは考えています。
-        </p>
+<!-- How It Works -->
+<section class="py-14 sm:py-20 bg-white">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-4 text-center">
+      ご利用の流れ
+    </h2>
+    <p class="text-gray-500 text-center max-w-xl mx-auto mb-12">
+      デイユースホテルの予約は、たった3ステップで完了します。
+    </p>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div class="relative text-center">
+        <div class="w-16 h-16 bg-teal-700 text-white rounded-full flex items-center justify-center mx-auto mb-5 text-2xl font-bold shadow-lg">1</div>
+        <h3 class="font-bold text-slate-900 text-lg mb-2">検索</h3>
+        <p class="text-gray-500 text-sm leading-relaxed">都市と日付を選択。カテゴリー、価格、アメニティでフィルタリングしてぴったりのホテルを見つけましょう。</p>
+      </div>
+      <div class="relative text-center">
+        <div class="w-16 h-16 bg-teal-700 text-white rounded-full flex items-center justify-center mx-auto mb-5 text-2xl font-bold shadow-lg">2</div>
+        <h3 class="font-bold text-slate-900 text-lg mb-2">予約</h3>
+        <p class="text-gray-500 text-sm leading-relaxed">プランを選んでPayPalで安全に決済。ホテルから予約確認が届きます。</p>
+      </div>
+      <div class="relative text-center">
+        <div class="w-16 h-16 bg-teal-700 text-white rounded-full flex items-center justify-center mx-auto mb-5 text-2xl font-bold shadow-lg">3</div>
+        <h3 class="font-bold text-slate-900 text-lg mb-2">チェックイン</h3>
+        <p class="text-gray-500 text-sm leading-relaxed">確認メールを持って直接ホテルへ。デイユースプランをお楽しみください。</p>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Use Cases -->
-  <section class="py-12 sm:py-16 bg-gray-50">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6">
-      <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-8 text-center">
-        DayDreamHubの利用シーン
-      </h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center">
-          <div class="w-12 h-12 bg-[#EBF8FC] rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg class="w-6 h-6 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-            </svg>
+<!-- Use Cases -->
+<section class="py-14 sm:py-20 bg-gray-50">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6">
+    <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mb-4 text-center">こんな時に使われています</h2>
+    <p class="text-gray-500 text-center max-w-2xl mx-auto mb-12">デイユースホテルは、あらゆるシーンで活躍します。</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {[
+        { img: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=600&q=80', title: '空港乗り継ぎ', desc: 'フライトの乗り継ぎ中、空港近くのホテルでシャワーや仮眠。ラウンジより圧倒的に快適。' },
+        { img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&q=80', title: 'ワーク＆ミーティング', desc: 'ホテルの客室を静かなオフィスや会議室として利用。Wi-Fi完備でプライバシーも確保。' },
+        { img: 'https://images.unsplash.com/photo-1529543544282-ea669407fca3?w=600&q=80', title: 'カップル・記念日', desc: 'ランチや記念日に数時間のホテル利用。手頃な価格で特別なひとときを。' },
+        { img: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&q=80', title: '観光の合間に', desc: '荷物を預けて観光へ。戻ってシャワーでリフレッシュ。' },
+        { img: 'https://images.unsplash.com/photo-1455587734955-081b22074882?w=600&q=80', title: '深夜・早朝の利用', desc: '早朝チェックアウト後や夜行バス到着後の仮眠に。' },
+        { img: 'https://images.unsplash.com/photo-1476703993599-0035a21b17a9?w=600&q=80', title: 'ファミリー', desc: '観光中のお子さんのお昼寝・授乳スペースとして活用できます。' },
+      ].map(u => (
+        <div class="group rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow duration-300 bg-white">
+          <div class="relative h-48 overflow-hidden">
+            <img src={u.img} alt={u.title} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+            <h3 class="absolute bottom-3 left-4 text-white font-bold text-lg drop-shadow">{u.title}</h3>
           </div>
-          <h3 class="font-semibold text-gray-800 mb-2">トランジット・乗り継ぎ</h3>
-          <p class="text-gray-500 text-sm">フライトの乗り継ぎやトランジット中の休息に</p>
-        </div>
-        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center">
-          <div class="w-12 h-12 bg-[#EBF8FC] rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg class="w-6 h-6 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-            </svg>
+          <div class="p-5">
+            <p class="text-gray-500 text-sm leading-relaxed">{u.desc}</p>
           </div>
-          <h3 class="font-semibold text-gray-800 mb-2">ビジネス・ワーク</h3>
-          <p class="text-gray-500 text-sm">短時間のビジネスミーティングや集中作業に</p>
         </div>
-        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center">
-          <div class="w-12 h-12 bg-[#EBF8FC] rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg class="w-6 h-6 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-            </svg>
-          </div>
-          <h3 class="font-semibold text-gray-800 mb-2">パーソナルタイム</h3>
-          <p class="text-gray-500 text-sm">一人の時間やリラックスしたいひとときに</p>
-        </div>
-        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center">
-          <div class="w-12 h-12 bg-[#EBF8FC] rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg class="w-6 h-6 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
-            </svg>
-          </div>
-          <h3 class="font-semibold text-gray-800 mb-2">大切な人との時間</h3>
-          <p class="text-gray-500 text-sm">快適な空間で大切な人と過ごす特別なひとときに</p>
-        </div>
-        <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 text-center">
-          <div class="w-12 h-12 bg-[#EBF8FC] rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg class="w-6 h-6 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-          </div>
-          <h3 class="font-semibold text-gray-800 mb-2">旅の休憩</h3>
-          <p class="text-gray-500 text-sm">旅行中の休憩や移動の合間のひと休みに</p>
-        </div>
-      </div>
+      ))}
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Features -->
-  <section class="py-12 sm:py-16">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6">
-      <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-8 text-center">
-        DayDreamHubの特徴
-      </h2>
-      <div class="space-y-6">
-        <div class="flex items-start gap-5 bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
-          <div class="w-12 h-12 bg-[#EBF8FC] rounded-full flex items-center justify-center flex-shrink-0">
-            <svg class="w-6 h-6 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
-            </svg>
-          </div>
-          <div>
-            <h3 class="font-semibold text-gray-800 mb-1">日本語対応</h3>
-            <p class="text-gray-500 text-sm leading-relaxed">
-              日本語対応のホテルを掲載しているため、日本語話者の旅行者でも安心してコミュニケーションやナビゲーションが可能です。
-            </p>
-          </div>
-        </div>
-        <div class="flex items-start gap-5 bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
-          <div class="w-12 h-12 bg-[#EBF8FC] rounded-full flex items-center justify-center flex-shrink-0">
-            <svg class="w-6 h-6 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"></path>
-            </svg>
-          </div>
-          <div>
-            <h3 class="font-semibold text-gray-800 mb-1">充実したサポート</h3>
-            <p class="text-gray-500 text-sm leading-relaxed">
-              道案内、チェックイン時の英語フレーズ、実用的なヒントなど、安心して滞在を楽しんでいただけるようサポートします。
-            </p>
-          </div>
-        </div>
-        <div class="flex items-start gap-5 bg-white border border-gray-100 rounded-xl p-6 shadow-sm">
-          <div class="w-12 h-12 bg-[#EBF8FC] rounded-full flex items-center justify-center flex-shrink-0">
-            <svg class="w-6 h-6 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>
-            </svg>
-          </div>
-          <div>
-            <h3 class="font-semibold text-gray-800 mb-1">オールインワンプラットフォーム</h3>
-            <p class="text-gray-500 text-sm leading-relaxed">
-              ホテルの掲載だけでなく、旅全体をシームレスにする実用的なトラベルサポートを提供します。
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA for Hotel Owners -->
-  <section class="py-12 sm:py-16 bg-[#EBF8FC]">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-      <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-4">
-        施設オーナー様へ
-      </h2>
-      <p class="text-gray-600 mb-8 max-w-xl mx-auto">
-        空室をDayDreamHubに掲載して収益化しませんか？アジア各地からデイユースの利用者が集まります。
-      </p>
-      <a href={localePath('/for-hotel-owner', locale)} class="btn-primary text-base px-8 py-3 inline-block">
-        空室を活用する
+<!-- CTA -->
+<section class="py-14 sm:py-20 bg-teal-700 text-white text-center">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6">
+    <h2 class="text-2xl sm:text-3xl font-bold mb-4">次の滞在を予約しましょう</h2>
+    <p class="text-teal-100 mb-8 text-lg">アジア全域の数百のホテルから、あなたにぴったりのプランを見つけてください。</p>
+    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+      <a href="/ja/search" class="bg-white text-teal-700 font-semibold px-8 py-3.5 rounded-xl hover:bg-teal-50 transition-colors shadow-lg">
+        ホテルを探す
+      </a>
+      <a href="/ja/for-hotel-owner" class="border border-white/50 text-white font-semibold px-8 py-3.5 rounded-xl hover:bg-white/10 transition-colors">
+        施設を掲載する
       </a>
     </div>
-  </section>
+  </div>
+</section>
+
 </Layout>

@@ -3,32 +3,82 @@ interface Props {
   planId: number;
   priceUsd: number;
   clientId: string;
+  testMode?: boolean;
+  hotelSlug?: string;
 }
 
-const { planId, priceUsd, clientId } = Astro.props;
-const usePayPal = clientId && clientId !== 'sandbox' && clientId.length > 10;
+const { planId, priceUsd, clientId, testMode = false, hotelSlug = '' } = Astro.props;
+const usePayPal = !testMode && clientId && clientId !== 'sandbox' && clientId.length > 10;
+// Evaluated at build/SSR time — becomes `false` in production bundle
+const isDev = import.meta.env.DEV;
+// simulate_error is only available for the test hotel
+const isTestHotel = hotelSlug.includes('test-hotel');
 ---
+
+<!-- Error overlay: shared across all payment modes, fixed center overlay -->
+<div id="payment-error-overlay"
+  style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); align-items:center; justify-content:center; z-index:9999;">
+  <!-- Popup body -->
+  <div style="background:white; border-radius:12px; padding:20px; width:calc(100% - 40px); max-width:320px; box-shadow:0 8px 32px rgba(0,0,0,0.24); margin:0 auto;">
+    <!-- Icon -->
+    <div id="popup-icon" style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:20px;"></div>
+    <!-- Title -->
+    <p id="popup-title" style="font-size:15px;font-weight:700;color:#111827;margin-bottom:6px;"></p>
+    <!-- Body -->
+    <p id="popup-body" style="font-size:13px;color:#374151;margin-bottom:4px;"></p>
+    <!-- Tip -->
+    <p id="popup-tip" style="font-size:12px;color:#6b7280;margin-bottom:16px;"></p>
+    <!-- Button 1 (main action) -->
+    <button id="popup-btn1"
+      style="width:100%;border:0.5px solid #d1d5db;border-radius:8px;padding:10px;font-size:13px;font-weight:500;background:#f9fafb;cursor:pointer;margin-bottom:10px;">
+    </button>
+    <!-- Button 2 (sub action / text link) -->
+    <div style="text-align:center;">
+      <button id="popup-btn2"
+        style="font-size:12px;text-decoration:underline;border:none;background:none;color:#6b7280;cursor:pointer;padding:0;">
+      </button>
+    </div>
+  </div>
+</div>
 
 <div id="payment-wrapper" class="mt-4">
 
 {usePayPal ? (
   <!-- PayPal mode -->
   <div>
-    <div id="paypal-button-container"></div>
-    <div id="paypal-loading" class="text-center py-4 text-sm text-gray-500">
-      Loading payment options...
+    <!-- Card form + PayPal button container -->
+    <div id="paypal-card-wrapper" class="relative">
+      <div id="paypal-button-container"></div>
+      <div id="paypal-loading" class="text-center py-4 text-sm text-gray-500">
+        Loading payment options...
+      </div>
     </div>
+  </div>
+) : testMode ? (
+  <!-- Test mode: simulate PayPal payment -->
+  <div>
+    <button id="test-pay-btn" type="button"
+      class="w-full py-4 px-6 bg-[#003087] hover:bg-[#001f6b] text-white font-bold rounded-xl text-lg transition-colors flex items-center justify-center gap-3">
+      <svg class="h-5 w-6" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.93 4.778-4.005 7.201-9.138 7.201h-2.19a.563.563 0 0 0-.556.479l-1.187 7.527h-.506l-.24 1.516a.56.56 0 0 0 .554.647h3.882c.46 0 .85-.334.922-.788.06-.26.76-4.852.816-5.09a.932.932 0 0 1 .923-.788h.58c3.76 0 6.705-1.528 7.565-5.946.36-1.847.174-3.388-.777-4.471z"/>
+      </svg>
+      <span id="test-btn-text">Pay with PayPal (Test)</span>
+      <span id="test-btn-spinner" class="hidden">
+        <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+      </span>
+    </button>
+    <p class="text-xs text-center text-gray-400 mt-2">🧪 テストモード — 実際の決済は発生しません</p>
 
-    <!-- Error box (hidden by default) -->
-    <div id="payment-error-box" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+    <!-- Error box for test mode -->
+    <div id="test-error-box" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
       <div class="flex items-start gap-3">
         <span class="text-xl">⚠️</span>
         <div>
-          <p class="font-semibold">Payment Failed</p>
-          <p id="payment-error-msg" class="mt-1 text-red-600">Please try again or use a different payment method.</p>
-          <button id="retry-payment-btn" class="mt-3 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg text-sm font-medium transition-colors">
-            Try Again
-          </button>
+          <p class="font-semibold">Booking Failed</p>
+          <p id="test-error-msg" class="mt-1 text-red-600">Please try again.</p>
         </div>
       </div>
     </div>
@@ -66,38 +116,220 @@ const usePayPal = clientId && clientId !== 'sandbox' && clientId.length > 10;
 
 </div>
 
-<script define:vars={{ planId, priceUsd, clientId, usePayPal }}>
+<script define:vars={{ planId, priceUsd, clientId, usePayPal, testMode, isDev, isTestHotel }}>
+  function init() {
+  // ─── i18n messages (shared across all payment modes) ─────────────────────
+  const POPUP_MESSAGES = {
+    en: {
+      card_error:    { title:'Please check your card details', body:'Your card number, expiry date, or security code (CVV) is incorrect.', tip:'Please check the number on the back of your card and try again.', btn1:'Correct card details and retry', btn2:'Pay with PayPal instead' },
+      limit_error:   { title:'Payment could not be completed', body:'Your card may have insufficient funds or has reached its limit.', tip:'Your reservation is saved. You can pay with another card or PayPal.', btn1:'Try a different card', btn2:'Pay with PayPal account' },
+      block_error:   { title:'Your card issuer blocked this transaction', body:'Your card may be blocking international transactions for security reasons.', tip:'Please contact your card issuer to enable international use, or try another method.', btn1:'Try a different card', btn2:'Pay with PayPal account' },
+      network_error: { title:'A temporary error occurred', body:'Your card has not been charged.', tip:'Please try again in a moment. Contact support if the issue persists.', btn1:'Try again', btn2:'Contact support' },
+      threeds_error: { title:'Authentication could not be completed', body:"Your card issuer's verification (3D Secure) was not completed.", tip:'Please check your SMS or card app for a verification prompt and try again.', btn1:'Try again', btn2:'Try a different card' },
+    },
+    ja: {
+      card_error:    { title:'カード情報をご確認ください', body:'カード番号・有効期限・セキュリティコード（CVV）のいずれかに誤りがあります。', tip:'カード裏面の番号を確認のうえ、再度お試しください。', btn1:'カード情報を修正して再試行する', btn2:'別のお支払い方法を使う（PayPal）' },
+      limit_error:   { title:'お支払いを完了できませんでした', body:'残高不足または利用限度額に達している可能性があります。', tip:'ご予約は保持されています。別のカードまたはPayPalでお手続きいただけます。', btn1:'別のカードで試す', btn2:'PayPalアカウントで支払う' },
+      block_error:   { title:'カード会社が取引をブロックしました', body:'セキュリティ保護のため、海外利用がブロックされている可能性があります。', tip:'カード裏面の番号に電話し「海外利用の解除」を依頼するか、別の方法をお試しください。', btn1:'別のカードで試す', btn2:'PayPalアカウントで支払う' },
+      network_error: { title:'一時的な通信エラーが発生しました', body:'お客様のカードには請求されていません。', tip:'しばらく待ってから再度お試しください。繰り返し失敗する場合はサポートへご連絡ください。', btn1:'もう一度試す', btn2:'サポートに連絡する' },
+      threeds_error: { title:'本人認証が完了しませんでした', body:'カード会社の本人確認（3Dセキュア）が完了しなかったため、お支払いを処理できませんでした。', tip:'SMSやカード会社アプリの通知を確認し、認証を完了させてから再度お試しください。', btn1:'もう一度試す', btn2:'別のカードで試す' },
+    },
+  };
+  const isJapanese = window.location.pathname.startsWith('/ja/') || window.location.pathname === '/ja';
+  const _lang = isJapanese ? 'ja' : 'en';
+  const _msg = POPUP_MESSAGES[_lang] || POPUP_MESSAGES.en;
+
+  function showPopup(type) {
+    const texts = _msg[type] || _msg.network_error;
+    const overlay = document.getElementById('payment-error-overlay');
+    const icon    = document.getElementById('popup-icon');
+    const title   = document.getElementById('popup-title');
+    const body    = document.getElementById('popup-body');
+    const tip     = document.getElementById('popup-tip');
+    const btn1    = document.getElementById('popup-btn1');
+    const btn2    = document.getElementById('popup-btn2');
+    if (!overlay) return;
+    const isRed = (type === 'card_error' || type === 'limit_error');
+    icon.style.background = isRed ? '#FCEBEB' : '#FAEEDA';
+    icon.textContent = isRed ? '💳' : '⚠️';
+    title.textContent = texts.title;
+    body.textContent  = texts.body;
+    tip.textContent   = texts.tip;
+    btn1.textContent  = texts.btn1;
+    btn2.textContent  = texts.btn2;
+    btn1.onclick = () => hidePopup();
+    btn2.onclick = () => {
+      if (type === 'network_error') {
+        window.location.href = isJapanese ? '/ja/contact' : '/contact';
+      } else {
+        hidePopup();
+        const ppBtn = document.querySelector('#paypal-button-container [data-funding-source="paypal"] button, #paypal-button-container iframe');
+        if (ppBtn) ppBtn.click();
+      }
+    };
+    overlay.style.display = 'flex';
+  }
+  function hidePopup() {
+    const overlay = document.getElementById('payment-error-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  // ─── simulate_error trigger ───────────────────────────────────────────────
+  // Enabled in DEV (local only) OR when hotel slug contains "test-hotel"
+  // Real hotel pages are completely unaffected
+  // TODO（本番デプロイ前確認）:
+  // [ ] isTestHotel = false の本番ホテル予約ページで ?simulate_error= が無視されることを確認
+  // [ ] /booking/878 (TEST HOTEL) でのみポップアップが出ることを確認
+  if (isDev || isTestHotel) {
+    const sim = new URLSearchParams(location.search).get('simulate_error');
+    const validTypes = ['card_error', 'limit_error', 'block_error', 'network_error', 'threeds_error'];
+    if (sim && validTypes.includes(sim)) {
+      // 800ms delay: waits for PayPal SDK + page render to settle
+      setTimeout(() => showPopup(sim), 800);
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   function validateForm() {
     const form = document.getElementById('booking-form');
     if (!form) return false;
-    const guestName = (form.querySelector('#guest_name') as HTMLInputElement)?.value.trim();
-    const guestEmail = (form.querySelector('#guest_email') as HTMLInputElement)?.value.trim();
-    const checkInDate = (form.querySelector('#check_in_date') as HTMLInputElement)?.value;
-    const adults = parseInt((form.querySelector('#adults') as HTMLSelectElement)?.value || '0');
-    const errorEl = document.getElementById('form-error');
+    const _isJa = window.location.pathname.startsWith('/ja/') || window.location.pathname === '/ja';
 
-    // Check each field individually for better error messages
-    const checkinY = (document.getElementById('checkin-y') as HTMLSelectElement)?.value;
-    const checkinM = (document.getElementById('checkin-m') as HTMLSelectElement)?.value;
-    const checkinD = (document.getElementById('checkin-d') as HTMLSelectElement)?.value;
-    const dateSelected = checkinY && checkinM && checkinD;
+    // ── clear all inline errors ──────────────────────────────────────────────
+    ['err-guest_name','err-guest_email','err-phone_local','err-check_in_date','err-adults'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.classList.add('hidden'); const sp = el.querySelector('span:last-child'); if (sp) sp.textContent = ''; }
+    });
+    // clear red borders
+    ['guest_name','guest_email','phone_local','check_in_date','adults'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.style.borderColor = ''; el.style.boxShadow = ''; }
+    });
+    const globalErr = document.getElementById('form-error');
+    if (globalErr) globalErr.classList.add('hidden');
 
-    let msg = '';
-    if (!guestName) msg = 'Please enter your name.';
-    else if (!guestEmail) msg = 'Please enter your email address.';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) msg = 'Please enter a valid email address.';
-    else if (!dateSelected || !checkInDate) msg = 'Please select a check-in date (YYYY / MM / DD).';
-    else if (adults < 1) msg = 'Please select at least 1 adult.';
+    // ── field values ─────────────────────────────────────────────────────────
+    const guestName  = (form.querySelector('#guest_name')?.value || '').trim();
+    const guestEmail = (form.querySelector('#guest_email')?.value || '').trim();
+    const phoneCode  = (form.querySelector('#phone_code')?.value || '').replace(/-[A-Z]+$/, '');
+    const phoneLocal = (form.querySelector('#phone_local')?.value || '').trim();
+    const guestPhone = phoneLocal ? (phoneCode + phoneLocal) : '';
+    const checkInDate = (form.querySelector('#check_in_date')?.value || '').trim();
+    const adults      = parseInt(form.querySelector('#adults')?.value || '0');
 
-    if (msg) {
-      if (errorEl) { errorEl.textContent = msg; errorEl.classList.remove('hidden'); }
+    // sync hidden phone field
+    const phoneHidden = form.querySelector('#guest_phone');
+    if (phoneHidden) phoneHidden.value = guestPhone;
+
+    // ── validation rules ─────────────────────────────────────────────────────
+    let errorFieldId = '';
+    let errorMsg = '';
+
+    if (!guestName) {
+      errorFieldId = 'guest_name';
+      errorMsg = _isJa ? 'お名前を入力してください。' : 'Please enter your name.';
+    } else if (!guestEmail) {
+      errorFieldId = 'guest_email';
+      errorMsg = _isJa ? 'メールアドレスを入力してください。' : 'Please enter your email address.';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
+      errorFieldId = 'guest_email';
+      errorMsg = _isJa ? '有効なメールアドレスを入力してください。' : 'Please enter a valid email address.';
+    } else if (!guestPhone) {
+      errorFieldId = 'phone_local';
+      errorMsg = _isJa ? '電話番号を入力してください。' : 'Please enter your phone number.';
+    } else if (!/^[+\d][\d\s\-()+]{3,}$/.test(guestPhone)) {
+      errorFieldId = 'phone_local';
+      errorMsg = _isJa ? '電話番号は数字・ハイフン・スペースのみ入力できます。' : 'Please enter a valid phone number (digits, hyphens, spaces only).';
+    } else if (!checkInDate) {
+      errorFieldId = 'check_in_date';
+      errorMsg = _isJa ? 'チェックイン日を選択してください。' : 'Please select a check-in date.';
+    } else if (adults < 1) {
+      errorFieldId = 'adults';
+      errorMsg = _isJa ? '大人を1名以上選択してください。' : 'Please select at least 1 adult.';
+    }
+
+    if (errorMsg) {
+      // show inline error below the field
+      const errEl = document.getElementById('err-' + errorFieldId);
+      if (errEl) {
+        const sp = errEl.querySelector('span:last-child');
+        if (sp) sp.textContent = errorMsg;
+        errEl.classList.remove('hidden');
+      }
+      // highlight the input with red border
+      const inputEl = document.getElementById(errorFieldId);
+      if (inputEl) {
+        inputEl.style.borderColor = '#ef4444';
+        inputEl.style.boxShadow = '0 0 0 2px rgba(239,68,68,0.2)';
+        // scroll to field + small offset
+        inputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (errEl) {
+        errEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return false;
     }
-    if (errorEl) errorEl.classList.add('hidden');
     return true;
   }
 
-  if (!usePayPal) {
+  if (testMode) {
+    // Test mode: simulate PayPal payment via /api/payments/test-capture
+    document.getElementById('test-pay-btn')?.addEventListener('click', async () => {
+      if (!validateForm()) return;
+
+      const btn = document.getElementById('test-pay-btn');
+      const btnText = document.getElementById('test-btn-text');
+      const spinner = document.getElementById('test-btn-spinner');
+      const errorBox = document.getElementById('test-error-box');
+      const errorMsg = document.getElementById('test-error-msg');
+
+      btn.disabled = true;
+      if (btnText) btnText.textContent = 'Processing...';
+      spinner?.classList.remove('hidden');
+      errorBox?.classList.add('hidden');
+
+      const form = document.getElementById('booking-form');
+      const fd = new FormData(form);
+
+      try {
+        const res = await fetch('/api/payments/test-capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            plan_id: planId,
+            guest_name: fd.get('guest_name'),
+            guest_email: fd.get('guest_email'),
+            guest_phone: fd.get('guest_phone') || '',
+            check_in_date: fd.get('check_in_date'),
+            adults: parseInt(fd.get('adults') || '1'),
+            children: parseInt(fd.get('children') || '0'),
+            infants: parseInt(fd.get('infants') || '0'),
+            notes: fd.get('notes') || '',
+          }),
+        });
+
+        const data = await res.json();
+        if (res.ok && data.order_id) {
+          window.location.href = `/booking/confirmation?order=${data.order_id}`;
+        } else {
+          if (errorBox && errorMsg) {
+            errorMsg.textContent = data.error || 'Booking failed. Please try again.';
+            errorBox.classList.remove('hidden');
+          }
+          btn.disabled = false;
+          if (btnText) btnText.textContent = 'Pay with PayPal (Test)';
+          spinner?.classList.add('hidden');
+        }
+      } catch (e) {
+        if (errorBox && errorMsg) {
+          errorMsg.textContent = 'Network error. Please check your connection and try again.';
+          errorBox.classList.remove('hidden');
+        }
+        btn.disabled = false;
+        if (btnText) btnText.textContent = 'Pay with PayPal (Test)';
+        spinner?.classList.add('hidden');
+      }
+    });
+  } else if (!usePayPal) {
     // Direct booking (PayPal bypass)
     document.getElementById('direct-book-btn')?.addEventListener('click', async () => {
       if (!validateForm()) return;
@@ -157,28 +389,51 @@ const usePayPal = clientId && clientId !== 'sandbox' && clientId.length > 10;
   } else {
     // PayPal mode
 
-    function showPaymentError(message: string) {
-      const errorBox = document.getElementById('payment-error-box');
-      const errorMsg = document.getElementById('payment-error-msg');
-      if (errorBox) errorBox.classList.remove('hidden');
-      if (errorMsg) errorMsg.textContent = message || 'Please try again or use a different payment method.';
+    const locale = isJapanese ? 'ja_JP' : 'en_US';
+
+    // ─── Error type classifier ────────────────────────────────────────────────
+    function classifyError(err) {
+      // Normalize: PayPal SDK error直接 or 自社API経由レスポンス({ paypal_result: {...} })
+      // どちらのパスでも details[0].issue を取得できるよう統一
+      const issue =
+        err?.details?.[0]?.issue ||
+        err?.paypal_result?.details?.[0]?.issue ||
+        err?.paypal_result?.payment_source?.card?.response_code ||
+        '';
+      const name = err?.name || err?.paypal_result?.name || '';
+
+      // 3D Secure
+      if (name === 'THREE_DS_FAILURE' || ['PAYER_ACTION_REQUIRED', 'CARD_3DS_FAILED'].includes(issue))
+        return 'threeds_error';
+
+      // Card info errors
+      if (name === 'UNPROCESSABLE_ENTITY' || ['INVALID_ACCOUNT', 'CARD_EXPIRED', 'INVALID_CVV'].includes(issue))
+        return 'card_error';
+
+      // Funds / limit
+      if (['INSUFFICIENT_FUNDS', 'CARD_LIMIT_EXCEEDED'].includes(issue))
+        return 'limit_error';
+
+      // Block
+      if (['CARD_CLOSED', 'TRANSACTION_REFUSED', 'TRANSACTION_BLOCKED_BY_PAYEE'].includes(issue))
+        return 'block_error';
+
+      // Default: network/server
+      return 'network_error';
     }
 
-    function hidePaymentError() {
-      const errorBox = document.getElementById('payment-error-box');
-      if (errorBox) errorBox.classList.add('hidden');
-    }
+    // showPopup / hidePopup are defined at the top of init() (shared)
 
+    // ─── PayPal buttons ───────────────────────────────────────────────────────
     function renderPayPalButtons() {
-      // Clear container before (re-)rendering
       const container = document.getElementById('paypal-button-container');
       if (container) container.innerHTML = '';
-      hidePaymentError();
+      hidePopup();
 
       paypal.Buttons({
         style: { layout: 'vertical', color: 'blue', shape: 'rect', label: 'pay' },
         createOrder: async () => {
-          hidePaymentError();
+          hidePopup();
           if (!validateForm()) throw new Error('Form validation failed');
           const form = document.getElementById('booking-form');
           const fd = new FormData(form);
@@ -200,42 +455,50 @@ const usePayPal = clientId && clientId !== 'sandbox' && clientId.length > 10;
           return (await res.json()).order_id;
         },
         onApprove: async (data) => {
-          const res = await fetch('/api/payments/capture', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: data.orderID }),
-          });
-          if (res.ok) {
-            window.location.href = '/booking/confirmation?order=' + data.orderID;
-          } else {
-            const errData = await res.json().catch(() => ({}));
-            showPaymentError(errData.error || 'Payment capture failed. Please contact support if this continues.');
+          try {
+            const res = await fetch('/api/payments/capture', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ order_id: data.orderID }),
+            });
+            if (res.ok) {
+              window.location.href = '/booking/confirmation?order=' + data.orderID;
+            } else {
+              let errObj = {};
+              try { errObj = await res.json(); } catch(_) {}
+              showPopup(classifyError(errObj));
+            }
+          } catch (e) {
+            showPopup('network_error');
           }
         },
         onError: (err) => {
-          if (err.message !== 'Form validation failed') {
-            showPaymentError('Payment failed. Please try again or use a different payment method.');
-          }
+          if (err?.message === 'Form validation failed') return;
+          showPopup(classifyError(err));
         },
       }).render('#paypal-button-container');
     }
 
     const script = document.createElement('script');
-    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&locale=${locale}`;
     script.onload = () => {
       const loadingEl = document.getElementById('paypal-loading');
       if (loadingEl) loadingEl.style.display = 'none';
       renderPayPalButtons();
 
-      // Wire up the "Try Again" retry button
-      document.getElementById('retry-payment-btn')?.addEventListener('click', () => {
-        renderPayPalButtons();
-      });
+      // simulate_error is handled at init() level (shared across all modes)
     };
     script.onerror = () => {
       const el = document.getElementById('paypal-loading');
       if (el) { el.textContent = 'Failed to load payment. Please refresh.'; el.classList.add('text-red-500'); }
     };
     document.head.appendChild(script);
+  }
+  } // end init()
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
 </script>

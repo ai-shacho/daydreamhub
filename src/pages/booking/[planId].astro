@@ -6,6 +6,38 @@ import { getLocale, t, localePath } from '../../lib/i18n';
 const locale = getLocale(Astro.url);
 const { planId } = Astro.params;
 const planIdNum = parseInt(planId || '0');
+const isTestMode = Astro.url.searchParams.get('test_pay') === '1';
+
+// Auth check: redirect to login if not authenticated
+async function verifyJWT(token: string, secret: string): Promise<Record<string, any> | null> {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [header, body, signature] = parts;
+    const key = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    );
+    const sigBytes = Uint8Array.from(
+      atob(signature.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)
+    );
+    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(`${header}.${body}`));
+    if (!valid) return null;
+    const payload = JSON.parse(atob(body));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch { return null; }
+}
+{
+  const env = (Astro.locals as any).runtime?.env;
+  const jwtSecret = env?.JWT_SECRET || 'ddh-secret-2025';
+  const cookieHeader = Astro.request.headers.get('cookie') || '';
+  const tokenMatch = cookieHeader.match(/ddh_token=([^;]+)/);
+  const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
+  if (!authPayload) {
+    return Astro.redirect(`/login?redirect=/booking/${planId}`);
+  }
+}
 
 let plan: any = null;
 let dbAvailable = false;
@@ -18,7 +50,7 @@ try {
   if (db) {
     dbAvailable = true;
     plan = await db.prepare(
-      "SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?"
+      "SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country, h.cancellation_policy as hotel_cancellation_policy FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?"
     ).bind(planIdNum).first();
   }
 } catch (e) {
@@ -42,10 +74,13 @@ if (!plan) {
   Astro.response.status = 404;
 }
 
+
+
 const displayPlanName = plan ? (locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name) : '';
 const displayHotelName = plan ? (locale === 'ja' && plan.hotel_name_ja ? plan.hotel_name_ja : plan.hotel_name) : '';
 const timeSlot = plan?.check_in_time && plan?.check_out_time ? `${plan.check_in_time} - ${plan.check_out_time}` : '';
 const today = new Date().toISOString().split('T')[0];
+const dateParam = Astro.url.searchParams.get('date') || today;
 const todayParts = today.split('-');
 const bookingMonths = [
   { val: '01', label: 'Jan' }, { val: '02', label: 'Feb' }, { val: '03', label: 'Mar' },
@@ -116,38 +151,62 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
                   {t('booking.guest_name', locale)} <span class="text-red-500">*</span>
                 </label>
                 <input type="text" id="guest_name" name="guest_name" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors" placeholder={locale === 'ja' ? '山田 太郎' : 'John Doe'} />
+                <p id="err-guest_name" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
               </div>
               <div>
                 <label for="guest_email" class="block text-sm font-medium text-gray-700 mb-1">
                   {t('booking.email', locale)} <span class="text-red-500">*</span>
                 </label>
                 <input type="email" id="guest_email" name="guest_email" required class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors" placeholder="email@example.com" />
+                <p id="err-guest_email" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
               </div>
               <div>
-                <label for="guest_phone" class="block text-sm font-medium text-gray-700 mb-1">
-                  {t('booking.phone', locale)}
+                <label for="phone_local" class="block text-sm font-medium text-gray-700 mb-1">
+                  {t('booking.phone', locale)} <span class="text-red-500">*</span>
                 </label>
-                <input type="tel" id="guest_phone" name="guest_phone" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors" placeholder="+81-90-1234-5678" />
+                <div class="flex gap-2">
+                  <select id="phone_code" class="flex-shrink-0 w-32 px-2 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white transition-colors">
+                    <option value="+1"  selected>🇺🇸 +1</option>
+                    <option value="+81">🇯🇵 +81</option>
+                    <option value="+44">🇬🇧 +44</option>
+                    <option value="+61">🇦🇺 +61</option>
+                    <option value="+1-CA">🇨🇦 +1</option>
+                    <option value="+49">🇩🇪 +49</option>
+                    <option value="+33">🇫🇷 +33</option>
+                    <option value="+86">🇨🇳 +86</option>
+                    <option value="+82">🇰🇷 +82</option>
+                    <option value="+852">🇭🇰 +852</option>
+                    <option value="+886">🇹🇼 +886</option>
+                    <option value="+65">🇸🇬 +65</option>
+                    <option value="+60">🇲🇾 +60</option>
+                    <option value="+66">🇹🇭 +66</option>
+                    <option value="+62">🇮🇩 +62</option>
+                    <option value="+63">🇵🇭 +63</option>
+                    <option value="+84">🇻🇳 +84</option>
+                    <option value="+91">🇮🇳 +91</option>
+                    <option value="+971">🇦🇪 +971</option>
+                    <option value="+55">🇧🇷 +55</option>
+                    <option value="+92">🇵🇰 +92</option>
+                    <option value="+94">🇱🇰 +94</option>
+                    <option value="+977">🇳🇵 +977</option>
+                  </select>
+                  <input type="tel" id="phone_local" autocomplete="tel-national"
+                    class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors"
+                    placeholder="90-1234-5678" />
+                </div>
+                <input type="hidden" id="guest_phone" name="guest_phone" />
+                <p id="err-phone_local" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
               </div>
               <div>
                 <label for="check_in_date" class="block text-sm font-medium text-gray-700 mb-1">
                   {t('booking.date', locale)} <span class="text-red-500">*</span>
                 </label>
-                <div class="flex gap-2">
-                  <select id="checkin-y" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white">
-                    <option value="">YYYY</option>
-                    {bookingYears.map(y => <option value={y}>{y}</option>)}
-                  </select>
-                  <select id="checkin-m" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white">
-                    <option value="">MM</option>
-                    {bookingMonths.map(m => <option value={m.val}>{m.label}</option>)}
-                  </select>
-                  <select id="checkin-d" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white">
-                    <option value="">DD</option>
-                    {bookingDays.map(d => <option value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <input type="hidden" id="check_in_date" name="check_in_date" />
+                <input type="text" id="check_in_date" name="check_in_date" required
+                  placeholder="MM/DD/YYYY" autocomplete="off" readonly
+                  value={dateParam}
+                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white cursor-pointer"
+                />
+                <p id="err-check_in_date" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
               </div>
               {plan?.max_guests && (
                 <div class="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -189,15 +248,15 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
                 </svg>
                 <span>This plan allows a maximum of <strong>{maxGuests}</strong> guests in total (adults + children + infants).</span>
               </div>
+              <p id="err-adults" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
               <div>
                 <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">
                   {t('booking.special_requests', locale)}
                 </label>
                 <textarea id="notes" name="notes" rows="3" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors resize-vertical" placeholder={t('booking.special_requests_placeholder', locale)}></textarea>
               </div>
-              <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3">
-                {t('booking.form_validation_error', locale)}
-              </div>
+              <!-- form-error kept for PayPal internal errors (not field-level) -->
+              <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3"></div>
             </form>
           </div>
         </div>
@@ -248,16 +307,29 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
               </div>
             )}
             <div class="mb-4">
-              <p class="text-sm text-gray-500">Cancellation Policy</p>
-              {plan.cancellation_hours === 0 ? (
-                <span class="inline-flex items-center gap-1 text-xs font-medium bg-red-100 text-red-700 px-2 py-0.5 rounded-full mt-1">
-                  ❌ Non-refundable
-                </span>
-              ) : (
-                <span class="inline-flex items-center gap-1 text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full mt-1">
-                  ✅ Free cancellation up to {plan.cancellation_hours ?? 24}h before check-in
-                </span>
-              )}
+              <p class="text-sm text-gray-500 mb-2">Cancellation Policy</p>
+              {(() => {
+                const fullPolicy = (plan.cancellation_policy || plan.hotel_cancellation_policy || '').trim();
+                if (fullPolicy) {
+                  return (
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-gray-700 leading-relaxed whitespace-pre-line">
+                      {fullPolicy}
+                    </div>
+                  );
+                } else if (plan.cancellation_hours === 0) {
+                  return (
+                    <div class="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-xs text-red-700 font-medium">
+                      ❌ Non-refundable
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div class="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-xs text-green-700">
+                      ✅ Free cancellation up to {plan.cancellation_hours ?? 24}h before check-in
+                    </div>
+                  );
+                }
+              })()}
             </div>
             <div class="border-t border-gray-200 my-4"></div>
             <div class="flex items-center justify-between mb-2">
@@ -266,7 +338,21 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
                 ${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
               </p>
             </div>
-            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} />
+            <!-- Approval-based booking notice -->
+            <div class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 mb-3">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div>
+                <p class="font-medium">{locale === 'ja' ? '予約承認制について' : 'Approval-based Booking'}</p>
+                <p class="mt-0.5 text-xs text-amber-700">
+                  {locale === 'ja'
+                    ? 'ご予約はホテルによる承認制です。お支払いは予約時にお預かりしますが、承認されなかった場合は全額返金いたします。'
+                    : 'Bookings are subject to hotel approval. Payment is collected at the time of booking, but you will receive a full refund if your request is not approved.'}
+                </p>
+              </div>
+            </div>
+            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} testMode={isTestMode} hotelSlug={plan.hotel_slug} />
           </div>
         </div>
       </div>
@@ -291,16 +377,43 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
 
 </Layout>
 
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script is:inline>
+  (function() {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+    s.onload = function() {
+      var today = new Date();
+      today.setHours(0,0,0,0);
+      flatpickr('#check_in_date', {
+        dateFormat: 'Y-m-d',   // 実際の input value は YYYY-MM-DD（API送信用）
+        altInput: true,         // 表示用の別インプットを生成
+        altFormat: 'm/d/Y',    // ユーザーには MM/DD/YYYY で表示
+        minDate: today,
+        disableMobile: true,
+        locale: { firstDayOfWeek: 0 }
+      });
+    };
+    document.head.appendChild(s);
+  })();
+</script>
 <script define:vars={{ maxGuests }}>
-  function syncCheckin() {
-    var y = (document.getElementById('checkin-y') as HTMLSelectElement).value;
-    var m = (document.getElementById('checkin-m') as HTMLSelectElement).value;
-    var d = (document.getElementById('checkin-d') as HTMLSelectElement).value;
-    (document.getElementById('check_in_date') as HTMLInputElement).value = (y && m && d) ? y + '-' + m + '-' + d : '';
-  }
-  ['checkin-y', 'checkin-m', 'checkin-d'].forEach(function(id) {
-    document.getElementById(id)?.addEventListener('change', syncCheckin);
-  });
+  // Phone: combine country code + local number into hidden #guest_phone
+  (function() {
+    function syncPhone() {
+      var code  = (document.getElementById('phone_code') as HTMLSelectElement)?.value || '';
+      var local = (document.getElementById('phone_local') as HTMLInputElement)?.value.trim() || '';
+      // strip "-CA" suffix (Canada shares +1)
+      var dialCode = code.replace(/-[A-Z]+$/, '');
+      var hidden = document.getElementById('guest_phone') as HTMLInputElement;
+      if (hidden) hidden.value = local ? dialCode + local : '';
+    }
+    document.getElementById('phone_code')?.addEventListener('change', syncPhone);
+    document.getElementById('phone_local')?.addEventListener('input', syncPhone);
+    syncPhone();
+  })();
+
+  // date input — value is already in YYYY-MM-DD format, no sync needed
 
   // Max guests: show error immediately
   if (maxGuests > 0) {
@@ -309,7 +422,7 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
     function checkGuestTotal() {
       var total = 0;
       guestSelIds.forEach(function(id) {
-        total += parseInt((document.getElementById(id) as HTMLSelectElement)?.value || '0') || 0;
+        total += parseInt(document.getElementById(id)?.value || '0') || 0;
       });
       var errEl = document.getElementById('guests-error');
       var over = total > maxGuests;
@@ -320,7 +433,7 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
 
       // Highlight selects in red when over
       guestSelIds.forEach(function(id) {
-        var el = document.getElementById(id) as HTMLSelectElement;
+        var el = document.getElementById(id);
         if (!el) return;
         if (over) {
           el.style.borderColor = '#ef4444';

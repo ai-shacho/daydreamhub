@@ -94,7 +94,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
   const allowed = ['name','name_ja','slug','description','description_ja','city','country','address',
-    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy'];
+    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy','is_active'];
   const updates: string[] = [];
   const params: any[] = [];
   for (const key of allowed) {
@@ -108,5 +108,48 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return new Response(JSON.stringify({ error: 'Update failed', details: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+};
+
+export const POST: APIRoute = async ({ request, locals }) => {
+  const db = (locals as any).runtime?.env?.DB;
+  if (!db) {
+    return new Response(JSON.stringify({ error: 'Database not available' }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  let data: Record<string, any>;
+  try { data = await request.json(); } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  const { name, slug, city, country } = data;
+  if (!name || !slug || !city || !country) {
+    return new Response(JSON.stringify({ error: 'Missing required fields: name, slug, city, country' }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const result = await db.prepare(
+      `INSERT INTO hotels (name, name_ja, slug, description, description_ja, city, country, address, thumbnail_url, property_type, email, phone, amenities, is_active, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 0, datetime('now'))`
+    ).bind(
+      name, data.name_ja || null, slug,
+      data.description || null, data.description_ja || null,
+      city, country,
+      data.address || null, data.thumbnail_url || null,
+      data.property_type || 'hotel',
+      data.email || null, data.phone || null
+    ).run();
+    return new Response(JSON.stringify({ success: true, id: (result as any).meta?.last_row_id }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: 'Insert failed', details: message }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    });
   }
 };

@@ -49,7 +49,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)"
     ).bind(name, email, passwordHash, role).run();
     const user = await db.prepare('SELECT id FROM users WHERE email = ? LIMIT 1').bind(email).first();
-    return new Response(JSON.stringify({ success: true, id: user?.id }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: true, id: user?.id, user: { name, email, role }, plainPassword: password }), { status: 201, headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     if (message.includes('UNIQUE') || message.includes('unique')) {

@@ -310,29 +310,41 @@ const translations = {
         }
       }
 
-      // Check for ?city= URL param (e.g. from hotel detail page "View on Map" button)
+      // Check for URL params
       const urlParams = new URLSearchParams(window.location.search);
+      const hotelParam = urlParams.get('hotel');
+      const latParam = parseFloat(urlParams.get('lat') || '');
+      const lngParam = parseFloat(urlParams.get('lng') || '');
       const cityParam = urlParams.get('city');
-      if (cityParam) {
+
+      if (cityParam && !hotelParam) {
         const citySelect = document.getElementById('filter-city');
-        // Try to find matching option (case-insensitive)
         const options = Array.from(citySelect.options);
         const match = options.find(o => o.value.toLowerCase() === cityParam.toLowerCase());
-        if (match) {
-          citySelect.value = match.value;
-        } else {
-          citySelect.value = cityParam;
-        }
+        if (match) citySelect.value = match.value;
+        else citySelect.value = cityParam;
       }
 
       // Initial render
-      if (cityParam) {
+      createHotelMarkers(mapData.hotels);
+      createCityMarkers('', '');
+      document.getElementById('results-count').textContent =
+        translations.hotelsCount.replace('{count}', mapData.hotels.length);
+
+      // Focus on specific hotel if ?hotel= param is present
+      if (hotelParam) {
+        // Find the matching marker
+        const targetMarker = hotelMarkers.find(m => m._hotelData && m._hotelData.slug === hotelParam);
+        if (targetMarker) {
+          const latlng = targetMarker.getLatLng();
+          map.setView([latlng.lat, latlng.lng], 15, { animate: true });
+          setTimeout(function() { targetMarker.openPopup(); }, 400);
+        } else if (!isNaN(latParam) && !isNaN(lngParam)) {
+          // Fallback: center on lat/lng from URL
+          map.setView([latParam, lngParam], 15, { animate: true });
+        }
+      } else if (cityParam) {
         applyFilters();
-      } else {
-        createHotelMarkers(mapData.hotels);
-        createCityMarkers('', '');
-        document.getElementById('results-count').textContent =
-          translations.hotelsCount.replace('{count}', mapData.hotels.length);
       }
 
       // Event listeners for filters

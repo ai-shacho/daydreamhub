@@ -1,19 +1,43 @@
 ---
 import Layout from '../../../layouts/Layout.astro';
+import PayPalButton from '../../../components/PayPalButton.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
 
 const locale = getLocale(Astro.url);
 const { planId } = Astro.params;
 const planIdNum = parseInt(planId || '0');
-const jaBookingMonths = [
-  { val: '01', label: 'Jan' }, { val: '02', label: 'Feb' }, { val: '03', label: 'Mar' },
-  { val: '04', label: 'Apr' }, { val: '05', label: 'May' }, { val: '06', label: 'Jun' },
-  { val: '07', label: 'Jul' }, { val: '08', label: 'Aug' }, { val: '09', label: 'Sep' },
-  { val: '10', label: 'Oct' }, { val: '11', label: 'Nov' }, { val: '12', label: 'Dec' },
-];
-const jaBookingCurYear = new Date().getFullYear();
-const jaBookingYears = [jaBookingCurYear, jaBookingCurYear + 1, jaBookingCurYear + 2];
-const jaBookingDays = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
+const isTestMode = Astro.url.searchParams.get('test_pay') === '1';
+
+// Auth check: redirect to login if not authenticated
+async function verifyJWT(token: string, secret: string): Promise<Record<string, any> | null> {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [header, body, signature] = parts;
+    const key = await crypto.subtle.importKey(
+      'raw', new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    );
+    const sigBytes = Uint8Array.from(
+      atob(signature.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)
+    );
+    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(`${header}.${body}`));
+    if (!valid) return null;
+    const payload = JSON.parse(atob(body));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload;
+  } catch { return null; }
+}
+{
+  const env = (Astro.locals as any).runtime?.env;
+  const jwtSecret = env?.JWT_SECRET || 'ddh-secret-2025';
+  const cookieHeader = Astro.request.headers.get('cookie') || '';
+  const tokenMatch = cookieHeader.match(/ddh_token=([^;]+)/);
+  const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
+  if (!authPayload) {
+    return Astro.redirect(`/ja/login?redirect=/ja/booking/${planId}`);
+  }
+}
 
 let plan: any = null;
 let dbAvailable = false;
@@ -26,7 +50,7 @@ try {
   if (db) {
     dbAvailable = true;
     plan = await db.prepare(
-      'SELECT p.*, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?'
+      'SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country, h.cancellation_policy as hotel_cancellation_policy FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?'
     ).bind(planIdNum).first();
   }
 } catch (e) {
@@ -35,12 +59,9 @@ try {
 
 if (!dbAvailable) {
   const samplePlans = [
-    { id: 1, name: '4-Hour Workspace', name_ja: '4時間ワークスペース', price_usd: 25, check_in_time: '09:00', check_out_time: '13:00', plan_type: 'day-use', max_guests: 1, duration_hours: 4, hotel_name: 'The Work Loft Bangkok', hotel_name_ja: 'ザ ワークロフト バンコク', hotel_slug: 'work-loft-bangkok', city: 'Bangkok', country: 'Thailand' },
-    { id: 2, name: 'Full Day Office', name_ja: '1日オフィス', price_usd: 45, check_in_time: '09:00', check_out_time: '18:00', plan_type: 'day-use', max_guests: 2, duration_hours: 9, hotel_name: 'The Work Loft Bangkok', hotel_name_ja: 'ザ ワークロフト バンコク', hotel_slug: 'work-loft-bangkok', city: 'Bangkok', country: 'Thailand' },
-    { id: 6, name: '6-Hour Layover', name_ja: '6時間レイオーバー', price_usd: 40, check_in_time: '00:00', check_out_time: '06:00', plan_type: 'day-use', max_guests: 2, duration_hours: 6, hotel_name: 'Airport Transit Hotel', hotel_name_ja: 'エアポート トランジットホテル', hotel_slug: 'airport-transit-hotel', city: 'Singapore', country: 'Singapore' },
-    { id: 10, name: 'Romantic Half Day', name_ja: 'ロマンチック半日', price_usd: 80, check_in_time: '12:00', check_out_time: '18:00', plan_type: 'day-use', max_guests: 2, duration_hours: 6, hotel_name: 'Romance Suite Bali', hotel_name_ja: 'ロマンス スイート バリ', hotel_slug: 'romance-suite-bali', city: 'Bali', country: 'Indonesia' },
-    { id: 14, name: 'Luxury Day Pass', name_ja: 'ラグジュアリーデイパス', price_usd: 150, check_in_time: '10:00', check_out_time: '18:00', plan_type: 'day-use', max_guests: 2, duration_hours: 8, hotel_name: 'The Ritz-Carlton KL', hotel_name_ja: 'ザ・リッツカールトン KL', hotel_slug: 'ritz-carlton-kl', city: 'Kuala Lumpur', country: 'Malaysia' },
-    { id: 18, name: 'Beach & Pool Day', name_ja: 'ビーチ＆プールデイ', price_usd: 55, check_in_time: '09:00', check_out_time: '17:00', plan_type: 'day-use', max_guests: 4, duration_hours: 8, hotel_name: 'Daycation Paradise', hotel_name_ja: 'デイケーション パラダイス', hotel_slug: 'daycation-paradise', city: 'Bali', country: 'Indonesia' },
+    { id: 1, name: '4-Hour Workspace', name_ja: '4時間ワークスペース', price_usd: 25, check_in_time: '09:00', check_out_time: '13:00', plan_type: 'day-use', max_guests: 1, duration_hours: 4, hotel_name: 'The Work Loft Bangkok', hotel_name_ja: 'ザ ワークロフト バンコク', hotel_slug: 'work-loft-bangkok', city: 'Bangkok', country: 'Thailand', cancellation_hours: 24, cancellation_policy: '', hotel_cancellation_policy: '' },
+    { id: 2, name: 'Full Day Office', name_ja: '1日オフィス', price_usd: 45, check_in_time: '09:00', check_out_time: '18:00', plan_type: 'day-use', max_guests: 2, duration_hours: 9, hotel_name: 'The Work Loft Bangkok', hotel_name_ja: 'ザ ワークロフト バンコク', hotel_slug: 'work-loft-bangkok', city: 'Bangkok', country: 'Thailand', cancellation_hours: 24, cancellation_policy: '', hotel_cancellation_policy: '' },
+    { id: 878, name: 'TEST Hotel', name_ja: 'テストホテル', price_usd: 10, check_in_time: '10:00', check_out_time: '11:00', plan_type: 'day-use', max_guests: 2, duration_hours: 1, hotel_name: 'TEST HOTEL', hotel_name_ja: 'テストホテル', hotel_slug: 'test-hotel--mmytizon', city: 'Tokyo', country: 'Japan', cancellation_hours: 24, cancellation_policy: '', hotel_cancellation_policy: '' },
   ];
   plan = samplePlans.find(p => p.id === planIdNum) || null;
   paypalClientId = 'sandbox';
@@ -50,155 +71,361 @@ if (!plan) {
   Astro.response.status = 404;
 }
 
-const displayPlanName = plan ? (locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name) : '';
-const displayHotelName = plan ? (locale === 'ja' && plan.hotel_name_ja ? plan.hotel_name_ja : plan.hotel_name) : '';
+const displayPlanName  = plan ? (plan.name_ja || plan.name) : '';
+const displayHotelName = plan ? (plan.hotel_name_ja || plan.hotel_name) : '';
 const timeSlot = plan?.check_in_time && plan?.check_out_time ? `${plan.check_in_time} - ${plan.check_out_time}` : '';
+const today = new Date().toISOString().split('T')[0];
+const dateParam = Astro.url.searchParams.get('date') || today;
+const maxGuests = plan?.max_guests || 10;
+const adultOptions = Array.from({ length: maxGuests }, (_, i) => i + 1);
+const guestOptions  = Array.from({ length: maxGuests + 1 }, (_, i) => i);
 
+const planTypeLabels: Record<string, string> = {
+  'day-use': 'デイユース',
+  'overnight': '宿泊',
+  'hourly': '時間制',
+};
 const planTypeColors: Record<string, string> = {
   'day-use': 'bg-blue-100 text-blue-700',
   'overnight': 'bg-indigo-100 text-indigo-700',
   'hourly': 'bg-green-100 text-green-700',
 };
 const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-100 text-gray-700') : '';
+const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_type || '') : '';
 ---
 
 <Layout
-  title={plan ? `${t('booking.title', locale)} - ${displayPlanName} | ${t('site.name', locale)}` : t('booking.plan_not_found', locale)}
-  description={plan ? `${t('booking.title', locale)} - ${displayHotelName}` : t('booking.plan_not_found_desc', locale)}
+  title={plan ? `ご予約 - ${displayPlanName} | ${t('site.name', locale)}` : 'プランが見つかりません'}
+  description={plan ? `ご予約 - ${displayHotelName}` : 'プランが見つかりませんでした'}
 >
   {plan ? (
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
       <!-- Breadcrumb -->
       <nav class="mb-6" aria-label="Breadcrumb">
         <ol class="flex items-center text-sm text-gray-500 space-x-2">
-          <li><a href={localePath('/', locale)} class="hover:text-[#45A2C1] transition-colors">{t('breadcrumb.home', locale)}</a></li>
+          <li><a href="/ja/" class="hover:text-[#45A2C1] transition-colors">ホーム</a></li>
           <li><span class="mx-1">/</span></li>
-          <li><a href={localePath('/search', locale)} class="hover:text-[#45A2C1] transition-colors">{t('breadcrumb.hotels', locale)}</a></li>
+          <li><a href="/ja/search" class="hover:text-[#45A2C1] transition-colors">ホテル</a></li>
           <li><span class="mx-1">/</span></li>
-          <li><a href={localePath(`/hotel/${plan.hotel_slug}`, locale)} class="hover:text-[#45A2C1] transition-colors truncate max-w-[150px] inline-block">{displayHotelName}</a></li>
+          <li><a href={`/ja/hotel/${plan.hotel_slug}`} class="hover:text-[#45A2C1] transition-colors truncate max-w-[150px] inline-block">{displayHotelName}</a></li>
           <li><span class="mx-1">/</span></li>
-          <li class="text-gray-800 font-medium" aria-current="page">{t('breadcrumb.book', locale)}</li>
+          <li class="text-gray-800 font-medium" aria-current="page">ご予約</li>
         </ol>
       </nav>
 
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">{t('booking.title', locale)}</h1>
+      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">ご予約手続き</h1>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Booking Form -->
+        <!-- 左カラム：ゲスト情報フォーム -->
         <div class="lg:col-span-2">
           <div class="bg-white border border-gray-200 rounded-xl p-6">
-            <h2 class="text-lg font-semibold text-gray-800 mb-5">{t('booking.guest_info', locale)}</h2>
-            <form class="space-y-4">
+            <h2 class="text-lg font-semibold text-gray-800 mb-5">ゲスト情報</h2>
+            <form id="booking-form" class="space-y-5" novalidate>
+              <!-- お名前 -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{t('booking.guest_name', locale)}</label>
-                <input type="text" required class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none" />
+                <label for="guest_name" class="block text-sm font-medium text-gray-700 mb-1">
+                  お名前 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="guest_name" name="guest_name" required
+                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors"
+                  placeholder="山田 太郎" />
+                <p id="err-guest_name" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
               </div>
+              <!-- メールアドレス -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{t('booking.email', locale)}</label>
-                <input type="email" required class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none" />
+                <label for="guest_email" class="block text-sm font-medium text-gray-700 mb-1">
+                  メールアドレス <span class="text-red-500">*</span>
+                </label>
+                <input type="email" id="guest_email" name="guest_email" required
+                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors"
+                  placeholder="email@example.com" />
+                <p id="err-guest_email" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
               </div>
+              <!-- 電話番号 -->
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{t('booking.phone', locale)}</label>
-                <input type="tel" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none" />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{t('booking.date', locale)}</label>
+                <label for="phone_local" class="block text-sm font-medium text-gray-700 mb-1">
+                  電話番号 <span class="text-red-500">*</span>
+                </label>
                 <div class="flex gap-2">
-                  <select id="ja-checkin-y" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] outline-none bg-white">
-                    <option value="">YYYY</option>
-                    {jaBookingYears.map(y => <option value={y}>{y}</option>)}
+                  <select id="phone_code" class="flex-shrink-0 w-32 px-2 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white transition-colors">
+                    <option value="+81" selected>🇯🇵 +81</option>
+                    <option value="+1">🇺🇸 +1</option>
+                    <option value="+44">🇬🇧 +44</option>
+                    <option value="+61">🇦🇺 +61</option>
+                    <option value="+1-CA">🇨🇦 +1</option>
+                    <option value="+49">🇩🇪 +49</option>
+                    <option value="+33">🇫🇷 +33</option>
+                    <option value="+86">🇨🇳 +86</option>
+                    <option value="+82">🇰🇷 +82</option>
+                    <option value="+852">🇭🇰 +852</option>
+                    <option value="+886">🇹🇼 +886</option>
+                    <option value="+65">🇸🇬 +65</option>
+                    <option value="+60">🇲🇾 +60</option>
+                    <option value="+66">🇹🇭 +66</option>
+                    <option value="+62">🇮🇩 +62</option>
+                    <option value="+63">🇵🇭 +63</option>
+                    <option value="+84">🇻🇳 +84</option>
+                    <option value="+91">🇮🇳 +91</option>
+                    <option value="+971">🇦🇪 +971</option>
+                    <option value="+55">🇧🇷 +55</option>
+                    <option value="+92">🇵🇰 +92</option>
+                    <option value="+94">🇱🇰 +94</option>
+                    <option value="+977">🇳🇵 +977</option>
                   </select>
-                  <select id="ja-checkin-m" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] outline-none bg-white">
-                    <option value="">MM</option>
-                    {jaBookingMonths.map(m => <option value={m.val}>{m.label}</option>)}
-                  </select>
-                  <select id="ja-checkin-d" class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] outline-none bg-white">
-                    <option value="">DD</option>
-                    {jaBookingDays.map(d => <option value={d}>{d}</option>)}
+                  <input type="tel" id="phone_local" autocomplete="tel-national"
+                    class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors"
+                    placeholder="90-1234-5678" />
+                </div>
+                <!-- hidden field: country_code + local number, read by validateForm + PayPal -->
+                <input type="hidden" id="guest_phone" name="guest_phone" />
+                <p id="err-phone_local" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
+              </div>
+              <!-- チェックイン日 -->
+              <div>
+                <label for="check_in_date" class="block text-sm font-medium text-gray-700 mb-1">
+                  チェックイン日 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="check_in_date" name="check_in_date" required
+                  placeholder="YYYY/MM/DD" autocomplete="off" readonly
+                  value={dateParam}
+                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white cursor-pointer"
+                />
+                <p id="err-check_in_date" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
+              </div>
+              <!-- 最大人数ガイド -->
+              {plan?.max_guests && (
+                <div class="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  <svg class="w-3.5 h-3.5 text-[#45A2C1]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                  </svg>
+                  最大 <strong class="text-slate-700 mx-1">{plan.max_guests}</strong> 名まで（大人・子供・幼児の合計）
+                </div>
+              )}
+              <!-- 人数選択 -->
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label for="adults" class="block text-sm font-medium text-gray-700 mb-1">
+                    大人 <span class="text-red-500">*</span>
+                  </label>
+                  <select id="adults" name="adults" required
+                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white transition-colors">
+                    {adultOptions.map(n => <option value={n} selected={n === 1}>{n}</option>)}
                   </select>
                 </div>
-                <input type="hidden" id="ja-check-in-date" name="check_in_date" />
+                <div>
+                  <label for="children" class="block text-sm font-medium text-gray-700 mb-1">子供</label>
+                  <select id="children" name="children"
+                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white transition-colors">
+                    {guestOptions.map(n => <option value={n} selected={n === 0}>{n}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label for="infants" class="block text-sm font-medium text-gray-700 mb-1">幼児</label>
+                  <select id="infants" name="infants"
+                    class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none bg-white transition-colors">
+                    {guestOptions.map(n => <option value={n} selected={n === 0}>{n}</option>)}
+                  </select>
+                </div>
               </div>
+              <p id="err-adults" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
+              <!-- 人数超過エラー -->
+              <div id="guests-error" style="display:none" class="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+                <span>このプランの最大人数は <strong>{maxGuests}</strong> 名です（大人・子供・幼児の合計）。</span>
+              </div>
+              <!-- 特別リクエスト -->
+              <div>
+                <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">特別リクエスト</label>
+                <textarea id="notes" name="notes" rows="3"
+                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors resize-vertical"
+                  placeholder="ご要望があればご記入ください（アレルギー、部屋の設定など）"></textarea>
+              </div>
+              <!-- form-error kept for PayPal internal errors (not field-level) -->
+              <div id="form-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3"></div>
             </form>
           </div>
         </div>
 
-        <!-- Summary -->
+        <!-- 右カラム：予約サマリー -->
         <div class="lg:col-span-1">
           <div class="bg-white border border-gray-200 rounded-xl p-6 sticky top-6">
-            <h2 class="text-lg font-semibold text-gray-800 mb-4">{t('booking.summary', locale)}</h2>
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">予約内容</h2>
+            <!-- ホテル -->
             <div class="mb-4">
-              <p class="text-sm text-gray-500">{t('booking.hotel', locale)}</p>
+              <p class="text-sm text-gray-500">ホテル</p>
               <p class="font-medium text-gray-900">{displayHotelName}</p>
               <p class="text-xs text-gray-400 mt-0.5">{plan.city}, {plan.country}</p>
             </div>
+            <!-- プラン -->
             <div class="mb-4">
-              <p class="text-sm text-gray-500">{t('booking.plan', locale)}</p>
+              <p class="text-sm text-gray-500">プラン</p>
               <div class="flex items-center gap-2 mt-0.5">
                 <p class="font-medium text-gray-900">{displayPlanName}</p>
-                {plan.plan_type && <span class:list={['text-xs font-medium rounded-full px-2 py-0.5', planTypeClass]}>{plan.plan_type}</span>}
+                {plan.plan_type && (
+                  <span class:list={['text-xs font-medium rounded-full px-2 py-0.5', planTypeClass]}>
+                    {planTypeLabel}
+                  </span>
+                )}
               </div>
             </div>
+            <!-- 時間帯 -->
             {timeSlot && (
               <div class="mb-4">
-                <p class="text-sm text-gray-500">{t('booking.time_slot', locale)}</p>
+                <p class="text-sm text-gray-500">時間帯</p>
                 <div class="flex items-center gap-1.5 mt-0.5">
                   <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
                   </svg>
                   <p class="font-medium text-gray-900">{timeSlot}</p>
                 </div>
               </div>
             )}
+            <!-- 利用時間 -->
             {plan.duration_hours && (
               <div class="mb-4">
-                <p class="text-sm text-gray-500">{t('hotel.duration', locale)}</p>
-                <p class="font-medium text-gray-900">{plan.duration_hours} {t('hotel.hours', locale)}</p>
+                <p class="text-sm text-gray-500">利用時間</p>
+                <p class="font-medium text-gray-900">{plan.duration_hours} 時間</p>
               </div>
             )}
+            <!-- 最大人数 -->
             {plan.max_guests && (
               <div class="mb-4">
-                <p class="text-sm text-gray-500">{t('booking.max_guests', locale)}</p>
-                <p class="font-medium text-gray-900">{plan.max_guests} {t('hotel.guests_unit', locale)}</p>
+                <p class="text-sm text-gray-500">最大人数</p>
+                <p class="font-medium text-gray-900">{plan.max_guests} 名</p>
               </div>
             )}
+            <!-- キャンセルポリシー -->
+            <div class="mb-4">
+              <p class="text-sm text-gray-500 mb-2">キャンセルポリシー</p>
+              {(() => {
+                const fullPolicy = (plan.cancellation_policy || plan.hotel_cancellation_policy || '').trim();
+                if (fullPolicy) {
+                  return (
+                    <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-gray-700 leading-relaxed whitespace-pre-line">
+                      {fullPolicy}
+                    </div>
+                  );
+                } else if (plan.cancellation_hours === 0) {
+                  return (
+                    <div class="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-xs text-red-700 font-medium">
+                      ❌ キャンセル不可
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div class="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-xs text-green-700">
+                      ✅ チェックイン {plan.cancellation_hours ?? 24} 時間前まで無料キャンセル可能
+                    </div>
+                  );
+                }
+              })()}
+            </div>
             <div class="border-t border-gray-200 my-4"></div>
+            <!-- 合計金額 -->
             <div class="flex items-center justify-between mb-2">
-              <p class="text-base font-semibold text-gray-800">{t('booking.total', locale)}</p>
+              <p class="text-base font-semibold text-gray-800">合計</p>
               <p class="text-2xl font-bold text-[#45A2C1]">
-                ${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
+                ${plan.price_usd} <span class="text-sm font-normal text-gray-500">USD</span>
               </p>
             </div>
-            <button class="w-full mt-4 py-3 bg-[#45A2C1] text-white font-medium rounded-lg hover:bg-[#3891AE] transition-colors">
-              {t('booking.pay', locale)}
-            </button>
+            <!-- 予約承認制の説明 -->
+            <div class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 mb-3">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <div>
+                <p class="font-medium">予約承認制について</p>
+                <p class="mt-0.5 text-xs text-amber-700">ご予約はホテルによる承認制です。お支払いは予約時にお預かりしますが、承認されなかった場合は全額返金いたします。</p>
+              </div>
+            </div>
+            <!-- PayPal ボタン -->
+            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} testMode={isTestMode} hotelSlug={plan.hotel_slug} />
           </div>
         </div>
       </div>
     </div>
   ) : (
+    <!-- 404 -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-20 text-center">
       <svg class="w-20 h-20 mx-auto text-gray-300 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"></path>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
       </svg>
-      <h1 class="text-2xl font-bold text-gray-700 mb-3">{t('booking.plan_not_found', locale)}</h1>
-      <p class="text-gray-500 mb-8 max-w-md mx-auto">{t('booking.plan_not_found_desc', locale)}</p>
-      <a href={localePath('/', locale)} class="inline-flex items-center px-6 py-3 bg-[#45A2C1] text-white font-medium rounded-lg hover:bg-[#3891AE] transition-colors">
-        {t('hotel.back_home', locale)}
+      <h1 class="text-2xl font-bold text-gray-700 mb-3">プランが見つかりません</h1>
+      <p class="text-gray-500 mb-8 max-w-md mx-auto">お探しのプランは存在しないか、既に終了している可能性があります。</p>
+      <a href="/ja/" class="inline-flex items-center px-6 py-3 bg-[#45A2C1] text-white font-medium rounded-lg hover:bg-[#3891AE] transition-colors">
+        トップページへ戻る
       </a>
     </div>
   )}
 </Layout>
 
-<script>
-  function syncJaCheckin() {
-    var y = (document.getElementById('ja-checkin-y') as HTMLSelectElement)?.value;
-    var m = (document.getElementById('ja-checkin-m') as HTMLSelectElement)?.value;
-    var d = (document.getElementById('ja-checkin-d') as HTMLSelectElement)?.value;
-    var hidden = document.getElementById('ja-check-in-date') as HTMLInputElement;
-    if (hidden) hidden.value = (y && m && d) ? y + '-' + m + '-' + d : '';
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script is:inline>
+  (function() {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+    s.onload = function() {
+      var today = new Date();
+      today.setHours(0,0,0,0);
+      flatpickr('#check_in_date', {
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'Y年m月d日',
+        minDate: today,
+        disableMobile: true,
+        locale: {
+          firstDayOfWeek: 1,
+          weekdays: { shorthand: ['日','月','火','水','木','金','土'], longhand: ['日曜日','月曜日','火曜日','水曜日','木曜日','金曜日','土曜日'] },
+          months: { shorthand: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'], longhand: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'] }
+        }
+      });
+    };
+    document.head.appendChild(s);
+  })();
+</script>
+<script define:vars={{ maxGuests }}>
+  // Phone: combine country code + local number into hidden #guest_phone
+  (function() {
+    function syncPhone() {
+      var code  = (document.getElementById('phone_code') as HTMLSelectElement)?.value || '';
+      var local = (document.getElementById('phone_local') as HTMLInputElement)?.value.trim() || '';
+      var dialCode = code.replace(/-[A-Z]+$/, '');
+      var hidden = document.getElementById('guest_phone') as HTMLInputElement;
+      if (hidden) hidden.value = local ? dialCode + local : '';
+    }
+    document.getElementById('phone_code')?.addEventListener('change', syncPhone);
+    document.getElementById('phone_local')?.addEventListener('input', syncPhone);
+    syncPhone();
+  })();
+
+  if (maxGuests > 0) {
+    var guestSelIds = ['adults', 'children', 'infants'];
+    function checkGuestTotal() {
+      var total = 0;
+      guestSelIds.forEach(function(id) {
+        total += parseInt(document.getElementById(id)?.value || '0') || 0;
+      });
+      var errEl = document.getElementById('guests-error');
+      var over = total > maxGuests;
+      if (errEl) errEl.style.display = over ? 'flex' : 'none';
+      guestSelIds.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.style.borderColor = over ? '#ef4444' : '';
+        el.style.boxShadow  = over ? '0 0 0 2px rgba(239,68,68,0.2)' : '';
+      });
+      return !over;
+    }
+    guestSelIds.forEach(function(id) {
+      document.getElementById(id)?.addEventListener('change', checkGuestTotal);
+    });
+    document.querySelector('form')?.addEventListener('submit', function(e) {
+      if (!checkGuestTotal()) {
+        e.preventDefault();
+        document.getElementById('guests-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, true);
   }
-  ['ja-checkin-y', 'ja-checkin-m', 'ja-checkin-d'].forEach(function(id) {
-    document.getElementById(id)?.addEventListener('change', syncJaCheckin);
-  });
 </script>

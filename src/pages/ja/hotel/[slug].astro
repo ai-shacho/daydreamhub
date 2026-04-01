@@ -1,5 +1,6 @@
 ---
 import Layout from '../../../layouts/Layout.astro';
+import ReviewSection from '../../../components/ReviewSection.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
 
 const locale = getLocale(Astro.url);
@@ -13,6 +14,7 @@ let avgRating = 0;
 let reviewCount = 0;
 let ratingDistribution: Record<number, number> = {};
 let dbAvailable = false;
+let nearbyHotels: any[] = [];
 
 try {
   const runtime = (Astro.locals as any).runtime;
@@ -45,6 +47,18 @@ try {
       for (const row of distResult?.results || []) {
         ratingDistribution[row.rating] = row.count;
       }
+
+      // Nearby hotels (same city, excluding current)
+      const nearbyResult = await db.prepare(
+        `SELECT h.id, h.name, h.slug, h.city, h.thumbnail_url, h.rating, MIN(p.price_usd) as min_price
+         FROM hotels h
+         LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+         WHERE h.city = ? AND h.id != ? AND h.is_active = 1
+         GROUP BY h.id
+         ORDER BY h.rating DESC
+         LIMIT 4`
+      ).bind(hotel.city, hotel.id).all();
+      nearbyHotels = nearbyResult?.results || [];
     }
   }
 } catch (e) {
@@ -77,8 +91,83 @@ if (!hotel) {
   Astro.response.status = 404;
 }
 
-const displayName = hotel ? (locale === 'ja' && hotel.name_ja ? hotel.name_ja : hotel.name) : '';
-const displayDescription = hotel ? (locale === 'ja' && hotel.description_ja ? hotel.description_ja : hotel.description || '') : '';
+function decodeHtmlEntities(str: string): string {
+  if (!str) return str;
+  return str.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+// Hotel name: use name_ja if available, otherwise translate
+let displayName = hotel ? decodeHtmlEntities(hotel.name_ja || hotel.name) : '';
+if (hotel && !hotel.name_ja && hotel.name) {
+  displayName = decodeHtmlEntities(await translateToJa(hotel.name).catch(() => hotel.name));
+}
+const siteUrl = 'https://www.daydreamhub.com';
+
+// Helper: translate text with Cloudflare AI (en → ja)
+// Plan name keyword map (handles 【NH】 hour-based plan names correctly)
+const PLAN_NAME_MAP: Record<string, string> = {
+  'morning':   '朝',
+  'evening':   '夕方',
+  'afternoon': '午後',
+  'night':     '夜',
+  'overnight': '宿泊',
+  'daytime':   '昼間',
+  'day use':   'デイユース',
+  'day-use':   'デイユース',
+  'late checkout': 'レイトチェックアウト',
+  'early check-in': 'アーリーチェックイン',
+  'early checkin': 'アーリーチェックイン',
+};
+
+// Translate plan names: converts 【NH】 → 【N時間】 and maps English keywords
+function translatePlanName(name: string): string {
+  if (!name) return name;
+  // Replace 【NH】 prefix → 【N時間】
+  let result = name.replace(/【(\d+)H】/gi, (_, n) => `【${n}時間】`);
+  // Replace English keyword (case-insensitive)
+  for (const [en, ja] of Object.entries(PLAN_NAME_MAP)) {
+    const re = new RegExp(`\\b${en}\\b`, 'gi');
+    result = result.replace(re, ja);
+  }
+  return result;
+}
+
+async function translateToJa(text: string): Promise<string> {
+  if (!text) return text;
+  try {
+    const runtime = (Astro.locals as any).runtime;
+    const ai = runtime?.env?.AI;
+    if (!ai) return text;
+    const result = await ai.run('@cf/meta/m2m100-1.2b', {
+      text,
+      source_lang: 'en',
+      target_lang: 'ja',
+    }) as any;
+    return result?.translated_text || text;
+  } catch {
+    return text;
+  }
+}
+
+// Auto-translate description if description_ja is missing
+let displayDescription = '';
+if (hotel) {
+  if (hotel.description_ja) {
+    displayDescription = hotel.description_ja;
+  } else if (hotel.description) {
+    displayDescription = await translateToJa(hotel.description);
+  }
+}
+
+// Auto-translate plan names and room_type labels if name_ja is missing
+if (plans.length > 0) {
+  plans = await Promise.all(plans.map(async (plan: any) => {
+    // Use dedicated plan name translator (handles 【NH】 hours correctly, no AI needed)
+    const jaName = plan.name_ja || translatePlanName(plan.name);
+    const jaRoomType = plan.room_type ? await translateToJa(plan.room_type) : '';
+    return { ...plan, _ja_name: jaName, _ja_room_type: jaRoomType };
+  }));
+}
 
 let categories: string[] = [];
 if (hotel) {
@@ -101,17 +190,56 @@ const categoryLabelKeys: Record<string, string> = {
   couple: 'search.for_couple', for_couple: 'search.for_couple', daycation: 'search.daycation',
   personal_time: 'search.personal_time', early_checkin: 'search.early_checkin',
 };
+// Amenity label map: supports both slug keys (wifi) and full English strings from DB
+const amenityLabelMap: Record<string, string> = {
+  // slug keys
+  'wifi': 'Wi-Fi', 'pool': 'プール', 'spa': 'スパ', 'gym': 'ジム',
+  'restaurant': 'レストラン', 'bar': 'バー', 'parking': '駐車場',
+  'desk': 'デスク', 'coffee': 'コーヒー', 'meeting_room': '会議室',
+  'printer': 'プリンター', 'shower': 'シャワー', 'luggage_storage': '荷物預かり',
+  'garden': '庭園', 'beach': 'ビーチアクセス', 'breakfast': '朝食',
+  'concierge': 'コンシェルジュ', 'air_conditioning': 'エアコン', 'tv': 'テレビ',
+  'refrigerator': '冷蔵庫', 'kitchen': 'キッチン', 'laundry': 'ランドリー',
+  'elevator': 'エレベーター', 'safe': 'セーフティボックス', 'minibar': 'ミニバー',
+  // Full English strings from DB
+  'Wi-Fi': 'Wi-Fi', 'Free Wi-Fi': '無料Wi-Fi', 'Pool': 'プール',
+  'Swimming Pool': 'スイミングプール', 'Spa': 'スパ', 'Gym': 'ジム',
+  'Fitness Center': 'フィットネスセンター', 'Restaurant': 'レストラン', 'Bar': 'バー',
+  'Parking': '駐車場', 'Parking on Premises': '駐車場', 'Free Parking': '無料駐車場',
+  'Desk': 'デスク', 'Desk/Workspace': 'デスク/ワークスペース',
+  'Work Desk': 'ワークデスク', 'Coffee': 'コーヒー', 'Meeting Room': '会議室',
+  'Printer': 'プリンター', 'Shower': 'シャワー', 'Luggage Storage': '荷物預かり',
+  'Garden': '庭園', 'Beach Access': 'ビーチアクセス', 'Breakfast': '朝食',
+  'Concierge': 'コンシェルジュ', 'Air Conditioning': 'エアコン',
+  'Air Conditioner': 'エアコン', 'Air Conditioner (Cooling)': 'エアコン（冷房）',
+  'Air Conditioner (Heating)': 'エアコン（暖房）', 'TV': 'テレビ', 'Television': 'テレビ',
+  'Refrigerator': '冷蔵庫', 'Kitchen': 'キッチン', 'Kitchenette': 'キッチネット',
+  'Laundry': 'ランドリー', 'Laundry Service': 'ランドリーサービス',
+  'Elevator': 'エレベーター', 'Safe': 'セーフティボックス', 'Minibar': 'ミニバー',
+  'Bathtub': 'バスタブ', 'Jacuzzi': 'ジャグジー', 'Sauna': 'サウナ',
+  'Terrace': 'テラス', 'Balcony': 'バルコニー', 'Sea View': 'シービュー',
+  'Mountain View': 'マウンテンビュー', 'City View': 'シティビュー',
+  'Airport Shuttle': 'エアポートシャトル', 'Room Service': 'ルームサービス',
+  'Housekeeping': 'ハウスキーピング', 'Reception 24h': '24時間フロント',
+  '24-hour Front Desk': '24時間フロント', 'Non-smoking': '禁煙',
+  'Hair Dryer': 'ヘアドライヤー', 'Hairdryer': 'ヘアドライヤー',
+  'Iron': 'アイロン', 'Ironing Facilities': 'アイロン設備',
+  'Electric pot': '電気ポット', 'Electric Kettle': '電気ケトル',
+  'Night wear': 'ナイトウェア', 'Slippers': 'スリッパ', 'Bathrobes': 'バスローブ',
+  'Towels': 'タオル', 'Toiletries': 'アメニティ', 'Toothbrush': '歯ブラシ',
+  'Shampoo': 'シャンプー', 'Soap': 'ソープ', 'TEL': '電話', 'Telephone': '電話',
+  'Wheelchair Accessible': '車椅子対応', 'Non Smoking': '禁煙',
+  'Smoking Allowed': '喫煙可', 'Pets Allowed': 'ペット可',
+  'Bicycle Rental': 'レンタサイクル', 'Car Rental': 'レンタカー',
+  'ATM': 'ATM', 'Currency Exchange': '両替', 'Business Center': 'ビジネスセンター',
+};
+// Legacy map for backwards compatibility
 const amenityLabels: Record<string, Record<string, string>> = {
   wifi: { en: 'Wi-Fi', ja: 'Wi-Fi' }, pool: { en: 'Pool', ja: 'プール' },
-  spa: { en: 'Spa', ja: 'スパ' }, gym: { en: 'Gym', ja: 'ジム' },
-  restaurant: { en: 'Restaurant', ja: 'レストラン' }, bar: { en: 'Bar', ja: 'バー' },
-  parking: { en: 'Parking', ja: '駐車場' }, desk: { en: 'Work Desk', ja: 'デスク' },
-  coffee: { en: 'Coffee', ja: 'コーヒー' }, meeting_room: { en: 'Meeting Room', ja: '会議室' },
-  printer: { en: 'Printer', ja: 'プリンター' }, shower: { en: 'Shower', ja: 'シャワー' },
-  luggage_storage: { en: 'Luggage Storage', ja: '荷物預かり' }, garden: { en: 'Garden', ja: '庭園' },
-  beach: { en: 'Beach Access', ja: 'ビーチ' }, breakfast: { en: 'Breakfast', ja: '朝食' },
-  concierge: { en: 'Concierge', ja: 'コンシェルジュ' },
 };
+function getAmenityLabel(amenity: string): string {
+  return amenityLabelMap[amenity] || amenity;
+}
 const propertyTypeLabels: Record<string, Record<string, string>> = {
   hotel: { en: 'Hotel', ja: 'ホテル' }, villa: { en: 'Villa', ja: 'ヴィラ' },
   'capsule-hotel': { en: 'Capsule Hotel', ja: 'カプセルホテル' }, hostel: { en: 'Hostel', ja: 'ホステル' },
@@ -124,9 +252,47 @@ function renderStars(rating: number) {
   const hasHalf = clamped % 1 >= 0.5;
   return '\u2605'.repeat(full) + (hasHalf ? '\u2606' : '') + '\u2606'.repeat(5 - full - (hasHalf ? 1 : 0));
 }
+
+// Group plans by room_type
+const plansByRoomType: Record<string, typeof plans> = {};
+for (const plan of plans) {
+  const rt = (plan.room_type as string) || '';
+  if (!plansByRoomType[rt]) plansByRoomType[rt] = [];
+  plansByRoomType[rt].push(plan);
+}
+const roomTypes = Object.keys(plansByRoomType);
+
+// Group hotel_images by room_type
+const imagesByRoomType: Record<string, string[]> = {};
+for (const img of images) {
+  const rt = (img as any).room_type || '';
+  if (!imagesByRoomType[rt]) imagesByRoomType[rt] = [];
+  imagesByRoomType[rt].push((img as any).image_url);
+}
 ---
 
 <Layout title={hotel ? `${displayName} | ${t('site.name', locale)}` : t('hotel.not_found', locale)} description={hotel ? displayDescription.slice(0, 160) : t('hotel.not_found_desc', locale)}>
+  {hotel && (
+    <script slot="head" type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "LodgingBusiness",
+      "name": displayName,
+      "description": displayDescription?.substring(0, 200),
+      "url": `${siteUrl}/ja/hotel/${hotel.slug}`,
+      "image": hotel.thumbnail_url || null,
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": hotel.city,
+        "addressCountry": hotel.country
+      },
+      ...(hotel.avg_rating ? { "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": hotel.avg_rating,
+        "bestRating": 5,
+        "ratingCount": hotel.review_count || 1
+      }} : {})
+    })} />
+  )}
   {hotel ? (
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
       <!-- Breadcrumb -->
@@ -156,7 +322,7 @@ function renderStars(rating: number) {
           )}
           <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{displayName}</h1>
 
-          {(avgRating > 0 || (hotel.rating && hotel.rating <= 5)) && (
+          {(avgRating > 0 || (hotel.rating > 0 && hotel.rating <= 5)) && (
             <div class="flex items-center gap-2 mb-3">
               <span class="text-yellow-500 text-lg tracking-wide">{renderStars(avgRating > 0 ? avgRating : hotel.rating || 0)}</span>
               <span class="text-sm text-gray-500">{Math.min(avgRating > 0 ? avgRating : hotel.rating || 0, 5).toFixed(1)}</span>
@@ -207,7 +373,7 @@ function renderStars(rating: number) {
                 <svg class="w-4 h-4 text-teal-700 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"></path>
                 </svg>
-                <span class="text-sm text-gray-700">{amenityLabels[amenity]?.[locale] || amenity}</span>
+                <span class="text-sm text-gray-700">{getAmenityLabel(amenity)}</span>
               </div>
             ))}
           </div>
@@ -218,31 +384,103 @@ function renderStars(rating: number) {
       {plans.length > 0 && (
         <section class="mb-10">
           <h2 class="text-xl font-bold text-slate-900 mb-4">{t('hotel.available_plans', locale)}</h2>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {plans.map((plan: any) => {
-              const planName = locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name;
+          {roomTypes.map(rt => {
+              const rtImages = imagesByRoomType[rt] || [];
               return (
-                <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow">
-                  <h3 class="font-semibold text-gray-900 mb-2">{planName}</h3>
-                  <div class="text-sm text-gray-500 space-y-1 mb-4">
-                    {plan.check_in_time && plan.check_out_time && (
-                      <p>{plan.check_in_time} - {plan.check_out_time}</p>
+              <div class="mb-8">
+                {rt && (
+                  <div class="mb-3 pb-2 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                      <svg class="w-5 h-5 text-teal-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                      </svg>
+                      {plansByRoomType[rt][0]?._ja_room_type || rt}
+                    </h3>
+                    {rtImages.length > 0 && (
+                      <div class="flex gap-2 overflow-x-auto pb-2 mb-1">
+                        {rtImages.map((url: string, i: number) => (
+                          <img
+                            src={url}
+                            alt={`${rt} ${i + 1}`}
+                            class="flex-shrink-0 h-40 w-60 object-cover rounded-lg hover:opacity-90 transition-opacity"
+                            loading="lazy"
+                          />
+                        ))}
+                      </div>
                     )}
-                    {plan.duration_hours && <p>{plan.duration_hours} {t('hotel.hours', locale)}</p>}
-                    {plan.max_guests && <p>{t('hotel.max_guests', locale)}: {plan.max_guests} {t('hotel.guests_unit', locale)}</p>}
                   </div>
-                  <div class="flex items-center justify-between">
-                    <p class="text-xl font-bold text-[#45A2C1]">${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span></p>
-                    <a href={localePath(`/booking/${plan.id}`, locale)} class="px-4 py-2 bg-[#45A2C1] text-white text-sm font-medium rounded-lg hover:bg-[#3891AE] transition-colors">
-                      {t('hotel.book_now', locale)}
-                    </a>
-                  </div>
+                )}
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {plansByRoomType[rt].map((plan: any) => {
+                    const planName = plan._ja_name || plan.name_ja || plan.name;
+                    return (
+                      <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow">
+                        <h3 class="font-semibold text-gray-900 mb-2">{planName}</h3>
+                        <div class="text-sm text-gray-500 space-y-1 mb-4">
+                          {plan.check_in_time && plan.check_out_time && (
+                            <p>{plan.check_in_time} - {plan.check_out_time}</p>
+                          )}
+                          {plan.duration_hours && <p>{plan.duration_hours} {t('hotel.hours', locale)}</p>}
+                          {plan.max_guests && <p>{t('hotel.max_guests', locale)}: {plan.max_guests} {t('hotel.guests_unit', locale)}</p>}
+                        </div>
+                        <p class="text-xl font-bold text-[#45A2C1] mb-3">${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span></p>
+                        {/* キャンセルポリシー */}
+                        {(() => {
+                          const policy = plan.cancellation_policy || hotel.cancellation_policy || '';
+                          const hours = plan.cancellation_hours;
+                          return (
+                            <div class="mb-3 text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                              <div class="font-medium text-amber-800 mb-1">キャンセルポリシー</div>
+                              {policy ? (
+                                <p class="leading-relaxed line-clamp-3">{policy}</p>
+                              ) : hours === 0 ? (
+                                <p class="text-red-600 font-medium">❌ キャンセル不可</p>
+                              ) : (
+                                <p>✅ チェックイン {hours ?? 24}時間前まで無料キャンセル可能</p>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        {/* Date picker + Book Now */}
+                        <div class="mb-3">
+                          <label class="block text-xs text-gray-500 mb-1">
+                            {locale === 'ja' ? '日付を選択' : 'Select Date'} <span class="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            class="plan-date-input w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none"
+                            placeholder={locale === 'ja' ? '日付を選択してください' : 'Select a date'}
+                            readonly
+                            data-plan-id={plan.id}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          class="book-now-btn block w-full text-center bg-[#45A2C1] text-white text-sm font-medium py-2.5 rounded-lg hover:bg-[#3891AE] transition-colors"
+                          data-plan-id={plan.id}
+                          data-href={localePath(`/booking/${plan.id}`, locale)}
+                        >
+                          {t('hotel.book_now', locale)}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </section>
       )}
+
+      <!-- Reviews Section -->
+      <ReviewSection
+        hotelId={hotel.id}
+        reviews={reviews}
+        avgRating={avgRating}
+        reviewCount={reviewCount}
+        locale={locale}
+        ratingDistribution={ratingDistribution}
+      />
 
       <!-- Location -->
       {hotel.address && (
@@ -262,6 +500,34 @@ function renderStars(rating: number) {
           </div>
         </section>
       )}
+      {/* Nearby hotels */}
+      {nearbyHotels.length > 0 && (
+        <section class="max-w-5xl mx-auto px-4 py-10 border-t border-gray-100">
+          <h2 class="text-xl font-bold text-gray-900 mb-5">
+            {locale === 'ja' ? `${hotel.city}の他のホテル` : `More Hotels in ${hotel.city}`}
+          </h2>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {nearbyHotels.map((h: any) => (
+              <a href={localePath(`/hotel/${h.slug}`, locale)} class="group block rounded-xl overflow-hidden border border-gray-100 hover:shadow-md transition-shadow">
+                <div class="aspect-video bg-slate-100 overflow-hidden">
+                  <img
+                    src={h.thumbnail_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=70&fm=webp'}
+                    alt={h.name}
+                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    loading="lazy"
+                    onerror="this.src='https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=70&fm=webp'"
+                  />
+                </div>
+                <div class="p-3">
+                  <p class="text-sm font-semibold text-gray-900 truncate">{h.name}</p>
+                  <p class="text-xs text-gray-500 mt-0.5">{h.city}</p>
+                  {h.min_price && <p class="text-sm font-bold text-teal-600 mt-1">from ${h.min_price}</p>}
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   ) : (
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-20 text-center">
@@ -276,3 +542,97 @@ function renderStars(rating: number) {
     </div>
   )}
 </Layout>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+<style is:global>
+  .flatpickr-day.ddh-blocked,
+  .flatpickr-day.ddh-blocked:hover {
+    background: #fee2e2 !important;
+    color: #b91c1c !important;
+    opacity: 1 !important;
+    cursor: not-allowed !important;
+    position: relative;
+    text-decoration: line-through !important;
+    border: 1px solid #fca5a5 !important;
+    border-radius: 4px !important;
+  }
+  .flatpickr-day.ddh-blocked::before {
+    content: '✕';
+    position: absolute;
+    top: 0; right: 0; bottom: 0; left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #dc2626;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+</style>
+<script is:inline>
+(function() {
+  // Load flatpickr and init date inputs with blocked dates
+  var fpScript = document.createElement('script');
+  fpScript.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+  fpScript.onload = function() {
+    if (typeof flatpickr === 'undefined') return;
+
+    document.querySelectorAll('.plan-date-input').forEach(function(input) {
+      var planId = input.dataset.planId;
+      fetch('/api/availability?planId=' + planId)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var blocked = data.blocked || [];
+          flatpickr(input, {
+            minDate: 'today',
+            dateFormat: 'Y-m-d',
+            locale: 'ja',
+            disable: blocked,
+            onDayCreate: function(dObj, dStr, fp, dayElem) {
+              var _d = dayElem.dateObj;
+              var dateStr = _d.getFullYear() + '-' + String(_d.getMonth()+1).padStart(2,'0') + '-' + String(_d.getDate()).padStart(2,'0');
+              if (blocked.includes(dateStr)) {
+                dayElem.classList.add('ddh-blocked');
+                dayElem.title = '予約不可';
+              }
+            },
+            onOpen: function(selectedDates, dateStr, instance) {
+              var cal = instance.calendarContainer;
+              if (cal && !cal.querySelector('.ddh-cal-legend') && blocked.length > 0) {
+                var legend = document.createElement('div');
+                legend.className = 'ddh-cal-legend';
+                legend.style.cssText = 'padding:6px 10px;display:flex;align-items:center;gap:8px;font-size:11px;color:#6b7280;border-top:1px solid #f3f4f6;';
+                legend.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#fee2e2;border:1px solid #fca5a5;border-radius:4px;color:#dc2626;font-size:10px;">✕</span>'
+                  + '<span>予約不可</span>'
+                  + '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;background:#fff;border:1px solid #d1d5db;border-radius:4px;margin-left:8px;"></span>'
+                  + '<span>予約可能</span>';
+                cal.appendChild(legend);
+              }
+            }
+          });
+        })
+        .catch(function() {
+          flatpickr(input, { minDate: 'today', dateFormat: 'Y-m-d', locale: 'ja' });
+        });
+    });
+  };
+  document.head.appendChild(fpScript);
+
+  // Book Now button handler
+  document.querySelectorAll('.book-now-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var planId = btn.dataset.planId;
+      var dateInput = document.querySelector('.plan-date-input[data-plan-id="' + planId + '"]');
+      if (!dateInput || !dateInput.value) {
+        if (dateInput) {
+          dateInput.style.borderColor = '#ef4444';
+          dateInput.focus();
+        }
+        return;
+      }
+      window.location.href = btn.dataset.href + '?date=' + dateInput.value;
+    });
+  });
+})();
+</script>

@@ -22,11 +22,13 @@ const specialities = [
 
 // Category sections to display
 const categoryDefs = [
-  { planType: 'workspace', title: 'Workspace', subtitle: 'Coworking spaces & hot desks', icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
-  { planType: 'for_couple', title: 'Romantic Hotels', subtitle: 'Perfect for couples', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-  { planType: 'luxury', title: 'Luxury Hotels', subtitle: 'Premium day-use experiences', icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
-  { planType: 'personal_time', title: 'Rest Hotels', subtitle: 'Relax and recharge', icon: 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' },
-  { planType: 'daycation', title: 'Daycation', subtitle: 'Day trips and experiences', icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
+  { planType: 'daycation',    title: 'Daycation',       subtitle: 'Day trips & leisure',          icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
+  { planType: 'for_couple',   title: 'Romantic Hotels', subtitle: 'Perfect for couples',           icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+  { planType: 'workspace',    title: 'Workspace',       subtitle: 'Coworking spaces & hot desks',  icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
+  { planType: 'transit_use',  title: 'Transit & Airport', subtitle: 'Layover & airport hotels',   icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
+  { planType: 'personal_time',title: 'Rest & Relax',    subtitle: 'Unwind and recharge',           icon: 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' },
+  { planType: 'luxury',       title: 'Luxury',          subtitle: 'Premium day-use experiences',   icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
+  { planType: 'early_check-in', title: 'Early Check-in', subtitle: 'Arrive early, settle in fast', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
 ];
 
 // Fetch data from DB
@@ -42,35 +44,30 @@ let hotelPlanTypes: Record<number, string[]> = {};
 
 try {
   if (DB) {
-    // Fetch hotels for speciality tab (top section)
-    if (activeSpeciality) {
-      const result = await DB.prepare(
-        `SELECT DISTINCT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
-                MIN(p.price_usd) as min_price
-         FROM hotels h
-         JOIN plans p ON p.hotel_id = h.id AND p.plan_type = ?1
-         WHERE h.is_active = 1
-         GROUP BY h.id
-         ORDER BY h.rating DESC
-         LIMIT 12`
-      ).bind(activeSpeciality).all();
-      heroHotels = result?.results ?? [];
-    } else {
-      const result = await DB.prepare(
-        `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
-                MIN(p.price_usd) as min_price
-         FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-         WHERE h.is_active = 1
-         GROUP BY h.id
-         ORDER BY h.rating DESC
-         LIMIT 12`
-      ).all();
-      heroHotels = result?.results ?? [];
-    }
+    // 全クエリを並列実行（順次awaitを廃止）
+    const heroQuery = activeSpeciality
+      ? DB.prepare(
+          `SELECT DISTINCT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+                  MIN(p.price_usd) as min_price
+           FROM hotels h
+           JOIN plans p ON p.hotel_id = h.id AND p.plan_type = ?1
+           WHERE h.is_active = 1
+           GROUP BY h.id
+           ORDER BY h.rating DESC
+           LIMIT 12`
+        ).bind(activeSpeciality).all().catch(() => ({ results: [] }))
+      : DB.prepare(
+          `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+                  MIN(p.price_usd) as min_price
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+           WHERE h.is_active = 1
+           GROUP BY h.id
+           ORDER BY h.rating DESC
+           LIMIT 12`
+        ).all().catch(() => ({ results: [] }));
 
-    // Fetch hotels per category
-    for (const cat of categoryDefs) {
-      const result = await DB.prepare(
+    const categoryQueries = categoryDefs.map(cat =>
+      DB.prepare(
         `SELECT DISTINCT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
                 MIN(p.price_usd) as min_price
          FROM hotels h
@@ -79,41 +76,43 @@ try {
          GROUP BY h.id
          ORDER BY h.rating DESC
          LIMIT 6`
-      ).bind(cat.planType).all();
-      categoryHotels[cat.planType] = result?.results ?? [];
-    }
+      ).bind(cat.planType).all().catch(() => ({ results: [] }))
+    );
 
-    // Get city counts for "Search by City" (all cities for region grouping)
-    const cityResult = await DB.prepare(
-      `SELECT city, country, COUNT(*) as hotel_count
-       FROM hotels WHERE city != '' AND is_active = 1
-       GROUP BY city ORDER BY hotel_count DESC LIMIT 60`
-    ).all();
+    const [heroResult, cityResult, statsH, statsP, blogResult, mapResult, ...categoryResults] =
+      await Promise.all([
+        heroQuery,
+        DB.prepare(
+          `SELECT city, country, COUNT(*) as hotel_count
+           FROM hotels WHERE city != '' AND is_active = 1
+           GROUP BY city ORDER BY hotel_count DESC LIMIT 60`
+        ).all().catch(() => ({ results: [] })),
+        DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE is_active = 1").first().catch(() => ({ c: 0 })),
+        DB.prepare("SELECT COUNT(*) as c FROM plans WHERE is_active = 1").first().catch(() => ({ c: 0 })),
+        DB.prepare(
+          `SELECT id, title, slug, excerpt, thumbnail_url, city, published_at
+           FROM blog_posts ORDER BY published_at DESC LIMIT 3`
+        ).all().catch(() => ({ results: [] })),
+        DB.prepare(
+          `SELECT id, name, slug, city, country, latitude, longitude, thumbnail_url,
+                  MIN(p.price_usd) as min_price
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+           WHERE h.is_active = 1 AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
+           GROUP BY h.id LIMIT 100`
+        ).all().catch(() => ({ results: [] })),
+        ...categoryQueries,
+      ]);
+
+    heroHotels = heroResult?.results ?? [];
     allCities = cityResult?.results ?? [];
-
-    // Stats
-    const statsH = await DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE is_active = 1").first();
     totalHotels = statsH?.c || 0;
-    const statsP = await DB.prepare("SELECT COUNT(*) as c FROM plans WHERE is_active = 1").first();
     totalPlans = statsP?.c || 0;
-
-    // Recent blog posts
-    const blogResult = await DB.prepare(
-      `SELECT id, title, slug, excerpt, thumbnail_url, city, published_at
-       FROM blog_posts ORDER BY published_at DESC LIMIT 3`
-    ).all();
     recentBlogs = blogResult?.results ?? [];
-
-    // Map hotels (with lat/lng)
-    const mapResult = await DB.prepare(
-      `SELECT id, name, slug, city, country, latitude, longitude, thumbnail_url,
-              MIN(p.price_usd) as min_price
-       FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-       WHERE h.is_active = 1 AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
-       GROUP BY h.id LIMIT 100`
-    ).all();
     mapHotels = mapResult?.results ?? [];
 
+    categoryDefs.forEach((cat, i) => {
+      categoryHotels[cat.planType] = categoryResults[i]?.results?.slice(0, 8) ?? [];
+    });
   }
 } catch (e) {
   console.error('Index DB error:', e);
@@ -164,42 +163,170 @@ try {
   console.error('Plan types error:', e3);
 }
 
-// City images (unsplash fallbacks)
+// City images — local Wikipedia Commons photos per city
+// City images — Unsplash (free for commercial use), unique per city, no people, landmark/scenery
 const cityImages: Record<string, string> = {
-  'Bangkok': 'photo-1508009603885-50cf7c579365',
-  'Tokyo': 'photo-1540959733332-eab4deabeeaf',
-  'Bali': 'photo-1537996194471-e657df975ab4',
-  'Singapore': 'photo-1525625293386-3f8f99389edd',
-  'Dubai': 'photo-1512453979798-5ea266f8880c',
-  'London': 'photo-1513635269975-59663e0ac1ad',
-  'Seoul': 'photo-1534274988757-a28bf68a75c0',
-  'Kuala Lumpur': 'photo-1596422846543-75c6fc197f07',
-  'Jakarta': 'photo-1555899434-94d1368aa7af',
-  'Osaka': 'photo-1590559899731-a382839e5549',
-  'Kyoto': 'photo-1493976040374-85c8e12f0c0e',
-  'Ho Chi Minh City': 'photo-1583417319070-4a69db38a482',
+  'Abu Dhabi':            'https://images.unsplash.com/photo-1512632578888-169bbbc64f33?w=600&q=80&fm=webp', // Sheikh Zayed Grand Mosque
+  'Abuja':                'https://images.unsplash.com/photo-1572204097183-e1ab140342ed?w=600&q=80&fm=webp', // Aso Rock
+  'Abuja (F.c.t.)':       'https://images.unsplash.com/photo-1572204097183-e1ab140342ed?w=600&q=80&fm=webp',
+  'Agra':                 'https://images.unsplash.com/photo-1548013146-72479768bada?w=600&q=80&fm=webp', // Taj Mahal
+  'Alicante':             'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80&fm=webp', // Santa Bárbara Castle
+  'Almaty':               'https://images.unsplash.com/photo-1527838832700-5059252407fa?w=600&q=80&fm=webp', // Almaty cityscape
+  'Amsterdam':            'https://images.unsplash.com/photo-1512470876302-972faa2aa9a4?w=600&q=80&fm=webp', // canal houses
+  'Arequipa':             'https://images.unsplash.com/photo-1597910037310-77e2c7c4f8b5?w=600&q=80&fm=webp', // El Misti volcano
+  'Auckland':             'https://images.unsplash.com/photo-1507699622108-4be3abd695ad?w=600&q=80&fm=webp', // Sky Tower
+  'Auckland Central':     'https://images.unsplash.com/photo-1507699622108-4be3abd695ad?w=600&q=80&fm=webp',
+  'Bali':                 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=600&q=80&fm=webp', // rice terraces
+  'Bang Rak':             'https://images.unsplash.com/photo-1563492065599-3520f775eeed?w=600&q=80&fm=webp', // Bangkok waterway
+  'Bangkok':              'https://images.unsplash.com/photo-1563492065599-3520f775eeed?w=600&q=80&fm=webp', // Wat Arun temple
+  'Barcelona':            'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=600&q=80&fm=webp', // Sagrada Família
+  'Batumi':               'https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?w=600&q=80&fm=webp', // Batumi seaside boulevard
+  'Beijing':              'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=600&q=80&fm=webp', // Great Wall
+  'Belgrade':             'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80&fm=webp', // Kalemegdan fortress
+  'Birmingham':           'https://images.unsplash.com/photo-1526129318478-62ed807ebdf9?w=600&q=80&fm=webp', // Bullring & Selfridges
+  'Bogotá':               'https://images.unsplash.com/photo-1597546122016-2afe18dabb3e?w=600&q=80&fm=webp', // Monserrate hill
+  'Busan':                'https://images.unsplash.com/photo-1578637387939-43c525550085?w=600&q=80&fm=webp', // Gamcheon Culture Village
+  'Cairo':                'https://images.unsplash.com/photo-1539768942893-daf1563a5c1d?w=600&q=80&fm=webp', // Pyramids of Giza
+  'Calgary':              'https://images.unsplash.com/photo-1570131812397-6f0026f8b60b?w=600&q=80&fm=webp', // Calgary skyline with Rockies
+  'California City':      'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=600&q=80&fm=webp', // California desert
+  'Candidasa':            'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=600&q=80&fm=webp', // Bali east coast
+  'Cape Town':            'https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=600&q=80&fm=webp', // Table Mountain
+  'Cebu':                 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=600&q=80&fm=webp', // Magellan's Cross
+  'Cebu City':            'https://images.unsplash.com/photo-1581493085664-1f55f9197d5a?w=600&q=80&fm=webp', // Cebu City skyline
+  'Cebu city':            'https://images.unsplash.com/photo-1581493085664-1f55f9197d5a?w=600&q=80&fm=webp',
+  'Chiang Mai':           'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=600&q=80&fm=webp', // Doi Suthep temple
+  'Chicago':              'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600&q=80&fm=webp', // Millennium Park
+  'Colombo':              'https://images.unsplash.com/photo-1700805047443-ab0ba14e0ced?w=600&q=80&fm=webp', // Colombo Lotus Tower
+  'Da Nang':              'https://images.unsplash.com/photo-1505018620898-92616e1849cc?w=600&q=80&fm=webp', // Da Nang beach
+  'Dalung':               'https://images.unsplash.com/photo-1623042392889-8073b7791004?w=600&q=80&fm=webp', // Bali north coast
+  'Danao City':           'https://images.unsplash.com/photo-1715884487912-27ec236680e0?w=600&q=80&fm=webp', // Danao City, Cebu
+  'Denpasar':             'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w=600&q=80&fm=webp', // Denpasar temple
+  'Dodoma':               'https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=600&q=80&fm=webp', // Tanzania landscape
+  'Doha':                 'https://images.unsplash.com/photo-1539020140153-e479b8f22986?w=600&q=80&fm=webp', // Doha skyline
+  'Dubai':                'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80&fm=webp', // Burj Khalifa
+  'Essex':                'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&q=80&fm=webp', // English countryside
+  'Fukuoka':              'https://images.unsplash.com/photo-1601823984263-b87b59798b70?w=600&q=80&fm=webp', // Fukuoka skyline
+  'Giza':                 'https://images.unsplash.com/photo-1554213579-bb4f8b8ebe54?w=600&q=80&fm=webp', // Sphinx & Pyramids
+  'Goris':                'https://images.unsplash.com/photo-1589656966895-2f33e7653819?w=600&q=80&fm=webp', // Armenian mountains
+  'Hanoi':                'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=600&q=80&fm=webp', // Hoan Kiem Lake
+  'Hiroshima':            'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=600&q=80&fm=webp', // Peace Memorial
+  'Ho Chi Minh':          'https://images.unsplash.com/photo-1557750255-c76072a7aad1?w=600&q=80&fm=webp', // Ben Thanh Market
+  'Ho Chi Minh City':     'https://images.unsplash.com/photo-1557750255-c76072a7aad1?w=600&q=80&fm=webp',
+  'Hong Kong':            'https://images.unsplash.com/photo-1506970845246-18f21d533b20?w=600&q=80&fm=webp', // Victoria Harbour skyline
+  'Hong Kong Island':     'https://images.unsplash.com/photo-1506970845246-18f21d533b20?w=600&q=80&fm=webp',
+  'Islamabad':            'https://images.unsplash.com/photo-1633938312695-e7b9a9cf50c6?w=600&q=80&fm=webp', // Faisal Mosque
+  'Istanbul':             'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=600&q=80&fm=webp', // Hagia Sophia
+  'Jakarta':              'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=600&q=80&fm=webp', // Monas monument
+  'Kajang':               'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=600&q=80&fm=webp', // Malaysia
+  'Kano':                 'https://images.unsplash.com/photo-1572204097183-e1ab140342ed?w=600&q=80&fm=webp', // Nigeria cityscape
+  'Kiambu':               'https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=600&q=80&fm=webp', // Kenya landscape
+  'Kigali':               'https://images.unsplash.com/photo-1586861203927-800a5acdcc6d?w=600&q=80&fm=webp', // Kigali hills
+  'Kobe':                 'https://images.unsplash.com/photo-1590422749897-47036da0b0ff?w=600&q=80&fm=webp', // Kobe port
+  'Koh Samui':            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80&fm=webp', // Koh Samui island
+  'Kuala Lumpur':         'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=600&q=80&fm=webp', // Petronas Towers
+  'Kubutambahan':         'https://images.unsplash.com/photo-1635528319984-a9add090242b?w=600&q=80&fm=webp', // north Bali village
+  'Kyoto':                'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=600&q=80&fm=webp', // Fushimi Inari torii
+  'Lahore':               'https://images.unsplash.com/photo-1567961339741-13bfd4f71cb0?w=600&q=80&fm=webp', // Badshahi Mosque
+  'Lapulapu':             'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=600&q=80&fm=webp', // Cebu area
+  'Las Vegas':            'https://images.unsplash.com/photo-1581351721010-8cf859cb14a4?w=600&q=80&fm=webp', // Las Vegas strip
+  'Lat Krabang':          'https://images.unsplash.com/photo-1563492065599-3520f775eeed?w=600&q=80&fm=webp', // Bangkok area
+  'Liloan':               'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=600&q=80&fm=webp', // Cebu area
+  'Loganholme':           'https://images.unsplash.com/photo-1524293581917-878a6d017c71?w=600&q=80&fm=webp', // Brisbane area
+  'Lombok':               'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w=600&q=80&fm=webp', // Rinjani volcano
+  'London':               'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&q=80&fm=webp', // Tower Bridge
+  'Los Angeles':          'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=600&q=80&fm=webp', // Hollywood hills
+  'Lovina':               'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=600&q=80&fm=webp', // north Bali coast
+  'Luang Prabang':        'https://images.unsplash.com/photo-1684918169953-088fe974b398?w=600&q=80&fm=webp', // Luang Prabang temple
+  'Makati':               'https://images.unsplash.com/photo-1565799557186-3a180c3e0c1a?w=600&q=80&fm=webp', // Makati skyline
+  'Manama':               'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=600&q=80&fm=webp', // Bahrain WTC
+  'Manila':               'https://images.unsplash.com/photo-1746168632944-5b1ea8140251?w=600&q=80&fm=webp', // Manila cityscape
+  'Marrakech':            'https://images.unsplash.com/photo-1553102674-af2860e3d4ee?w=600&q=80&fm=webp', // Jemaa el-Fna square
+  'Melbourne':            'https://images.unsplash.com/photo-1514395462725-fb4566210144?w=600&q=80&fm=webp', // Flinders St Station
+  'Mesaieed':             'https://images.unsplash.com/photo-1539020140153-e479b8f22986?w=600&q=80&fm=webp', // Qatar desert
+  'Miami':                'https://images.unsplash.com/photo-1514214246283-d427a95c5d2f?w=600&q=80&fm=webp', // South Beach
+  'Nagoya':               'https://images.unsplash.com/photo-1557409518-691ebcd96038?w=600&q=80&fm=webp', // Nagoya Castle
+  'Nairobi':              'https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=600&q=80&fm=webp', // Nairobi skyline
+  'Nara':                 'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=600&q=80&fm=webp', // Todai-ji temple
+  'New Delhi':            'https://images.unsplash.com/photo-1587474260584-136574528ed5?w=600&q=80&fm=webp', // India Gate
+  'New York':             'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&q=80&fm=webp', // Manhattan skyline
+  'Nonthaburi':           'https://images.unsplash.com/photo-1563492065599-3520f775eeed?w=600&q=80&fm=webp', // Bangkok suburb
+  'Ontario':              'https://images.unsplash.com/photo-1570131812397-6f0026f8b60b?w=600&q=80&fm=webp', // Canadian landscape
+  'Osaka':                'https://images.unsplash.com/photo-1590559899731-a382839e5549?w=600&q=80&fm=webp', // Osaka Castle
+  'Oulu':                 'https://images.unsplash.com/photo-1565026057447-bc90a3dceb87?w=600&q=80&fm=webp', // Finnish winter
+  'Padang':               'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w=600&q=80&fm=webp', // West Sumatra
+  'Paris':                'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80&fm=webp', // Eiffel Tower
+  'Perth':                'https://images.unsplash.com/photo-1524293581917-878a6d017c71?w=600&q=80&fm=webp', // Perth skyline
+  'Petaling Jaya':        'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=600&q=80&fm=webp', // Malaysia
+  'Phnom Penh':           'https://images.unsplash.com/photo-1568895008361-1dee0e15253c?w=600&q=80&fm=webp', // Royal Palace
+  'Phuket':               'https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?w=600&q=80&fm=webp', // Big Buddha aerial
+  'Pichincha':            'https://images.unsplash.com/photo-1597546122016-2afe18dabb3e?w=600&q=80&fm=webp', // Ecuador Andes
+  'Plaga':                'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&q=80&fm=webp', // Bali coast
+  'Porto':                'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&q=80&fm=webp', // Porto ribeira
+  'Prague':               'https://images.unsplash.com/photo-1541849546-216549ae216d?w=600&q=80&fm=webp', // Prague old town
+  'Quito':                'https://images.unsplash.com/photo-1597546122016-2afe18dabb3e?w=600&q=80&fm=webp', // Quito old town
+  'Rijswijk':             'https://images.unsplash.com/photo-1512470876302-972faa2aa9a4?w=600&q=80&fm=webp', // Netherlands
+  'Riyadh':               'https://images.unsplash.com/photo-1591604466107-ec97de577aff?w=600&q=80&fm=webp', // Kingdom Tower
+  'Rome':                 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=600&q=80&fm=webp', // Colosseum
+  'Russia':               'https://images.unsplash.com/photo-1513326738677-b964603b136d?w=600&q=80&fm=webp', // St Basil's Cathedral
+  'Saint Petersburg':     'https://images.unsplash.com/photo-1548834925-e48f8a27b6b7?w=600&q=80&fm=webp', // Church on Spilled Blood
+  'Salalah':              'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80&fm=webp', // Oman coast
+  'Samarkand':            'https://images.unsplash.com/photo-1604580864964-0462f5d5b1a8?w=600&q=80&fm=webp', // Registan Square
+  'San Francisco':        'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=600&q=80&fm=webp', // Golden Gate Bridge
+  'Sapporo':              'https://images.unsplash.com/photo-1604580864964-0462f5d5b1a8?w=600&q=80&fm=webp', // Odori Park snow festival
+  'Sathon':               'https://images.unsplash.com/photo-1563492065599-3520f775eeed?w=600&q=80&fm=webp', // Bangkok
+  'Seal Beach':           'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=600&q=80&fm=webp', // California beach
+  'Seminyak':             'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=600&q=80&fm=webp', // Bali beach
+  'Seoul':                'https://images.unsplash.com/photo-1538485399081-7191377e8241?w=600&q=80&fm=webp', // N Seoul Tower
+  'Shanghai':             'https://images.unsplash.com/photo-1548919973-5cef591cdbc9?w=600&q=80&fm=webp', // The Bund at night
+  'Sharjah':              'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80&fm=webp', // UAE cityscape
+  'Shibuya':              'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&q=80&fm=webp', // Shibuya crossing
+  'Siem Reap':            'https://images.unsplash.com/photo-1508159452718-d22f6734a236?w=600&q=80&fm=webp', // Angkor Wat
+  'Singapore':            'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=600&q=80&fm=webp', // Marina Bay Sands
+  'Sofia':                'https://images.unsplash.com/photo-1541849546-216549ae216d?w=600&q=80&fm=webp', // Alexander Nevsky Cathedral
+  'Sukhumvit':            'https://images.unsplash.com/photo-1563492065599-3520f775eeed?w=600&q=80&fm=webp', // Bangkok
+  'Sydney':               'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=600&q=80&fm=webp', // Opera House
+  'Taipei':               'https://images.unsplash.com/photo-1470004914212-05527e49370b?w=600&q=80&fm=webp', // Taipei 101
+  'Tashkent':             'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=600&q=80&fm=webp', // Tashkent cityscape
+  'Tbilisi':              'https://images.unsplash.com/photo-1600093463592-8e36ae95ef56?w=600&q=80&fm=webp', // Narikala fortress
+  'Thimphu':              'https://images.unsplash.com/photo-1589656966895-2f33e7653819?w=600&q=80&fm=webp', // Tashichho Dzong
+  'Tijuana':              'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=600&q=80&fm=webp', // Baja California
+  'Tokyo':                'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&q=80&fm=webp', // Tokyo Tower at night
+  'Toronto':              'https://images.unsplash.com/photo-1517090504586-fde19ea6066f?w=600&q=80&fm=webp', // CN Tower
+  'Toulouse':             'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80&fm=webp', // France pink city
+  'Ubud':                 'https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=600&q=80&fm=webp', // Tegalalang rice terraces
+  'Ulaanbaatar':          'https://images.unsplash.com/photo-1600176209323-879e2565a763?w=600&q=80&fm=webp', // Ulaanbaatar cityscape
+  'Valencia':             'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=600&q=80&fm=webp', // City of Arts & Sciences
+  'Vancouver':            'https://images.unsplash.com/photo-1519832979-6fa011b87667?w=600&q=80&fm=webp', // downtown & mountains
+  'Venice':               'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=600&q=80&fm=webp', // Grand Canal
+  'Vienna':               'https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=600&q=80&fm=webp', // Schönbrunn Palace
+  'Vientiane':            'https://images.unsplash.com/photo-1511181447955-4c7642494e83?w=600&q=80&fm=webp', // Patuxai monument
+  'Yakkasaray':           'https://images.unsplash.com/photo-1604580864964-0462f5d5b1a8?w=600&q=80&fm=webp', // Tashkent area
+  'Yau Tsim Mong District': 'https://images.unsplash.com/photo-1506970845246-18f21d533b20?w=600&q=80&fm=webp', // Hong Kong
+  'Yerevan':              'https://images.unsplash.com/photo-1589656966895-2f33e7653819?w=600&q=80&fm=webp', // Republic Square
+  'Yokohama':             'https://images.unsplash.com/photo-1590422749897-47036da0b0ff?w=600&q=80&fm=webp', // Yokohama port
+  'sofia':                'https://images.unsplash.com/photo-1541849546-216549ae216d?w=600&q=80&fm=webp',
 };
 
 function getHotelImage(hotel: any): string {
   if (hotel.thumbnail_url) return hotel.thumbnail_url;
-  return 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80';
+  return 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80&fm=webp';
 }
 
 function getCityImage(city: string): string {
-  const key = cityImages[city];
-  if (key) return `https://images.unsplash.com/${key}?w=400&q=80`;
-  return 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=80';
+  if (cityImages[city]) return cityImages[city];
+  // fallback: generic travel cityscape
+  return 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600&q=80&fm=webp';
 }
 
 // Speciality card data for "Search by Speciality" section
 const specialityCards = [
-  { value: 'daycation', label: 'Daycation', desc: 'Day trips & experiences', color: 'bg-amber-50 text-amber-700 border-amber-200', iconPath: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
-  { value: 'for_couple', label: 'For Couple', desc: 'Romantic getaways', color: 'bg-pink-50 text-pink-700 border-pink-200', iconPath: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-  { value: 'for_work', label: 'For Work', desc: 'Remote work spaces', color: 'bg-blue-50 text-blue-700 border-blue-200', iconPath: 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z' },
-  { value: 'luxury', label: 'Luxury', desc: 'Premium experiences', color: 'bg-purple-50 text-purple-700 border-purple-200', iconPath: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
-  { value: 'personal_time', label: 'Personal Time', desc: 'Rest & relaxation', color: 'bg-green-50 text-green-700 border-green-200', iconPath: 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' },
-  { value: 'transit_use', label: 'Transit Use', desc: 'Airport & station stays', color: 'bg-sky-50 text-sky-700 border-sky-200', iconPath: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
-  { value: 'workspace', label: 'Workspace', desc: 'Coworking & meeting rooms', color: 'bg-teal-50 text-teal-700 border-teal-200', iconPath: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
+  { value: 'daycation',    label: 'Daycation',     desc: 'Day trips & experiences',    img: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'for_couple',   label: 'For Couple',    desc: 'Romantic getaways',           img: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'for_work',     label: 'For Work',      desc: 'Remote work spaces',          img: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'luxury',       label: 'Luxury',        desc: 'Premium experiences',         img: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'personal_time',label: 'Personal Time', desc: 'Rest & relaxation',           img: 'https://images.unsplash.com/photo-1540518614846-7eded433c457?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'transit_use',  label: 'Transit Use',   desc: 'Airport & station stays',     img: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'workspace',    label: 'Workspace',     desc: 'Coworking & meeting rooms',   img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=400&fit=crop&fm=webp' },
 ];
 
 // Room types for "Search by Room Type"
@@ -305,22 +432,35 @@ for (const region of Object.keys(citiesByRegion)) {
 const availableRegions = regionOrder.filter(r => citiesByRegion[r]?.length > 0);
 if (citiesByRegion['Other']?.length) availableRegions.push('Other');
 
+// Pre-compute city data with images for JS dynamic rendering (non-default tabs)
+const citiesDataForJS: Record<string, Array<{city: string; country: string; hotel_count: number; image: string; href: string}>> = {};
+for (const [region, cities] of Object.entries(citiesByRegion)) {
+  citiesDataForJS[region] = (cities as any[]).map((city) => ({
+    city: city.city,
+    country: city.country,
+    hotel_count: city.hotel_count,
+    image: getCityImage(city.city),
+    href: `/city/${city.city.toLowerCase().replace(/\s+/g, '-')}`
+  }));
+}
+
 // Unique city count
 const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
 ---
 
 <Layout title="DayDreamHub - Hotels by the Hour, Worldwide">
+  <link slot="head" rel="preload" as="image" href="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80&fm=webp" fetchpriority="high" />
 
   <!-- Hero Section -->
   <section class="relative min-h-[600px] md:min-h-[700px] flex items-center overflow-hidden">
-    <div id="hero-slide-0" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-100" style="background-image:url('https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80')"></div>
-    <div id="hero-slide-1" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" style="background-image:url('https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1600&q=80')"></div>
-    <div id="hero-slide-2" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" style="background-image:url('https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=1600&q=80')"></div>
+    <div id="hero-slide-0" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-100" style="background-image:url('https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80&fm=webp')"></div>
+    <div id="hero-slide-1" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" data-bg="https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1600&q=80&fm=webp"></div>
+    <div id="hero-slide-2" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" data-bg="https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=1600&q=80&fm=webp"></div>
     <div class="absolute inset-0 bg-teal-900/80"></div>
 
     <div class="relative z-10 max-w-7xl mx-auto px-4 py-16 w-full">
       <div class="text-center text-white mb-8">
-        <h1 class="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4">Hotels by the Hour. {uniqueCityCount}+ Cities Worldwide.</h1>
+        <h1 class="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4">Hotels by the Hour. {uniqueCityCount}+ Cities Worldwide.</h1>
         <p class="text-lg md:text-xl text-teal-100 max-w-3xl mx-auto mb-6">The day-use hotel booking platform - find short-stay plans for work, rest, or transit.</p>
         <div class="flex flex-wrap justify-center gap-3 mb-8">
           <span class="bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full">From 1 hour</span>
@@ -440,10 +580,19 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
               </select>
             </div>
             <div class="flex items-end">
-              <button type="button" id="hero-search-btn" onclick="window._heroAskAI()" class="w-full bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold px-6 py-2.5 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                Ask AI
-              </button>
+              <!-- Split button: Ask AI | Search -->
+              <div class="flex w-full rounded-lg overflow-hidden shadow-sm text-sm font-semibold">
+                <button type="button" id="mode-ai" onclick="window._heroAskAI()"
+                  class="flex-1 py-2.5 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-gray-900 transition-colors border-r border-amber-600">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                  Ask AI
+                </button>
+                <button type="button" id="mode-search" onclick="window._heroNormalSearch()"
+                  class="flex-1 py-2.5 flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                  Search
+                </button>
+              </div>
             </div>
           </div>
         </form>
@@ -467,105 +616,13 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
             </button>
           ))}
         </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- Stats Bar -->
-  <section class="bg-teal-700 text-white py-6">
-    <div class="max-w-5xl mx-auto px-4 grid grid-cols-3 text-center divide-x divide-teal-600">
-      <div>
-        <div class="text-2xl md:text-3xl font-bold">{totalHotels || '350'}+</div>
-        <div class="text-xs md:text-sm text-teal-100 mt-1">Day-Use Hotels</div>
-      </div>
-      <div>
-        <div class="text-2xl md:text-3xl font-bold">{uniqueCityCount}+</div>
-        <div class="text-xs md:text-sm text-teal-100 mt-1">Cities</div>
-      </div>
-      <div>
-        <div class="text-2xl md:text-3xl font-bold">{totalPlans || '1200'}+</div>
-        <div class="text-xs md:text-sm text-teal-100 mt-1">Short-Stay Plans</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Speciality Tabs -->
-  <section class="py-10 bg-white">
-    <div class="max-w-7xl mx-auto px-4">
-      <h2 class="text-2xl font-bold text-gray-800 mb-5">Browse by Speciality</h2>
-
-      <!-- Tab buttons -->
-      <div class="flex gap-2 overflow-x-auto pb-3 -mx-4 px-4 scrollbar-hide mb-6">
-        {specialities.map(s => (
-          <a
-            href={s.value ? `/?speciality=${s.value}` : '/'}
-            class:list={[
-              "flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium border transition-colors",
-              activeSpeciality === s.value
-                ? "bg-teal-700 text-white border-teal-700"
-                : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-teal-50 hover:border-teal-300"
-            ]}
-          >
-            {s.label}
-          </a>
-        ))}
-      </div>
-
-      <!-- Hotels grid -->
-      {heroHotels.length > 0 ? (
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {heroHotels.map((hotel: any) => {
-            const planTags = (hotelPlanTypes[hotel.id] || []).slice(0, 2);
-            return (
-              <div class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100 relative">
-                <a href={`/hotel/${hotel.slug}`} class="block">
-                  <div class="aspect-[4/3] overflow-hidden bg-gray-100 relative">
-                    <img src={getHotelImage(hotel)} alt={hotel.name} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                    {planTags.length > 0 && (
-                      <div class="absolute top-2 left-2 flex gap-1 flex-wrap">
-                        {planTags.map((tag: string) => (
-                          <span class="text-[10px] font-semibold bg-teal-700/90 text-white px-2 py-0.5 rounded-full capitalize">{tag.replace(/_/g, ' ')}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div class="p-4">
-                    <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
-                    <p class="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                      {hotel.city}, {hotel.country}
-                    </p>
-                    <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
-                      {hotel.min_price != null ? (
-                        <div>
-                          <span class="text-xs text-gray-400">from</span>
-                          <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
-                        </div>
-                      ) : (
-                        <span class="text-xs text-gray-400">Price on request</span>
-                      )}
-                      <span class="text-xs text-teal-700 font-medium">View Plans →</span>
-                    </div>
-                  </div>
-                </a>
-                <button class="wishlist-btn absolute top-2 right-2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow hover:bg-white transition-colors" data-slug={hotel.slug} title="Save to wishlist">
-                  <svg class="wishlist-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"/></svg>
-                </button>
-              </div>
-            );
-          })}
+        <!-- Stats inline -->
+        <div class="flex items-center justify-center gap-8 mt-5 text-white/80 text-base md:text-lg">
+          <span><strong class="text-white font-extrabold text-2xl md:text-3xl">{totalHotels || '350'}+</strong> Day-Use Hotels</span>
+          <span class="text-white/40 text-xl">|</span>
+          <span><strong class="text-white font-extrabold text-2xl md:text-3xl">{uniqueCityCount}+</strong> Cities</span>
         </div>
-      ) : (
-        <div class="py-12 text-center text-gray-400">
-          <p>No hotels found for this speciality.</p>
-        </div>
-      )}
-
-      <div class="text-center mt-6">
-        <a href={activeSpeciality ? `/search?speciality=${activeSpeciality}` : '/search'} class="inline-flex items-center gap-2 text-teal-700 hover:text-teal-800 font-semibold text-sm">
-          View all
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        </a>
       </div>
     </div>
   </section>
@@ -588,24 +645,50 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
         ))}
       </div>
 
-      <!-- City grids per region -->
-      {availableRegions.map((region, i) => (
-        <div data-region-panel={region} class={i !== 0 ? 'hidden' : ''}>
+      <!-- City grids per region — default tab SSR only, others rendered dynamically by JS -->
+      <div id="region-panels-container">
+        <div data-region-panel={availableRegions[0]}>
           <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {citiesByRegion[region].map((city: any) => (
-              <a href={`/search?city=${encodeURIComponent(city.city)}`} class="group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow">
+            {citiesByRegion[availableRegions[0]].map((city: any) => (
+              <a href={`/city/${city.city.toLowerCase().replace(/\s+/g, '-')}`} class="group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow">
                 <img src={getCityImage(city.city)} alt={city.city} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                 <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
                 <div class="absolute bottom-0 left-0 right-0 p-3">
-                  <h4 class="text-white font-semibold text-sm">{city.city}</h4>
-                    <p class="text-white/60 text-xs">{city.country}</p>
-                  <p class="text-white/70 text-xs">{city.hotel_count} hotels</p>
+                  <h3 class="text-white font-semibold text-sm">{city.city}</h3>
+                  <p class="text-white/60 text-xs">{city.country}</p>
+                  <p class="text-white/70 text-xs">{city.hotel_count} {city.hotel_count === 1 ? 'hotel' : 'hotels'}</p>
                 </div>
               </a>
             ))}
           </div>
         </div>
-      ))}
+      </div>
+      <script define:vars={{ citiesDataForJS, defaultRegion: availableRegions[0] }}>
+        window.__CITIES_DATA__ = citiesDataForJS;
+        window.__DEFAULT_REGION__ = defaultRegion;
+      </script>
+    </div>
+  </section>
+
+  <!-- Browse by Speciality -->
+  <section class="py-10 bg-white">
+    <div class="max-w-7xl mx-auto px-4">
+      <h2 class="text-2xl font-bold text-gray-800 mb-2">Browse by Speciality</h2>
+      <p class="text-sm text-gray-500 mb-6">Choose your ideal stay experience</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {specialityCards.map(s => (
+          <a href={`/search?speciality=${s.value}`}
+            class="group relative rounded-2xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow">
+            <img src={s.img} alt={s.label}
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-0 left-0 right-0 p-4">
+              <p class="font-bold text-white text-sm leading-tight">{s.label}</p>
+              <p class="text-xs text-white/80 mt-0.5">{s.desc}</p>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   </section>
 
@@ -613,10 +696,40 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
     document.querySelectorAll('.region-tab').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var region = btn.getAttribute('data-region');
-        // Switch panels
-        document.querySelectorAll('[data-region-panel]').forEach(function(panel) {
-          panel.classList.toggle('hidden', panel.getAttribute('data-region-panel') !== region);
+        var container = document.getElementById('region-panels-container');
+
+        // Create panel on demand if not yet rendered
+        var existingPanel = container.querySelector('[data-region-panel="' + region + '"]');
+        if (!existingPanel) {
+          var cities = (window.__CITIES_DATA__ || {})[region] || [];
+          var panel = document.createElement('div');
+          panel.setAttribute('data-region-panel', region);
+          var grid = document.createElement('div');
+          grid.className = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4';
+          cities.forEach(function(city) {
+            var a = document.createElement('a');
+            a.href = city.href;
+            a.className = 'group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow';
+            a.innerHTML =
+              '<img src="' + city.image + '" alt="' + city.city.replace(/"/g, '&quot;') + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
+              '<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>' +
+              '<div class="absolute bottom-0 left-0 right-0 p-3">' +
+                '<h3 class="text-white font-semibold text-sm">' + city.city.replace(/</g, '&lt;') + '</h3>' +
+                '<p class="text-white/60 text-xs">' + city.country.replace(/</g, '&lt;') + '</p>' +
+                '<p class="text-white/70 text-xs">' + city.hotel_count + ' ' + (city.hotel_count === 1 ? 'hotel' : 'hotels') + '</p>' +
+              '</div>';
+            grid.appendChild(a);
+          });
+          panel.appendChild(grid);
+          container.appendChild(panel);
+          existingPanel = panel;
+        }
+
+        // Show this panel, hide others
+        container.querySelectorAll('[data-region-panel]').forEach(function(p) {
+          p.classList.toggle('hidden', p.getAttribute('data-region-panel') !== region);
         });
+
         // Switch tab styles
         document.querySelectorAll('.region-tab').forEach(function(t) {
           t.classList.remove('bg-teal-600', 'text-white', 'border-teal-600');
@@ -632,77 +745,7 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
 
 
 
-  <!-- Category Hotel Sections -->
-  {categoryDefs.map(cat => {
-    const hotels = categoryHotels[cat.planType] || [];
-    if (hotels.length === 0) return null;
-    return (
-      <section class="py-12 bg-gray-50 border-t border-gray-100">
-        <div class="max-w-7xl mx-auto px-4">
-          <div class="flex items-center justify-between mb-6">
-            <div>
-              <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                <svg class="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={cat.icon}/></svg>
-                {cat.title}
-              </h2>
-              <p class="text-sm text-gray-500 mt-1">{cat.subtitle}</p>
-            </div>
-            <a href={`/search?speciality=${cat.planType}`} class="text-sm text-teal-700 hover:text-teal-800 font-medium flex items-center gap-1">
-              View all
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-            </a>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {hotels.map((hotel: any) => {
-              const planTags = (hotelPlanTypes[hotel.id] || []).slice(0, 2);
-              return (
-                <div class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100 relative">
-                  <a href={`/hotel/${hotel.slug}`} class="block">
-                    <div class="aspect-[3/2] overflow-hidden bg-gray-100 relative">
-                      <img src={getHotelImage(hotel)} alt={hotel.name} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                      {planTags.length > 0 && (
-                        <div class="absolute top-2 left-2 flex gap-1 flex-wrap">
-                          {planTags.map((tag: string) => (
-                            <span class="text-[10px] font-semibold bg-teal-700/90 text-white px-2 py-0.5 rounded-full capitalize">{tag.replace(/_/g,' ')}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div class="p-4">
-                      <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
-                      <p class="text-xs text-gray-500 mt-1">{hotel.city}, {hotel.country}</p>
-                      <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
-                        {hotel.min_price != null ? (
-                          <div>
-                            <span class="text-xs text-gray-400">from</span>
-                            <span class="text-lg font-bold text-teal-700 ml-1">${hotel.min_price}</span>
-                          </div>
-                        ) : (
-                          <span class="text-xs text-gray-400">Price on request</span>
-                        )}
-                        {hotel.rating > 0 ? (
-                          <div class="flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                            <span class="text-xs font-medium text-gray-600">{hotel.rating.toFixed(1)}</span>
-                          </div>
-                        ) : (
-                          <span class="text-xs text-teal-700 font-medium">View Plans →</span>
-                        )}
-                      </div>
-                    </div>
-                  </a>
-                  <button class="wishlist-btn absolute top-2 right-2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow hover:bg-white transition-colors" data-slug={hotel.slug} title="Save to wishlist">
-                    <svg class="wishlist-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"/></svg>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-    );
-  })}
+  
 
   <!-- Search by Room Type -->
   <section class="py-12 bg-white">
@@ -710,35 +753,16 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
       <h2 class="text-2xl font-bold text-gray-800 mb-2">Search by Room Type</h2>
       <p class="text-sm text-gray-500 mb-6">Find the perfect accommodation style</p>
 
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div class="flex flex-wrap justify-center gap-4">
         {roomTypes.map(rt => (
-          <a href={`/search?propertyType=${encodeURIComponent(rt.value)}`} class="group relative rounded-xl overflow-hidden aspect-square shadow-sm hover:shadow-lg transition-shadow">
-            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80`} alt={rt.label} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+          <a href={`/search?propertyType=${encodeURIComponent(rt.value)}`} class="group relative rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow w-[calc(50%-0.5rem)] sm:w-[calc(33.333%-0.75rem)] lg:w-[calc(20%-0.8rem)]" style="aspect-ratio:1">
+            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80`}&fm=webp alt={rt.label} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
             <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
             <div class="absolute bottom-0 left-0 right-0 p-3 text-center">
               <h3 class="text-white font-semibold text-sm">{rt.label}</h3>
             </div>
           </a>
         ))}
-      </div>
-    </div>
-  </section>
-
-  <!-- Map View -->
-  <section class="py-12 bg-white">
-    <div class="max-w-7xl mx-auto px-4">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h2 class="text-2xl font-bold text-gray-800 mb-1">Map View</h2>
-          <p class="text-sm text-gray-500">Explore day-use hotels on the map</p>
-        </div>
-        <a href="/search?view=map" class="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1">
-          Full Map
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        </a>
-      </div>
-      <div id="homepage-map" class="w-full h-96 rounded-2xl overflow-hidden shadow-md bg-gray-100 relative">
-        <div class="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">Loading map...</div>
       </div>
     </div>
   </section>
@@ -825,68 +849,61 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
   )}
 
   <!-- Map Script (Leaflet) -->
-  <script is:inline define:vars={{ mapHotels }}>
-    document.addEventListener('DOMContentLoaded', function() {
-      if (typeof window === 'undefined') return;
-      var mapEl = document.getElementById('homepage-map');
-      if (!mapEl) return;
+  <script is:inline>
+    (function() {
+      function initMap() {
+        var mapEl = document.getElementById('homepage-map');
+        if (!mapEl) return;
 
-      // Load Leaflet dynamically
-      var link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
+        var hotelsEl = document.getElementById('map-hotels-data');
+        var hotels = [];
+        try { hotels = JSON.parse(hotelsEl ? hotelsEl.textContent : '[]'); } catch(e) { console.error('map hotels parse error', e); }
 
-      var script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = function() {
-        mapEl.innerHTML = '';
-        var map = L.map('homepage-map', { scrollWheelZoom: false }).setView([13.75, 100.5], 3);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+        // Load Leaflet CSS
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
 
-        (mapHotels || []).forEach(function(h) {
-          if (!h.latitude || !h.longitude) return;
-          var marker = L.circleMarker([h.latitude, h.longitude], {
-            radius: 7,
-            fillColor: '#0d9488',
-            color: '#fff',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.9
+        // Load Leaflet JS
+        var script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = function() {
+          mapEl.innerHTML = '';
+          var map = L.map('homepage-map', { scrollWheelZoom: false }).setView([13.75, 100.5], 3);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
           }).addTo(map);
-          marker.bindPopup(
-            '<a href="/hotel/' + h.slug + '" class="font-semibold text-teal-700">' + h.name + '</a>' +
-            '<br><span class="text-xs text-gray-500">' + h.city + ', ' + h.country + '</span>' +
-            (h.min_price ? '<br><span class="text-xs font-bold">from $' + h.min_price + '</span>' : '')
-          );
-        });
-      };
-      document.head.appendChild(script);
-    });
+
+          hotels.forEach(function(h) {
+            if (!h.latitude || !h.longitude) return;
+            var marker = L.circleMarker([h.latitude, h.longitude], {
+              radius: 7,
+              fillColor: '#0d9488',
+              color: '#fff',
+              weight: 2,
+              opacity: 1,
+              fillOpacity: 0.9
+            }).addTo(map);
+            marker.bindPopup(
+              '<a href="/hotel/' + h.slug + '" style="font-weight:600;color:#0d9488">' + h.name + '</a>' +
+              '<br><span style="font-size:12px;color:#6b7280">' + h.city + ', ' + h.country + '</span>' +
+              (h.min_price ? '<br><span style="font-size:12px;font-weight:700">from $' + h.min_price + '</span>' : '')
+            );
+          });
+        };
+        document.head.appendChild(script);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMap);
+      } else {
+        initMap();
+      }
+    })();
   </script>
 
-  <!-- About DayDreamHub -->
-  <section class="py-16 bg-teal-700 text-white">
-    <div class="max-w-4xl mx-auto px-4 text-center">
-      <h2 class="text-3xl font-bold mb-4">About DayDreamHub</h2>
-      <p class="text-teal-100 text-lg leading-relaxed mb-6">
-        DayDreamHub is the global platform for day-use hotel bookings. Whether you need a quiet workspace during the day, a place to rest between flights, a romantic daycation, or just a few hours of luxury - we connect you with {totalHotels || 350}+ hotels across {uniqueCityCount}+ cities worldwide.
-      </p>
-      <p class="text-teal-200 text-sm leading-relaxed mb-8">
-        Our plans start from just 1 hour. No overnight stay required. Choose your check-in and check-out times, browse by speciality, and book instantly with secure PayPal payments. Every booking is confirmed in real-time.
-      </p>
-      <div class="flex flex-wrap justify-center gap-4">
-        <a href="/search" class="bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold px-8 py-3 rounded-xl transition-colors">
-          Start Searching
-        </a>
-        <a href="/concierge" class="bg-white/10 hover:bg-white/20 border border-white/30 text-white font-semibold px-8 py-3 rounded-xl transition-colors">
-          Try AI Concierge
-        </a>
-      </div>
-    </div>
-  </section>
+  
 
   <!-- Slideshow Script -->
   <script>
@@ -897,8 +914,14 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
         document.getElementById('hero-slide-2'),
       ];
       let current = 0;
+      function loadSlide(slideEl: HTMLElement | null) {
+        if (slideEl && (slideEl as any).dataset.bg && !slideEl.style.backgroundImage) {
+          slideEl.style.backgroundImage = `url('${(slideEl as any).dataset.bg}')`;
+        }
+      }
       setInterval(() => {
         const next = (current + 1) % 3;
+        loadSlide(slides[next]);
         if (slides[current]) slides[current].style.opacity = '0';
         if (slides[next]) slides[next].style.opacity = '1';
         current = next;
@@ -979,19 +1002,17 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
     // Markdown: - リスト項目
     html = html.replace(/^[-•]\s+(.+)$/gm, '<span class="flex gap-1.5"><span class="text-amber-400 flex-shrink-0">•</span><span>$1</span></span>');
 
-    // Hotel links: [text](http.../hotel/slug...)
-    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]*?\/hotel\/([\w-]+)[^)]*)\)/g,
+    // Hotel links: [text](http.../hotel/slug...) or [text](/hotel/slug) or [text](hotel/slug)
+    html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)]*?\/hotel\/([\w-]+)[^)]*)\)/g,
       '<a href="/hotel/$3" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
-    // Hotel links: [text](/hotel/slug)
-    html = html.replace(/\[([^\]]+)\]\((\/hotel\/([\w-]+))\)/g,
+    html = html.replace(/\[([^\]\n]+)\]\((\/?hotel\/([\w-]+))\)/g,
       '<a href="/hotel/$3" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
-    // Bare /hotel/slug
-    html = html.replace(/(\/hotel\/([\w-]+))/g,
-      '<a href="$1" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
-
     // 通常リンク [text](url)
-    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+    html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)]+)\)/g,
       '<a href="$2" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
+    // Bare /hotel/slug — only if NOT already inside href="" (prevents double-conversion)
+    html = html.replace(/(?<!href=")(\/hotel\/([\w-]+))(?!")/g,
+      '<a href="/hotel/$2" target="_blank" class="underline text-amber-300 hover:text-amber-200">/hotel/$2</a>');
 
     return html;
   }
@@ -1394,7 +1415,7 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
       });
       var data = await res.json();
       removeTyping();
-      addMsg(data.response || data.reply || data.message || 'Sorry, something went wrong.', 'assistant');
+      addMsg(data.response || data.reply || data.message || (data.error ? '⚠️ ' + data.error : 'Sorry, something went wrong. Please try again.'), 'assistant');
 
       // 電話発信中なら自動ポーリング開始
       if (data.message_type === 'call_status' && data.metadata?.call_status === 'calling') {
@@ -1419,6 +1440,63 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
   inputEl.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
   });
+
+  // Search mode toggle
+  var _searchMode = 'ai';
+  window._setSearchMode = function(mode) {
+    _searchMode = mode;
+    var modeAi = document.getElementById('mode-ai');
+    var modeSearch = document.getElementById('mode-search');
+    var btnLabel = document.getElementById('hero-btn-label');
+    var btnIcon = document.getElementById('hero-btn-icon');
+    if (mode === 'ai') {
+      modeAi.classList.add('bg-amber-500', 'text-gray-900');
+      modeAi.classList.remove('bg-white', 'text-gray-500');
+      modeSearch.classList.add('bg-white', 'text-gray-500');
+      modeSearch.classList.remove('bg-amber-500', 'text-gray-900');
+      btnLabel.textContent = 'Ask AI';
+      btnIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>';
+    } else {
+      modeSearch.classList.add('bg-amber-500', 'text-gray-900');
+      modeSearch.classList.remove('bg-white', 'text-gray-500');
+      modeAi.classList.add('bg-white', 'text-gray-500');
+      modeAi.classList.remove('bg-amber-500', 'text-gray-900');
+      btnLabel.textContent = 'Search';
+      btnIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>';
+    }
+  };
+
+  window._heroSearchAction = function() {
+    if (_searchMode === 'ai') {
+      window._heroAskAI();
+    } else {
+      window._heroNormalSearch();
+    }
+  };
+
+  window._heroNormalSearch = function() {
+    var location = document.getElementById('location-input') ? document.getElementById('location-input').value.trim() : '';
+    var date     = document.getElementById('checkin-fp') ? document.getElementById('checkin-fp').value.trim() : '';
+    var ciTime   = document.querySelector('select[name="checkin_time"]') ? document.querySelector('select[name="checkin_time"]').value : '';
+    var coTime   = document.querySelector('select[name="checkout_time"]') ? document.querySelector('select[name="checkout_time"]').value : '';
+    var guestsEl = document.querySelector('select[name="guests"]');
+    var guests   = guestsEl ? guestsEl.value : '';
+    var budgetEl = document.querySelector('select[name="budget"]');
+    var budget   = budgetEl ? budgetEl.value : '';
+    var specEl   = document.querySelector('select[name="speciality"]');
+    var spec     = specEl ? specEl.value : '';
+
+    var params = new URLSearchParams();
+    if (location) params.set('city', location);
+    if (date)     params.set('date', date);
+    if (ciTime)   params.set('checkin_time', ciTime);
+    if (coTime)   params.set('checkout_time', coTime);
+    if (guests)   params.set('guests', guests);
+    if (budget)   params.set('budget', budget);
+    if (spec)     params.set('speciality', spec);
+
+    window.location.href = '/search?' + params.toString();
+  };
 
   // グローバル関数として登録（onclick属性から呼び出し）
   window._heroAskAI = function() {
@@ -1501,7 +1579,7 @@ const uniqueCityCount = new Set(allCities.map((c: any) => c.city)).size || 85;
 </script>
 
 <!-- Flatpickr: English date picker for Check-in -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" media="print" onload="this.media='all'" /><noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" /></noscript>
 
 <script is:inline define:vars={{ allCities }}>
 (function() {

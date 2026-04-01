@@ -1,0 +1,446 @@
+---
+import OwnerLayout from '../../layouts/OwnerLayout.astro';
+import { verifyOwner } from '../../lib/ownerAuth';
+
+const runtime = (Astro.locals as any).runtime;
+const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
+const owner = await verifyOwner(Astro.request, jwtSecret);
+if (!owner) return Astro.redirect('/login');
+
+const chapters = [
+  { id: 'ch1', num: 1, title: 'Introduction' },
+  { id: 'ch2', num: 2, title: 'How to Log In' },
+  { id: 'ch3', num: 3, title: 'Dashboard Overview' },
+  { id: 'ch4', num: 4, title: 'Managing Bookings' },
+  { id: 'ch5', num: 5, title: 'Calendar & Availability' },
+  { id: 'ch6', num: 6, title: 'Hotel & Plan Management' },
+  { id: 'ch7', num: 7, title: 'Sales Reports' },
+  { id: 'ch8', num: 8, title: 'Guest Reviews' },
+  { id: 'ch9', num: 9, title: 'Messages' },
+  { id: 'ch10', num: 10, title: 'Settings' },
+  { id: 'ch11', num: 11, title: 'Contact & Support' },
+];
+---
+
+<OwnerLayout title="User Guide" activeNav="manual">
+  <div class="flex gap-8 max-w-6xl">
+
+    <!-- Sticky sidebar TOC -->
+    <aside class="hidden lg:block w-56 flex-shrink-0">
+      <div class="sticky top-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Contents</p>
+        <nav class="space-y-1">
+          {chapters.map(ch => (
+            <a href={`#${ch.id}`} class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
+              <span class="text-xs font-bold text-indigo-400 w-5">{ch.num}</span>
+              {ch.title}
+            </a>
+          ))}
+        </nav>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="flex-1 space-y-10 pb-16">
+
+      <!-- Cover banner -->
+      <div class="bg-gradient-to-r from-indigo-700 to-indigo-500 rounded-2xl p-8 text-white">
+        <p class="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-2">DayDreamHub</p>
+        <h1 class="text-3xl font-extrabold mb-2">Owner Panel User Guide</h1>
+        <p class="text-indigo-200">For Hotel Owners & Property Managers — Version 1.0</p>
+      </div>
+
+      <!-- ── CH 1 ── -->
+      <section id="ch1" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 1</span>
+          <h2 class="text-xl font-bold text-slate-900">Introduction</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 mb-6"><strong>DayDreamHub</strong> is an online travel agency (OTA) specializing in day-use hotel bookings — allowing guests to reserve hotel rooms by the hour during daytime. As a registered property owner, you manage everything through this Owner Panel.</p>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">What You Can Do</h3>
+          <div class="grid grid-cols-2 gap-3">
+            {[
+              ['📅','Approve / Reject Bookings','Review guest requests in real time and confirm or decline.'],
+              ['📆','Calendar Management','Block dates and sync with external OTAs via iCal.'],
+              ['📊','Sales Reports','Track revenue and booking stats. Export to CSV.'],
+              ['⭐','Reply to Reviews','Post official responses to guest reviews.'],
+              ['💬','Messages','Communicate with guests about their bookings.'],
+              ['🏨','Hotel & Plan Management','Edit property info, photos, pricing, and plans.'],
+            ].map(([icon, title, desc]) => (
+              <div class="border border-slate-200 rounded-xl p-4 hover:border-indigo-200 hover:bg-indigo-50 transition-colors">
+                <div class="text-2xl mb-2">{icon}</div>
+                <p class="font-semibold text-slate-800 text-sm mb-1">{title}</p>
+                <p class="text-slate-500 text-xs leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CH 2 ── -->
+      <section id="ch2" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 2</span>
+          <h2 class="text-xl font-bold text-slate-900">How to Log In</h2>
+        </div>
+        <div class="p-8">
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Your Login Credentials</h3>
+          <p class="text-slate-600 text-sm mb-3">DayDreamHub will send you a welcome email containing:</p>
+          <ul class="space-y-2 mb-5">
+            {[['Login URL:', 'https://daydreamhub.com/login'],['Email address','(used as your login ID)'],['Temporary password','']].map(([k, v]) => (
+              <li class="flex items-start gap-2 text-sm"><span class="text-indigo-500 font-bold mt-0.5">›</span><span><strong>{k}</strong> {v}</span></li>
+            ))}
+          </ul>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+            <span class="text-xl">⚠️</span>
+            <div><strong>Important:</strong> Change your password immediately after your first login. See Chapter 10 for instructions.</div>
+          </div>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Login Steps</h3>
+          <ol class="space-y-3">
+            {[
+              'Open a browser and go to https://daydreamhub.com/login',
+              'Enter your email address in the Email field.',
+              'Enter your password in the Password field.',
+              'Click Sign In.',
+              'After logging in, click 🏨 Owner Portal at the bottom of the page.',
+            ].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mt-5 text-sm">
+            <span class="text-xl">💡</span>
+            <div>Forgot your password? Click <strong>Forgot password?</strong> to receive a reset link by email.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CH 3 ── -->
+      <section id="ch3" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 3</span>
+          <h2 class="text-xl font-bold text-slate-900">Dashboard Overview</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">The Dashboard is the first screen after logging in. It gives you a quick overview of your property performance.</p>
+
+          <!-- Screenshot -->
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/dashboard.jpg" alt="Dashboard screen" class="w-full" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Dashboard screen — overview of your property performance</div>
+          </div>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Summary Cards (top 4)</h3>
+          <div class="grid grid-cols-2 gap-3 mb-5">
+            {[['MY HOTELS','Number of properties registered'],['TOTAL BOOKINGS','Cumulative bookings received'],['THIS MONTH REVENUE','Revenue this month (USD)'],['PENDING BOOKINGS','Awaiting approval — action required']].map(([l,d]) => (
+              <div class="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                <p class="text-xs font-bold text-indigo-600 mb-1">{l}</p>
+                <p class="text-xs text-slate-500">{d}</p>
+              </div>
+            ))}
+          </div>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-5 text-sm">
+            <span class="text-xl">⚠️</span>
+            <div>If <strong>PENDING BOOKINGS</strong> is not 0, guests are waiting. Please approve or reject them as soon as possible.</div>
+          </div>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Left Sidebar Navigation</h3>
+          <div class="flex flex-wrap gap-2">
+            {['Dashboard','Bookings','Calendar','My Hotels','Reviews','Reports','Messages','Staff','Settings'].map(item => (
+              <span class="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1 rounded-full border border-indigo-200">{item}</span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CH 4 ── -->
+      <section id="ch4" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 4</span>
+          <h2 class="text-xl font-bold text-slate-900">Managing Bookings (Approve / Reject)</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">DayDreamHub uses a <strong>booking request system</strong>. When a guest completes payment via PayPal, the booking enters <em>pending</em> status and awaits your approval.</p>
+
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/bookings.jpg" alt="Bookings screen" class="w-full" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Bookings screen — filter by status, approve or reject requests</div>
+          </div>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Booking Status Types</h3>
+          <div class="overflow-hidden rounded-xl border border-slate-200 mb-6">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-indigo-600 text-white text-left"><th class="px-4 py-3 font-semibold">Status</th><th class="px-4 py-3 font-semibold">Meaning</th><th class="px-4 py-3 font-semibold">Required Action</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3"><span class="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded-full">pending</span></td><td class="px-4 py-3 text-slate-600">Guest paid — awaiting approval</td><td class="px-4 py-3 font-medium text-slate-800">Approve or Reject</td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3"><span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full">confirmed</span></td><td class="px-4 py-3 text-slate-600">Approved and confirmed</td><td class="px-4 py-3 text-slate-600">Prepare for check-in</td></tr>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3"><span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full">cancelled</span></td><td class="px-4 py-3 text-slate-600">Booking was cancelled</td><td class="px-4 py-3 text-slate-600">No action needed</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">How to Approve or Reject</h3>
+          <ol class="space-y-3 mb-5">
+            {['Click Bookings in the left sidebar.','Use the Status filter → select pending to view requests awaiting action.','Review booking details: guest name, plan, check-in date, amount.','Click Approve or Reject in the Actions column.','Confirm in the dialog that appears.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mb-3 text-sm">
+            <span class="text-xl">✉️</span>
+            <div>Guest receives an automatic email notification after you approve or reject. No manual contact needed.</div>
+          </div>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-5 text-sm">
+            <span class="text-xl">⚠️</span>
+            <div><strong>Rejecting = full refund to the guest.</strong> Only reject when truly necessary. Repeated rejections may result in account suspension.</div>
+          </div>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">CSV Export</h3>
+          <p class="text-sm text-slate-600">Click <strong>Export CSV</strong> to download the booking list for Excel or Google Sheets.</p>
+        </div>
+      </section>
+
+      <!-- ── CH 5 ── -->
+      <section id="ch5" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 5</span>
+          <h2 class="text-xl font-bold text-slate-900">Calendar & Availability Management</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">Block specific dates when your property is unavailable (maintenance, holidays, etc.).</p>
+
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/calendar.jpg" alt="Calendar screen" class="w-full" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Calendar screen — click any date to block or unblock it</div>
+          </div>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Reading the Calendar</h3>
+          <div class="flex gap-6 mb-5">
+            <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-lg bg-red-400 shadow-sm"></div><span class="text-sm text-slate-700"><strong>Red</strong> — Blocked (no new bookings)</span></div>
+            <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-lg border-2 border-slate-300 bg-white shadow-sm"></div><span class="text-sm text-slate-700"><strong>White</strong> — Available</span></div>
+          </div>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Block / Unblock Dates</h3>
+          <ol class="space-y-3 mb-4">
+            {['Click Calendar in the left sidebar.','Select your hotel from the dropdown at the top.','Click a date → it turns red (blocked).','Click again → it returns to white (unblocked).'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+            <span class="text-xl">✅</span>
+            <div>Blocked dates prevent new bookings. Already confirmed reservations are <strong>not</strong> affected.</div>
+          </div>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">iCal Sync (Advanced)</h3>
+          <p class="text-sm text-slate-600 mb-3">Automatically sync blocked dates with external OTAs (Booking.com, Airbnb, etc.).</p>
+          <ol class="space-y-3">
+            {['Go to My Hotels and click your property name.','Copy the iCal URL and paste it into the calendar settings of the external service.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <!-- ── CH 6 ── -->
+      <section id="ch6" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 6</span>
+          <h2 class="text-xl font-bold text-slate-900">Hotel & Plan Management</h2>
+        </div>
+        <div class="p-8">
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/hotels.jpg" alt="My Hotels screen" class="w-full" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ My Hotels screen — manage your registered properties</div>
+          </div>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Editing Property Information</h3>
+          <ol class="space-y-3 mb-5">
+            {['Click My Hotels in the left sidebar.','Click your property name to open the detail/edit screen.','Update the fields and click Save.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Editable Fields</h3>
+          <ul class="space-y-2 mb-6">
+            {['Property name & description (English / Japanese)','Address, phone number, and contact email','Check-in and check-out times','Property photos','Plan details: base price, weekend price, max guests'].map(item => (
+              <li class="flex items-start gap-2 text-sm text-slate-700"><span class="text-indigo-500 font-bold mt-0.5">›</span><span>{item}</span></li>
+            ))}
+          </ul>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Pausing a Plan</h3>
+          <p class="text-sm text-slate-600 mb-3">Temporarily stop accepting bookings for a plan without deleting it.</p>
+          <ol class="space-y-3 mb-4">
+            {['Open the property detail screen and find the plan list.','Click Pause → the plan is hidden from guest search.','Click Resume when ready to accept bookings again.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex gap-3 text-sm">
+            <span class="text-xl">✅</span>
+            <div>All plan data is preserved when paused. You can reactivate at any time.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CH 7 ── -->
+      <section id="ch7" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 7</span>
+          <h2 class="text-xl font-bold text-slate-900">Sales Reports</h2>
+        </div>
+        <div class="p-8">
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/reports.jpg" alt="Reports screen" class="w-full" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Reports screen — view revenue and export to CSV</div>
+          </div>
+          <ol class="space-y-3 mb-5">
+            {['Click Reports in the left sidebar.','Select a period: This Month / 3 Months / 6 Months / 1 Year.','Review the summary cards for revenue, bookings, and average value.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Metrics</h3>
+          <div class="grid grid-cols-2 gap-3 mb-5">
+            {[['TOTAL REVENUE','Total sales (USD)'],['TOTAL BOOKINGS','Confirmed bookings count'],['AVG BOOKING VALUE','Average per booking'],['MONTH-OVER-MONTH','Growth vs. previous month']].map(([l,d]) => (
+              <div class="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                <p class="text-xs font-bold text-indigo-600 mb-1">{l}</p>
+                <p class="text-xs text-slate-500">{d}</p>
+              </div>
+            ))}
+          </div>
+          <p class="text-sm text-slate-600">Click <strong>Export CSV</strong> for a full per-plan breakdown. Compatible with Excel and Google Sheets.</p>
+        </div>
+      </section>
+
+      <!-- ── CH 8 ── -->
+      <section id="ch8" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 8</span>
+          <h2 class="text-xl font-bold text-slate-900">Guest Reviews</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">Guests can post reviews after checkout. Reviews are publicly visible on your property page.</p>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">View & Reply to Reviews</h3>
+          <ol class="space-y-3 mb-4">
+            {['Click Reviews in the left sidebar.','Browse the list: rating, comment, and date.','Click Reply on any review to write an official response.','Submit your reply.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mb-3 text-sm">
+            <span class="text-xl">💡</span>
+            <div>You can reply to each review <strong>once</strong>. Replies are public — be professional and courteous.</div>
+          </div>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-sm">
+            <span class="text-xl">⚠️</span>
+            <div>Reviews cannot be deleted on request. Report guideline violations to DayDreamHub support.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CH 9 ── -->
+      <section id="ch9" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 9</span>
+          <h2 class="text-xl font-bold text-slate-900">Messages</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">Use the built-in messaging system to communicate with guests about their bookings.</p>
+          <ol class="space-y-3 mb-4">
+            {['Click Messages in the left sidebar.','Select a conversation from the list.','Type your reply and send.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-sm">
+            <span class="text-xl">⚠️</span>
+            <div>Messages must be used for <strong>booking-related communication only</strong>. Solicitation or directing guests to book outside DayDreamHub is strictly prohibited.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CH 10 ── -->
+      <section id="ch10" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 10</span>
+          <h2 class="text-xl font-bold text-slate-900">Settings</h2>
+        </div>
+        <div class="p-8">
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/settings.jpg" alt="Settings screen" class="w-full" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Settings screen — update profile and change password</div>
+          </div>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Update Your Profile</h3>
+          <ol class="space-y-3 mb-4">
+            {['Click Settings in the left sidebar.','Update your Full Name in the Profile Information section.','Click Update Profile to save.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+            <span class="text-xl">💡</span>
+            <div>Your email address cannot be changed here — it is your login ID. Contact support if you need to update it.</div>
+          </div>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Change Your Password</h3>
+          <ol class="space-y-3 mb-4">
+            {['Scroll to the Change Password section.','Enter your current password.','Enter and confirm your new password (minimum 8 characters).','Click Change Password.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+            <span class="text-xl">🔑</span>
+            <div><strong>Change your password after your first login.</strong> Use a strong, unique password of at least 8 characters.</div>
+          </div>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">Notification Preferences</h3>
+          <p class="text-sm text-slate-600">Click <strong>Manage Notifications</strong> to control which email alerts you receive (new bookings, guest messages, etc.).</p>
+        </div>
+      </section>
+
+      <!-- ── CH 11 ── -->
+      <section id="ch11" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 11</span>
+          <h2 class="text-xl font-bold text-slate-900">Contact & Support</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">If you have any questions or run into issues, our support team is here to help.</p>
+          <div class="grid grid-cols-2 gap-3 mb-5">
+            {[['📧','Partner Support','partners@daydreamhub.com'],['📧','General Inquiries','customer@daydreamhub.com'],['🕐','Business Hours','Mon – Fri  9:00 – 18:00 (JST)'],['🌐','Contact Form','daydreamhub.com/contact']].map(([icon,label,val]) => (
+              <div class="bg-teal-50 border border-teal-200 rounded-xl p-4">
+                <p class="text-xs font-bold text-teal-600 mb-1">{icon} {label}</p>
+                <p class="text-sm font-semibold text-slate-800">{val}</p>
+              </div>
+            ))}
+          </div>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex gap-3 text-sm">
+            <span class="text-xl">✅</span>
+            <div>When contacting support, include your <strong>property name</strong>, <strong>registered email</strong>, and a description (or screenshot) of the issue for faster assistance.</div>
+          </div>
+          <p class="text-center text-slate-400 text-xs mt-8">© 2026 DayDreamHub — Owner Panel User Guide v1.0</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</OwnerLayout>

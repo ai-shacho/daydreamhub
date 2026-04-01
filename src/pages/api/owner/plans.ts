@@ -17,7 +17,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try { body = await request.json(); } catch { return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: json }); }
 
   const { hotel_id, name, name_ja, description, description_ja, price_usd,
-    check_in_time, check_out_time, plan_type, max_guests, duration_hours, cancellation_policy, cancellation_hours } = body;
+    check_in_time, check_out_time, plan_type, max_guests, duration_hours, cancellation_policy, cancellation_hours,
+    room_type, room_type_image_url } = body;
 
   if (!hotel_id || !name) return new Response(JSON.stringify({ error: 'hotel_id and name required' }), { status: 400, headers: json });
 
@@ -29,11 +30,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   try {
     const r = await db.prepare(
-      `INSERT INTO plans (hotel_id,name,name_ja,description,description_ja,price_usd,check_in_time,check_out_time,plan_type,max_guests,duration_hours,cancellation_policy,cancellation_hours,is_active)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)`
+      `INSERT INTO plans (hotel_id,name,name_ja,description,description_ja,price_usd,check_in_time,check_out_time,plan_type,max_guests,duration_hours,cancellation_policy,cancellation_hours,room_type,room_type_image_url,is_active)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`
     ).bind(hotel_id, name, name_ja||null, description||'', description_ja||null,
       price_usd||0, check_in_time||'', check_out_time||'', plan_type||'daycation',
-      max_guests||2, duration_hours||null, cancellation_policy||'', cancellation_hours ?? 24).run();
+      max_guests||2, duration_hours||null, cancellation_policy||'', cancellation_hours ?? 24,
+      room_type||null, room_type_image_url||null).run();
     return new Response(JSON.stringify({ success: true, id: r.meta?.last_row_id }), { status: 201, headers: json });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: json });
@@ -62,7 +64,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   }
 
   const allowed = ['name','name_ja','description','description_ja','price_usd','check_in_time',
-    'check_out_time','plan_type','max_guests','duration_hours','cancellation_policy','cancellation_hours','is_active'];
+    'check_out_time','plan_type','max_guests','duration_hours','cancellation_policy','cancellation_hours','is_active',
+    'room_type','room_type_image_url'];
   const updates: string[] = []; const params: any[] = [];
   for (const k of allowed) { if (k in fields) { updates.push(`${k} = ?`); params.push(fields[k]); } }
   if (!updates.length) return new Response(JSON.stringify({ error: 'No fields to update' }), { status: 400, headers: json });

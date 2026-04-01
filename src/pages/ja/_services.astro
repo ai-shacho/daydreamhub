@@ -1,0 +1,199 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const title = '追加サービス | DayDreamHub';
+const description = 'デイユース滞在中の医療コンシェルジュ・空港送迎・ツアー体験をご予約ください。';
+
+const serviceCategories = [
+  {
+    id: 'medical',
+    icon: '🏥',
+    color: 'teal',
+    title: '医療コンシェルジュ',
+    subtitle: 'ヘルスケア・ウェルネスサポート',
+    description: '英語対応の医療専門家への紹介、クリニック案内、滞在中のウェルネスサービスをご提供します。',
+    services: [
+      { name: 'クリニック紹介', desc: '訪問者が受診しやすい近隣のクリニック・病院をご案内', price: '無料', icon: '🏨' },
+      { name: '往診サービス', desc: '客室での診療が可能な医師が対応', price: '$80〜', icon: '👨‍⚕️' },
+      { name: '薬局サポート', desc: '薬の受け取りや処方箋のガイダンスをご支援', price: '$15〜', icon: '💊' },
+      { name: '歯科緊急対応', desc: '当日の歯科クリニック手配', price: '$60〜', icon: '🦷' },
+      { name: '点滴療法', desc: 'ウェルネス・回復のための点滴セッション（一部スパにて）', price: '$120〜', icon: '💉' },
+      { name: '健康診断', desc: '包括的なデイユース健康スクリーニングパッケージ', price: '$150〜', icon: '🩺' },
+    ],
+    cta: '医療サポートを依頼する',
+    ctaLink: '/ja/concierge?service=medical',
+    bgFrom: 'from-teal-50',
+    bgTo: 'to-cyan-50',
+    border: 'border-teal-200',
+    badge: 'bg-teal-100 text-teal-700',
+    btn: 'bg-teal-600 hover:bg-teal-700',
+    icon2: 'text-teal-600',
+  },
+  {
+    id: 'taxi',
+    icon: '🚗',
+    color: 'amber',
+    title: '空港・市内送迎',
+    subtitle: '交通・移動サービス',
+    description: '空港、ホテル、観光スポット間の信頼できる事前予約送迎。英語対応ドライバーもご利用いただけます。',
+    services: [
+      { name: '空港出迎え', desc: '到着ターミナルでの名前ボード持参お出迎え', price: '$25〜', icon: '✈️' },
+      { name: '空港見送り', desc: 'ホテルから空港への確実な送迎', price: '$25〜', icon: '🛫' },
+      { name: '市内送迎', desc: '市内の目的地間のポイントツーポイント移動', price: '$15〜', icon: '🏙️' },
+      { name: 'チャーター（時間制）', desc: '時間単位の柔軟なプライベートカーレンタル', price: '$40/時間〜', icon: '⏱️' },
+      { name: 'グループシャトル', desc: '最大10名のグループ向けミニバン送迎', price: '$60〜', icon: '🚐' },
+      { name: '高級セダン', desc: 'ビジネスや特別な場面向けのプレミアム車両', price: '$80〜', icon: '🚘' },
+    ],
+    cta: '送迎を予約する',
+    ctaLink: '/ja/concierge?service=taxi',
+    bgFrom: 'from-amber-50',
+    bgTo: 'to-orange-50',
+    border: 'border-amber-200',
+    badge: 'bg-amber-100 text-amber-700',
+    btn: 'bg-amber-500 hover:bg-amber-600',
+    icon2: 'text-amber-600',
+  },
+  {
+    id: 'tours',
+    icon: '🗺️',
+    color: 'indigo',
+    title: 'ツアー・体験',
+    subtitle: '地元体験・アクティビティ',
+    description: 'キュレーションされたハーフデイ・フルデイ体験で街を発見しましょう。文化ツアーからアドベンチャーアクティビティまで。',
+    services: [
+      { name: '市内ハイライトツアー', desc: '主要ランドマークを巡るハーフデイガイドツアー', price: '$45〜', icon: '🏛️' },
+      { name: 'フード＆マーケットツアー', desc: 'ローカルストリートフードと市場の探索', price: '$35〜', icon: '🍜' },
+      { name: '文化体験', desc: '寺院参拝、伝統ワークショップ、セレモニー参加', price: '$50〜', icon: '⛩️' },
+      { name: 'ネイチャー＆アドベンチャー', desc: '郊外でのハイキング、サイクリング、水上アクティビティ', price: '$60〜', icon: '🏔️' },
+      { name: 'ウェルネスデイ', desc: 'ヨガ、瞑想、スパデイパッケージ', price: '$80〜', icon: '🧘' },
+      { name: 'プライベート撮影', desc: '街の探索を彩るプロカメラマン同行プラン', price: '$120〜', icon: '📸' },
+    ],
+    cta: 'ツアーを探す',
+    ctaLink: '/ja/concierge?service=tours',
+    bgFrom: 'from-indigo-50',
+    bgTo: 'to-purple-50',
+    border: 'border-indigo-200',
+    badge: 'bg-indigo-100 text-indigo-700',
+    btn: 'bg-indigo-600 hover:bg-indigo-700',
+    icon2: 'text-indigo-600',
+  },
+];
+---
+
+<Layout title={title} description={description}>
+  <!-- ヒーローセクション -->
+  <section class="bg-gradient-to-br from-teal-700 via-teal-600 to-cyan-600 text-white py-16 px-4">
+    <div class="max-w-4xl mx-auto text-center">
+      <p class="text-teal-200 text-sm font-medium uppercase tracking-wider mb-3">デイユース滞在をさらに充実させる</p>
+      <h1 class="text-3xl md:text-4xl font-bold mb-4">追加サービス</h1>
+      <p class="text-teal-100 text-lg max-w-2xl mx-auto leading-relaxed">
+        厳選されたサービスでご滞在を最大限にお楽しみください。医療サポート、市内送迎から現地ガイドツアー・体験まで幅広くご用意しています。
+      </p>
+      <div class="flex flex-wrap justify-center gap-3 mt-8">
+        {serviceCategories.map(cat => (
+          <a href={`#${cat.id}`} class="flex items-center gap-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 rounded-full px-4 py-2 text-sm font-medium transition-colors">
+            <span>{cat.icon}</span>
+            <span>{cat.title}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ご利用の流れ -->
+  <section class="bg-gray-50 border-b border-gray-200 py-8 px-4">
+    <div class="max-w-4xl mx-auto">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+        <div class="flex flex-col items-center gap-2">
+          <div class="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center text-xl">1️⃣</div>
+          <p class="font-semibold text-gray-800 text-sm">サービスを選ぶ</p>
+          <p class="text-gray-500 text-xs">サービスカテゴリーを確認して必要なものを選択してください</p>
+        </div>
+        <div class="flex flex-col items-center gap-2">
+          <div class="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center text-xl">2️⃣</div>
+          <p class="font-semibold text-gray-800 text-sm">AIコンシェルジュに連絡</p>
+          <p class="text-gray-500 text-xs">コンシェルジュが詳細を確認してすべての手配を行います</p>
+        </div>
+        <div class="flex flex-col items-center gap-2">
+          <div class="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center text-xl">3️⃣</div>
+          <p class="font-semibold text-gray-800 text-sm">体験をお楽しみください</p>
+          <p class="text-gray-500 text-xs">すべての調整はお任せ。ゆっくりとおくつろぎください</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- サービスカテゴリー -->
+  <div class="max-w-6xl mx-auto px-4 py-12 space-y-16">
+    {serviceCategories.map(cat => (
+      <section id={cat.id} class="scroll-mt-20">
+        <!-- カテゴリーヘッダー -->
+        <div class={`bg-gradient-to-r ${cat.bgFrom} ${cat.bgTo} rounded-2xl p-6 md:p-8 border ${cat.border} mb-6`}>
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div class="flex items-start gap-4">
+              <div class="text-4xl">{cat.icon}</div>
+              <div>
+                <span class={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2 ${cat.badge}`}>{cat.subtitle}</span>
+                <h2 class="text-2xl font-bold text-gray-900">{cat.title}</h2>
+                <p class="text-gray-600 mt-1 max-w-xl">{cat.description}</p>
+              </div>
+            </div>
+            <a
+              href={cat.ctaLink}
+              class={`flex-shrink-0 inline-flex items-center gap-2 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors ${cat.btn}`}
+            >
+              {cat.cta}
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- サービスカードグリッド -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {cat.services.map(svc => (
+            <div class="bg-white rounded-xl border border-gray-100 p-4 hover:shadow-md transition-shadow group">
+              <div class="flex items-start gap-3">
+                <div class="text-2xl flex-shrink-0 mt-0.5">{svc.icon}</div>
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-semibold text-gray-900 text-sm">{svc.name}</h3>
+                  <p class="text-gray-500 text-xs mt-1 leading-relaxed">{svc.desc}</p>
+                  <div class="flex items-center justify-between mt-3">
+                    <span class={`text-xs font-bold ${cat.icon2}`}>{svc.price}</span>
+                    <a
+                      href={cat.ctaLink}
+                      class="text-xs text-gray-400 hover:text-teal-600 font-medium transition-colors group-hover:text-teal-600"
+                    >
+                      問い合わせる →
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    ))}
+  </div>
+
+  <!-- 下部CTA -->
+  <section class="bg-gray-900 text-white py-12 px-4 mt-8">
+    <div class="max-w-2xl mx-auto text-center">
+      <div class="text-3xl mb-4">🤖</div>
+      <h2 class="text-2xl font-bold mb-3">何が必要か迷っていますか？</h2>
+      <p class="text-gray-400 mb-6">
+        AIコンシェルジュに相談してください。24時間365日対応で、滞在中のあらゆるサービスの計画・予約・調整をサポートします。
+      </p>
+      <a
+        href="/ja/concierge"
+        class="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+        </svg>
+        AIコンシェルジュに相談する
+      </a>
+    </div>
+  </section>
+</Layout>

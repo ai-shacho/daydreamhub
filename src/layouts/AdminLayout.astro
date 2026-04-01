@@ -11,7 +11,7 @@ const { title, activeNav = "" } = Astro.props;
 const navItems = [
   { key: "dashboard", label: "Dashboard", href: "/admin", icon: "home" },
   { key: "hotels", label: "Hotels", href: "/admin/hotels", icon: "hotel" },
-  { key: "edit-requests", label: "Edit Requests", href: "/admin/edit-requests", icon: "pencil-square" },
+  // { key: "edit-requests", label: "Edit Requests", href: "/admin/edit-requests", icon: "pencil-square" },
   { key: "bookings", label: "Bookings", href: "/admin/bookings", icon: "calendar" },
   { key: "call-logs", label: "Call Logs", href: "/admin/call-logs", icon: "phone" },
   { key: "concierge", label: "Concierge", href: "/admin/concierge", icon: "phone" },
@@ -103,7 +103,8 @@ const navItems = [
     const logoutBtn = document.getElementById('admin-logout');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
-        document.cookie = 'auth_token=; Path=/; Max-Age=0; Secure; SameSite=Strict';
+        document.cookie = 'ddh_token=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly';
+        document.cookie = 'auth_token=; Path=/; Max-Age=0; Secure; SameSite=Strict'; // legacy
         window.location.href = '/admin/login';
       });
     }

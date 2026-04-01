@@ -36,6 +36,62 @@ async function sendEmail(params: {
   return { success: true };
 }
 
+export async function sendWelcomeEmail(
+  apiKey: string,
+  data: {
+    name: string;
+    email: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = 'Welcome to DaydreamHub 🌿';
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#0d9488;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
+    <div style="font-size:40px;margin-bottom:12px">🌿</div>
+    <h1 style="margin:0;font-size:24px;font-weight:700">Welcome to DaydreamHub!</h1>
+    <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Your account has been created successfully.</p>
+  </div>
+
+  <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#ffffff">
+    <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.name)}</strong> 👋</p>
+    <p style="color:#374151;line-height:1.6">
+      Thank you for joining DaydreamHub — the easiest way to book day-use hotel rooms worldwide.
+      Enjoy a pool, spa, workspace, or simply a place to relax between flights.
+    </p>
+
+    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;padding:20px;margin:24px 0">
+      <h2 style="margin:0 0 14px;font-size:15px;color:#0d9488;font-weight:700">✅ What you can do now</h2>
+      <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:1.8">
+        <li>Search hotels by city or country</li>
+        <li>Book day-use rooms with instant payment</li>
+        <li>Save your favourite hotels to your wishlist</li>
+        <li>Manage all bookings from <strong>My Page</strong></li>
+      </ul>
+    </div>
+
+    <div style="text-align:center;margin:28px 0">
+      <a href="https://daydreamhub.com/search"
+         style="display:inline-block;padding:14px 32px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
+        Find a Hotel →
+      </a>
+    </div>
+
+    <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
+      You're receiving this because you just registered at <a href="https://daydreamhub.com" style="color:#0d9488">daydreamhub.com</a>.<br>
+      If you didn't create this account, please <a href="https://daydreamhub.com/contact" style="color:#0d9488">contact us</a>.
+    </p>
+  </div>
+</div>`;
+
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.email,
+    subject,
+    html,
+  });
+}
+
 export async function sendBookingNotificationToHotel(
   apiKey: string,
   data: {

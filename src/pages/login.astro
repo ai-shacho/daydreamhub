@@ -75,7 +75,7 @@ const isAdminLogin = redirectTo.startsWith('/admin');
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <label for="password" class="block text-sm font-medium text-slate-700">Password</label>
-              <a href="/forgot-password" class={`text-xs hover:underline ${isOwnerLogin ? 'text-indigo-600' : 'text-teal-600'}`}>Forgot password?</a>
+              <a href="/auth/reset-password" class={`text-xs hover:underline ${isOwnerLogin ? 'text-indigo-600' : 'text-teal-600'}`}>Forgot password?</a>
             </div>
             <input id="password" name="password" type="password" required autocomplete="current-password"
               placeholder="••••••••"
@@ -107,9 +107,7 @@ const isAdminLogin = redirectTo.startsWith('/admin');
               <a href="/owner" class="flex items-center justify-center gap-2 w-full border border-slate-200 rounded-xl py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
                 🏨 Owner Portal
               </a>
-              <a href="/admin" class="flex items-center justify-center gap-2 w-full border border-slate-200 rounded-xl py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-                ⚙️ Admin Panel
-              </a>
+
             </div>
           </>
         )}

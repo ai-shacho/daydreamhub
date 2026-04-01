@@ -36,6 +36,23 @@ if (db) {
   }
 }
 
+// room_typeでプランをグループ化
+const plansByRoomType: Record<string, any[]> = {};
+for (const plan of plans) {
+  const rt = plan.room_type || '';
+  if (!plansByRoomType[rt]) plansByRoomType[rt] = [];
+  plansByRoomType[rt].push(plan);
+}
+const roomTypes = Object.keys(plansByRoomType);
+// ルームタイプなし（''）を先頭に、それ以外はアルファベット順
+roomTypes.sort((a, b) => {
+  if (a === '') return -1;
+  if (b === '') return 1;
+  return a.localeCompare(b);
+});
+// 既存ルームタイプ一覧（空文字を除く）
+const existingRoomTypes = roomTypes.filter(rt => rt !== '');
+
 let selectedCategories: string[] = [];
 try {
   selectedCategories = JSON.parse(hotel?.categories || "[]");
@@ -369,7 +386,7 @@ const propertyTypes = [
       <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
         <div>
           <h2 class="text-base font-semibold text-slate-900">Plans</h2>
-          <p class="mt-0.5 text-xs text-slate-500">Manage your plans here.</p>
+          <p class="mt-0.5 text-xs text-slate-500">Manage plans by room type.</p>
         </div>
         <button id="open-add-plan" type="button" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors">
           <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -378,80 +395,91 @@ const propertyTypes = [
           Add Plan
         </button>
       </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="bg-slate-50 border-b border-slate-200">
-              <th class="text-left px-4 py-3 font-medium text-slate-600">Name</th>
-              <th class="text-right px-4 py-3 font-medium text-slate-600">Price (USD)</th>
-              <th class="text-center px-4 py-3 font-medium text-slate-600">Check-in</th>
-              <th class="text-center px-4 py-3 font-medium text-slate-600">Check-out</th>
-              <th class="text-center px-4 py-3 font-medium text-slate-600">Max Guests</th>
-              <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
-              <th class="text-right px-4 py-3 font-medium text-slate-600">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            {plans.length === 0 && (
-              <tr>
-                <td colspan="6" class="px-4 py-8 text-center text-slate-400">
-                  No plans found for this hotel.
-                </td>
-              </tr>
-            )}
-            {plans.map((plan: any) => (
-              <tr class="plan-row hover:bg-slate-50 transition-colors cursor-grab active:cursor-grabbing" draggable="true" data-plan-id={plan.id}>
-                <td class="px-4 py-3">
-                  <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-slate-300 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-                    </svg>
-                    <div>
-                      <div class="font-medium text-slate-900">{plan.name}</div>
-                      {plan.name_ja && <div class="text-xs text-slate-400 mt-0.5">{plan.name_ja}</div>}
+      <div class="p-6 space-y-4" id="plans-container">
+        {plans.length === 0 && (
+          <p class="text-center text-slate-400 text-sm py-6">No plans found for this hotel.</p>
+        )}
+        {roomTypes.map((rt: string) => (
+          <div class="border border-slate-200 rounded-lg overflow-hidden">
+            <div class="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
+              <h3 class="text-sm font-semibold text-slate-700">
+                {rt ? `🏠 ${rt}` : 'No Room Type'}
+              </h3>
+              <button
+                type="button"
+                class="btn-add-plan-for-rt inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                data-room-type={rt}
+              >
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                Add plan
+              </button>
+            </div>
+            <div class="divide-y divide-slate-100">
+              {plansByRoomType[rt].map((plan: any) => (
+                <div
+                  class="plan-row flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors cursor-grab active:cursor-grabbing"
+                  draggable="true"
+                  data-plan-id={plan.id}
+                >
+                  <svg class="w-4 h-4 text-slate-300 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M11 18c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-2-8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 4c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                  </svg>
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-medium text-slate-900 text-sm">{plan.name}</span>
+                      {plan.name_ja && <span class="text-xs text-slate-400">{plan.name_ja}</span>}
+                      <span class="font-mono text-slate-700 text-sm">${plan.price_usd}</span>
+                      {plan.check_in_time && plan.check_out_time && (
+                        <span class="text-xs text-slate-500">{plan.check_in_time}–{plan.check_out_time}</span>
+                      )}
+                      {plan.max_guests && <span class="text-xs text-slate-500">👤 {plan.max_guests}</span>}
+                      {plan.is_active ? (
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                          <span class="w-1 h-1 rounded-full bg-green-500"></span>Active
+                        </span>
+                      ) : (
+                        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
+                          <span class="w-1 h-1 rounded-full bg-red-500"></span>Inactive
+                        </span>
+                      )}
                     </div>
                   </div>
-                </td>
-                <td class="px-4 py-3 text-right font-mono text-slate-700">${plan.price_usd}</td>
-                <td class="px-4 py-3 text-center text-slate-600">{plan.check_in_time || "-"}</td>
-                <td class="px-4 py-3 text-center text-slate-600">{plan.check_out_time || "-"}</td>
-                <td class="px-4 py-3 text-center text-slate-600">{plan.max_guests || "-"}</td>
-                <td class="px-4 py-3 text-center">
-                  {plan.is_active ? (
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
-                      <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                      Active
-                    </span>
-                  ) : (
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
-                      <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                      Inactive
-                    </span>
-                  )}
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <button
-                    type="button"
-                    class="btn-toggle-plan text-xs font-medium mr-3 transition-colors"
-                    class:list={[plan.is_active ? 'text-amber-600 hover:text-amber-800' : 'text-green-600 hover:text-green-800']}
-                    data-plan-id={plan.id}
-                    data-is-active={plan.is_active ? '1' : '0'}
-                  >{plan.is_active ? '⏸ Pause' : '▶ Resume'}</button>
-                  <button
-                    type="button"
-                    class="btn-edit-plan text-xs text-indigo-600 hover:text-indigo-800 font-medium mr-3"
-                    data-plan={JSON.stringify(plan)}
-                  >Edit</button>
-                  <button
-                    type="button"
-                    class="btn-delete-plan text-xs text-red-500 hover:text-red-700 font-medium"
-                    data-plan-id={plan.id}
-                  >Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      class="btn-toggle-plan text-xs font-medium transition-colors"
+                      class:list={[plan.is_active ? 'text-amber-600 hover:text-amber-800' : 'text-green-600 hover:text-green-800']}
+                      data-plan-id={plan.id}
+                      data-is-active={plan.is_active ? '1' : '0'}
+                    >{plan.is_active ? '⏸' : '▶'}</button>
+                    <button
+                      type="button"
+                      class="btn-edit-plan text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                      data-plan={JSON.stringify(plan)}
+                    >Edit</button>
+                    <button
+                      type="button"
+                      class="btn-delete-plan text-xs text-red-500 hover:text-red-700 font-medium"
+                      data-plan-id={plan.id}
+                    >Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          id="open-add-new-rt"
+          class="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg text-sm text-slate-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Add a new room type
+        </button>
       </div>
     </div>
   </div>
@@ -471,6 +499,15 @@ const propertyTypes = [
       <form id="plan-form" class="p-6 space-y-4">
         <input type="hidden" id="plan-id" name="id" value="" />
         <div class="grid grid-cols-2 gap-4">
+          <div class="col-span-2">
+            <label class="block text-sm font-medium text-slate-700 mb-1">Room Type</label>
+            <input type="text" id="plan-room-type" name="room_type" list="room-types-list" placeholder="e.g. Standard Double Room"
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none" />
+            <datalist id="room-types-list">
+              {existingRoomTypes.map((rt: string) => <option value={rt} />)}
+            </datalist>
+            <p class="text-xs text-slate-400 mt-1">Leave blank if not associated with a specific room type.</p>
+          </div>
           <div class="col-span-2">
             <label class="block text-sm font-medium text-slate-700 mb-1">Plan Name <span class="text-red-500">*</span></label>
             <input type="text" id="plan-name" name="name" required placeholder="e.g. Morning Day-Use"
@@ -577,6 +614,8 @@ const propertyTypes = [
   </div>
 
   <script define:vars={{ hotelId, originalName: hotel?.name || "", originalNameJa: hotel?.name_ja || "", originalDescription: hotel?.description || "", originalDescriptionJa: hotel?.description_ja || "", originalAmenities: amenitiesStr, originalCategories: selectedCategories, originalPropertyType: hotel?.property_type || "Hotel", originalThumbnailUrl: hotel?.thumbnail_url || "", originalIcalUrl: hotel?.ical_url || "", originalAddress: hotel?.address || "", originalLatitude: hotel?.latitude ?? "", originalLongitude: hotel?.longitude ?? "" }}>
+  document.addEventListener('DOMContentLoaded', function() {
+  try {
     // -- Thumbnail preview --
     // -- Gallery upload --
     var galleryUploadInput = document.getElementById('gallery-upload');
@@ -913,11 +952,11 @@ const propertyTypes = [
 
     // -- Plan Row Drag & Drop --
     (function() {
-      var planTbody = document.querySelector('table tbody');
-      if (!planTbody) return;
+      var plansContainer = document.getElementById('plans-container');
+      if (!plansContainer) return;
       var dragRow = null;
 
-      planTbody.querySelectorAll('.plan-row').forEach(function(row) {
+      plansContainer.querySelectorAll('.plan-row').forEach(function(row) {
         row.addEventListener('dragstart', function(e) {
           dragRow = this;
           e.dataTransfer.effectAllowed = 'move';
@@ -925,14 +964,14 @@ const propertyTypes = [
         });
         row.addEventListener('dragend', function() {
           this.style.opacity = '';
-          planTbody.querySelectorAll('.plan-row').forEach(function(r) {
+          plansContainer.querySelectorAll('.plan-row').forEach(function(r) {
             r.style.borderTop = '';
           });
         });
         row.addEventListener('dragover', function(e) {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
-          planTbody.querySelectorAll('.plan-row').forEach(function(r) { r.style.borderTop = ''; });
+          plansContainer.querySelectorAll('.plan-row').forEach(function(r) { r.style.borderTop = ''; });
           if (this !== dragRow) this.style.borderTop = '2px solid #6366f1';
         });
         row.addEventListener('dragleave', function() {
@@ -943,7 +982,7 @@ const propertyTypes = [
           this.style.borderTop = '';
           if (this === dragRow) return;
 
-          var rows = Array.from(planTbody.querySelectorAll('.plan-row'));
+          var rows = Array.from(plansContainer.querySelectorAll('.plan-row'));
           var fromIdx = rows.indexOf(dragRow);
           var toIdx = rows.indexOf(this);
 
@@ -955,7 +994,7 @@ const propertyTypes = [
           }
 
           // Build new order
-          var newOrder = Array.from(planTbody.querySelectorAll('.plan-row')).map(function(r) {
+          var newOrder = Array.from(plansContainer.querySelectorAll('.plan-row')).map(function(r) {
             return parseInt(r.dataset.planId);
           });
 
@@ -976,12 +1015,13 @@ const propertyTypes = [
     })();
 
     // -- Plan Modal --
-    function openPlanModal(plan) {
+    function openPlanModal(plan, presetRoomType) {
       document.getElementById('plan-modal').classList.remove('hidden');
       document.body.style.overflow = 'hidden';
       var isEdit = !!plan;
       document.getElementById('plan-modal-title').textContent = isEdit ? 'Edit Plan' : 'Add Plan';
       document.getElementById('plan-id').value = isEdit ? plan.id : '';
+      document.getElementById('plan-room-type').value = isEdit ? (plan.room_type || '') : (presetRoomType || '');
       document.getElementById('plan-name').value = isEdit ? (plan.name || '') : '';
       document.getElementById('plan-name-ja').value = isEdit ? (plan.name_ja || '') : '';
       document.getElementById('plan-price').value = isEdit ? (plan.price_usd || '') : '';
@@ -1001,7 +1041,11 @@ const propertyTypes = [
       document.body.style.overflow = '';
     }
 
-    document.getElementById('open-add-plan')?.addEventListener('click', function() { openPlanModal(null); });
+    document.getElementById('open-add-plan')?.addEventListener('click', function() { openPlanModal(null, ''); });
+    document.getElementById('open-add-new-rt')?.addEventListener('click', function() { openPlanModal(null, ''); });
+    document.querySelectorAll('.btn-add-plan-for-rt').forEach(function(btn) {
+      btn.addEventListener('click', function() { openPlanModal(null, this.dataset.roomType || ''); });
+    });
     document.getElementById('close-plan-modal')?.addEventListener('click', closePlanModal);
     document.getElementById('cancel-plan-btn')?.addEventListener('click', closePlanModal);
     document.getElementById('plan-modal-backdrop')?.addEventListener('click', closePlanModal);
@@ -1059,6 +1103,7 @@ const propertyTypes = [
       var isEdit = !!planId;
       var data = {
         hotel_id: hotelId,
+        room_type: document.getElementById('plan-room-type').value || null,
         name: document.getElementById('plan-name').value,
         name_ja: document.getElementById('plan-name-ja').value,
         price_usd: parseFloat(document.getElementById('plan-price').value) || 0,
@@ -1114,5 +1159,16 @@ const propertyTypes = [
         setTimeout(function() { btn.textContent = '📍 Auto-fill coordinates from address'; btn.disabled = false; }, 3000);
       }
     });
+
+  } catch(initErr) {
+    console.error('[Hotel Edit] Initialization error:', initErr);
+    var statusEl = document.getElementById('status-msg');
+    if (statusEl) {
+      statusEl.className = 'mb-6 p-4 rounded-lg text-sm bg-red-50 border border-red-200 text-red-700';
+      statusEl.textContent = 'Page error: ' + initErr.message + ' — Please refresh or contact support.';
+      statusEl.classList.remove('hidden');
+    }
+  }
+  }); // end DOMContentLoaded
   </script>
 </OwnerLayout>

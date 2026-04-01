@@ -6,20 +6,23 @@ import { CONCIERGE_SYSTEM_PROMPT_EN, CONCIERGE_SYSTEM_PROMPT_JA } from '../../..
 function sanitizeAIText(text: string): string {
   if (!text) return text;
 
+  // 0. Handle [label](<a href="url" ...>) — AI mixing Markdown links with HTML anchors in URL
+  text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^"]+)"[^>]*>[\s\S]*?<\/a>\)/gi, (_, label, href) => `[${label}](${href})`);
+  text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^"]+)"[^>]*>\)/gi, (_, label, href) => `[${label}](${href})`);
+
   // 1. Convert complete <a href="...">label</a> → Markdown [label](href)
   text = text.replace(/<a\s[^>]*?href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
     const cleanLabel = label.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() || href;
     return `[${cleanLabel}](${href})`;
   });
 
-  // 2. Strip orphaned HTML attribute fragments that AI reproduces from history
-  //    e.g. ..." target="_blank" class="underline text-amber-300 hover:text-amber-200">Book Now
-  //    → Book Now
-  // Orphaned HTML attribute fragments with optional preceding URL
-  // e.g.: /hotel/slug" target="_blank" class="...">Book Now
-  text = text.replace(/[^\s"]*"?\s*target="_blank"[^>]*>(.*?)(?=\n|$)/gi, (_, after) => after.trim());
+  // 1b. Handle unclosed <a href="..."> tags (no </a>)
+  text = text.replace(/<a\s[^>]*?href="([^"]*)"[^>]*>/gi, (_, href) => `[リンク](${href})`);
+
+  // 2. Strip orphaned HTML attribute fragments (e.g. /hotel/slug" target="_blank" class="...">Book Now)
+  text = text.replace(/[^\s"(]*"?\s*target="_blank"[^>]*>(.*?)(?=\n|$)/gi, (_, after) => after.trim());
   text = text.replace(/"?\s*target="_blank"/gi, '');
-  text = text.replace(/\s*class="(?:underline|text-amber|hover:)[^"]*"/gi, '');
+  text = text.replace(/\s*class="(?:underline|text-amber|hover:|text-teal|font-)[^"]*"/gi, '');
   // orphaned closing > after attribute cleanup
   text = text.replace(/"\s*>/g, ' ');
 
@@ -164,33 +167,65 @@ async function telnyxOrchestrate(
       if (city) {
         const cityLower = city.toLowerCase();
         const hotels = await db.prepare(
-          `SELECT h.name, h.slug, h.city, h.country, h.property_type,
-                  MIN(p.price_usd) as min_price
-           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+          `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.rating,
+                  p.id as plan_id, p.name as plan_name,
+                  p.price_usd, p.check_in_time, p.check_out_time, p.max_guests
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
            WHERE h.is_active = 1 AND (
              LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
              OR LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
            )
-           GROUP BY h.id
            ORDER BY
              CASE WHEN LOWER(h.property_type) LIKE '%clinic%' OR LOWER(h.name) LIKE '%clinic%' THEN 1 ELSE 0 END ASC,
-             h.rating DESC
-           LIMIT 15`
+             h.rating DESC, p.price_usd ASC
+           LIMIT 50`
         ).bind(`%${cityLower}%`, `%${cityLower}%`, `${cityLower}%`, `${cityLower}%`).all();
-        const rawResults = hotels?.results || [];
-        // 同じ親ホテル（"–"より前の名前）から1件のみ表示
+        const rawRows = hotels?.results || [];
+
+        // ホテルごとにプランをまとめる
+        const hotelMap = new Map<number, any>();
+        for (const row of rawRows) {
+          if (!hotelMap.has(row.id)) {
+            hotelMap.set(row.id, {
+              id: row.id, name: row.name, slug: row.slug,
+              city: row.city, country: row.country,
+              property_type: row.property_type, rating: row.rating,
+              plans: []
+            });
+          }
+          if (row.plan_id) {
+            hotelMap.get(row.id).plans.push({
+              name: row.plan_name,
+              price_usd: row.price_usd,
+              check_in_time: row.check_in_time,
+              check_out_time: row.check_out_time,
+              max_guests: row.max_guests
+            });
+          }
+        }
+
+        // 同じ親ホテルから1件のみ表示（最大5件）
         const seenBase = new Set<string>();
-        const results = rawResults.filter((h: any) => {
+        const results = Array.from(hotelMap.values()).filter((h: any) => {
           const base = h.name.split('–')[0].split('-')[0].trim().toLowerCase().slice(0, 30);
           if (seenBase.has(base)) return false;
           seenBase.add(base);
           return true;
         }).slice(0, 5);
+
         // 自社ホテルを先に表示
         if (results.length > 0) {
           hotelContext = `\n\n## DDH REGISTERED HOTELS (Free direct booking - no service fee):\n` +
-            results.map((h: any) => `- ${h.name} (${h.city}, ${h.country}) - From $${h.min_price || '?'} - /hotel/${h.slug} - source:internal`).join('\n') +
-            `\n\nShow these internal hotels FIRST with "Book Now" links. Use relative paths like /hotel/slug (NOT full URLs).`;
+            results.map((h: any) => {
+              const minPrice = h.plans.length > 0 ? Math.min(...h.plans.map((p: any) => p.price_usd || 9999)) : null;
+              const planLines = h.plans.length > 0
+                ? h.plans.map((p: any) =>
+                    `  * ${p.name || 'Plan'}: $${p.price_usd ?? '?'} | ${p.check_in_time ?? '?'}–${p.check_out_time ?? '?'} | max ${p.max_guests ?? '?'} guests`
+                  ).join('\n')
+                : '  * (No plans available)';
+              return `- ${h.name} (${h.city}, ${h.country}) - From $${minPrice ?? '?'} - /hotel/${h.slug} - source:internal\n${planLines}`;
+            }).join('\n') +
+            `\n\nIMPORTANT: Use ONLY the plan times listed above. NEVER invent or estimate check-in/check-out times. Show these internal hotels FIRST with "Book Now" links. Use relative paths like /hotel/slug (NOT full URLs).`;
         }
 
         // 自社の有無にかかわらず外部ホテルも検索して追加提案
@@ -248,7 +283,8 @@ async function telnyxOrchestrate(
     `   - Example: [Book Now](/hotel/wellmed-bangkok)\n` +
     `   - source:external hotels → NO booking links whatsoever. Show only the phone number (📞). Never add any URL or link.\n` +
     `   - NEVER generate daydreamhub.com/hotel/... or daydreamhub.com/book/... or any full URL. Use ONLY the exact /hotel/slug from the data.\n` +
-    `5. Do NOT output XML function_calls or tool_use tags.\n` +
+    `5. TIME SLOTS — CRITICAL: ONLY use check_in_time and check_out_time from the plan data provided above. NEVER invent, estimate, or assume time slots. If a plan shows "10:00–20:00", write exactly that. Do not write "10:00–18:00" unless that is in the data.\n` +
+    `5b. Do NOT output XML function_calls or tool_use tags.\n` +
     `6. For external hotels: show name + address + phone number only. The "Call to Book (+$7)" button is added automatically by the UI — do not add it yourself.\n` +
     `7. NEVER output raw HTML tags (no <a>, <b>, <div>, etc.). Use ONLY Markdown: **bold**, [link text](url), - list item. HTML tags will be shown as broken text to the user.\n` +
     `=== END RULES ===`;

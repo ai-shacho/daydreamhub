@@ -61,12 +61,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
         name: (user as any).name,
         role: (user as any).role,
         iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30, // 30 days
+        exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 * 10, // 10 years
       },
       secret
     );
 
-    const cookieValue = `ddh_token=${token}; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Strict; HttpOnly`;
+    const cookieValue = `ddh_token=${token}; Path=/; Max-Age=${60 * 60 * 24 * 365 * 10}; SameSite=Strict; HttpOnly; Secure`;
 
     return new Response(
       JSON.stringify({

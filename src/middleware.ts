@@ -62,6 +62,10 @@ export const onRequest = defineMiddleware(async (context, next) => {
   newHeaders.set('X-Frame-Options', 'SAMEORIGIN');
   newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  newHeaders.set(
+    'Content-Security-Policy',
+    "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src https://www.paypal.com https://www.sandbox.paypal.com; object-src 'none'; base-uri 'self';"
+  );
 
   return new Response(response.body, {
     status: response.status,
