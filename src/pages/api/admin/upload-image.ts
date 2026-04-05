@@ -38,15 +38,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   try {
-    // Convert file to base64
+    // Convert file to base64 (compatible with Cloudflare Workers)
     const buffer = await file.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
     const mimeType = file.type;
     const imageDataUrl = `data:${mimeType};base64,${base64}`;
 
     return new Response(
       JSON.stringify({ success: true, imageUrl: imageDataUrl, fileName: file.name }),
-      { headers: json }
+      { status: 200, headers: json }
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

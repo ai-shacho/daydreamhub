@@ -64,7 +64,7 @@ if (db) {
   <!-- Block Date Controls -->
   <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 flex flex-wrap items-center gap-3">
     <div class="text-sm font-medium text-amber-800">📵 Availability Control</div>
-    <p class="text-xs text-amber-600 flex-1">Click any date to block/unblock it. Blocked dates won't accept new bookings.</p>
+    <p class="text-xs text-amber-600 flex-1"><strong>Double-click</strong> (or Shift+click) any date to block/unblock it. Single click shows bookings for that day. Blocked dates won't accept new bookings.</p>
     {hotels.length > 0 && (
       <select id="block-hotel-select" class="text-xs border border-amber-300 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">
         {hotels.map((h: any) => <option value={h.id}>{h.name}</option>)}

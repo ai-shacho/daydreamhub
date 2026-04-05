@@ -128,16 +128,64 @@ async function telnyxOrchestrate(
         'karachi','lahore','dhaka','kathmandu','colombo',
         'beirut','amman','tel aviv','jerusalem',
       ];
+      // 日本語→英語の都市名マッピング
+      const JA_TO_EN_CITIES: Record<string, string> = {
+        'バリ': 'Bali', 'ジャカルタ': 'Jakarta', 'スラバヤ': 'Surabaya', 'ジョグジャカルタ': 'Yogyakarta',
+        'バンコク': 'Bangkok', 'プーケット': 'Phuket', 'チェンマイ': 'Chiang Mai', 'パタヤ': 'Pattaya', 'ホアヒン': 'Hua Hin',
+        'シンガポール': 'Singapore', 'クアラルンプール': 'Kuala Lumpur', 'ペナン': 'Penang',
+        'マニラ': 'Manila', 'セブ': 'Cebu', 'ボラカイ': 'Boracay',
+        'ホーチミン': 'Ho Chi Minh', 'ハノイ': 'Hanoi', 'ダナン': 'Da Nang',
+        'プノンペン': 'Phnom Penh', 'シェムリアップ': 'Siem Reap',
+        'ドバイ': 'Dubai', 'アブダビ': 'Abu Dhabi', 'ドーハ': 'Doha', 'リヤド': 'Riyadh',
+        'ロンドン': 'London', 'パリ': 'Paris', 'ベルリン': 'Berlin', 'マドリード': 'Madrid',
+        'ローマ': 'Rome', 'アムステルダム': 'Amsterdam', 'バルセロナ': 'Barcelona',
+        'ウィーン': 'Vienna', 'プラハ': 'Prague', 'イスタンブール': 'Istanbul',
+        'アテネ': 'Athens', 'リスボン': 'Lisbon', 'ストックホルム': 'Stockholm',
+        'コペンハーゲン': 'Copenhagen', 'チューリッヒ': 'Zurich', 'ブリュッセル': 'Brussels',
+        'ダブリン': 'Dublin', 'ミラノ': 'Milan', 'ミュンヘン': 'Munich',
+        'ニューヨーク': 'New York', 'ロサンゼルス': 'Los Angeles', 'シカゴ': 'Chicago',
+        'サンフランシスコ': 'San Francisco', 'シアトル': 'Seattle', 'ボストン': 'Boston',
+        'マイアミ': 'Miami', 'ラスベガス': 'Las Vegas', 'ワシントン': 'Washington DC',
+        'トロント': 'Toronto', 'バンクーバー': 'Vancouver', 'モントリオール': 'Montreal',
+        'メキシコシティ': 'Mexico City', 'カンクン': 'Cancun',
+        'ソウル': 'Seoul', 'プサン': 'Busan', '釜山': 'Busan', '台北': 'Taipei',
+        '香港': 'Hong Kong', 'マカオ': 'Macau', '北京': 'Beijing', '上海': 'Shanghai',
+        'ムンバイ': 'Mumbai', 'デリー': 'Delhi', 'バンガロール': 'Bangalore', 'ゴア': 'Goa',
+        'シドニー': 'Sydney', 'メルボルン': 'Melbourne', 'オークランド': 'Auckland',
+        'カイロ': 'Cairo', 'カサブランカ': 'Casablanca', 'マラケシュ': 'Marrakech',
+        'ケープタウン': 'Cape Town', 'ナイロビ': 'Nairobi',
+        '東京': 'Tokyo', '大阪': 'Osaka', '京都': 'Kyoto', '札幌': 'Sapporo',
+        '福岡': 'Fukuoka', '名古屋': 'Nagoya', '広島': 'Hiroshima', '神戸': 'Kobe',
+        '横浜': 'Yokohama', '奈良': 'Nara', '鎌倉': 'Kamakura', '沖縄': 'Okinawa',
+        'ブエノスアイレス': 'Buenos Aires', 'サンパウロ': 'Sao Paulo',
+        'リオデジャネイロ': 'Rio de Janeiro', 'サンティアゴ': 'Santiago', 'リマ': 'Lima',
+        'ボゴタ': 'Bogota', 'カラチ': 'Karachi', 'ダッカ': 'Dhaka',
+        'カトマンズ': 'Kathmandu', 'コロンボ': 'Colombo',
+        'ベイルート': 'Beirut', 'テルアビブ': 'Tel Aviv',
+        'ティビリシ': 'Tbilisi', 'トビリシ': 'Tbilisi', 'バクー': 'Baku',
+        'オウル': 'Oulu', 'ナイアガラ': 'Niagara', 'カルガリー': 'Calgary',
+        'ゴリス': 'Goris', 'ギザ': 'Giza', 'エクアドル': 'Ecuador',
+      };
       const lowerMsg = lastUserMsg.toLowerCase();
       let city = '';
 
+      // 0. 日本語都市名の変換チェック
+      for (const [ja, en] of Object.entries(JA_TO_EN_CITIES)) {
+        if (lastUserMsg.includes(ja)) {
+          city = en;
+          break;
+        }
+      }
+
       // 1. DB登録都市と照合
-      const dbCityRows = await db.prepare(
-        `SELECT DISTINCT city FROM hotels WHERE is_active = 1 ORDER BY city`
-      ).all();
-      for (const row of (dbCityRows?.results || []) as any[]) {
-        if (row.city && lowerMsg.includes(row.city.toLowerCase())) {
-          city = row.city; break;
+      if (!city) {
+        const dbCityRows = await db.prepare(
+          `SELECT DISTINCT city FROM hotels WHERE is_active = 1 ORDER BY city`
+        ).all();
+        for (const row of (dbCityRows?.results || []) as any[]) {
+          if (row.city && lowerMsg.includes(row.city.toLowerCase())) {
+            city = row.city; break;
+          }
         }
       }
 

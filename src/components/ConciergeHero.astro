@@ -7,10 +7,10 @@ const { locale = 'en', paypalClientId = '' } = Astro.props;
 ---
 <section class="py-12 bg-teal-700">
   <div class="max-w-3xl mx-auto px-4 text-center text-white">
-    <h1 class="text-3xl font-bold mb-4">AI Concierge</h1>
-    <p class="text-teal-100 mb-8">Find your perfect day-use hotel with AI assistance.</p>
-    <a href="/search" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-8 py-3 rounded-xl transition-colors">
-      Search Hotels →
+    <h1 class="text-3xl font-bold mb-4">{locale === 'ja' ? 'AIコンシェルジュ' : 'AI Concierge'}</h1>
+    <p class="text-teal-100 mb-8">{locale === 'ja' ? 'AIがあなたにぴったりのデイユースホテルをお探しします。右下のチャットアイコンからお気軽にご相談ください。' : 'Find your perfect day-use hotel with AI assistance. Click the chat icon in the bottom-right corner to get started.'}</p>
+    <a href={locale === 'ja' ? '/ja/search' : '/search'} class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-8 py-3 rounded-xl transition-colors">
+      {locale === 'ja' ? 'ホテルを検索する →' : 'Search Hotels →'}
     </a>
   </div>
 </section>

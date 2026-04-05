@@ -125,10 +125,10 @@ const locale = getLocale(Astro.url);
     submitBtn.textContent = '...';
 
     try {
-      const res = await fetch('/api/admin/auth', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'register', name, email, password }),
+        body: JSON.stringify({ name, email, password }),
       });
 
       const data = await res.json();

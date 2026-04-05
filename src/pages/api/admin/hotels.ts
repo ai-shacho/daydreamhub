@@ -111,6 +111,43 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   }
 };
 
+export const DELETE: APIRoute = async ({ request, locals }) => {
+  const db = (locals as any).runtime?.env?.DB;
+  if (!db) {
+    return new Response(JSON.stringify({ error: 'Database not available' }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const url = new URL(request.url);
+  const id = url.searchParams.get('id');
+  if (!id) {
+    return new Response(JSON.stringify({ error: 'Missing required query param: id' }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
+    const hotelId = parseInt(id);
+    await db.prepare('DELETE FROM plans WHERE hotel_id = ?').bind(hotelId).run();
+    await db.prepare('DELETE FROM hotel_amenities WHERE hotel_id = ?').bind(hotelId).run();
+    const result = await db.prepare('DELETE FROM hotels WHERE id = ?').bind(hotelId).run();
+    if (result.meta.changes === 0) {
+      return new Response(JSON.stringify({ error: 'Hotel not found' }), {
+        status: 404, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: 'Delete failed', details: message }), {
+      status: 500, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+};
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const db = (locals as any).runtime?.env?.DB;
   if (!db) {

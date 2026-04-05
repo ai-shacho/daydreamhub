@@ -25,6 +25,26 @@ const curYear = new Date().getFullYear();
 const years = [curYear - 1, curYear, curYear + 1];
 const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
 const search = url.searchParams.get("search") || "";
+const sortCol = url.searchParams.get("sort") || "";
+const sortOrder = url.searchParams.get("order") === "asc" ? "ASC" : "DESC";
+
+const sortableColumns: Record<string, string> = {
+  id: "b.id",
+  check_in: "b.check_in_date",
+  created: "b.created_at",
+};
+
+function sortLink(col: string) {
+  const p = new URLSearchParams(url.search);
+  p.set("sort", col);
+  p.set("order", sortCol === col && sortOrder === "ASC" ? "desc" : "asc");
+  return `/admin/bookings?${p.toString()}`;
+}
+
+function sortIcon(col: string) {
+  if (sortCol !== col) return "↕";
+  return sortOrder === "ASC" ? "↑" : "↓";
+}
 
 let bookings: any[] = [];
 let error = "";
@@ -55,7 +75,8 @@ if (db) {
       binds.push(dateTo);
     }
 
-    query += " ORDER BY b.created_at DESC LIMIT 200";
+    const orderByCol = sortableColumns[sortCol] || "b.created_at";
+    query += ` ORDER BY ${orderByCol} ${sortOrder} LIMIT 200`;
     const result = await db.prepare(query).bind(...binds).all();
     bookings = result?.results || [];
   } catch (e: any) {
@@ -156,14 +177,14 @@ const statusColors: Record<string, string> = {
       <table class="w-full text-sm">
         <thead>
           <tr class="bg-slate-50 border-b border-slate-200">
-            <th class="text-left px-4 py-3 font-medium text-slate-600">ID</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600"><a href={sortLink("id")} class="hover:text-teal-600">ID {sortIcon("id")}</a></th>
             <th class="text-left px-4 py-3 font-medium text-slate-600">Guest</th>
             <th class="text-left px-4 py-3 font-medium text-slate-600">Hotel</th>
             <th class="text-left px-4 py-3 font-medium text-slate-600">Plan</th>
-            <th class="text-left px-4 py-3 font-medium text-slate-600">Check-in</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600"><a href={sortLink("check_in")} class="hover:text-teal-600">Check-in {sortIcon("check_in")}</a></th>
             <th class="text-right px-4 py-3 font-medium text-slate-600">Price (USD)</th>
             <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
-            <th class="text-left px-4 py-3 font-medium text-slate-600">Created</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600"><a href={sortLink("created")} class="hover:text-teal-600">Created {sortIcon("created")}</a></th>
             <th class="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
           </tr>
         </thead>
@@ -388,6 +409,8 @@ const statusColors: Record<string, string> = {
     btn.addEventListener('click', async () => {
       const id = Number(btn.getAttribute('data-id'));
       const action = btn.getAttribute('data-action');
+      const statusMap = { confirm: 'confirmed', cancel: 'cancelled', complete: 'completed' };
+      const status = statusMap[action] || action;
       const actionLabel = action === 'confirm' ? 'confirm' : action === 'cancel' ? 'cancel' : 'complete';
 
       if (!confirm(`Are you sure you want to ${actionLabel} booking #${id}?`)) return;
@@ -400,7 +423,7 @@ const statusColors: Record<string, string> = {
         const res = await fetch('/api/admin/bookings', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, action }),
+          body: JSON.stringify({ id, status }),
         });
 
         if (res.ok) {
