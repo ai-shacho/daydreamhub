@@ -210,11 +210,17 @@ if (db) {
 
   var blockedDates = new Set();
 
+  function getFirstHotelId() {
+    if (blockHotelSelect && blockHotelSelect.value) return blockHotelSelect.value;
+    if (hotelFilter && hotelFilter.value) return hotelFilter.value;
+    // Auto-select first hotel from either dropdown
+    if (blockHotelSelect && blockHotelSelect.options.length > 0) return blockHotelSelect.options[0].value;
+    if (hotelFilter && hotelFilter.options.length > 1) return hotelFilter.options[1].value; // skip "All Hotels"
+    return '';
+  }
+
   async function fetchBlockedDates() {
-    var hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
-    if (!hotelId && blockHotelSelect && blockHotelSelect.options.length === 1) {
-      hotelId = blockHotelSelect.options[0].value;
-    }
+    var hotelId = getFirstHotelId();
     if (!hotelId) return;
     try {
       const res = await fetch(`/api/owner/blocked-dates?hotel_id=${hotelId}&month=${currentYear}-${String(currentMonth).padStart(2, '0')}`);
@@ -225,15 +231,8 @@ if (db) {
   }
 
   async function toggleBlockDate(dateStr) {
-    var hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
-    // If no hotel selected but only one hotel exists, use it
-    if (!hotelId && blockHotelSelect && blockHotelSelect.options.length === 1) {
-      hotelId = blockHotelSelect.options[0].value;
-    }
-    if (!hotelId) {
-      alert('Please select a hotel first to block/unblock dates.');
-      return;
-    }
+    var hotelId = getFirstHotelId();
+    if (!hotelId) return;
     const isBlocked = blockedDates.has(dateStr);
     try {
       if (isBlocked) {
