@@ -209,13 +209,42 @@ export const airportList: Array<{ code: string; name: string; lat: number; lng: 
   { code: 'AKL', name: 'AKL', lat: -37.0082, lng: 174.7850 },
 ];
 
+// Full airport names for display
+export const airportNames: Record<string, string> = {
+  'BKK': 'Suvarnabhumi Airport', 'DMK': 'Don Mueang Airport',
+  'DPS': 'Ngurah Rai Airport', 'CGK': 'Soekarno-Hatta Airport',
+  'KUL': 'Kuala Lumpur International Airport', 'SIN': 'Changi Airport',
+  'MNL': 'Ninoy Aquino Airport', 'CEB': 'Mactan-Cebu Airport',
+  'SGN': 'Tan Son Nhat Airport', 'HAN': 'Noi Bai Airport',
+  'DAD': 'Da Nang Airport', 'HKT': 'Phuket Airport',
+  'USM': 'Samui Airport', 'PNH': 'Phnom Penh Airport',
+  'RGN': 'Yangon Airport',
+  'HND': 'Haneda Airport', 'NRT': 'Narita Airport',
+  'KIX': 'Kansai Airport', 'ICN': 'Incheon Airport',
+  'PEK': 'Beijing Capital Airport', 'PVG': 'Pudong Airport',
+  'HKG': 'Hong Kong Airport', 'TPE': 'Taoyuan Airport',
+  'BOM': 'Mumbai Airport', 'DEL': 'Delhi Airport',
+  'CMB': 'Bandaranaike Airport',
+  'DXB': 'Dubai Airport', 'AUH': 'Abu Dhabi Airport',
+  'DOH': 'Hamad Airport', 'BAH': 'Bahrain Airport',
+  'KWI': 'Kuwait Airport', 'MCT': 'Muscat Airport',
+  'NBO': 'Jomo Kenyatta Airport', 'CAI': 'Cairo Airport',
+  'JNB': 'O.R. Tambo Airport',
+  'LHR': 'Heathrow Airport', 'CDG': 'Charles de Gaulle Airport',
+  'AMS': 'Schiphol Airport', 'FRA': 'Frankfurt Airport',
+  'BHX': 'Birmingham Airport',
+  'JFK': 'JFK Airport', 'LAX': 'LAX Airport',
+  'SYD': 'Sydney Airport', 'MEL': 'Melbourne Airport',
+  'AKL': 'Auckland Airport',
+};
+
 // Find nearest airport from hotel coordinates
-export function nearestAirport(hotelLat: number, hotelLng: number): { code: string; km: number } | null {
-  let best: { code: string; km: number } | null = null;
+export function nearestAirport(hotelLat: number, hotelLng: number): { code: string; name: string; km: number } | null {
+  let best: { code: string; name: string; km: number } | null = null;
   for (const ap of airportList) {
     const km = haversineKm(hotelLat, hotelLng, ap.lat, ap.lng);
     if (!best || km < best.km) {
-      best = { code: ap.code, km };
+      best = { code: ap.code, name: airportNames[ap.code] || ap.code, km };
     }
   }
   return best;
