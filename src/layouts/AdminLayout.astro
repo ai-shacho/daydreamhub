@@ -102,9 +102,8 @@ const navItems = [
     }
     const logoutBtn = document.getElementById('admin-logout');
     if (logoutBtn) {
-      logoutBtn.addEventListener('click', () => {
-        document.cookie = 'ddh_token=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly';
-        document.cookie = 'auth_token=; Path=/; Max-Age=0; Secure; SameSite=Strict'; // legacy
+      logoutBtn.addEventListener('click', async () => {
+        await fetch('/api/auth/logout', { method: 'POST' });
         window.location.href = '/admin/login';
       });
     }
