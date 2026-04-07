@@ -82,6 +82,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       { status: 200, headers: { ...json, 'Set-Cookie': cookieValue } }
     );
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: 'Server error' }), { status: 500, headers: json });
+    console.error('Login error:', e);
+    return new Response(JSON.stringify({ error: e?.message || 'Server error' }), { status: 500, headers: json });
   }
 };
