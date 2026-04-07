@@ -421,6 +421,54 @@ const cityAliases: Record<string, string> = {
   'Cebu city': 'Cebu',
 };
 
+// Japanese city name mapping
+const cityNameJa: Record<string, string> = {
+  'Agra': 'アグラ', 'Bali': 'バリ', 'Ubud': 'ウブド', 'Jakarta': 'ジャカルタ',
+  'Dalung': 'ダルン', 'Denpasar': 'デンパサール', 'Tokyo': '東京', 'Kyoto': '京都',
+  'Almaty': 'アルマトイ', 'Vientiane': 'ビエンチャン', 'Luang Prabang': 'ルアンパバーン',
+  'Kuala Lumpur': 'クアラルンプール', 'Ulaanbaatar': 'ウランバートル',
+  'Islamabad': 'イスラマバード', 'Cebu': 'セブ', 'Manila': 'マニラ',
+  'Danao City': 'ダナオ', 'Colombo': 'コロンボ', 'Bangkok': 'バンコク',
+  'Koh Samui': 'コサムイ', 'Phuket': 'プーケット', 'Tashkent': 'タシケント',
+  'Samarkand': 'サマルカンド', 'Hanoi': 'ハノイ', 'Da Nang': 'ダナン',
+  'Ho Chi Minh City': 'ホーチミン', 'Osaka': '大阪', 'Siem Reap': 'シェムリアップ',
+  'Phnom Penh': 'プノンペン', 'Singapore': 'シンガポール', 'Seoul': 'ソウル',
+  'Busan': 'プサン', 'Taipei': '台北', 'Hong Kong': '香港', 'Macau': 'マカオ',
+  'Delhi': 'デリー', 'Mumbai': 'ムンバイ', 'Jaipur': 'ジャイプール',
+  'Kathmandu': 'カトマンズ', 'Yangon': 'ヤンゴン', 'Chiang Mai': 'チェンマイ',
+  'Pattaya': 'パタヤ', 'Doha': 'ドーハ', 'Dubai': 'ドバイ', 'Abu Dhabi': 'アブダビ',
+  'Tbilisi': 'トビリシ', 'Yerevan': 'エレバン', 'Nairobi': 'ナイロビ',
+  'Cairo': 'カイロ', 'Istanbul': 'イスタンブール', 'Prague': 'プラハ',
+  'Sofia': 'ソフィア', 'London': 'ロンドン', 'Paris': 'パリ', 'Rome': 'ローマ',
+  'Barcelona': 'バルセロナ', 'Amsterdam': 'アムステルダム', 'Berlin': 'ベルリン',
+  'Auckland': 'オークランド', 'Sydney': 'シドニー', 'Melbourne': 'メルボルン',
+  'Quito': 'キト', 'Lima': 'リマ', 'Bogota': 'ボゴタ',
+  'Seminyak': 'スミニャック', 'Sanur': 'サヌール', 'Nusa Dua': 'ヌサドゥア',
+  'Sharjah': 'シャルジャ', 'Bahrain': 'バーレーン', 'Muscat': 'マスカット',
+  'Lahore': 'ラホール', 'Colombo': 'コロンボ',
+};
+function getCityNameJa(name: string): string { return cityNameJa[name] || name; }
+
+// Japanese country name mapping
+const countryNameJa: Record<string, string> = {
+  'India': 'インド', 'Indonesia': 'インドネシア', 'Japan': '日本', 'Kazakhstan': 'カザフスタン',
+  'Laos': 'ラオス', 'Malaysia': 'マレーシア', 'Mongolia': 'モンゴル', 'Pakistan': 'パキスタン',
+  'Philippines': 'フィリピン', 'Sri Lanka': 'スリランカ', 'Thailand': 'タイ',
+  'Uzbekistan': 'ウズベキスタン', 'Vietnam': 'ベトナム', 'Cambodia': 'カンボジア',
+  'Singapore': 'シンガポール', 'South Korea': '韓国', 'Taiwan': '台湾', 'China': '中国',
+  'Nepal': 'ネパール', 'Myanmar': 'ミャンマー', 'Qatar': 'カタール', 'UAE': 'アラブ首長国連邦',
+  'United Arab Emirates': 'アラブ首長国連邦', 'Georgia': 'ジョージア', 'Armenia': 'アルメニア',
+  'Kenya': 'ケニア', 'Egypt': 'エジプト', 'Turkey': 'トルコ', 'Czech Republic': 'チェコ',
+  'Czechia': 'チェコ', 'Bulgaria': 'ブルガリア', 'United Kingdom': 'イギリス', 'France': 'フランス',
+  'Italy': 'イタリア', 'Spain': 'スペイン', 'Netherlands': 'オランダ', 'Germany': 'ドイツ',
+  'New Zealand': 'ニュージーランド', 'Australia': 'オーストラリア',
+  'Ecuador': 'エクアドル', 'Peru': 'ペルー', 'Colombia': 'コロンビア',
+  'Bahrain': 'バーレーン', 'Iceland': 'アイスランド', 'Tanzania': 'タンザニア',
+  'South Africa': '南アフリカ', 'Nigeria': 'ナイジェリア', 'Bhutan': 'ブータン',
+  'Bangladesh': 'バングラデシュ', 'Russia': 'ロシア',
+};
+function getCountryNameJa(name: string): string { return countryNameJa[name] || name; }
+
 // Apply aliases and merge hotel counts
 const cityMap: Record<string, any> = {};
 for (const city of allCities) {
@@ -479,8 +527,8 @@ const availableRegions = regionOrder.filter(r => citiesByRegion[r]?.length > 0);
 const citiesDataForJS: Record<string, Array<{city: string; country: string; hotel_count: number; image: string; href: string}>> = {};
 for (const [region, cities] of Object.entries(citiesByRegion)) {
   citiesDataForJS[region] = (cities as any[]).map((city) => ({
-    city: city.city,
-    country: city.country,
+    city: getCityNameJa(city.city),
+    country: getCountryNameJa(city.country),
     hotel_count: city.hotel_count,
     image: getCityImage(city.city),
     href: `/ja/search?city=${encodeURIComponent(city.city)}`
@@ -696,8 +744,8 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
                 <img src={getCityImage(city.city)} alt={city.city} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                 <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
                 <div class="absolute bottom-0 left-0 right-0 p-3">
-                  <h3 class="text-white font-semibold text-sm">{city.city}</h3>
-                  <p class="text-white/60 text-xs">{city.country}</p>
+                  <h3 class="text-white font-semibold text-sm">{getCityNameJa(city.city)}</h3>
+                  <p class="text-white/60 text-xs">{getCountryNameJa(city.country)}</p>
                   <p class="text-white/70 text-xs">{city.hotel_count}件</p>
                 </div>
               </a>
