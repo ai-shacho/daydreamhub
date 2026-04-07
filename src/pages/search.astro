@@ -182,23 +182,8 @@ if (DB) {
     });
 
     if (isAirportSort) {
-      // Sort by airport distance
-      const targetCity = cityFilter || location;
-      let airportCoords = getAirportCoords(targetCity);
-      if (!airportCoords && allResults.length > 0) {
-        airportCoords = getAirportCoords(allResults[0].city);
-      }
-      if (airportCoords) {
-        const [aLat, aLng] = airportCoords;
-        allResults = allResults
-          .map((h: any) => ({
-            ...h,
-            _airport_km: (h.latitude != null && h.longitude != null)
-              ? haversineKm(h.latitude, h.longitude, aLat, aLng)
-              : 99999,
-          }))
-          .sort((a: any, b: any) => a._airport_km - b._airport_km);
-      }
+      // Sort by each hotel's nearest airport distance (ascending)
+      allResults.sort((a: any, b: any) => (a._airport_km ?? 99999) - (b._airport_km ?? 99999));
     }
 
     hotels = isAirportSort ? allResults.slice(offset, offset + perPage) : allResults;
