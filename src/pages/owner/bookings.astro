@@ -16,6 +16,8 @@ const statusFilter = url.searchParams.get("status") || "";
 const hotelFilter = url.searchParams.get("hotel_id") || "";
 const dateFrom = url.searchParams.get("from") || "";
 const dateTo = url.searchParams.get("to") || "";
+const sortBy = url.searchParams.get("sort") || "created_at";
+const sortOrder = url.searchParams.get("order") || "desc";
 
 // セレクト用に年月日に分解
 const [fromY, fromM, fromD] = dateFrom ? dateFrom.split('-') : ['', '', ''];
@@ -69,13 +71,36 @@ if (db) {
         binds.push(dateTo);
       }
 
-      query += " ORDER BY b.created_at DESC";
+      const validSorts: Record<string, string> = {
+        created_at: "b.created_at",
+        check_in: "b.check_in_date",
+        amount: "b.total_price_usd",
+        status: "b.status",
+      };
+      const orderCol = validSorts[sortBy] || "b.created_at";
+      const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
+      query += ` ORDER BY ${orderCol} ${orderDir}`;
       const result = await db.prepare(query).bind(...binds).all();
       bookings = result?.results || [];
     }
   } catch (e: any) {
     error = e.message || "Failed to load bookings";
   }
+}
+
+function sortLink(col: string) {
+  const params = new URLSearchParams(url.searchParams);
+  if (params.get("sort") === col) {
+    params.set("order", sortOrder === "asc" ? "desc" : "asc");
+  } else {
+    params.set("sort", col);
+    params.set("order", col === "check_in" ? "asc" : "desc");
+  }
+  return `/owner/bookings?${params.toString()}`;
+}
+function sortIcon(col: string) {
+  if (sortBy !== col) return "↕";
+  return sortOrder === "asc" ? "↑" : "↓";
 }
 
 const statusOptions = ["", "pending", "pending_confirmation", "confirmed", "cancelled"];
@@ -169,13 +194,21 @@ const statusLabels: Record<string, string> = {
       <table class="w-full text-sm" id="bookings-table">
         <thead>
           <tr class="bg-slate-50 border-b border-slate-200">
-            <th class="text-left px-4 py-3 font-medium text-slate-600">ID</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("created_at")} class="hover:text-indigo-600 inline-flex items-center gap-1">ID <span class="text-xs">{sortIcon("created_at")}</span></a>
+            </th>
             <th class="text-left px-4 py-3 font-medium text-slate-600">Guest Name</th>
             <th class="text-left px-4 py-3 font-medium text-slate-600">Hotel</th>
             <th class="text-left px-4 py-3 font-medium text-slate-600">Plan</th>
-            <th class="text-left px-4 py-3 font-medium text-slate-600">Check-in</th>
-            <th class="text-right px-4 py-3 font-medium text-slate-600">Amount (USD)</th>
-            <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("check_in")} class="hover:text-indigo-600 inline-flex items-center gap-1">Check-in <span class="text-xs">{sortIcon("check_in")}</span></a>
+            </th>
+            <th class="text-right px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("amount")} class="hover:text-indigo-600 inline-flex items-center gap-1">Amount (USD) <span class="text-xs">{sortIcon("amount")}</span></a>
+            </th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("status")} class="hover:text-indigo-600 inline-flex items-center gap-1">Status <span class="text-xs">{sortIcon("status")}</span></a>
+            </th>
             <th class="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
           </tr>
         </thead>
