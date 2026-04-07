@@ -128,31 +128,6 @@ if (!hotel) {
         </div>
       </div>
 
-      <!-- Plans -->
-      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-          <h3 class="font-semibold text-slate-900">Plans ({plans.length})</h3>
-        </div>
-        {plans.length === 0 ? (
-          <p class="px-5 py-8 text-center text-slate-400 text-sm">No plans yet</p>
-        ) : (
-          <div class="divide-y divide-slate-100">
-            {plans.map((plan) => (
-              <div class="px-5 py-4 flex items-center justify-between">
-                <div>
-                  <p class="font-medium text-slate-900 text-sm">{plan.name}</p>
-                  <p class="text-xs text-slate-500 mt-0.5 capitalize">{plan.plan_type} · {plan.duration_hours}h</p>
-                </div>
-                <div class="text-right">
-                  <p class="font-bold text-slate-900">${plan.price_usd}</p>
-                  <p class="text-xs text-slate-400">{plan.is_active ? 'Active' : 'Inactive'}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       <!-- Assign to Owner -->
       <div class="bg-white rounded-xl shadow-sm border border-teal-200 overflow-hidden">
         <div class="px-5 py-4 border-b border-teal-100 bg-teal-50">
@@ -193,6 +168,31 @@ if (!hotel) {
           </div>
           <div id="assign-owner-message" class="hidden text-sm rounded-lg px-3 py-2"></div>
         </div>
+      </div>
+
+      <!-- Plans -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h3 class="font-semibold text-slate-900">Plans ({plans.length})</h3>
+        </div>
+        {plans.length === 0 ? (
+          <p class="px-5 py-8 text-center text-slate-400 text-sm">No plans yet</p>
+        ) : (
+          <div class="divide-y divide-slate-100">
+            {plans.map((plan) => (
+              <div class="px-5 py-4 flex items-center justify-between">
+                <div>
+                  <p class="font-medium text-slate-900 text-sm">{plan.name}</p>
+                  <p class="text-xs text-slate-500 mt-0.5 capitalize">{plan.plan_type} · {plan.duration_hours}h</p>
+                </div>
+                <div class="text-right">
+                  <p class="font-bold text-slate-900">${plan.price_usd}</p>
+                  <p class="text-xs text-slate-400">{plan.is_active ? 'Active' : 'Inactive'}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <!-- Recent bookings -->

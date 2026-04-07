@@ -71,7 +71,7 @@ for (let h = 0; h < 24; h++) {
 
     {hotel && (
       <form id="edit-hotel-form" class="space-y-6">
-        <input type="hidden" name="id" value={hotel.id} />
+        <input type="hidden" name="hotel_id" value={hotel.id} />
 
         <!-- Top action bar -->
         <div>
@@ -452,7 +452,7 @@ async function saveHotel() {
   btns.forEach(b => { b.disabled = true; b.textContent = 'Saving...'; });
 
   const form = document.getElementById('edit-hotel-form');
-  const body = { id: parseInt(form.id.value) };
+  const body = { id: parseInt(form.hotel_id.value) };
   const fields = ['name','name_ja','slug','description','description_ja','cancellation_policy','city','country',
     'address','thumbnail_url','property_type','email','phone','ical_url'];
   for (const f of fields) { if (form[f]) body[f] = form[f].value; }
