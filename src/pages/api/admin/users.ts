@@ -19,7 +19,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const binds: any[] = [];
   if (role) { query += ' AND role = ?'; binds.push(role); }
   if (search) { query += ' AND (name LIKE ? OR email LIKE ?)'; binds.push(`%${search}%`, `%${search}%`); }
-  query += ' ORDER BY created_at DESC LIMIT 200';
+  const limit = parseInt(new URL(request.url).searchParams.get('limit') || '200');
+  query += ` ORDER BY created_at DESC LIMIT ${Math.min(limit, 1000)}`;
 
   try {
     const result = binds.length
