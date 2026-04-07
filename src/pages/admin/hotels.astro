@@ -32,7 +32,7 @@ if (db) {
   try {
     // Fetch all owner accounts for mapping
     const ownersResult = await db.prepare(
-      "SELECT name, email FROM users WHERE role = 'owner' ORDER BY name"
+      "SELECT name, email FROM users WHERE role IN ('owner', 'inactive') ORDER BY name"
     ).all();
     for (const o of (ownersResult?.results || []) as any[]) {
       ownerMap[o.email] = o.name;
@@ -103,9 +103,9 @@ if (db) {
       query += " AND h.is_active = 0";
     }
     if (ownerFilter === "assigned") {
-      query += " AND h.email IS NOT NULL AND h.email != '' AND h.email IN (SELECT email FROM users WHERE role = 'owner')";
+      query += " AND h.email IS NOT NULL AND h.email != '' AND h.email IN (SELECT email FROM users WHERE role IN ('owner', 'inactive'))";
     } else if (ownerFilter === "unassigned") {
-      query += " AND (h.email IS NULL OR h.email = '' OR h.email NOT IN (SELECT email FROM users WHERE role = 'owner'))";
+      query += " AND (h.email IS NULL OR h.email = '' OR h.email NOT IN (SELECT email FROM users WHERE role IN ('owner', 'inactive')))";
     }
 
     query += ` ORDER BY ${orderCol} ${orderDir}`;

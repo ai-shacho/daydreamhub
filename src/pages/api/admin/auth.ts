@@ -82,13 +82,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
-    // Check role
-    if (user.role !== "admin" && user.role !== "owner" && user.role !== "staff") {
+    // Check role — inactive users are treated as owner on login
+    const effectiveRole = user.role === "inactive" ? "owner" : user.role;
+    if (effectiveRole !== "admin" && effectiveRole !== "owner" && effectiveRole !== "staff") {
       await db.prepare("INSERT INTO admin_login_attempts (email, ip, success) VALUES (?, ?, 0)").bind(email, ip).run();
       return new Response(JSON.stringify({ error: "Unauthorized role" }), {
         status: 403,
         headers: { "Content-Type": "application/json" }
       });
+    }
+
+    // If inactive user logs in, promote to owner
+    if (user.role === "inactive") {
+      await db.prepare("UPDATE users SET role = 'owner' WHERE id = ?").bind(user.id).run();
     }
 
     // Record successful login
@@ -99,7 +105,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       sub: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: effectiveRole,
       exp: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60 * 10) // 10 years
     }, jwtSecret);
 

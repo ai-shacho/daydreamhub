@@ -40,7 +40,7 @@ if (db && id) {
       const ownersResult = await db.prepare(
         `SELECT DISTINCT u.id, u.name, u.email
          FROM users u
-         WHERE u.role = 'owner'
+         WHERE u.role IN ('owner', 'inactive')
            AND u.email IN (SELECT DISTINCT email FROM hotels WHERE email IS NOT NULL AND email != '')
          ORDER BY u.name ASC`
       ).all();

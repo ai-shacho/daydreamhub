@@ -50,7 +50,7 @@ export const PATCH: APIRoute = async ({ request, params, locals }) => {
   try {
     // Check owner exists
     const owner = await db
-      .prepare(`SELECT id, name, email FROM users WHERE email = ? AND role = 'owner'`)
+      .prepare(`SELECT id, name, email FROM users WHERE email = ? AND role IN ('owner', 'inactive')`)
       .bind(owner_email)
       .first();
 
