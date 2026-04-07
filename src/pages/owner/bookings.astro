@@ -275,19 +275,6 @@ const statusLabels: Record<string, string> = {
 </OwnerLayout>
 
 <script>
-  // Date select → hidden input combiner
-  function syncDate(prefix) {
-    var y = document.getElementById(prefix + '-y').value;
-    var m = document.getElementById(prefix + '-m').value;
-    var d = document.getElementById(prefix + '-d').value;
-    document.getElementById(prefix + '-hidden').value = (y && m && d) ? y + '-' + m + '-' + d : '';
-  }
-  ['from', 'to'].forEach(function(p) {
-    ['y', 'm', 'd'].forEach(function(part) {
-      document.getElementById(p + '-' + part).addEventListener('change', function() { syncDate(p); });
-    });
-  });
-
   // Toggle detail rows
   document.querySelectorAll('.detail-toggle').forEach((btn) => {
     btn.addEventListener('click', () => {
