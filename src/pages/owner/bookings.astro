@@ -316,7 +316,7 @@ const statusLabels: Record<string, string> = {
   document.querySelectorAll('.cancel-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const id = btn.getAttribute('data-id');
-      if (!confirm(`⚠️ Booking #${id} をキャンセルしますか？\n\nこの操作は元に戻せません。\nゲストにキャンセル通知メールが送信されます。`)) return;
+      if (!confirm(`⚠️ Cancel booking #${id}?\n\nThis action cannot be undone.\nA cancellation email will be sent to the guest.`)) return;
 
       try {
         const res = await fetch('/api/owner/bookings', {
