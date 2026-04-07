@@ -211,7 +211,10 @@ if (db) {
   var blockedDates = new Set();
 
   async function fetchBlockedDates() {
-    const hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
+    var hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
+    if (!hotelId && blockHotelSelect && blockHotelSelect.options.length === 1) {
+      hotelId = blockHotelSelect.options[0].value;
+    }
     if (!hotelId) return;
     try {
       const res = await fetch(`/api/owner/blocked-dates?hotel_id=${hotelId}&month=${currentYear}-${String(currentMonth).padStart(2, '0')}`);
@@ -222,8 +225,15 @@ if (db) {
   }
 
   async function toggleBlockDate(dateStr) {
-    const hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
-    if (!hotelId) return;
+    var hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
+    // If no hotel selected but only one hotel exists, use it
+    if (!hotelId && blockHotelSelect && blockHotelSelect.options.length === 1) {
+      hotelId = blockHotelSelect.options[0].value;
+    }
+    if (!hotelId) {
+      alert('Please select a hotel first to block/unblock dates.');
+      return;
+    }
     const isBlocked = blockedDates.has(dateStr);
     try {
       if (isBlocked) {
@@ -348,22 +358,28 @@ if (db) {
 
     calendarGrid.innerHTML = html;
 
-    // Add click handlers to day cells
-    calendarGrid.querySelectorAll('[data-date]').forEach(cell => {
-      cell.addEventListener('click', async (e) => {
-        const date = cell.getAttribute('data-date');
+    // Add click handlers to day cells (use timer to distinguish single/double click)
+    var clickTimer = null;
+    calendarGrid.querySelectorAll('[data-date]').forEach(function(cell) {
+      cell.addEventListener('click', function(e) {
+        var date = cell.getAttribute('data-date');
         if (!date) return;
-        // Right-click or shift+click = toggle block
         if (e.shiftKey) {
-          await toggleBlockDate(date);
-        } else {
-          showDayBookings(date);
+          toggleBlockDate(date);
+          return;
         }
+        // Delay single-click to allow double-click detection
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+        clickTimer = setTimeout(function() {
+          clickTimer = null;
+          showDayBookings(date);
+        }, 250);
       });
-      // Double-click = toggle block
-      cell.addEventListener('dblclick', async () => {
-        const date = cell.getAttribute('data-date');
-        if (date) await toggleBlockDate(date);
+      cell.addEventListener('dblclick', function() {
+        // Cancel the pending single-click
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+        var date = cell.getAttribute('data-date');
+        if (date) toggleBlockDate(date);
       });
     });
 
