@@ -401,6 +401,9 @@ if (db) {
           b.status === 'cancelled' ? 'bg-red-100 text-red-700' :
           'bg-slate-100 text-slate-600';
 
+        const showConfirm = b.status === 'pending' || b.status === 'pending_confirmation';
+        const showCancel = b.status === 'pending' || b.status === 'pending_confirmation' || b.status === 'confirmed';
+
         html += `
           <div class="px-4 py-3 hover:bg-slate-50 transition-colors">
             <div class="flex items-center justify-between">
@@ -408,7 +411,11 @@ if (db) {
                 <span class="text-sm font-medium text-slate-900">${escapeHtml(b.guest_name)}</span>
                 <span class="text-xs text-slate-400 ml-2">#${b.id}</span>
               </div>
-              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">${b.status}</span>
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">${b.status}</span>
+                ${showConfirm ? `<button class="cal-confirm-btn px-2 py-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded hover:bg-emerald-100 transition-colors" data-id="${b.id}">Confirm</button>` : ''}
+                ${showCancel ? `<button class="cal-cancel-btn px-2 py-1 text-xs text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors" data-id="${b.id}">Cancel</button>` : ''}
+              </div>
             </div>
             <div class="mt-1 flex items-center gap-4 text-xs text-slate-500">
               <span>${escapeHtml(b.hotel_name || '-')}</span>
@@ -419,6 +426,43 @@ if (db) {
         `;
       });
       dayBookingsList.innerHTML = html;
+
+      // Attach confirm/cancel handlers
+      dayBookingsList.querySelectorAll('.cal-confirm-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          if (!confirm(`Confirm booking #${id}?`)) return;
+          (btn as HTMLButtonElement).disabled = true;
+          btn.textContent = '...';
+          try {
+            const res = await fetch('/api/owner/bookings', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: Number(id), status: 'confirmed' }),
+            });
+            if (res.ok) { await fetchBookings(); showDayBookings(dateStr); }
+            else { alert('Failed to confirm booking'); }
+          } catch { alert('Error confirming booking'); }
+        });
+      });
+
+      dayBookingsList.querySelectorAll('.cal-cancel-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          if (!confirm(`⚠️ Cancel booking #${id}?\n\nThis action cannot be undone.\nA cancellation email will be sent to the guest.`)) return;
+          (btn as HTMLButtonElement).disabled = true;
+          btn.textContent = '...';
+          try {
+            const res = await fetch('/api/owner/bookings', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: Number(id), status: 'cancelled' }),
+            });
+            if (res.ok) { await fetchBookings(); showDayBookings(dateStr); }
+            else { alert('Failed to cancel booking'); }
+          } catch { alert('Error cancelling booking'); }
+        });
+      });
     }
 
     dayBookings.classList.remove('hidden');
