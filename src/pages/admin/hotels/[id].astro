@@ -12,6 +12,7 @@ const { id } = Astro.params;
 let hotel: any = null;
 let plans: any[] = [];
 let bookings: any[] = [];
+let owners: any[] = [];
 let error = '';
 
 if (db && id) {
@@ -35,6 +36,11 @@ if (db && id) {
          WHERE b.hotel_id = ?1 ORDER BY b.created_at DESC LIMIT 20`
       ).bind(id).all();
       bookings = bookingsResult?.results || [];
+
+      const ownersResult = await db.prepare(
+        `SELECT id, name, email FROM users WHERE role = 'owner' ORDER BY name ASC`
+      ).all();
+      owners = ownersResult?.results || [];
     }
   } catch (e: any) {
     error = e.message || 'Failed to load hotel';
@@ -134,36 +140,27 @@ if (!hotel) {
           <h3 class="font-semibold text-teal-900">🔄 Assign to Owner</h3>
         </div>
         <div class="p-5 space-y-4">
-          <div class="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3 text-sm text-teal-800">
-            移行すると、このホテルは自動的に公開され、オーナーパネルから管理できるようになります。<br />
-            <span class="text-teal-600">(After assignment, this hotel will be activated and visible to the owner in their portal.)</span>
-          </div>
           <div class="flex items-center gap-2 text-sm">
-            <span class="text-slate-500">Current owner email:</span>
-            <span id="current-owner-email" class="font-medium text-slate-800 font-mono">{hotel.email || '—'}</span>
+            <span class="text-slate-500">Current owner:</span>
+            <span id="current-owner-email" class="font-medium text-slate-800 font-mono">{hotel.email || '— (未割当)'}</span>
           </div>
           <div class="flex gap-2">
-            <input
-              type="email"
-              id="assign-owner-email"
-              placeholder="owner@example.com"
-              class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-            <button
-              id="assign-owner-search-btn"
-              class="px-4 py-2 bg-slate-100 text-slate-700 text-sm rounded-lg hover:bg-slate-200 transition-colors whitespace-nowrap"
+            <select
+              id="assign-owner-select"
+              class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
             >
-              Search
-            </button>
-          </div>
-          <div id="assign-owner-result" class="hidden text-sm rounded-lg p-3 bg-slate-50 border border-slate-200">
-            <p class="text-slate-500 mb-2">Found user:</p>
-            <div id="assign-owner-user-info" class="font-medium text-slate-800 mb-3"></div>
+              <option value="">-- オーナーを選択 --</option>
+              {owners.map((o: any) => (
+                <option value={o.email} selected={hotel.email === o.email}>
+                  {o.name} ({o.email})
+                </option>
+              ))}
+            </select>
             <button
-              id="assign-owner-confirm-btn"
-              class="px-4 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 transition-colors"
+              id="assign-owner-btn"
+              class="px-4 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 transition-colors whitespace-nowrap"
             >
-              Confirm Assign
+              Assign
             </button>
           </div>
           <div id="assign-owner-message" class="hidden text-sm rounded-lg px-3 py-2"></div>
@@ -337,89 +334,52 @@ document.getElementById('toggle-active-btn')?.addEventListener('click', async fu
 });
 
 // Assign to Owner
-(function() {
-  const hotelId = document.querySelector('[data-hotel-id]')?.getAttribute('data-hotel-id')
-    || window.location.pathname.split('/').filter(Boolean).pop();
-  let foundOwnerEmail = '';
+document.getElementById('assign-owner-btn')?.addEventListener('click', async function() {
+  const select = document.getElementById('assign-owner-select');
+  const msgEl = document.getElementById('assign-owner-message');
+  const email = select?.value;
 
-  document.getElementById('assign-owner-search-btn')?.addEventListener('click', async function() {
-    const emailInput = document.getElementById('assign-owner-email');
-    const resultEl = document.getElementById('assign-owner-result');
-    const userInfoEl = document.getElementById('assign-owner-user-info');
-    const msgEl = document.getElementById('assign-owner-message');
-    const email = emailInput?.value?.trim();
+  msgEl.classList.add('hidden');
+  if (!email) {
+    msgEl.textContent = 'オーナーを選択してください';
+    msgEl.className = 'text-sm rounded-lg px-3 py-2 bg-amber-50 border border-amber-200 text-amber-700';
+    msgEl.classList.remove('hidden');
+    return;
+  }
 
-    msgEl.classList.add('hidden');
-    resultEl.classList.add('hidden');
-    if (!email) return;
+  if (!confirm(`このホテルを ${email} に割り当てますか？`)) return;
 
-    this.disabled = true;
-    this.textContent = 'Searching...';
+  this.disabled = true;
+  this.textContent = 'Assigning...';
 
-    try {
-      const res = await fetch(`/api/admin/users?role=owner&search=${encodeURIComponent(email)}`);
-      const data = await res.json();
-      const users = data.users || data.results || data || [];
-      const user = Array.isArray(users) ? users.find(u => u.email === email || u.email?.includes(email)) : null;
-
-      if (user) {
-        foundOwnerEmail = user.email;
-        userInfoEl.textContent = `${user.name || '(no name)'} — ${user.email}`;
-        resultEl.classList.remove('hidden');
-      } else {
-        msgEl.textContent = `❌ No owner account found for "${email}"`;
-        msgEl.className = 'text-sm rounded-lg px-3 py-2 bg-red-50 border border-red-200 text-red-700';
-        msgEl.classList.remove('hidden');
-      }
-    } catch (e) {
-      msgEl.textContent = `❌ Search failed: ${e.message}`;
+  try {
+    const pathId = window.location.pathname.split('/').filter(Boolean).pop();
+    const res = await fetch(`/api/admin/hotels/${pathId}/assign-owner`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ owner_email: email }),
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      msgEl.textContent = `✅ ${data.owner.name} (${data.owner.email}) に割り当てました`;
+      msgEl.className = 'text-sm rounded-lg px-3 py-2 bg-green-50 border border-green-200 text-green-700';
+      msgEl.classList.remove('hidden');
+      const currentEl = document.getElementById('current-owner-email');
+      if (currentEl) currentEl.textContent = data.owner.email;
+    } else {
+      msgEl.textContent = `❌ ${data.error || 'Failed to assign owner'}`;
       msgEl.className = 'text-sm rounded-lg px-3 py-2 bg-red-50 border border-red-200 text-red-700';
       msgEl.classList.remove('hidden');
-    } finally {
-      this.disabled = false;
-      this.textContent = 'Search';
     }
-  });
-
-  document.getElementById('assign-owner-confirm-btn')?.addEventListener('click', async function() {
-    if (!foundOwnerEmail) return;
-    const msgEl = document.getElementById('assign-owner-message');
-    const resultEl = document.getElementById('assign-owner-result');
-
-    this.disabled = true;
-    this.textContent = 'Assigning...';
-
-    try {
-      const pathId = window.location.pathname.split('/').filter(Boolean).pop();
-      const res = await fetch(`/api/admin/hotels/${pathId}/assign-owner`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner_email: foundOwnerEmail }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        msgEl.textContent = `✅ Assigned to ${data.owner.name} (${data.owner.email})`;
-        msgEl.className = 'text-sm rounded-lg px-3 py-2 bg-green-50 border border-green-200 text-green-700';
-        msgEl.classList.remove('hidden');
-        resultEl.classList.add('hidden');
-        const currentEl = document.getElementById('current-owner-email');
-        if (currentEl) currentEl.textContent = data.owner.email;
-      } else {
-        msgEl.textContent = `❌ ${data.error || 'Failed to assign owner'}`;
-        msgEl.className = 'text-sm rounded-lg px-3 py-2 bg-red-50 border border-red-200 text-red-700';
-        msgEl.classList.remove('hidden');
-        this.disabled = false;
-        this.textContent = 'Confirm Assign';
-      }
-    } catch (e) {
-      msgEl.textContent = `❌ Network error: ${e.message}`;
-      msgEl.className = 'text-sm rounded-lg px-3 py-2 bg-red-50 border border-red-200 text-red-700';
-      msgEl.classList.remove('hidden');
-      this.disabled = false;
-      this.textContent = 'Confirm Assign';
-    }
-  });
-})();
+  } catch (e) {
+    msgEl.textContent = `❌ ネットワークエラー: ${e.message}`;
+    msgEl.className = 'text-sm rounded-lg px-3 py-2 bg-red-50 border border-red-200 text-red-700';
+    msgEl.classList.remove('hidden');
+  } finally {
+    this.disabled = false;
+    this.textContent = 'Assign';
+  }
+});
 
 document.getElementById('call-hotel-btn')?.addEventListener('click', async function() {
   const btn = this;
