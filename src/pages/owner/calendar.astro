@@ -264,7 +264,11 @@ if (db) {
   }
 
   if (blockHotelSelect) {
-    blockHotelSelect.addEventListener('change', fetchBlockedDates);
+    blockHotelSelect.addEventListener('change', function() {
+      // Sync hotel filter with block select
+      if (hotelFilter) hotelFilter.value = blockHotelSelect.value;
+      fetchBookings();
+    });
   }
 
   // Fetch bookings for the current month
@@ -539,8 +543,9 @@ if (db) {
     fetchBookings();
   });
 
-  // Hotel filter change
-  hotelFilter?.addEventListener('change', () => {
+  // Hotel filter change - sync with block hotel select
+  hotelFilter?.addEventListener('change', function() {
+    if (blockHotelSelect) blockHotelSelect.value = hotelFilter.value;
     fetchBookings();
   });
 
