@@ -14,7 +14,7 @@ if (!db) {
   hotel = await db.prepare('SELECT * FROM hotels WHERE id = ?').bind(id).first();
   if (!hotel) error = 'Hotel not found';
   if (hotel) {
-    const plansResult = await db.prepare('SELECT * FROM plans WHERE hotel_id = ? ORDER BY price_usd ASC').bind(id).all();
+    const plansResult = await db.prepare('SELECT * FROM plans WHERE hotel_id = ? ORDER BY sort_order ASC, price_usd ASC').bind(id).all();
     plans = plansResult?.results || [];
   }
 }
@@ -358,7 +358,11 @@ for (let h = 0; h < 24; h++) {
             <p class="text-sm text-gray-400 text-center py-4">No plans yet.</p>
           )}
           {plans.map((plan: any) => (
-            <div class="plan-row flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors" data-plan-id={plan.id}>
+            <div class="plan-row flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors" data-plan-id={plan.id} data-sort-order={plan.sort_order || 0}>
+              <div class="flex flex-col gap-0.5 flex-shrink-0">
+                <button class="move-plan-up text-xs text-slate-400 hover:text-indigo-600 px-1 py-0.5 rounded hover:bg-indigo-50 transition-colors" title="Move up">▲</button>
+                <button class="move-plan-down text-xs text-slate-400 hover:text-indigo-600 px-1 py-0.5 rounded hover:bg-indigo-50 transition-colors" title="Move down">▼</button>
+              </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="font-medium text-sm text-slate-900 plan-name">{plan.name}</span>
@@ -762,6 +766,43 @@ document.getElementById('geocode-btn')?.addEventListener('click', async () => {
     btn.textContent = '❌ Error — please try again';
   } finally {
     setTimeout(() => { btn.textContent = '📍 Auto-fill coordinates from address'; btn.disabled = false; }, 3000);
+  }
+});
+
+// ── Plan Reorder ──
+async function savePlanOrder() {
+  var rows = document.querySelectorAll('#plans-list .plan-row');
+  var plans = [];
+  rows.forEach(function(row, i) {
+    plans.push({ id: Number(row.getAttribute('data-plan-id')), sort_order: i });
+  });
+  try {
+    await fetch('/api/admin/plans', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plans: plans })
+    });
+  } catch {}
+}
+
+document.getElementById('plans-list')?.addEventListener('click', function(e) {
+  var btn = e.target.closest('.move-plan-up, .move-plan-down');
+  if (!btn) return;
+  var row = btn.closest('.plan-row');
+  if (!row) return;
+  var list = document.getElementById('plans-list');
+  if (btn.classList.contains('move-plan-up')) {
+    var prev = row.previousElementSibling;
+    if (prev && prev.classList.contains('plan-row')) {
+      list.insertBefore(row, prev);
+      savePlanOrder();
+    }
+  } else {
+    var next = row.nextElementSibling;
+    if (next && next.classList.contains('plan-row')) {
+      list.insertBefore(next, row);
+      savePlanOrder();
+    }
   }
 });
 </script>
