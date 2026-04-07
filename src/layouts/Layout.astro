@@ -46,7 +46,7 @@ const jwtSecret = env0?.JWT_SECRET || 'ddh-secret-2025';
 const cookieHeader = Astro.request.headers.get('cookie') || '';
 const tokenMatch = cookieHeader.match(/ddh_token=([^;]+)/);
 const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
-const currentUser = authPayload ? { id: authPayload.sub, name: authPayload.name, email: authPayload.email, role: authPayload.role } : null;
+const currentUser = authPayload ? { id: authPayload.sub, name: authPayload.name, email: authPayload.email, role: authPayload.role === 'inactive' ? 'owner' : authPayload.role } : null;
 
 // GA4
 const ga4Id: string | undefined = (Astro.locals as any).runtime?.env?.GA4_MEASUREMENT_ID;

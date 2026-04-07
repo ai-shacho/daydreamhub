@@ -53,13 +53,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
       return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: json });
     }
 
+    // inactive users are treated as owner on login
+    const effectiveRole = (user as any).role === 'inactive' ? 'owner' : (user as any).role;
+    if ((user as any).role === 'inactive') {
+      await db.prepare("UPDATE users SET role = 'owner' WHERE id = ?").bind((user as any).id).run();
+    }
+
     const secret = env?.JWT_SECRET || 'ddh-secret-2025';
     const token = await createJWT(
       {
         sub: (user as any).id,
         email: (user as any).email,
         name: (user as any).name,
-        role: (user as any).role,
+        role: effectiveRole,
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365 * 10, // 10 years
       },
@@ -71,7 +77,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(
       JSON.stringify({
         ok: true,
-        user: { id: (user as any).id, name: (user as any).name, email: (user as any).email, role: (user as any).role },
+        user: { id: (user as any).id, name: (user as any).name, email: (user as any).email, role: effectiveRole },
       }),
       { status: 200, headers: { ...json, 'Set-Cookie': cookieValue } }
     );
