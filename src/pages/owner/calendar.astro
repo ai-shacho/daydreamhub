@@ -189,7 +189,7 @@ if (db) {
   </script>
 </OwnerLayout>
 
-<script>
+<script is:inline>
   const MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -197,18 +197,18 @@ if (db) {
 
   let currentYear = new Date().getFullYear();
   let currentMonth = new Date().getMonth() + 1; // 1-indexed
-  let bookings: any[] = [];
-  let selectedDate: string | null = null;
+  var bookings = [];
+  var selectedDate = null;
 
   const calendarGrid = document.getElementById('calendar-grid');
   const monthLabel = document.getElementById('month-label');
   const dayBookings = document.getElementById('day-bookings');
   const dayBookingsTitle = document.getElementById('day-bookings-title');
   const dayBookingsList = document.getElementById('day-bookings-list');
-  const hotelFilter = document.getElementById('hotel-filter') as HTMLSelectElement | null;
-  const blockHotelSelect = document.getElementById('block-hotel-select') as HTMLSelectElement | null;
+  var hotelFilter = document.getElementById('hotel-filter');
+  var blockHotelSelect = document.getElementById('block-hotel-select');
 
-  let blockedDates: Set<string> = new Set();
+  var blockedDates = new Set();
 
   async function fetchBlockedDates() {
     const hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
@@ -216,12 +216,12 @@ if (db) {
     try {
       const res = await fetch(`/api/owner/blocked-dates?hotel_id=${hotelId}&month=${currentYear}-${String(currentMonth).padStart(2, '0')}`);
       const data = await res.json();
-      blockedDates = new Set((data.blocked || []).map((b: any) => b.blocked_date));
+      blockedDates = new Set((data.blocked || []).map((b) => b.blocked_date));
       renderCalendar();
     } catch {}
   }
 
-  async function toggleBlockDate(dateStr: string) {
+  async function toggleBlockDate(dateStr) {
     const hotelId = blockHotelSelect?.value || hotelFilter?.value || '';
     if (!hotelId) return;
     const isBlocked = blockedDates.has(dateStr);
@@ -261,7 +261,7 @@ if (db) {
   }
 
   // Get bookings for a specific date string (YYYY-MM-DD)
-  function getBookingsForDate(dateStr: string) {
+  function getBookingsForDate(dateStr) {
     return bookings.filter(b => b.check_in_date === dateStr);
   }
 
@@ -354,7 +354,7 @@ if (db) {
         const date = cell.getAttribute('data-date');
         if (!date) return;
         // Right-click or shift+click = toggle block
-        if ((e as MouseEvent).shiftKey) {
+        if (e.shiftKey) {
           await toggleBlockDate(date);
         } else {
           showDayBookings(date);
@@ -379,7 +379,7 @@ if (db) {
   }
 
   // Show bookings for a clicked day
-  function showDayBookings(dateStr: string) {
+  function showDayBookings(dateStr) {
     if (!dayBookings || !dayBookingsTitle || !dayBookingsList) return;
 
     selectedDate = dateStr;
@@ -394,7 +394,7 @@ if (db) {
       dayBookingsList.innerHTML = '<div class="px-4 py-8 text-center text-slate-400 text-sm">No bookings for this date</div>';
     } else {
       let html = '';
-      dayData.forEach((b: any) => {
+      dayData.forEach((b) => {
         const statusColor =
           b.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
           b.status === 'pending' ? 'bg-amber-100 text-amber-700' :
@@ -432,7 +432,7 @@ if (db) {
         btn.addEventListener('click', async () => {
           const id = btn.getAttribute('data-id');
           if (!confirm(`Confirm booking #${id}?`)) return;
-          (btn as HTMLButtonElement).disabled = true;
+          btn.disabled = true;
           btn.textContent = '...';
           try {
             const res = await fetch('/api/owner/bookings', {
@@ -450,7 +450,7 @@ if (db) {
         btn.addEventListener('click', async () => {
           const id = btn.getAttribute('data-id');
           if (!confirm(`⚠️ Cancel booking #${id}?\n\nThis action cannot be undone.\nA cancellation email will be sent to the guest.`)) return;
-          (btn as HTMLButtonElement).disabled = true;
+          btn.disabled = true;
           btn.textContent = '...';
           try {
             const res = await fetch('/api/owner/bookings', {
@@ -474,7 +474,7 @@ if (db) {
     dayBookings.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  function escapeHtml(str: string) {
+  function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
     div.textContent = str;
