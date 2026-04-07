@@ -238,6 +238,35 @@ export const airportNames: Record<string, string> = {
   'AKL': 'Auckland Airport',
 };
 
+// Japanese airport names
+export const airportNamesJa: Record<string, string> = {
+  'BKK': 'スワンナプーム国際空港', 'DMK': 'ドンムアン空港',
+  'DPS': 'ングラライ国際空港', 'CGK': 'スカルノ・ハッタ国際空港',
+  'KUL': 'クアラルンプール国際空港', 'SIN': 'チャンギ国際空港',
+  'MNL': 'ニノイ・アキノ国際空港', 'CEB': 'マクタン・セブ国際空港',
+  'SGN': 'タンソンニャット国際空港', 'HAN': 'ノイバイ国際空港',
+  'DAD': 'ダナン国際空港', 'HKT': 'プーケット国際空港',
+  'USM': 'サムイ空港', 'PNH': 'プノンペン国際空港',
+  'RGN': 'ヤンゴン国際空港',
+  'HND': '羽田空港', 'NRT': '成田国際空港',
+  'KIX': '関西国際空港', 'ICN': '仁川国際空港',
+  'PEK': '北京首都国際空港', 'PVG': '上海浦東国際空港',
+  'HKG': '香港国際空港', 'TPE': '桃園国際空港',
+  'BOM': 'ムンバイ国際空港', 'DEL': 'デリー国際空港',
+  'CMB': 'バンダラナイケ国際空港',
+  'DXB': 'ドバイ国際空港', 'AUH': 'アブダビ国際空港',
+  'DOH': 'ハマド国際空港', 'BAH': 'バーレーン国際空港',
+  'KWI': 'クウェート国際空港', 'MCT': 'マスカット国際空港',
+  'NBO': 'ジョモ・ケニヤッタ国際空港', 'CAI': 'カイロ国際空港',
+  'JNB': 'O.R.タンボ国際空港',
+  'LHR': 'ヒースロー空港', 'CDG': 'シャルル・ド・ゴール空港',
+  'AMS': 'スキポール空港', 'FRA': 'フランクフルト空港',
+  'BHX': 'バーミンガム空港',
+  'JFK': 'JFK国際空港', 'LAX': 'ロサンゼルス国際空港',
+  'SYD': 'シドニー国際空港', 'MEL': 'メルボルン空港',
+  'AKL': 'オークランド空港',
+};
+
 // Find nearest airport from hotel coordinates
 export function nearestAirport(hotelLat: number, hotelLng: number): { code: string; name: string; km: number } | null {
   let best: { code: string; name: string; km: number } | null = null;
