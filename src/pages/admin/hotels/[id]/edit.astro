@@ -493,7 +493,12 @@ async function saveHotel() {
   } finally { btns.forEach(b => { b.disabled = false; b.textContent = 'Save Changes'; }); }
 }
 
-document.querySelectorAll('.save-btn').forEach(btn => btn.addEventListener('click', saveHotel));
+document.querySelectorAll('.save-btn').forEach(function(btn) {
+  btn.addEventListener('click', function(e) {
+    e.preventDefault();
+    saveHotel();
+  });
+});
 
 const HOTEL_ID = parseInt(hotelId);
 
