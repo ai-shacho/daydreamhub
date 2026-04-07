@@ -546,10 +546,12 @@ document.getElementById('thumbnail-url-input')?.addEventListener('input', functi
   let dragSrcId = null;
 
   async function loadImages() {
-    const res = await fetch(`/api/admin/hotel-images?hotel_id=${HOTEL_ID}`);
-    const data = await res.json();
-    images = data.images || [];
-    renderGrid();
+    try {
+      const res = await fetch(`/api/admin/hotel-images?hotel_id=${HOTEL_ID}`);
+      const data = await res.json();
+      images = data.images || [];
+      renderGrid();
+    } catch (e) { console.error('Failed to load images:', e); }
   }
 
   function renderGrid() {
@@ -739,19 +741,19 @@ document.getElementById('update-plan-btn')?.addEventListener('click', async () =
 
 // Geocode button
 document.getElementById('geocode-btn')?.addEventListener('click', async () => {
-  const addressInput = document.getElementById('address') as HTMLInputElement | null;
+  const addressInput = document.getElementById('address');
   const address = addressInput?.value;
   if (!address) { alert('Please enter an address first'); return; }
-  const btn = document.getElementById('geocode-btn') as HTMLButtonElement | null;
+  const btn = document.getElementById('geocode-btn');
   if (!btn) return;
   btn.textContent = '⏳ Looking up...';
   btn.disabled = true;
   try {
     const response = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`);
-    const result = await response.json() as { latitude?: number; longitude?: number };
+    const result = await response.json();
     if (result.latitude && result.longitude) {
-      (document.getElementById('latitude') as HTMLInputElement).value = result.latitude.toFixed(6);
-      (document.getElementById('longitude') as HTMLInputElement).value = result.longitude.toFixed(6);
+      document.getElementById('latitude').value = result.latitude.toFixed(6);
+      document.getElementById('longitude').value = result.longitude.toFixed(6);
       btn.textContent = '✅ Coordinates updated';
     } else {
       btn.textContent = '❌ Not found — try a more specific address';
