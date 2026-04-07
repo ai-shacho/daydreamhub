@@ -67,6 +67,7 @@ if (db) {
     <p class="text-xs text-amber-600 flex-1"><strong>Double-click</strong> (or Shift+click) any date to block/unblock it. Single click shows bookings for that day. Blocked dates won't accept new bookings.</p>
     {hotels.length > 0 && (
       <select id="block-hotel-select" class="text-xs border border-amber-300 rounded-lg px-3 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400">
+        <option value="">All Hotels</option>
         {hotels.map((h: any) => <option value={h.id}>{h.name}</option>)}
       </select>
     )}
