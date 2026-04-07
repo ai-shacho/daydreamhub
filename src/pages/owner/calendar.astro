@@ -211,38 +211,54 @@ if (db) {
 
   var blockedDates = new Set();
 
-  function getFirstHotelId() {
+  // Get all hotel IDs from the block-hotel-select dropdown (skip "All Hotels" option with value="")
+  function getAllHotelIds() {
+    var ids = [];
+    var sel = blockHotelSelect || hotelFilter;
+    if (!sel) return ids;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value) ids.push(sel.options[i].value);
+    }
+    return ids;
+  }
+
+  function getSelectedHotelId() {
     if (blockHotelSelect && blockHotelSelect.value) return blockHotelSelect.value;
     if (hotelFilter && hotelFilter.value) return hotelFilter.value;
-    // Auto-select first hotel from either dropdown
-    if (blockHotelSelect && blockHotelSelect.options.length > 0) return blockHotelSelect.options[0].value;
-    if (hotelFilter && hotelFilter.options.length > 1) return hotelFilter.options[1].value; // skip "All Hotels"
     return '';
   }
 
   async function fetchBlockedDates() {
-    var hotelId = getFirstHotelId();
-    if (!hotelId) return;
+    var hotelId = getSelectedHotelId();
+    var ids = hotelId ? [hotelId] : getAllHotelIds();
+    if (ids.length === 0) return;
     try {
-      const res = await fetch(`/api/owner/blocked-dates?hotel_id=${hotelId}&month=${currentYear}-${String(currentMonth).padStart(2, '0')}`);
-      const data = await res.json();
-      blockedDates = new Set((data.blocked || []).map((b) => b.blocked_date));
+      // Fetch blocked dates for all relevant hotels and merge
+      blockedDates = new Set();
+      var month = currentYear + '-' + String(currentMonth).padStart(2, '0');
+      for (var i = 0; i < ids.length; i++) {
+        var res = await fetch('/api/owner/blocked-dates?hotel_id=' + ids[i] + '&month=' + month);
+        var data = await res.json();
+        (data.blocked || []).forEach(function(b) { blockedDates.add(b.blocked_date); });
+      }
       renderCalendar();
     } catch {}
   }
 
   async function toggleBlockDate(dateStr) {
-    var hotelId = getFirstHotelId();
-    if (!hotelId) return;
-    const isBlocked = blockedDates.has(dateStr);
+    var hotelId = getSelectedHotelId();
+    var ids = hotelId ? [hotelId] : getAllHotelIds();
+    if (ids.length === 0) return;
+    var isBlocked = blockedDates.has(dateStr);
     try {
-      if (isBlocked) {
-        await fetch('/api/owner/blocked-dates', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hotel_id: Number(hotelId), date: dateStr }) });
-        blockedDates.delete(dateStr);
-      } else {
-        await fetch('/api/owner/blocked-dates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hotel_id: Number(hotelId), date: dateStr }) });
-        blockedDates.add(dateStr);
+      for (var i = 0; i < ids.length; i++) {
+        if (isBlocked) {
+          await fetch('/api/owner/blocked-dates', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hotel_id: Number(ids[i]), date: dateStr }) });
+        } else {
+          await fetch('/api/owner/blocked-dates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hotel_id: Number(ids[i]), date: dateStr }) });
+        }
       }
+      if (isBlocked) { blockedDates.delete(dateStr); } else { blockedDates.add(dateStr); }
       renderCalendar();
     } catch { alert('Failed to update availability'); }
   }
