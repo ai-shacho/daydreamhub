@@ -326,7 +326,7 @@ export async function sendGuestBookingStatusUpdate(
 
     ${isConfirmed
       ? `<p style="color:#374151">Great news! <strong>${escapeHtml(data.hotelName)}</strong> has confirmed your booking. Please arrive on time and present your booking ID at check-in.</p>`
-      : `<p style="color:#374151">We're sorry, but <strong>${escapeHtml(data.hotelName)}</strong> was unable to accommodate your booking request at this time.${data.cancelReason ? ` Reason: ${escapeHtml(data.cancelReason)}` : ''}</p>`
+      : `<p style="color:#374151">We're sorry, but <strong>${escapeHtml(data.hotelName)}</strong> was unable to accommodate your booking request.${data.cancelReason ? ` Reason: ${escapeHtml(data.cancelReason)}` : ''}</p>`
     }
 
     <div style="background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};border:1px solid ${isConfirmed ? '#99f6e4' : '#e5e7eb'};border-radius:8px;padding:20px;margin:20px 0">
