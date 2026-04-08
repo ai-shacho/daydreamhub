@@ -74,7 +74,7 @@ export async function sendWelcomeEmail(
   const subject = 'Welcome to DaydreamHub 🌿';
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
-  <div style="background:#0d9488;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
+  <div style="background:#46a3c2;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
     <div style="font-size:40px;margin-bottom:12px">🌿</div>
     <h1 style="margin:0;font-size:24px;font-weight:700">Welcome to DaydreamHub!</h1>
     <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Your account has been created successfully.</p>
@@ -87,8 +87,8 @@ export async function sendWelcomeEmail(
       Enjoy a pool, spa, workspace, or simply a place to relax between flights.
     </p>
 
-    <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;padding:20px;margin:24px 0">
-      <h2 style="margin:0 0 14px;font-size:15px;color:#0d9488;font-weight:700">✅ What you can do now</h2>
+    <div style="background:#eef7fb;border:1px solid #b3d9e8;border-radius:8px;padding:20px;margin:24px 0">
+      <h2 style="margin:0 0 14px;font-size:15px;color:#46a3c2;font-weight:700">✅ What you can do now</h2>
       <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:1.8">
         <li>Search hotels by city or country</li>
         <li>Book day-use rooms with instant payment</li>
@@ -99,7 +99,7 @@ export async function sendWelcomeEmail(
 
     <div style="text-align:center;margin:28px 0">
       <a href="https://daydreamhub.com/search"
-         style="display:inline-block;padding:14px 32px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
+         style="display:inline-block;padding:14px 32px;background:#46a3c2;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
         Find a Hotel →
       </a>
     </div>
@@ -124,7 +124,7 @@ export async function sendOwnerAccountEmail(
   const subject = 'Your DaydreamHub Owner Account is Ready 🏨';
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
-  <div style="background:#4f46e5;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
+  <div style="background:#46a3c2;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
     <div style="font-size:40px;margin-bottom:12px">🏨</div>
     <h1 style="margin:0;font-size:24px;font-weight:700">Welcome to DaydreamHub Owner Portal!</h1>
     <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Your hotel management account has been created.</p>
@@ -132,8 +132,8 @@ export async function sendOwnerAccountEmail(
   <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
     <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.name)}</strong> 👋</p>
     <p style="color:#374151;line-height:1.6">Your owner account for DaydreamHub has been set up. You can now manage your hotel listings, bookings, and more.</p>
-    <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:20px;margin:24px 0">
-      <h2 style="margin:0 0 14px;font-size:15px;color:#4f46e5;font-weight:700">🔑 Your Login Details</h2>
+    <div style="background:#eef7fb;border:1px solid #b3d9e8;border-radius:8px;padding:20px;margin:24px 0">
+      <h2 style="margin:0 0 14px;font-size:15px;color:#46a3c2;font-weight:700">🔑 Your Login Details</h2>
       <table style="font-size:14px;color:#374151">
         <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Email:</td><td style="font-weight:600">${escapeHtml(data.email)}</td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Password:</td><td style="font-weight:600">${escapeHtml(data.password)}</td></tr>
@@ -141,7 +141,7 @@ export async function sendOwnerAccountEmail(
     </div>
     <div style="text-align:center;margin:28px 0">
       <a href="https://daydreamhub.com/login?redirect=/owner"
-         style="display:inline-block;padding:14px 32px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
+         style="display:inline-block;padding:14px 32px;background:#46a3c2;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
         Log in to Owner Portal →
       </a>
     </div>
