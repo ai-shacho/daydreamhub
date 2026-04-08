@@ -92,6 +92,50 @@ export async function sendWelcomeEmail(
   });
 }
 
+export async function sendOwnerAccountEmail(
+  apiKey: string,
+  data: { name: string; email: string; password: string }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = 'Your DaydreamHub Owner Account is Ready 🏨';
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#4f46e5;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
+    <div style="font-size:40px;margin-bottom:12px">🏨</div>
+    <h1 style="margin:0;font-size:24px;font-weight:700">Welcome to DaydreamHub Owner Portal!</h1>
+    <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Your hotel management account has been created.</p>
+  </div>
+  <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+    <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.name)}</strong> 👋</p>
+    <p style="color:#374151;line-height:1.6">Your owner account for DaydreamHub has been set up. You can now manage your hotel listings, bookings, and more.</p>
+    <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:20px;margin:24px 0">
+      <h2 style="margin:0 0 14px;font-size:15px;color:#4f46e5;font-weight:700">🔑 Your Login Details</h2>
+      <table style="font-size:14px;color:#374151">
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Email:</td><td style="font-weight:600">${escapeHtml(data.email)}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Password:</td><td style="font-weight:600">${escapeHtml(data.password)}</td></tr>
+      </table>
+    </div>
+    <div style="text-align:center;margin:28px 0">
+      <a href="https://daydreamhub.com/login?redirect=/owner"
+         style="display:inline-block;padding:14px 32px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
+        Log in to Owner Portal →
+      </a>
+    </div>
+    <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
+      We recommend changing your password after your first login.<br>
+      If you have any questions, please <a href="https://daydreamhub.com/contact" style="color:#4f46e5">contact us</a>.
+    </p>
+  </div>
+</div>`;
+
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.email,
+    subject,
+    html,
+  });
+}
+
 export async function sendBookingNotificationToHotel(
   apiKey: string,
   data: {

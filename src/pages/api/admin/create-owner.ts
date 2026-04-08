@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { verifyAdmin } from '../../../lib/adminAuth';
+import { sendOwnerAccountEmail } from '../../../lib/email';
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -57,7 +58,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
       "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, 'owner', datetime('now'))"
     ).bind(name, email.toLowerCase().trim(), passwordHash).run();
 
-    return new Response(JSON.stringify({ success: true }), { status: 201, headers: json });
+    // Send owner account notification email
+    const resendKey = runtime?.env?.RESEND_API_KEY;
+    if (resendKey) {
+      sendOwnerAccountEmail(resendKey, { name, email: email.toLowerCase().trim(), password }).catch((err) => {
+        console.error('Owner account email failed:', email, err);
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true, plainPassword: password }), { status: 201, headers: json });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e.message || 'Failed to create owner' }), { status: 500, headers: json });
   }
