@@ -16,7 +16,7 @@ const directionFilter = url.searchParams.get("direction") || "";
 const statusFilter = url.searchParams.get("status") || "";
 const hotelFilter = url.searchParams.get("hotel_id") || "";
 
-let messages: any[] = [];
+let bookingMessages: any[] = [];
 let ownerHotels: any[] = [];
 let error = "";
 
@@ -30,28 +30,27 @@ if (db) {
 
     if (ownerHotelIds.length > 0) {
       const placeholders = ownerHotelIds.map(() => "?").join(",");
-      let query = `SELECT m.*, h.name as hotel_name
-        FROM messages m
-        LEFT JOIN hotels h ON m.hotel_id = h.id
-        WHERE m.hotel_id IN (${placeholders})`;
+      // Fetch booking messages (guest <-> hotel)
+      let query = `SELECT bm.*, b.guest_name, b.guest_email, b.id as booking_id, h.name as hotel_name
+        FROM booking_messages bm
+        LEFT JOIN bookings b ON bm.booking_id = b.id
+        LEFT JOIN hotels h ON b.hotel_id = h.id
+        WHERE b.hotel_id IN (${placeholders})`;
       const binds: any[] = [...ownerHotelIds];
 
-      if (directionFilter) {
-        query += " AND m.direction = ?";
-        binds.push(directionFilter);
-      }
-      if (statusFilter) {
-        query += " AND m.status = ?";
-        binds.push(statusFilter);
+      if (directionFilter === "inbound") {
+        query += " AND bm.sender_type = 'guest'";
+      } else if (directionFilter === "outbound") {
+        query += " AND bm.sender_type = 'hotel'";
       }
       if (hotelFilter) {
-        query += " AND m.hotel_id = ?";
+        query += " AND b.hotel_id = ?";
         binds.push(parseInt(hotelFilter));
       }
 
-      query += " ORDER BY m.created_at DESC";
+      query += " ORDER BY bm.created_at DESC LIMIT 200";
       const result = await db.prepare(query).bind(...binds).all();
-      messages = result?.results || [];
+      bookingMessages = result?.results || [];
     }
   } catch (e: any) {
     error = e.message || "Failed to load messages";
@@ -60,23 +59,9 @@ if (db) {
 
 const directionOptions = ["", "inbound", "outbound"];
 const directionLabels: Record<string, string> = {
-  "": "All Directions",
-  inbound: "Inbound",
-  outbound: "Outbound",
-};
-const statusOptions = ["", "sent", "delivered", "read", "failed"];
-const statusLabels: Record<string, string> = {
-  "": "All Statuses",
-  sent: "Sent",
-  delivered: "Delivered",
-  read: "Read",
-  failed: "Failed",
-};
-const statusColors: Record<string, string> = {
-  sent: "bg-blue-100 text-blue-700",
-  delivered: "bg-emerald-100 text-emerald-700",
-  read: "bg-slate-100 text-slate-600",
-  failed: "bg-red-100 text-red-700",
+  "": "All",
+  inbound: "From Guests",
+  outbound: "From Hotel",
 };
 ---
 
@@ -100,14 +85,6 @@ const statusColors: Record<string, string> = {
           ))}
         </select>
       </div>
-      <div class="min-w-[160px]">
-        <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
-        <select name="status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white">
-          {statusOptions.map((s) => (
-            <option value={s} selected={s === statusFilter}>{statusLabels[s]}</option>
-          ))}
-        </select>
-      </div>
       <div class="flex gap-2">
         <button type="submit" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
           Filter
@@ -120,10 +97,11 @@ const statusColors: Record<string, string> = {
   </div>
 
   <div class="flex items-center gap-4 mb-4 text-sm">
-    <p class="text-slate-500">{messages.length} message{messages.length !== 1 ? "s" : ""} found</p>
+    <p class="text-slate-500">{bookingMessages.length} message{bookingMessages.length !== 1 ? "s" : ""} found</p>
     <span class="text-slate-300">|</span>
-    <span class="text-blue-600">{messages.filter((m: any) => m.direction === "inbound").length} inbound</span>
-    <span class="text-indigo-600">{messages.filter((m: any) => m.direction === "outbound").length} outbound</span>
+    <span class="text-blue-600">{bookingMessages.filter((m: any) => m.sender_type === "guest").length} from guests</span>
+    <span class="text-indigo-600">{bookingMessages.filter((m: any) => m.sender_type === "hotel").length} from hotel</span>
+    <span class="text-amber-600">{bookingMessages.filter((m: any) => m.sender_type === "guest" && !m.is_read).length} unread</span>
   </div>
 
   {error && (
@@ -135,46 +113,55 @@ const statusColors: Record<string, string> = {
       <table class="w-full text-sm">
         <thead>
           <tr class="bg-slate-50 border-b border-slate-200">
-            <th class="text-left px-4 py-3 font-medium text-slate-600">ID</th>
-            <th class="text-center px-4 py-3 font-medium text-slate-600">Direction</th>
-            <th class="text-left px-4 py-3 font-medium text-slate-600">Subject</th>
-            <th class="text-left px-4 py-3 font-medium text-slate-600">Recipient</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Booking</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">From</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Message</th>
             <th class="text-left px-4 py-3 font-medium text-slate-600">Hotel</th>
             <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
             <th class="text-left px-4 py-3 font-medium text-slate-600">Date</th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-          {messages.length === 0 ? (
+          {bookingMessages.length === 0 ? (
             <tr>
               <td colspan="7" class="px-4 py-12 text-center text-slate-400">No messages found</td>
             </tr>
-          ) : messages.map((m: any) => (
-            <tr class="hover:bg-slate-50 transition-colors">
-              <td class="px-4 py-3 font-mono text-slate-500">#{m.id}</td>
-              <td class="px-4 py-3 text-center">
-                <span class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${m.direction === "inbound" ? "bg-blue-100 text-blue-700" : "bg-indigo-100 text-indigo-700"}`}>
-                  {m.direction === "inbound" ? (
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                  ) : (
-                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                    </svg>
-                  )}
-                  {m.direction || "-"}
-                </span>
+          ) : bookingMessages.map((m: any) => (
+            <tr class:list={["hover:bg-slate-50 transition-colors", m.sender_type === "guest" && !m.is_read ? "bg-blue-50" : ""]}>
+              <td class="px-4 py-3 font-mono text-slate-500">
+                <a href={`/owner/bookings?search=${m.booking_id}`} class="text-indigo-600 hover:underline">#{m.booking_id}</a>
               </td>
-              <td class="px-4 py-3 font-medium text-slate-900">{m.subject || "-"}</td>
-              <td class="px-4 py-3 text-slate-600">{m.recipient || m.to_email || "-"}</td>
-              <td class="px-4 py-3 text-slate-600">{m.hotel_name || "-"}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${m.sender_type === "guest" ? "bg-blue-100 text-blue-700" : "bg-indigo-100 text-indigo-700"}`}>
+                    {m.sender_type === "guest" ? "Guest" : "Hotel"}
+                  </span>
+                  <span class="text-sm text-slate-700">{m.sender_name}</span>
+                </div>
+                {m.sender_type === "guest" && m.guest_email && (
+                  <div class="text-xs text-slate-400 mt-0.5">{m.guest_email}</div>
+                )}
+              </td>
+              <td class="px-4 py-3 text-slate-700 max-w-[300px]">
+                <p class="truncate">{m.content}</p>
+              </td>
+              <td class="px-4 py-3 text-slate-600 text-sm">{m.hotel_name || "-"}</td>
               <td class="px-4 py-3 text-center">
-                <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[m.status] || "bg-slate-100 text-slate-600"}`}>
-                  {m.status || "-"}
-                </span>
+                {m.sender_type === "guest" ? (
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${m.is_read ? "bg-slate-100 text-slate-500" : "bg-amber-100 text-amber-700"}`}>
+                    {m.is_read ? "Read" : "Unread"}
+                  </span>
+                ) : (
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Sent</span>
+                )}
               </td>
               <td class="px-4 py-3 text-slate-500 text-xs">{m.created_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-center">
+                <a href={`/owner/bookings`} class="px-2 py-1 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors">
+                  Reply
+                </a>
+              </td>
             </tr>
           ))}
         </tbody>
