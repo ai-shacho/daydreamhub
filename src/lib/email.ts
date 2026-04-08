@@ -276,7 +276,7 @@ export async function sendGuestBookingStatusUpdate(
     ? `✅ Booking Confirmed #${data.bookingId} — ${data.hotelName}`
     : `❌ Booking Cancelled #${data.bookingId} — ${data.hotelName}`;
 
-  const headerBg = isConfirmed ? '#059669' : '#dc2626';
+  const headerBg = isConfirmed ? '#059669' : '#6b7280';
   const headerEmoji = isConfirmed ? '✅' : '❌';
   const headerTitle = isConfirmed ? 'Booking Confirmed!' : 'Booking Cancelled';
   const headerSub = isConfirmed
@@ -303,17 +303,17 @@ export async function sendGuestBookingStatusUpdate(
       : `<p style="color:#374151">We're sorry, but <strong>${escapeHtml(data.hotelName)}</strong> was unable to accommodate your booking.${data.cancelReason ? ` Reason: ${escapeHtml(data.cancelReason)}` : ''}</p>`
     }
 
-    <div style="background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};border:1px solid ${isConfirmed ? '#99f6e4' : '#fecaca'};border-radius:8px;padding:20px;margin:20px 0">
-      <h2 style="margin:0 0 16px;font-size:16px;color:${isConfirmed ? '#0d9488' : '#dc2626'}">📋 Booking Details</h2>
+    <div style="background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};border:1px solid ${isConfirmed ? '#99f6e4' : '#e5e7eb'};border-radius:8px;padding:20px;margin:20px 0">
+      <h2 style="margin:0 0 16px;font-size:16px;color:${isConfirmed ? '#0d9488' : '#6b7280'}">📋 Booking Details</h2>
       <table style="border-collapse:collapse;width:100%">
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};width:38%;font-size:13px">Booking ID</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-size:13px"><strong>#${data.bookingId}</strong></td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};font-size:13px">Hotel</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-size:13px">${escapeHtml(data.hotelName)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};font-size:13px">Location</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-size:13px">${escapeHtml(data.hotelCity)}, ${escapeHtml(data.hotelCountry)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};font-size:13px">Plan</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-size:13px">${escapeHtml(data.planName)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-size:13px">${escapeHtml(data.checkInDate)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};font-size:13px">Time</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-size:13px">${escapeHtml(data.checkInTime)} – ${escapeHtml(data.checkOutTime)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-size:13px">${escapeHtml(guestCount)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#fef2f2'};font-size:13px">Amount</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#fecaca'};font-size:13px"><strong>$${data.totalPriceUsd.toFixed(2)} USD</strong></td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};width:38%;font-size:13px">Booking ID</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px"><strong>#${data.bookingId}</strong></td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Hotel</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.hotelName)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Location</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.hotelCity)}, ${escapeHtml(data.hotelCountry)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Plan</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.planName)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.checkInDate)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Time</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.checkInTime)} – ${escapeHtml(data.checkOutTime)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(guestCount)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Amount</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px"><strong>$${data.totalPriceUsd.toFixed(2)} USD</strong></td></tr>
       </table>
     </div>
 
@@ -436,7 +436,7 @@ export async function sendPaymentFailureEmail(
   const subject = `Payment Failed — DaydreamHub`;
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
-  <div style="background:#dc2626;color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
+  <div style="background:#6b7280;color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
     <div style="font-size:40px;margin-bottom:8px">⚠️</div>
     <h1 style="margin:0;font-size:22px;font-weight:700">Payment Failed</h1>
     <p style="margin:6px 0 0;opacity:0.85;font-size:14px">Your payment could not be processed</p>
@@ -446,11 +446,11 @@ export async function sendPaymentFailureEmail(
     <p style="font-size:16px;margin-top:0">Hello <strong>${escapeHtml(data.guestName)}</strong>,</p>
     <p style="color:#374151">We were unable to process your payment for the following booking:</p>
 
-    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;margin:20px 0">
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:20px 0">
       <table style="border-collapse:collapse;width:100%">
-        <tr><td style="padding:7px 10px;border:1px solid #fecaca;font-weight:600;background:#fef2f2;width:38%;font-size:13px">Hotel</td><td style="padding:7px 10px;border:1px solid #fecaca;font-size:13px">${escapeHtml(data.hotelName)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid #fecaca;font-weight:600;background:#fef2f2;font-size:13px">Plan</td><td style="padding:7px 10px;border:1px solid #fecaca;font-size:13px">${escapeHtml(data.planName)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid #fecaca;font-weight:600;background:#fef2f2;font-size:13px">Reason</td><td style="padding:7px 10px;border:1px solid #fecaca;font-size:13px;color:#dc2626">${escapeHtml(data.errorMessage)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;width:38%;font-size:13px">Hotel</td><td style="padding:7px 10px;border:1px solid #e5e7eb;font-size:13px">${escapeHtml(data.hotelName)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;font-size:13px">Plan</td><td style="padding:7px 10px;border:1px solid #e5e7eb;font-size:13px">${escapeHtml(data.planName)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;font-size:13px">Reason</td><td style="padding:7px 10px;border:1px solid #e5e7eb;font-size:13px;color:#6b7280">${escapeHtml(data.errorMessage)}</td></tr>
       </table>
     </div>
 
