@@ -158,9 +158,13 @@ const directionLabels: Record<string, string> = {
               </td>
               <td class="px-4 py-3 text-slate-500 text-xs">{m.created_at?.slice(0, 16) || "-"}</td>
               <td class="px-4 py-3 text-center">
-                <a href={`/owner/bookings`} class="px-2 py-1 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors">
+                <button class="reply-btn px-2 py-1 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors"
+                  data-booking-id={m.booking_id}
+                  data-guest-name={m.guest_name || m.sender_name}
+                  data-hotel-name={m.hotel_name}
+                >
                   Reply
-                </a>
+                </button>
               </td>
             </tr>
           ))}
@@ -168,4 +172,120 @@ const directionLabels: Record<string, string> = {
       </table>
     </div>
   </div>
+  <!-- Reply Modal -->
+  <div id="reply-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/50" id="reply-modal-backdrop"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900">Message Thread</h2>
+            <p class="text-xs text-slate-500">Booking <span id="reply-booking-id" class="font-mono"></span> — <span id="reply-guest-name"></span></p>
+          </div>
+          <button id="reply-close" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+        </div>
+        <div id="reply-thread" class="flex-1 overflow-y-auto px-6 py-4 space-y-3 bg-slate-50 min-h-[120px]">
+          <p class="text-center text-slate-400 text-sm">Loading...</p>
+        </div>
+        <div class="px-6 py-4 border-t border-slate-200">
+          <textarea id="reply-content" rows="2" placeholder="Type your reply..."
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"></textarea>
+          <div class="flex justify-end gap-2 mt-3">
+            <button id="reply-cancel" class="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">Close</button>
+            <button id="reply-send" class="px-5 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </OwnerLayout>
+
+<script is:inline>
+(function() {
+  var modal = document.getElementById('reply-modal');
+  var thread = document.getElementById('reply-thread');
+  var content = document.getElementById('reply-content');
+  var bookingIdEl = document.getElementById('reply-booking-id');
+  var guestNameEl = document.getElementById('reply-guest-name');
+  var currentBookingId = null;
+
+  function openModal(bookingId, guestName, hotelName) {
+    currentBookingId = bookingId;
+    bookingIdEl.textContent = '#' + bookingId;
+    guestNameEl.textContent = guestName || 'Guest';
+    content.value = '';
+    thread.innerHTML = '<p class="text-center text-slate-400 text-sm">Loading...</p>';
+    modal.classList.remove('hidden');
+    loadThread(bookingId);
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+    currentBookingId = null;
+  }
+
+  async function loadThread(bookingId) {
+    try {
+      var res = await fetch('/api/owner/booking-messages?booking_id=' + bookingId);
+      var data = await res.json();
+      var msgs = data.messages || [];
+      if (msgs.length === 0) {
+        thread.innerHTML = '<p class="text-center text-slate-400 text-sm">No messages yet</p>';
+        return;
+      }
+      var html = '';
+      msgs.forEach(function(m) {
+        var isHotel = m.sender_type === 'hotel';
+        html += '<div class="' + (isHotel ? 'text-right' : 'text-left') + '">' +
+          '<div class="inline-block max-w-[85%] px-3 py-2 rounded-xl text-sm ' +
+          (isHotel ? 'bg-indigo-500 text-white' : 'bg-white border border-slate-200 text-slate-700') + '">' +
+          m.content.replace(/</g, '&lt;') + '</div>' +
+          '<div class="text-xs text-slate-400 mt-0.5">' + m.sender_name + ' · ' + (m.created_at || '').slice(0, 16) + '</div></div>';
+      });
+      thread.innerHTML = html;
+      thread.scrollTop = thread.scrollHeight;
+    } catch (e) {
+      thread.innerHTML = '<p class="text-center text-red-400 text-sm">Failed to load messages</p>';
+    }
+  }
+
+  // Reply buttons
+  document.querySelectorAll('.reply-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      openModal(btn.dataset.bookingId, btn.dataset.guestName, btn.dataset.hotelName);
+    });
+  });
+
+  // Close
+  document.getElementById('reply-close').addEventListener('click', closeModal);
+  document.getElementById('reply-cancel').addEventListener('click', closeModal);
+  document.getElementById('reply-modal-backdrop').addEventListener('click', closeModal);
+
+  // Send
+  document.getElementById('reply-send').addEventListener('click', async function() {
+    var msg = content.value.trim();
+    if (!msg || !currentBookingId) return;
+    var sendBtn = this;
+    sendBtn.textContent = 'Sending...';
+    sendBtn.disabled = true;
+    try {
+      var res = await fetch('/api/owner/booking-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ booking_id: Number(currentBookingId), content: msg })
+      });
+      var data = await res.json();
+      if (data.success) {
+        content.value = '';
+        await loadThread(currentBookingId);
+      } else {
+        alert(data.error || 'Failed to send');
+      }
+    } catch (e) {
+      alert('Network error');
+    }
+    sendBtn.textContent = 'Send';
+    sendBtn.disabled = false;
+  });
+})();
+</script>
