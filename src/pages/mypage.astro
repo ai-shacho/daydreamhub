@@ -59,6 +59,22 @@ try {
       LIMIT 50
     `).bind(currentUser.email).all();
     bookings = result?.results ?? [];
+
+    // Fetch unread message counts per booking (hotel→guest, unread by guest)
+    if (bookings.length > 0) {
+      const bookingIds = bookings.map((b: any) => b.id);
+      const ph = bookingIds.map(() => '?').join(',');
+      const unreadResult = await DB.prepare(
+        `SELECT booking_id, COUNT(*) as unread_count FROM booking_messages
+         WHERE booking_id IN (${ph}) AND sender_type = 'hotel' AND is_read = 0
+         GROUP BY booking_id`
+      ).bind(...bookingIds).all();
+      const unreadMap: Record<number, number> = {};
+      for (const r of (unreadResult?.results || []) as any[]) {
+        unreadMap[r.booking_id] = r.unread_count;
+      }
+      bookings = bookings.map((b: any) => ({ ...b, unread_messages: unreadMap[b.id] || 0 }));
+    }
   }
 } catch (e: any) {
   error = 'Failed to load bookings.';
@@ -194,13 +210,16 @@ function formatDate(dateStr: string): string {
                         class="text-xs text-teal-600 hover:text-teal-700 font-medium border border-teal-200 hover:border-teal-400 px-3 py-1.5 rounded-lg transition-colors">
                         View Hotel
                       </a>
-                      {(b.status === 'confirmed' || b.status === 'pending_confirmation') && (
+                      {(b.status !== 'failed') && (
                         <button
-                          class="btn-message-hotel text-xs text-blue-600 hover:text-blue-700 font-medium border border-blue-200 hover:border-blue-400 px-3 py-1.5 rounded-lg transition-colors"
+                          class="btn-message-hotel relative text-xs text-blue-600 hover:text-blue-700 font-medium border border-blue-200 hover:border-blue-400 px-3 py-1.5 rounded-lg transition-colors"
                           data-booking-id={b.id}
                           data-hotel-name={b.hotel_name}
                         >
                           💬 Message
+                          {b.unread_messages > 0 && (
+                            <span class="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">{b.unread_messages}</span>
+                          )}
                         </button>
                       )}
                       {(b.status === 'confirmed' || b.status === 'completed') && (
