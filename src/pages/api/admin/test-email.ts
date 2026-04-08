@@ -1,27 +1,16 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const GET: APIRoute = async ({ request, locals }) => {
   const json = { 'Content-Type': 'application/json' };
   const runtime = (locals as any).runtime;
-  const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-  }
 
   const resendKey = runtime?.env?.RESEND_API_KEY;
   if (!resendKey) {
-    return new Response(JSON.stringify({ error: 'RESEND_API_KEY is not configured' }), { status: 500, headers: json });
+    return new Response(JSON.stringify({ error: 'RESEND_API_KEY is not configured', hint: 'Set it in Cloudflare Pages > Settings > Environment Variables' }), { status: 500, headers: json });
   }
 
-  let body: any;
-  try { body = await request.json(); } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: json });
-  }
-
-  const to = body.to || admin.email;
+  const url = new URL(request.url);
+  const to = url.searchParams.get('to') || 'daydreamhub.contact@gmail.com';
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
