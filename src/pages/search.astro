@@ -388,7 +388,7 @@ function buildUrl(overrides: Record<string, string>) {
               type="text"
               name="checkin"
               id="search-checkin-fp"
-              placeholder="MM / DD / YYYY"
+              placeholder="YYYY-MM-DD"
               autocomplete="off"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
@@ -865,7 +865,7 @@ function buildUrl(overrides: Record<string, string>) {
       if (window.flatpickr) {
         window.flatpickr('#search-checkin-fp', {
           locale: 'en',
-          dateFormat: 'm/d/Y',
+          dateFormat: 'Y-m-d',
           disableMobile: true,
           allowInput: true,
         });

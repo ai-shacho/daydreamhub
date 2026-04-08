@@ -623,7 +623,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
             </div>
             <div>
               <label class="block text-xs text-gray-600 mb-1 font-semibold">日付</label>
-              <input type="text" name="checkin" id="checkin-fp" placeholder="MM / DD / YYYY" autocomplete="off" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              <input type="text" name="checkin" id="checkin-fp" placeholder="YYYY-MM-DD" autocomplete="off" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
             <div>
               <label class="block text-xs text-gray-600 mb-1 font-semibold">チェックイン</label>
@@ -1802,7 +1802,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       if (window.flatpickr) {
         window.flatpickr('#checkin-fp', {
           locale: 'ja',
-          dateFormat: 'm/d/Y',
+          dateFormat: 'Y-m-d',
           disableMobile: true,
           allowInput: true,
         });
