@@ -59,7 +59,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // 登録完了メールを送信（失敗しても登録自体は成功扱い）
     const resendKey = env?.RESEND_API_KEY;
     if (resendKey) {
-      sendWelcomeEmail(resendKey, { name, email }).catch(() => {});
+      sendWelcomeEmail(resendKey, { name, email }).catch((err) => {
+        console.error('Welcome email failed:', email, err);
+      });
+    } else {
+      console.warn('RESEND_API_KEY not configured — welcome email skipped for', email);
     }
 
     return new Response(JSON.stringify({ ok: true }), { status: 201, headers: json });
