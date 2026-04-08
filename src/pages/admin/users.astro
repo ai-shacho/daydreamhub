@@ -133,6 +133,16 @@ const roleColors: Record<string, string> = {
                   >
                     Edit
                   </button>
+                  {u.role !== 'admin' && (
+                    <button
+                      class="delete-user-btn px-2 py-1 text-xs text-red-600 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors"
+                      data-id={u.id}
+                      data-name={u.name}
+                      data-email={u.email}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>
@@ -268,6 +278,20 @@ const roleColors: Record<string, string> = {
   document.getElementById('user-modal-close')?.addEventListener('click', closeModal);
   document.getElementById('user-form-cancel')?.addEventListener('click', closeModal);
   document.getElementById('user-modal-backdrop')?.addEventListener('click', closeModal);
+
+  document.querySelectorAll('.delete-user-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const name = btn.getAttribute('data-name');
+      const email = btn.getAttribute('data-email');
+      if (!confirm(`Delete user "${name}" (${email})?\n\nThis action cannot be undone.`)) return;
+      try {
+        const res = await fetch(`/api/admin/users?id=${id}`, { method: 'DELETE' });
+        if (res.ok) { location.reload(); }
+        else { const d = await res.json(); alert('Failed: ' + (d.error || 'Unknown error')); }
+      } catch { alert('Network error'); }
+    });
+  });
 
   document.querySelectorAll('.edit-role-btn').forEach((btn) => {
     btn.addEventListener('click', () => openModal('edit', {

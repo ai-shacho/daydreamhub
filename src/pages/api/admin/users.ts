@@ -94,3 +94,25 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Failed to update user', details: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 };
+
+export const DELETE: APIRoute = async ({ request, locals }) => {
+  const db = (locals as any).runtime?.env?.DB;
+  if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+
+  const url = new URL(request.url);
+  const id = url.searchParams.get('id');
+  if (!id) return new Response(JSON.stringify({ error: 'id is required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+
+  // Prevent deleting admin accounts
+  const user = await db.prepare('SELECT role FROM users WHERE id = ?').bind(Number(id)).first();
+  if (!user) return new Response(JSON.stringify({ error: 'User not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+  if ((user as any).role === 'admin') return new Response(JSON.stringify({ error: 'Cannot delete admin accounts' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+
+  try {
+    await db.prepare('DELETE FROM users WHERE id = ?').bind(Number(id)).run();
+    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: 'Failed to delete user', details: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+};
