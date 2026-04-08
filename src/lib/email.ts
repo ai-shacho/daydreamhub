@@ -7,6 +7,34 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+const SITE_URL = 'https://daydreamhub.com';
+
+function hotelLink(hotelName: string, hotelSlug?: string): string {
+  const name = escapeHtml(hotelName);
+  if (hotelSlug) {
+    return `<a href="${SITE_URL}/hotel/${hotelSlug}" style="color:#0d9488;text-decoration:none;font-weight:600">${name}</a>`;
+  }
+  return `<strong>${name}</strong>`;
+}
+
+function emailFooter(): string {
+  return `
+    <div style="margin-top:32px;padding-top:24px;border-top:1px solid #e5e7eb;text-align:center">
+      <a href="${SITE_URL}" style="text-decoration:none">
+        <span style="font-size:18px;font-weight:700;color:#4b5563">DayDream</span><span style="font-size:18px;font-weight:700;color:#5ba8c8">Hub</span>
+      </a>
+      <p style="color:#9ca3af;font-size:11px;margin:8px 0 0;line-height:1.6">
+        Day-Use Hotel Booking Worldwide<br>
+        <a href="${SITE_URL}" style="color:#9ca3af">${SITE_URL.replace('https://', '')}</a>
+        &nbsp;|&nbsp; <a href="${SITE_URL}/contact" style="color:#9ca3af">Contact Us</a>
+        &nbsp;|&nbsp; <a href="${SITE_URL}/faq" style="color:#9ca3af">FAQ</a>
+      </p>
+      <p style="color:#d1d5db;font-size:10px;margin:12px 0 0">
+        &copy; 2026 Day Dream Hub.com LLC All Rights Reserved.
+      </p>
+    </div>`;
+}
+
 async function sendEmail(params: {
   apiKey: string;
   from: string;
@@ -76,10 +104,7 @@ export async function sendWelcomeEmail(
       </a>
     </div>
 
-    <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
-      You're receiving this because you just registered at <a href="https://daydreamhub.com" style="color:#0d9488">daydreamhub.com</a>.<br>
-      If you didn't create this account, please <a href="https://daydreamhub.com/contact" style="color:#0d9488">contact us</a>.
-    </p>
+    ${emailFooter()}
   </div>
 </div>`;
 
@@ -121,9 +146,9 @@ export async function sendOwnerAccountEmail(
       </a>
     </div>
     <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
-      We recommend changing your password after your first login.<br>
-      If you have any questions, please <a href="https://daydreamhub.com/contact" style="color:#4f46e5">contact us</a>.
+      We recommend changing your password after your first login.
     </p>
+    ${emailFooter()}
   </div>
 </div>`;
 
@@ -269,6 +294,7 @@ export async function sendGuestBookingStatusUpdate(
     totalPriceUsd: number;
     status: 'confirmed' | 'cancelled';
     cancelReason?: string;
+    hotelSlug?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const isConfirmed = data.status === 'confirmed';
@@ -281,7 +307,7 @@ export async function sendGuestBookingStatusUpdate(
   const headerTitle = isConfirmed ? 'Booking Confirmed!' : 'Booking Cancelled';
   const headerSub = isConfirmed
     ? 'Your day-use hotel booking has been confirmed.'
-    : 'Unfortunately, your booking has been cancelled.';
+    : 'Unfortunately, your booking request could not be accommodated.';
 
   const guestCount = data.children > 0
     ? `${data.adults} adult${data.adults > 1 ? 's' : ''}, ${data.children} child${data.children > 1 ? 'ren' : ''}`
@@ -300,14 +326,14 @@ export async function sendGuestBookingStatusUpdate(
 
     ${isConfirmed
       ? `<p style="color:#374151">Great news! <strong>${escapeHtml(data.hotelName)}</strong> has confirmed your booking. Please arrive on time and present your booking ID at check-in.</p>`
-      : `<p style="color:#374151">We're sorry, but <strong>${escapeHtml(data.hotelName)}</strong> was unable to accommodate your booking.${data.cancelReason ? ` Reason: ${escapeHtml(data.cancelReason)}` : ''}</p>`
+      : `<p style="color:#374151">We're sorry, but <strong>${escapeHtml(data.hotelName)}</strong> was unable to accommodate your booking request at this time.${data.cancelReason ? ` Reason: ${escapeHtml(data.cancelReason)}` : ''}</p>`
     }
 
     <div style="background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};border:1px solid ${isConfirmed ? '#99f6e4' : '#e5e7eb'};border-radius:8px;padding:20px;margin:20px 0">
       <h2 style="margin:0 0 16px;font-size:16px;color:${isConfirmed ? '#0d9488' : '#6b7280'}">📋 Booking Details</h2>
       <table style="border-collapse:collapse;width:100%">
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};width:38%;font-size:13px">Booking ID</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px"><strong>#${data.bookingId}</strong></td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Hotel</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.hotelName)}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Hotel</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${hotelLink(data.hotelName, data.hotelSlug)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Location</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.hotelCity)}, ${escapeHtml(data.hotelCountry)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Plan</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.planName)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.checkInDate)}</td></tr>
@@ -332,10 +358,7 @@ export async function sendGuestBookingStatusUpdate(
         </div>`
     }
 
-    <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
-      Questions? <a href="https://daydreamhub.com/contact" style="color:#0d9488">Contact us</a> or reply to this email.<br>
-      DaydreamHub — Day-Use Hotel Booking Worldwide
-    </p>
+    ${emailFooter()}
   </div>
 </div>`;
 
@@ -408,10 +431,7 @@ export async function sendGuestBookingConfirmation(
       <a href="https://daydreamhub.com/mypage" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Check Booking Status</a>
     </div>
 
-    <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
-      Questions? Reply to this email or visit <a href="https://daydreamhub.com" style="color:#0d9488">daydreamhub.com</a><br>
-      DaydreamHub — Day-Use Hotel Booking Worldwide
-    </p>
+    ${emailFooter()}
   </div>
 </div>`;
   return sendEmail({
@@ -464,10 +484,7 @@ export async function sendPaymentFailureEmail(
       <a href="https://daydreamhub.com" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Return to DaydreamHub</a>
     </div>
 
-    <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px">
-      Questions? <a href="https://daydreamhub.com/contact" style="color:#0d9488">Contact us</a> or reply to this email.<br>
-      DaydreamHub — Day-Use Hotel Booking Worldwide
-    </p>
+    ${emailFooter()}
   </div>
 </div>`;
 
