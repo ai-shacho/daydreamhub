@@ -1,0 +1,116 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = Astro.locals.runtime as any;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect("/admin/login");
+---
+
+<AdminLayout title="SQL Console" activeNav="sql">
+  <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-sm text-amber-800">
+    <strong>Warning:</strong> This console executes SQL directly on the production database. Use with caution.
+  </div>
+
+  <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+    <h2 class="text-base font-semibold text-slate-900 mb-3">Execute SQL</h2>
+    <textarea id="sql-input" rows="12" placeholder="Enter SQL statements here..."
+      class="w-full px-4 py-3 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none resize-y"></textarea>
+    <div class="flex items-center gap-3 mt-3">
+      <button id="run-btn" class="px-5 py-2.5 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors">
+        Run SQL
+      </button>
+      <button id="clear-btn" class="px-4 py-2.5 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50">
+        Clear
+      </button>
+      <span id="status" class="text-sm text-slate-500"></span>
+    </div>
+  </div>
+
+  <div id="results" class="space-y-4"></div>
+</AdminLayout>
+
+<script>
+  const input = document.getElementById('sql-input') as HTMLTextAreaElement;
+  const runBtn = document.getElementById('run-btn') as HTMLButtonElement;
+  const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
+  const status = document.getElementById('status') as HTMLElement;
+  const results = document.getElementById('results') as HTMLElement;
+
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    results.innerHTML = '';
+    status.textContent = '';
+  });
+
+  runBtn.addEventListener('click', async () => {
+    const sql = input.value.trim();
+    if (!sql) return;
+
+    runBtn.disabled = true;
+    runBtn.textContent = 'Running...';
+    status.textContent = '';
+    results.innerHTML = '';
+
+    try {
+      const res = await fetch('/api/admin/sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        status.textContent = 'Error';
+        status.className = 'text-sm text-red-600';
+        results.innerHTML = `<div class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700 font-mono whitespace-pre-wrap">${data.error || 'Unknown error'}</div>`;
+        return;
+      }
+
+      status.textContent = `Completed — ${data.results?.length || 0} statement(s)`;
+      status.className = 'text-sm text-emerald-600';
+
+      for (const r of (data.results || [])) {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-xl border border-slate-200 overflow-hidden';
+
+        if (r.error) {
+          card.innerHTML = `
+            <div class="px-4 py-2 bg-red-50 border-b border-red-200 text-xs text-red-700 font-mono">${escapeHtml(r.sql?.slice(0, 100) || '')}</div>
+            <div class="p-4 text-sm text-red-600">${escapeHtml(r.error)}</div>`;
+        } else if (r.rows && r.rows.length > 0) {
+          const cols = Object.keys(r.rows[0]);
+          let html = `<div class="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-500 font-mono">${escapeHtml(r.sql?.slice(0, 100) || '')} — ${r.rows.length} rows</div>`;
+          html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr>';
+          for (const c of cols) html += `<th class="px-3 py-2 text-left text-xs font-semibold text-slate-500 bg-slate-50 border-b">${escapeHtml(c)}</th>`;
+          html += '</tr></thead><tbody>';
+          for (const row of r.rows.slice(0, 200)) {
+            html += '<tr class="hover:bg-slate-50">';
+            for (const c of cols) html += `<td class="px-3 py-1.5 border-b border-slate-100 text-xs font-mono">${escapeHtml(String(row[c] ?? ''))}</td>`;
+            html += '</tr>';
+          }
+          if (r.rows.length > 200) html += `<tr><td colspan="${cols.length}" class="px-3 py-2 text-center text-xs text-slate-400">... ${r.rows.length - 200} more rows</td></tr>`;
+          html += '</tbody></table></div>';
+          card.innerHTML = html;
+        } else {
+          card.innerHTML = `
+            <div class="px-4 py-2 bg-emerald-50 border-b border-emerald-200 text-xs text-emerald-700 font-mono">${escapeHtml(r.sql?.slice(0, 100) || '')}</div>
+            <div class="p-3 text-sm text-slate-600">OK — ${r.changes ?? 0} row(s) affected</div>`;
+        }
+        results.appendChild(card);
+      }
+    } catch (e) {
+      status.textContent = 'Network error';
+      status.className = 'text-sm text-red-600';
+    } finally {
+      runBtn.disabled = false;
+      runBtn.textContent = 'Run SQL';
+    }
+  });
+
+  function escapeHtml(s: string) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+</script>
