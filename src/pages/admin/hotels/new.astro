@@ -54,6 +54,21 @@ const PROPERTY_TYPES = ['hotel','villa','resort','apartment','clinic','spa','wel
           <input type="text" name="address" placeholder="e.g. 123 Sukhumvit Rd, Bangkok" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Latitude</label>
+          <input id="latitude" type="number" name="latitude" step="any" placeholder="e.g. 13.7563"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Longitude</label>
+          <input id="longitude" type="number" name="longitude" step="any" placeholder="e.g. 100.5018"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div class="col-span-2">
+          <button type="button" id="geocode-btn" class="text-sm text-teal-600 hover:text-teal-800 font-medium">
+            📍 Get coordinates from address / city / country
+          </button>
+        </div>
+        <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Property Type</label>
           <select name="property_type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
             {PROPERTY_TYPES.map(pt => <option value={pt}>{pt.charAt(0).toUpperCase() + pt.slice(1)}</option>)}
@@ -174,6 +189,31 @@ document.querySelector('[name="name"]')?.addEventListener('input', function() {
 });
 document.querySelector('[name="slug"]')?.addEventListener('input', function() {
   this.dataset.manual = 'true';
+});
+
+// Geocode from address
+document.getElementById('geocode-btn')?.addEventListener('click', async function() {
+  const address = document.querySelector('[name="address"]')?.value || '';
+  const city = document.querySelector('[name="city"]')?.value || '';
+  const country = document.querySelector('[name="country"]')?.value || '';
+  const query = [address, city, country].filter(Boolean).join(', ');
+  if (!query) { alert('Please enter an address, city, or country first.'); return; }
+
+  this.textContent = '📍 Searching...';
+  try {
+    const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q=' + encodeURIComponent(query));
+    const data = await res.json();
+    if (data && data[0]) {
+      document.getElementById('latitude').value = parseFloat(data[0].lat).toFixed(6);
+      document.getElementById('longitude').value = parseFloat(data[0].lon).toFixed(6);
+      this.textContent = '📍 Coordinates found!';
+    } else {
+      this.textContent = '📍 Not found — please enter manually';
+    }
+  } catch {
+    this.textContent = '📍 Error — please enter manually';
+  }
+  setTimeout(() => { this.textContent = '📍 Get coordinates from address / city / country'; }, 3000);
 });
 
 document.getElementById('new-hotel-form')?.addEventListener('submit', async function(e) {
