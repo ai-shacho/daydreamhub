@@ -114,20 +114,20 @@ try {
     // What's New: newsテーブル + ブログを統合
     try {
       const newsResult = await DB.prepare(
-        "SELECT title, title_ja, content, category, published_at FROM news WHERE published_at IS NOT NULL AND category != 'blog' ORDER BY published_at DESC LIMIT 5"
+        "SELECT title, title_ja, content, content_ja, category, published_at FROM news WHERE published_at IS NOT NULL AND category != 'blog' ORDER BY published_at DESC LIMIT 5"
       ).all();
       const newsItems = (newsResult?.results || []).map((n: any) => ({
-        title: n.title_ja || n.title, published_at: n.published_at, link: null,
+        title: n.title_ja || n.title, content: n.content_ja || n.content, category: n.category, published_at: n.published_at, link: null,
       }));
       const blogNewsItems = recentBlogs.slice(0, 5).map((b: any) => ({
-        title: b.title_ja || b.title, published_at: b.published_at, link: `/blog/${b.slug}`,
+        title: b.title_ja || b.title, content: b.excerpt, category: 'blog', published_at: b.published_at, link: `/blog/${b.slug}`,
       }));
       whatsNewItems = [...newsItems, ...blogNewsItems]
         .sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime())
         .slice(0, 5);
     } catch {
       whatsNewItems = recentBlogs.slice(0, 5).map((b: any) => ({
-        title: b.title_ja || b.title, published_at: b.published_at, link: `/blog/${b.slug}`,
+        title: b.title_ja || b.title, content: b.excerpt, category: 'blog', published_at: b.published_at, link: `/blog/${b.slug}`,
       }));
     }
 
@@ -925,34 +925,49 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
   <!-- What's New -->
   {whatsNewItems.length > 0 && (
     <section class="py-10 bg-white border-t border-gray-100">
-      <div class="max-w-7xl mx-auto px-4">
-        <div class="flex items-center justify-between mb-5">
-          <h2 class="text-2xl font-bold text-gray-800">最新情報</h2>
+      <div class="max-w-3xl mx-auto px-4">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-800">最新情報</h2>
+            <p class="text-sm text-gray-500 mt-1">DayDreamHubの最新のお知らせ、更新情報をお届けします。</p>
+          </div>
           <a href="/ja/news" class="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1">
             もっと見る →
           </a>
         </div>
-        <ul class="space-y-3 max-w-2xl">
+        <div class="space-y-4">
           {whatsNewItems.map((item: any) => (
-            <li class="flex items-start gap-3">
-              <span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-teal-500 flex-shrink-0"></span>
-              <div>
-                {item.link ? (
-                  <a href={item.link} class="text-sm text-gray-800 hover:text-teal-700 transition-colors font-medium leading-snug">
-                    {item.title}
-                  </a>
-                ) : (
-                  <span class="text-sm text-gray-800 font-medium leading-snug">{item.title}</span>
-                )}
-                {item.published_at && (
-                  <span class="block text-xs text-gray-400 mt-0.5">
-                    {new Date(item.published_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' })}
-                  </span>
-                )}
+            <article class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+              <div class="flex items-center gap-3 mb-2">
+                <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  item.category === 'blog' ? 'bg-teal-100 text-teal-700' :
+                  item.category === 'update' ? 'bg-blue-100 text-blue-700' :
+                  item.category === 'feature' ? 'bg-purple-100 text-purple-700' :
+                  item.category === 'policy' ? 'bg-amber-100 text-amber-700' :
+                  'bg-slate-100 text-slate-600'
+                }`}>{
+                  item.category === 'blog' ? 'ブログ' :
+                  item.category === 'update' ? 'お知らせ' :
+                  item.category === 'feature' ? '新機能' :
+                  item.category === 'policy' ? '規約更新' :
+                  item.category === 'maintenance' ? 'メンテナンス' :
+                  item.category
+                }</span>
+                <time class="text-xs text-gray-400">
+                  {new Date(item.published_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </time>
               </div>
-            </li>
+              {item.link ? (
+                <a href={item.link} class="text-base font-semibold text-gray-900 hover:text-cyan-600 transition-colors">{item.title}</a>
+              ) : (
+                <h3 class="text-base font-semibold text-gray-900">{item.title}</h3>
+              )}
+              {item.content && (
+                <p class="text-sm text-gray-600 mt-1 line-clamp-2">{item.content}</p>
+              )}
+            </article>
           ))}
-        </ul>
+        </div>
       </div>
     </section>
   )}
