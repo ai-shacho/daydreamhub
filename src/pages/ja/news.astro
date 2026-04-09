@@ -2,14 +2,40 @@
 import Layout from '../../layouts/Layout.astro';
 
 const db = (Astro.locals as any).runtime?.env?.DB;
-let news: any[] = [];
+let items: any[] = [];
 
 if (db) {
   try {
-    const result = await db.prepare(
-      "SELECT * FROM news WHERE published_at IS NOT NULL ORDER BY published_at DESC LIMIT 50"
+    // newsテーブルから取得（blog以外）
+    const newsResult = await db.prepare(
+      "SELECT title, title_ja, content, content_ja, category, published_at FROM news WHERE published_at IS NOT NULL AND category != 'blog' ORDER BY published_at DESC LIMIT 50"
     ).all();
-    news = result?.results || [];
+    const newsItems = (newsResult?.results || []).map((n: any) => ({
+      title: n.title_ja || n.title,
+      content: n.content_ja || n.content,
+      category: n.category,
+      published_at: n.published_at,
+      type: 'news',
+      link: null,
+    }));
+
+    // blog_postsテーブルから取得
+    const blogResult = await db.prepare(
+      "SELECT title, title_ja, excerpt, slug, published_at FROM blog_posts WHERE published_at IS NOT NULL ORDER BY published_at DESC LIMIT 50"
+    ).all();
+    const blogItems = (blogResult?.results || []).map((b: any) => ({
+      title: b.title_ja || b.title,
+      content: b.excerpt,
+      category: 'blog',
+      published_at: b.published_at,
+      type: 'blog',
+      link: `/blog/${b.slug}`,
+    }));
+
+    // 統合して日付順にソート
+    items = [...newsItems, ...blogItems].sort((a, b) =>
+      new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
+    );
   } catch {}
 }
 
@@ -36,21 +62,25 @@ function formatDate(dateStr: string): string {
     <h1 class="text-3xl font-bold text-gray-900 mb-2">新着情報</h1>
     <p class="text-gray-500 mb-8">DayDreamHubの最新のお知らせ、更新情報をお届けします。</p>
 
-    {news.length === 0 ? (
+    {items.length === 0 ? (
       <div class="text-center py-16 text-gray-400">
         <p class="text-lg">まだお知らせはありません。</p>
       </div>
     ) : (
       <div class="space-y-6">
-        {news.map((n: any) => (
+        {items.map((n: any) => (
           <article class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div class="flex items-center gap-3 mb-3">
               <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${categoryColors[n.category] || "bg-slate-100 text-slate-600"}`}>{categoryLabels[n.category] || n.category}</span>
               <time class="text-xs text-gray-400">{formatDate(n.published_at)}</time>
             </div>
-            <h2 class="text-lg font-semibold text-gray-900 mb-2">{n.title_ja || n.title}</h2>
-            {(n.content_ja || n.content) && (
-              <p class="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{n.content_ja || n.content}</p>
+            {n.link ? (
+              <a href={n.link} class="text-lg font-semibold text-gray-900 hover:text-cyan-600 transition-colors">{n.title}</a>
+            ) : (
+              <h2 class="text-lg font-semibold text-gray-900">{n.title}</h2>
+            )}
+            {n.content && (
+              <p class="text-sm text-gray-600 leading-relaxed mt-2 whitespace-pre-line">{n.content}</p>
             )}
           </article>
         ))}

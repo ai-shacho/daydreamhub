@@ -38,6 +38,7 @@ let allCities: any[] = [];
 let totalHotels = 0;
 let totalPlans = 0;
 let recentBlogs: any[] = [];
+let whatsNewItems: any[] = [];
 let mapHotels: any[] = [];
 let popularPlans: any[] = [];
 let hotelPlanTypes: Record<number, string[]> = {};
@@ -109,6 +110,26 @@ try {
     totalPlans = statsP?.c || 0;
     recentBlogs = blogResult?.results ?? [];
     mapHotels = mapResult?.results ?? [];
+
+    // What's New: newsテーブル + ブログを統合
+    try {
+      const newsResult = await DB.prepare(
+        "SELECT title, title_ja, content, category, published_at FROM news WHERE published_at IS NOT NULL AND category != 'blog' ORDER BY published_at DESC LIMIT 5"
+      ).all();
+      const newsItems = (newsResult?.results || []).map((n: any) => ({
+        title: n.title_ja || n.title, published_at: n.published_at, link: null,
+      }));
+      const blogNewsItems = recentBlogs.slice(0, 5).map((b: any) => ({
+        title: b.title_ja || b.title, published_at: b.published_at, link: `/blog/${b.slug}`,
+      }));
+      whatsNewItems = [...newsItems, ...blogNewsItems]
+        .sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime())
+        .slice(0, 5);
+    } catch {
+      whatsNewItems = recentBlogs.slice(0, 5).map((b: any) => ({
+        title: b.title_ja || b.title, published_at: b.published_at, link: `/blog/${b.slug}`,
+      }));
+    }
 
     categoryDefs.forEach((cat, i) => {
       categoryHotels[cat.planType] = categoryResults[i]?.results?.slice(0, 8) ?? [];
@@ -902,26 +923,30 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
   </section>
 
   <!-- What's New -->
-  {recentBlogs.length > 0 && (
+  {whatsNewItems.length > 0 && (
     <section class="py-10 bg-white border-t border-gray-100">
       <div class="max-w-7xl mx-auto px-4">
         <div class="flex items-center justify-between mb-5">
           <h2 class="text-2xl font-bold text-gray-800">最新情報</h2>
-          <a href="/ja/blog" class="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1">
+          <a href="/ja/news" class="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1">
             もっと見る →
           </a>
         </div>
         <ul class="space-y-3 max-w-2xl">
-          {recentBlogs.map((post: any) => (
+          {whatsNewItems.map((item: any) => (
             <li class="flex items-start gap-3">
               <span class="mt-1.5 w-1.5 h-1.5 rounded-full bg-teal-500 flex-shrink-0"></span>
               <div>
-                <a href={`/ja/blog/${post.slug}`} class="text-sm text-gray-800 hover:text-teal-700 transition-colors font-medium leading-snug">
-                  {post.title}
-                </a>
-                {post.published_at && (
+                {item.link ? (
+                  <a href={item.link} class="text-sm text-gray-800 hover:text-teal-700 transition-colors font-medium leading-snug">
+                    {item.title}
+                  </a>
+                ) : (
+                  <span class="text-sm text-gray-800 font-medium leading-snug">{item.title}</span>
+                )}
+                {item.published_at && (
                   <span class="block text-xs text-gray-400 mt-0.5">
-                    {new Date(post.published_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' })}
+                    {new Date(item.published_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric' })}
                   </span>
                 )}
               </div>
