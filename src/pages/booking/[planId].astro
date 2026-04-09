@@ -372,12 +372,36 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
               })()}
             </div>
             <div class="border-t border-gray-200 my-4"></div>
-            <div class="flex items-center justify-between mb-2">
-              <p class="text-base font-semibold text-gray-800">{t('booking.total', locale)}</p>
-              <p class="text-2xl font-bold text-[#45A2C1]">
-                ${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
-              </p>
-            </div>
+            {(() => {
+              const processingFee = Math.round(plan.price_usd * 0.06 * 100) / 100;
+              const serviceFeeBase = Math.round(plan.price_usd * 0.10 * 100) / 100;
+              const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
+              const total = Math.round((plan.price_usd + processingFee + serviceFee) * 100) / 100;
+              return (
+                <div class="space-y-1.5 text-sm mb-3">
+                  <div class="flex justify-between text-gray-600">
+                    <span>{locale === 'ja' ? 'プラン料金' : 'Plan Price'}</span>
+                    <span>${plan.price_usd.toFixed(2)}</span>
+                  </div>
+                  <div class="flex justify-between text-gray-600">
+                    <span>{locale === 'ja' ? '決済手数料 (6%)' : 'Processing Fee (6%)'}</span>
+                    <span>${processingFee.toFixed(2)}</span>
+                  </div>
+                  {serviceFee > 0 && (
+                    <div class="flex justify-between text-gray-600">
+                      <span>{locale === 'ja' ? 'サービス料' : 'Service Fee'}</span>
+                      <span>${serviceFee.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div class="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <p class="text-base font-semibold text-gray-800">{t('booking.total', locale)}</p>
+                    <p class="text-2xl font-bold text-[#45A2C1]">
+                      ${total.toFixed(2)} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
             <!-- Approval-based booking notice -->
             <div class="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 mb-3">
               <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

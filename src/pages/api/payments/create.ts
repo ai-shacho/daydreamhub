@@ -61,15 +61,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const hotel_id: number = (plan as any).hotel_id;
   const planName: string = (plan as any).name;
 
+  // Fee calculation
+  const processingFee = Math.round(price_usd * 0.06 * 100) / 100; // 6% processing fee
+  const serviceFeeBase = Math.round(price_usd * 0.10 * 100) / 100; // 10% of plan price
+  const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0; // top-up to $10 if under
+  const totalAmount = Math.round((price_usd + processingFee + serviceFee) * 100) / 100;
+
   try {
-    // [追加] 二重決済防止: リクエストごとに一意なキーを生成（既存処理には影響なし）
-    // 目的: 同一決済リクエストがネットワーク障害等で再送された場合の重複INSERT防止
-    // ※ キャンセル後の再予約など正当な操作はブロックしない（リクエストごとに新しいUUIDが生成されるため）
     const idempotencyKey = crypto.randomUUID();
 
-    // Step 2: Create PayPal order（idempotencyKey を PayPal-Request-Id ヘッダーとして付与）
+    // Step 2: Create PayPal order with total amount (plan + fees)
     const accessToken = await getAccessToken(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE);
-    const orderId = await createOrder(accessToken, price_usd, PAYPAL_MODE, planName, idempotencyKey);
+    const orderId = await createOrder(accessToken, totalAmount, PAYPAL_MODE, planName, idempotencyKey);
 
     // Step 3: Insert booking record with status='pending'
     // [変更前] idempotency_key カラムなし
@@ -92,7 +95,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         adults,
         children,
         infants,
-        price_usd,
+        totalAmount,
         notes || null,
         orderId,
         idempotencyKey  // [追加] 二重決済防止キー
