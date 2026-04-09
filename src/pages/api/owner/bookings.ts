@@ -124,9 +124,9 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   await db.prepare("UPDATE bookings SET status = ?, updated_at = datetime('now') WHERE id = ?").bind(status, id).run();
 
   // ゲストへ承認/却下メール送信
-  try {
-    const RESEND_API_KEY = runtime?.env?.RESEND_API_KEY || '';
-    if (RESEND_API_KEY) {
+  const RESEND_API_KEY = runtime?.env?.RESEND_API_KEY || '';
+  if (RESEND_API_KEY) {
+    try {
       const fullBooking = await db.prepare(`
         SELECT b.*, h.name as hotel_name, h.city, h.country, p.name as plan_name, p.check_in_time, p.check_out_time
         FROM bookings b
@@ -153,26 +153,23 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           status: status as 'confirmed' | 'cancelled',
         });
       }
-    }
+
       // DDH管理者へ通知
       const ADMIN_EMAIL = runtime?.env?.ADMIN_EMAIL || 'info@daydreamhub.com';
-      try {
-        const statusLabel = status === 'confirmed' ? 'Confirmed' : 'Rejected';
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from: 'DaydreamHub <noreply@daydreamhub.com>',
-            to: [ADMIN_EMAIL],
-            subject: `[Booking ${statusLabel}] #${id} — ${fullBooking?.hotel_name || ''}`,
-            html: `<div style="font-family:Arial,sans-serif"><h3>Booking ${statusLabel} by Owner</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${id}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${fullBooking?.guest_name || ''} (${fullBooking?.guest_email || ''})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${fullBooking?.hotel_name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Date:</td><td>${fullBooking?.check_in_date || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Status:</td><td><strong>${statusLabel}</strong></td></tr></table></div>`,
-          }),
-        });
-      } catch {}
+      const statusLabel = status === 'confirmed' ? 'Confirmed' : 'Rejected';
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'DaydreamHub <noreply@daydreamhub.com>',
+          to: [ADMIN_EMAIL],
+          subject: `[Booking ${statusLabel}] #${id} — ${fullBooking?.hotel_name || ''}`,
+          html: `<div style="font-family:Arial,sans-serif"><h3>Booking ${statusLabel} by Owner</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${id}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${fullBooking?.guest_name || ''} (${fullBooking?.guest_email || ''})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${fullBooking?.hotel_name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Date:</td><td>${fullBooking?.check_in_date || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Status:</td><td><strong>${statusLabel}</strong></td></tr></table></div>`,
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to send booking status emails:', e);
     }
-  } catch (e) {
-    console.error('Failed to send guest status email:', e);
-    // メール失敗してもステータス更新は成功扱い
   }
 
   return new Response(JSON.stringify({ success: true }), {

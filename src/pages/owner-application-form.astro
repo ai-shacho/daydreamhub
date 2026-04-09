@@ -31,10 +31,37 @@ import Layout from '../layouts/Layout.astro';
               class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
           </div>
           <div>
-            <label for="hotel_phone" class="block text-sm font-medium text-slate-700 mb-1.5">Property Phone Number <span class="text-red-500">*</span></label>
-            <p class="text-xs text-gray-500 mb-1.5">Please include the country code (e.g. +1, +81).</p>
-            <input id="hotel_phone" name="hotel_phone" type="tel" required placeholder="+81-3-1234-5678"
-              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Property Phone Number <span class="text-red-500">*</span></label>
+            <div class="flex gap-2">
+              <select id="hotel_phone_code" class="w-32 px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all bg-white">
+                <option value="+1">+1 (US/CA)</option>
+                <option value="+44">+44 (UK)</option>
+                <option value="+81" selected>+81 (JP)</option>
+                <option value="+82">+82 (KR)</option>
+                <option value="+86">+86 (CN)</option>
+                <option value="+852">+852 (HK)</option>
+                <option value="+886">+886 (TW)</option>
+                <option value="+65">+65 (SG)</option>
+                <option value="+66">+66 (TH)</option>
+                <option value="+84">+84 (VN)</option>
+                <option value="+62">+62 (ID)</option>
+                <option value="+60">+60 (MY)</option>
+                <option value="+63">+63 (PH)</option>
+                <option value="+91">+91 (IN)</option>
+                <option value="+61">+61 (AU)</option>
+                <option value="+49">+49 (DE)</option>
+                <option value="+33">+33 (FR)</option>
+                <option value="+39">+39 (IT)</option>
+                <option value="+34">+34 (ES)</option>
+                <option value="+7">+7 (RU)</option>
+                <option value="+55">+55 (BR)</option>
+                <option value="+52">+52 (MX)</option>
+                <option value="+971">+971 (AE)</option>
+              </select>
+              <input id="hotel_phone_number" type="tel" required placeholder="3-1234-5678"
+                class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            </div>
+            <input id="hotel_phone" name="hotel_phone" type="hidden" />
           </div>
           <div>
             <label for="site_url" class="block text-sm font-medium text-slate-700 mb-1.5">Website URL <span class="text-gray-400">(optional)</span></label>
@@ -65,9 +92,37 @@ import Layout from '../layouts/Layout.astro';
               class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
           </div>
           <div>
-            <label for="contact_phone" class="block text-sm font-medium text-slate-700 mb-1.5">Contact Person's Direct Phone <span class="text-red-500">*</span></label>
-            <input id="contact_phone" name="contact_phone" type="tel" required placeholder="+81-90-1234-5678"
-              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            <label class="block text-sm font-medium text-slate-700 mb-1.5">Contact Person's Direct Phone <span class="text-red-500">*</span></label>
+            <div class="flex gap-2">
+              <select id="contact_phone_code" class="w-32 px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all bg-white">
+                <option value="+1">+1 (US/CA)</option>
+                <option value="+44">+44 (UK)</option>
+                <option value="+81" selected>+81 (JP)</option>
+                <option value="+82">+82 (KR)</option>
+                <option value="+86">+86 (CN)</option>
+                <option value="+852">+852 (HK)</option>
+                <option value="+886">+886 (TW)</option>
+                <option value="+65">+65 (SG)</option>
+                <option value="+66">+66 (TH)</option>
+                <option value="+84">+84 (VN)</option>
+                <option value="+62">+62 (ID)</option>
+                <option value="+60">+60 (MY)</option>
+                <option value="+63">+63 (PH)</option>
+                <option value="+91">+91 (IN)</option>
+                <option value="+61">+61 (AU)</option>
+                <option value="+49">+49 (DE)</option>
+                <option value="+33">+33 (FR)</option>
+                <option value="+39">+39 (IT)</option>
+                <option value="+34">+34 (ES)</option>
+                <option value="+7">+7 (RU)</option>
+                <option value="+55">+55 (BR)</option>
+                <option value="+52">+52 (MX)</option>
+                <option value="+971">+971 (AE)</option>
+              </select>
+              <input id="contact_phone_number" type="tel" required placeholder="90-1234-5678"
+                class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+            </div>
+            <input id="contact_phone" name="contact_phone" type="hidden" />
           </div>
           <div>
             <label for="contact_method" class="block text-sm font-medium text-slate-700 mb-1.5">Preferred Contact Method (other than email) <span class="text-red-500">*</span></label>
@@ -179,6 +234,19 @@ document.getElementById('owner-application-form')?.addEventListener('submit', as
 
   errEl.className = 'hidden';
   successEl.className = 'hidden';
+
+  // Combine country code + number into hidden fields
+  const hotelCode = document.getElementById('hotel_phone_code')?.value || '';
+  const hotelNum = document.getElementById('hotel_phone_number')?.value?.trim() || '';
+  document.getElementById('hotel_phone').value = hotelNum ? hotelCode + hotelNum : '';
+
+  const contactCode = document.getElementById('contact_phone_code')?.value || '';
+  const contactNum = document.getElementById('contact_phone_number')?.value?.trim() || '';
+  document.getElementById('contact_phone').value = contactNum ? contactCode + contactNum : '';
+
+  if (!hotelNum) { errEl.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3'; errEl.textContent = 'Property phone number is required.'; return; }
+  if (!contactNum) { errEl.className = 'block bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-3'; errEl.textContent = 'Contact phone number is required.'; return; }
+
   btn.disabled = true;
   btn.textContent = 'Sending...';
 
