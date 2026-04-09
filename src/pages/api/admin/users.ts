@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { sendWelcomeEmail, sendOwnerAccountEmail } from '../../../lib/email';
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -50,6 +51,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
       "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)"
     ).bind(name, email, passwordHash, role).run();
     const user = await db.prepare('SELECT id FROM users WHERE email = ? LIMIT 1').bind(email).first();
+
+    // Send registration email
+    const resendKey = (locals as any).runtime?.env?.RESEND_API_KEY;
+    if (resendKey) {
+      try {
+        if (role === 'owner') {
+          await sendOwnerAccountEmail(resendKey, { name, email, password });
+        } else {
+          await sendWelcomeEmail(resendKey, { name, email });
+        }
+      } catch (e) {
+        console.error('Failed to send registration email:', e);
+      }
+    }
+
     return new Response(JSON.stringify({ success: true, id: user?.id, user: { name, email, role }, plainPassword: password }), { status: 201, headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

@@ -67,8 +67,33 @@ export const POST: APIRoute = async ({ request, locals }) => {
   </div>
 </div>`;
 
+  // Save to database
+  const db = env?.DB;
+  if (db) {
+    try {
+      await db.prepare(`
+        INSERT INTO owner_applications (
+          hotel_name, booking_email, hotel_phone, management_company, site_url,
+          contact_name, contact_email, contact_phone, contact_method,
+          messenger_url, whatsapp_url, line_url, other_sns_url,
+          payment_method, paypal_account, wise_account, payoneer_account
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        data.hotel_name, data.booking_email, data.hotel_phone,
+        data.management_company || '', data.site_url || '',
+        data.contact_name, data.contact_email, data.contact_phone,
+        data.contact_method || '',
+        data.messenger_url || '', data.whatsapp_url || '',
+        data.line_url || '', data.other_sns_url || '',
+        data.payment_method || '', data.paypal_account || '',
+        data.wise_account || '', data.payoneer_account || ''
+      ).run();
+    } catch (e) {
+      console.error('Failed to save owner application to DB:', e);
+    }
+  }
+
   if (!apiKey) {
-    // Fallback: log and return success (dev mode)
     console.log('Owner application received (no RESEND_API_KEY):', data);
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
