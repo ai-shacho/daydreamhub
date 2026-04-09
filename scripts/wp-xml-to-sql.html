@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WP XML → D1 SQL Converter</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #1e293b; padding: 24px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  .subtitle { color: #64748b; margin-bottom: 24px; }
+  .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .drop-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 48px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: #0d9488; background: #f0fdfa; }
+  .drop-zone p { color: #64748b; margin-top: 8px; }
+  input[type="file"] { display: none; }
+  .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: #0d9488; color: white; }
+  .btn-primary:hover { background: #0f766e; }
+  .btn-secondary { background: #e2e8f0; color: #475569; }
+  .btn-secondary:hover { background: #cbd5e1; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f8fafc; text-align: left; padding: 8px 12px; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #64748b; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+  tr:hover { background: #f8fafc; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-yellow { background: #fef9c3; color: #854d0e; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  #output-area { display: none; }
+  #sql-output { width: 100%; height: 300px; font-family: 'SF Mono', Monaco, monospace; font-size: 12px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; resize: vertical; }
+  .stats { display: flex; gap: 16px; margin-bottom: 16px; }
+  .stat { flex: 1; background: #f8fafc; border-radius: 8px; padding: 16px; text-align: center; }
+  .stat-num { font-size: 28px; font-weight: 700; color: #0d9488; }
+  .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; }
+  .password-setting { margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+  .password-setting input { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; width: 200px; }
+  .password-setting label { font-size: 14px; font-weight: 600; color: #475569; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>WP XML → D1 SQL Converter</h1>
+  <p class="subtitle">WordPress XMLエクスポートファイルからオーナーアカウント + ホテル紐付けSQLを生成</p>
+
+  <div class="card">
+    <div class="password-setting">
+      <label>仮パスワード:</label>
+      <input type="text" id="temp-password" value="DaydreamHub2026" />
+      <span style="color:#64748b;font-size:12px">全オーナーに設定される初期パスワード</span>
+    </div>
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div style="font-size:48px;margin-bottom:12px">📄</div>
+      <strong>WordPress XMLファイルをドラッグ&ドロップ</strong>
+      <p>またはクリックしてファイルを選択</p>
+    </div>
+    <input type="file" id="file-input" accept=".xml,.XML" />
+  </div>
+
+  <div id="output-area">
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num" id="stat-total">0</div>
+        <div class="stat-label">総ユーザー数</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-owners">0</div>
+        <div class="stat-label">オーナー（移行対象）</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-matched">0</div>
+        <div class="stat-label">ホテル紐付け可能</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px">ユーザー一覧</h3>
+      <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
+        <table id="user-table">
+          <thead><tr><th>ID</th><th>Login</th><th>Display Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:between;margin-bottom:12px">
+        <h3 style="flex:1">生成されたSQL</h3>
+        <button class="btn btn-primary" onclick="copySQL()" style="margin-left:auto">📋 SQLをコピー</button>
+      </div>
+      <p style="color:#64748b;font-size:13px;margin-bottom:12px">
+        このSQLを <strong>Cloudflare Dashboard → D1 → daydreamhub-db → Console</strong> に貼り付けて実行してください。
+      </p>
+      <textarea id="sql-output" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+const EXCLUDED_LOGINS = new Set([
+  'kyodake', 'sales_owner', 'owner_shimizu', 'ddh_develop', 'test.test', 'PreListing_test_owner'
+]);
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+async function sha256(text) {
+  const data = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function sqlEscape(str) {
+  if (!str) return "''";
+  return "'" + String(str).replace(/'/g, "''") + "'";
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  dropZone.innerHTML = '<div style="font-size:48px;margin-bottom:12px">⏳</div><strong>解析中...</strong>';
+
+  const text = await file.text();
+  const parser = new DOMParser();
+  const xml = parser.parseFromString(text, 'text/xml');
+
+  // WXR形式: <wp:author> or <item> with wp:post_type = 'user' など
+  // 一般的なWXR: wp:author要素にユーザー情報がある
+  const users = [];
+
+  // Method 1: wp:author elements
+  const authors = xml.querySelectorAll('author');
+  if (authors.length > 0) {
+    authors.forEach(author => {
+      const getTag = (tag) => {
+        // Try with wp: prefix and without
+        const el = author.querySelector(tag) || author.getElementsByTagName('wp:' + tag)[0] || author.getElementsByTagName(tag)[0];
+        return el ? el.textContent.trim() : '';
+      };
+
+      const login = getTag('author_login');
+      const email = getTag('author_email');
+      const displayName = getTag('author_display_name');
+      const id = getTag('author_id');
+
+      if (login || email) {
+        users.push({
+          ID: id || '0',
+          user_login: login,
+          display_name: displayName || login,
+          user_email: email,
+          user_nicename: login, // WXRではnicename≒login
+          role: 'unknown'
+        });
+      }
+    });
+  }
+
+  // Method 2: If no authors found, try items with post_type
+  if (users.length === 0) {
+    const items = xml.querySelectorAll('item');
+    items.forEach(item => {
+      const getTag = (tag) => {
+        const el = item.querySelector(tag) || item.getElementsByTagName('wp:' + tag)[0];
+        return el ? el.textContent.trim() : '';
+      };
+      // Check if this is relevant user data
+      const title = item.querySelector('title')?.textContent || '';
+      const content = item.querySelector('content\\:encoded, encoded')?.textContent || '';
+      // Items might contain user metadata
+    });
+  }
+
+  // Method 3: Look for wp:wp_user elements (some WP exports use this)
+  if (users.length === 0) {
+    const nsResolver = (prefix) => {
+      const ns = { wp: 'http://wordpress.org/export/1.2/', content: 'http://purl.org/rss/1.0/modules/content/' };
+      return ns[prefix] || null;
+    };
+    // Try XPath for namespaced elements
+    try {
+      const iter = xml.evaluate('//wp:author', xml, nsResolver, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
+      let node;
+      while (node = iter.iterateNext()) {
+        const getChild = (tag) => {
+          const el = node.getElementsByTagNameNS('http://wordpress.org/export/1.2/', tag)[0];
+          return el ? el.textContent.trim() : '';
+        };
+        users.push({
+          ID: getChild('author_id') || '0',
+          user_login: getChild('author_login'),
+          display_name: getChild('author_display_name') || getChild('author_login'),
+          user_email: getChild('author_email'),
+          user_nicename: getChild('author_login'),
+          role: 'unknown'
+        });
+      }
+    } catch(e) { console.log('XPath fallback failed:', e); }
+  }
+
+  // Also extract user metadata from post meta if available
+  // Look for items that might have author assignments
+  const itemAuthors = new Map(); // author_login -> [post_slugs]
+  const items = xml.querySelectorAll('item');
+  items.forEach(item => {
+    const creator = item.querySelector('creator')?.textContent?.trim() ||
+                    item.getElementsByTagName('dc:creator')[0]?.textContent?.trim() || '';
+    const postType = item.getElementsByTagName('wp:post_type')[0]?.textContent?.trim() ||
+                     item.querySelector('post_type')?.textContent?.trim() || '';
+    const slug = item.getElementsByTagName('wp:post_name')[0]?.textContent?.trim() ||
+                 item.querySelector('post_name')?.textContent?.trim() || '';
+
+    // Hotels might be stored as custom post types or pages
+    if (creator && slug && (postType === 'hotel' || postType === 'listing' || postType === 'page' || postType === 'post')) {
+      if (!itemAuthors.has(creator)) itemAuthors.set(creator, []);
+      itemAuthors.get(creator).push({ slug, postType });
+    }
+  });
+
+  // Filter users
+  const filtered = users.filter(u => {
+    if (EXCLUDED_LOGINS.has(u.user_login)) return false;
+    if (!u.user_email || u.user_email.trim() === '') return false;
+    return true;
+  });
+
+  // Generate SQL
+  const password = document.getElementById('temp-password').value || 'DaydreamHub2026';
+  const passwordHash = await sha256(password);
+
+  const sqlLines = [];
+  sqlLines.push('-- WP XML → D1 Migration SQL');
+  sqlLines.push('-- Generated: ' + new Date().toISOString());
+  sqlLines.push('-- Temp password: ' + password);
+  sqlLines.push('-- Hash: ' + passwordHash);
+  sqlLines.push('');
+
+  // Users INSERT
+  sqlLines.push('-- === users INSERT (role=owner) ===');
+  for (const u of filtered) {
+    const name = sqlEscape(u.display_name || u.user_login);
+    const email = sqlEscape(u.user_email.trim().toLowerCase());
+    sqlLines.push(
+      `INSERT OR IGNORE INTO users (name, email, password_hash, role) VALUES (${name}, ${email}, '${passwordHash}', 'owner');`
+    );
+  }
+
+  sqlLines.push('');
+  sqlLines.push('-- === hotels.email UPDATE (slug matching) ===');
+
+  let matchCount = 0;
+  for (const u of filtered) {
+    const nicename = u.user_nicename || u.user_login;
+    if (!nicename) continue;
+    const email = sqlEscape(u.user_email.trim().toLowerCase());
+    const likePattern = sqlEscape(nicename + '%');
+    sqlLines.push(
+      `UPDATE hotels SET email = ${email} WHERE slug LIKE ${likePattern} AND (email IS NULL OR email = '');`
+    );
+    matchCount++;
+  }
+
+  // Also add direct author->post matching if found
+  if (itemAuthors.size > 0) {
+    sqlLines.push('');
+    sqlLines.push('-- === hotels.email UPDATE (post author matching) ===');
+    for (const u of filtered) {
+      const posts = itemAuthors.get(u.user_login) || [];
+      for (const p of posts) {
+        const email = sqlEscape(u.user_email.trim().toLowerCase());
+        const slug = sqlEscape(p.slug);
+        sqlLines.push(
+          `UPDATE hotels SET email = ${email} WHERE slug = ${slug} AND (email IS NULL OR email = '');`
+        );
+      }
+    }
+  }
+
+  sqlLines.push('');
+  sqlLines.push('-- Done');
+
+  // Display results
+  document.getElementById('stat-total').textContent = users.length;
+  document.getElementById('stat-owners').textContent = filtered.length;
+  document.getElementById('stat-matched').textContent = matchCount;
+
+  const tbody = document.querySelector('#user-table tbody');
+  tbody.innerHTML = '';
+  for (const u of users) {
+    const excluded = EXCLUDED_LOGINS.has(u.user_login);
+    const noEmail = !u.user_email || u.user_email.trim() === '';
+    let status = '<span class="badge badge-green">OK</span>';
+    if (excluded) status = '<span class="badge badge-red">Excluded</span>';
+    else if (noEmail) status = '<span class="badge badge-yellow">No Email</span>';
+
+    const tr = document.createElement('tr');
+    if (excluded || noEmail) tr.style.opacity = '0.5';
+    tr.innerHTML = `<td>${u.ID}</td><td>${u.user_login}</td><td>${u.display_name}</td><td>${u.user_email || '-'}</td><td>${u.role}</td><td>${status}</td>`;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById('sql-output').value = sqlLines.join('\n');
+  document.getElementById('output-area').style.display = 'block';
+
+  dropZone.innerHTML = `<div style="font-size:48px;margin-bottom:12px">✅</div><strong>${file.name} — 解析完了</strong><p>別のファイルをドロップして再実行できます</p>`;
+}
+
+function copySQL() {
+  const textarea = document.getElementById('sql-output');
+  textarea.select();
+  document.execCommand('copy');
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.textContent = '✅ Copied!';
+  setTimeout(() => btn.textContent = orig, 2000);
+}
+</script>
+</body>
+</html>
