@@ -5,12 +5,15 @@ const db = (Astro.locals as any).runtime?.env?.DB;
 let items: any[] = [];
 
 if (db) {
+  let newsItems: any[] = [];
+  let blogItems: any[] = [];
+
+  // newsテーブルから取得（blog以外）
   try {
-    // newsテーブルから取得（blog以外）
     const newsResult = await db.prepare(
       "SELECT title, title_ja, content, content_ja, category, published_at FROM news WHERE published_at IS NOT NULL AND category != 'blog' ORDER BY published_at DESC LIMIT 50"
     ).all();
-    const newsItems = (newsResult?.results || []).map((n: any) => ({
+    newsItems = (newsResult?.results || []).map((n: any) => ({
       title: n.title_ja || n.title,
       content: n.content_ja || n.content,
       category: n.category,
@@ -18,12 +21,14 @@ if (db) {
       type: 'news',
       link: null,
     }));
+  } catch {}
 
-    // blog_postsテーブルから取得
+  // blog_postsテーブルから取得
+  try {
     const blogResult = await db.prepare(
       "SELECT title, title_ja, excerpt, slug, published_at FROM blog_posts WHERE published_at IS NOT NULL ORDER BY published_at DESC LIMIT 50"
     ).all();
-    const blogItems = (blogResult?.results || []).map((b: any) => ({
+    blogItems = (blogResult?.results || []).map((b: any) => ({
       title: b.title_ja || b.title,
       content: b.excerpt,
       category: 'blog',
@@ -31,12 +36,12 @@ if (db) {
       type: 'blog',
       link: `/blog/${b.slug}`,
     }));
-
-    // 統合して日付順にソート
-    items = [...newsItems, ...blogItems].sort((a, b) =>
-      new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
-    );
   } catch {}
+
+  // 統合して日付順にソート
+  items = [...newsItems, ...blogItems].sort((a, b) =>
+    new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
+  );
 }
 
 const categoryLabels: Record<string, string> = {
