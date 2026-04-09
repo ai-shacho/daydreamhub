@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WP XML Listing → Hotel Location SQL</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f1f5f9; color: #1e293b; padding: 24px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  .subtitle { color: #64748b; margin-bottom: 20px; font-size: 14px; }
+  .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .drop-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s; }
+  .drop-zone:hover, .drop-zone.dragover { border-color: #0d9488; background: #f0fdfa; }
+  input[type="file"] { display: none; }
+  .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: #0d9488; color: white; }
+  .btn-primary:hover { background: #0f766e; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #f8fafc; text-align: left; padding: 6px 10px; border-bottom: 2px solid #e2e8f0; font-weight: 600; color: #64748b; position: sticky; top: 0; }
+  td { padding: 5px 10px; border-bottom: 1px solid #f1f5f9; }
+  tr:hover { background: #f8fafc; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-yellow { background: #fef9c3; color: #854d0e; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  #output-area { display: none; }
+  #sql-output { width: 100%; height: 300px; font-family: 'SF Mono', Monaco, monospace; font-size: 11px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; resize: vertical; }
+  .stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat { flex: 1; min-width: 120px; background: #f8fafc; border-radius: 8px; padding: 14px; text-align: center; }
+  .stat-num { font-size: 24px; font-weight: 700; color: #0d9488; }
+  .stat-label { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .filter-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap; }
+  .filter-bar select, .filter-bar input { padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
+  .filter-bar input { flex: 1; min-width: 200px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>WP XML Listing → Hotel Location SQL</h1>
+  <p class="subtitle">WordPressのListing XMLから住所・位置情報を抽出し、D1のhotelsテーブルを更新するSQLを生成</p>
+
+  <div class="card">
+    <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+      <div style="font-size:40px;margin-bottom:8px">📄</div>
+      <strong>WordPress XML（Listing データ）をドラッグ&ドロップ</strong>
+      <p style="color:#64748b;margin-top:6px;font-size:13px">またはクリックしてファイルを選択</p>
+    </div>
+    <input type="file" id="file-input" accept=".xml,.XML" multiple />
+  </div>
+
+  <div id="output-area">
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num" id="stat-total">0</div>
+        <div class="stat-label">Listing総数</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-with-location">0</div>
+        <div class="stat-label">位置情報あり</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-with-address">0</div>
+        <div class="stat-label">住所あり</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num" id="stat-sql-rows">0</div>
+        <div class="stat-label">SQL UPDATE行</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:8px">抽出されたListing一覧</h3>
+      <div class="filter-bar">
+        <input type="text" id="search-filter" placeholder="Search by name..." />
+        <select id="status-filter">
+          <option value="">All</option>
+          <option value="has-location">Has Location</option>
+          <option value="has-address">Has Address Only</option>
+          <option value="no-data">No Data</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto;max-height:500px;overflow-y:auto">
+        <table id="listing-table">
+          <thead><tr>
+            <th>Title</th>
+            <th>Slug</th>
+            <th>Address</th>
+            <th>Lat</th>
+            <th>Lng</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;margin-bottom:12px">
+        <h3 style="flex:1">生成されたSQL</h3>
+        <button class="btn btn-primary" onclick="copySQL()">📋 SQLをコピー</button>
+      </div>
+      <p style="color:#64748b;font-size:12px;margin-bottom:12px">
+        <strong>/admin/sql</strong> に貼り付けて実行してください。slugでマッチしてlatitude, longitude, addressを更新します。
+      </p>
+      <textarea id="sql-output" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFiles(e.target.files); });
+
+let allListings = [];
+
+async function handleFiles(files) {
+  dropZone.innerHTML = '<div style="font-size:40px;margin-bottom:8px">⏳</div><strong>解析中...</strong>';
+  allListings = [];
+
+  for (const file of files) {
+    const text = await file.text();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, 'text/xml');
+    extractListings(xml);
+  }
+
+  renderResults();
+  dropZone.innerHTML = `<div style="font-size:40px;margin-bottom:8px">✅</div><strong>${allListings.length} listings found</strong><p style="color:#64748b;margin-top:6px;font-size:13px">別のファイルをドロップして追加できます</p>`;
+}
+
+function getTextContent(parent, tagNames) {
+  // Try multiple tag name patterns (with/without namespace)
+  for (const tag of tagNames) {
+    // Direct querySelector
+    let el = parent.querySelector(tag);
+    if (el && el.textContent.trim()) return el.textContent.trim();
+
+    // Try with wp: namespace
+    el = parent.getElementsByTagName('wp:' + tag)[0];
+    if (el && el.textContent.trim()) return el.textContent.trim();
+
+    // Try plain
+    el = parent.getElementsByTagName(tag)[0];
+    if (el && el.textContent.trim()) return el.textContent.trim();
+  }
+  return '';
+}
+
+function getMetaValue(item, metaKey) {
+  // WP XML stores post meta as wp:postmeta > wp:meta_key + wp:meta_value
+  const metas = item.querySelectorAll('postmeta, wp\\:postmeta');
+  for (const meta of metas) {
+    const key = getTextContent(meta, ['meta_key', 'wp:meta_key']);
+    if (key === metaKey) {
+      return getTextContent(meta, ['meta_value', 'wp:meta_value']);
+    }
+  }
+
+  // Fallback: getElementsByTagName
+  const metaEls = item.getElementsByTagName('wp:postmeta');
+  for (const meta of metaEls) {
+    const keyEl = meta.getElementsByTagName('wp:meta_key')[0];
+    const valEl = meta.getElementsByTagName('wp:meta_value')[0];
+    if (keyEl && keyEl.textContent.trim() === metaKey && valEl) {
+      return valEl.textContent.trim();
+    }
+  }
+  return '';
+}
+
+function extractListings(xml) {
+  const items = xml.querySelectorAll('item');
+
+  for (const item of items) {
+    const postType = getTextContent(item, ['post_type', 'wp:post_type']);
+    const status = getTextContent(item, ['status', 'wp:status']);
+    const title = item.querySelector('title')?.textContent?.trim() || '';
+    const slug = getTextContent(item, ['post_name', 'wp:post_name']);
+
+    // Accept common listing post types
+    // MyListing: 'job_listing', WP Job Manager: 'job_listing', HivePress: 'hp_listing',
+    // Flavor: 'flavor_listing', Custom: 'listing', 'hotel', 'property', 'accommodation'
+    // Also accept 'post' and 'page' as some sites use these
+    const listingTypes = ['job_listing', 'listing', 'hotel', 'property', 'accommodation', 'hp_listing', 'flavor_listing'];
+
+    // Get all items regardless of post type for broader matching
+    if (!title || status === 'trash') continue;
+
+    // Try to extract location data from various meta key patterns
+    let lat = '', lng = '', address = '', city = '', country = '', zipcode = '';
+
+    // Common meta key patterns for different plugins
+    const latKeys = ['_job_location_lat', '_listing_lat', 'geolocation_lat', '_latitude', 'latitude', 'hp_latitude', '_geolocation_lat', 'lat'];
+    const lngKeys = ['_job_location_lng', '_listing_lng', 'geolocation_long', '_longitude', 'longitude', 'hp_longitude', '_geolocation_long', 'lng', 'geolocation_lng'];
+    const addressKeys = ['_job_location', '_listing_address', 'geolocation_formatted_address', '_address', 'address', 'hp_location', '_geolocation_formatted_address', '_geolocation_street'];
+    const cityKeys = ['geolocation_city', '_city', 'city', '_geolocation_city'];
+    const countryKeys = ['geolocation_country_long', '_country', 'country', 'geolocation_country_short', '_geolocation_country_long'];
+    const zipKeys = ['geolocation_postcode', '_zip', 'zipcode', '_geolocation_postcode'];
+
+    for (const k of latKeys) { if (!lat) lat = getMetaValue(item, k); }
+    for (const k of lngKeys) { if (!lng) lng = getMetaValue(item, k); }
+    for (const k of addressKeys) { if (!address) address = getMetaValue(item, k); }
+    for (const k of cityKeys) { if (!city) city = getMetaValue(item, k); }
+    for (const k of countryKeys) { if (!country) country = getMetaValue(item, k); }
+    for (const k of zipKeys) { if (!zipcode) zipcode = getMetaValue(item, k); }
+
+    // Also try serialized location data (some plugins store as serialized PHP array)
+    if (!lat || !lng) {
+      const locationMeta = getMetaValue(item, '_job_location_data') || getMetaValue(item, '_listing_location') || getMetaValue(item, '_geolocation');
+      if (locationMeta) {
+        // Try JSON parse
+        try {
+          const loc = JSON.parse(locationMeta);
+          if (!lat && (loc.lat || loc.latitude)) lat = String(loc.lat || loc.latitude);
+          if (!lng && (loc.lng || loc.longitude || loc.lon)) lng = String(loc.lng || loc.longitude || loc.lon);
+          if (!address && loc.address) address = loc.address;
+        } catch {
+          // Try extracting from serialized PHP
+          const latMatch = locationMeta.match(/lat[itude]*[";:]+s:\d+:"([^"]+)"/);
+          const lngMatch = locationMeta.match(/l[o]?ng[itude]*[";:]+s:\d+:"([^"]+)"/);
+          if (latMatch) lat = latMatch[1];
+          if (lngMatch) lng = lngMatch[1];
+        }
+      }
+    }
+
+    // Only add if it's a listing type OR has location data
+    const isListing = listingTypes.includes(postType);
+    const hasData = lat || lng || address || city;
+
+    if (isListing || hasData) {
+      allListings.push({
+        title, slug, postType,
+        lat: lat ? parseFloat(lat) : null,
+        lng: lng ? parseFloat(lng) : null,
+        address: [address, city, country, zipcode].filter(Boolean).join(', ').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim(),
+        rawAddress: address,
+        city, country
+      });
+    }
+  }
+}
+
+function sqlEscape(str) {
+  if (!str) return "''";
+  return "'" + String(str).replace(/'/g, "''") + "'";
+}
+
+function renderResults() {
+  const withLoc = allListings.filter(l => l.lat && l.lng);
+  const withAddr = allListings.filter(l => l.address && (!l.lat || !l.lng));
+  const noData = allListings.filter(l => !l.lat && !l.lng && !l.address);
+
+  document.getElementById('stat-total').textContent = allListings.length;
+  document.getElementById('stat-with-location').textContent = withLoc.length;
+  document.getElementById('stat-with-address').textContent = withAddr.length;
+
+  // Generate SQL
+  const sqlLines = [];
+  sqlLines.push('-- WP Listing XML → Hotel Location Update SQL');
+  sqlLines.push('-- Generated: ' + new Date().toISOString());
+  sqlLines.push('');
+
+  let sqlCount = 0;
+  for (const l of allListings) {
+    if (!l.lat && !l.lng && !l.address) continue;
+
+    const parts = [];
+    if (l.lat && l.lng) {
+      parts.push(`latitude = ${l.lat.toFixed(6)}, longitude = ${l.lng.toFixed(6)}`);
+    }
+    if (l.address) {
+      parts.push(`address = ${sqlEscape(l.address)}`);
+    }
+    if (parts.length === 0) continue;
+
+    const slug = l.slug.replace(/'/g, "''");
+    sqlLines.push(`UPDATE hotels SET ${parts.join(', ')} WHERE slug = '${slug}' AND (latitude IS NULL OR latitude = 0 OR latitude = '');`);
+
+    // Also try matching without suffix (e.g. slug might have room-type appended in D1)
+    const baseSlug = slug.replace(/-(?:copy|2|3)$/, '');
+    if (baseSlug !== slug) {
+      sqlLines.push(`UPDATE hotels SET ${parts.join(', ')} WHERE slug LIKE '${baseSlug}%' AND (latitude IS NULL OR latitude = 0 OR latitude = '');`);
+    }
+    sqlCount++;
+  }
+
+  sqlLines.push('');
+  sqlLines.push(`-- Total: ${sqlCount} listings with location data`);
+
+  document.getElementById('stat-sql-rows').textContent = sqlCount;
+  document.getElementById('sql-output').value = sqlLines.join('\n');
+
+  // Render table
+  renderTable(allListings);
+  document.getElementById('output-area').style.display = 'block';
+
+  // Filters
+  document.getElementById('search-filter').addEventListener('input', applyFilter);
+  document.getElementById('status-filter').addEventListener('change', applyFilter);
+}
+
+function applyFilter() {
+  const search = document.getElementById('search-filter').value.toLowerCase();
+  const status = document.getElementById('status-filter').value;
+  const filtered = allListings.filter(l => {
+    if (search && !l.title.toLowerCase().includes(search) && !l.slug.toLowerCase().includes(search)) return false;
+    if (status === 'has-location' && (!l.lat || !l.lng)) return false;
+    if (status === 'has-address' && (l.lat || !l.address)) return false;
+    if (status === 'no-data' && (l.lat || l.lng || l.address)) return false;
+    return true;
+  });
+  renderTable(filtered);
+}
+
+function renderTable(listings) {
+  const tbody = document.querySelector('#listing-table tbody');
+  tbody.innerHTML = '';
+  for (const l of listings) {
+    const tr = document.createElement('tr');
+    let statusBadge = '<span class="badge badge-red">No Data</span>';
+    if (l.lat && l.lng) statusBadge = '<span class="badge badge-green">Location ✓</span>';
+    else if (l.address) statusBadge = '<span class="badge badge-yellow">Address Only</span>';
+
+    tr.innerHTML = `
+      <td style="font-weight:500;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.title}">${l.title}</td>
+      <td style="font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${l.slug}">${l.slug}</td>
+      <td style="font-size:11px;max-width:250px;overflow:hidden;text-overflow:ellipsis" title="${l.address || ''}">${l.address || '-'}</td>
+      <td style="font-size:11px;font-family:monospace">${l.lat?.toFixed(4) || '-'}</td>
+      <td style="font-size:11px;font-family:monospace">${l.lng?.toFixed(4) || '-'}</td>
+      <td>${statusBadge}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function copySQL() {
+  const textarea = document.getElementById('sql-output');
+  textarea.select();
+  document.execCommand('copy');
+  const btn = event.target;
+  const orig = btn.textContent;
+  btn.textContent = '✅ Copied!';
+  setTimeout(() => btn.textContent = orig, 2000);
+}
+</script>
+</body>
+</html>
