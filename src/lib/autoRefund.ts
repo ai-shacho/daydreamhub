@@ -32,9 +32,9 @@ export async function autoRefundBooking(
       const accessToken = await getAccessToken(
         env.PAYPAL_CLIENT_ID,
         env.PAYPAL_SECRET,
-        env.PAYPAL_MODE || 'sandbox'
+        env.PAYPAL_MODE || 'live'
       );
-      await refundCapture(accessToken, booking.paypal_capture_id, env.PAYPAL_MODE || 'sandbox');
+      await refundCapture(accessToken, booking.paypal_capture_id, env.PAYPAL_MODE || 'live');
     }
 
     await db

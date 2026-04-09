@@ -104,8 +104,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   // Step 3: Execute PayPal capture (we now hold the 'processing' lock)
   try {
-    const accessToken = await getAccessToken(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE || 'sandbox');
-    const captureResult = await captureOrder(accessToken, order_id, PAYPAL_MODE || 'sandbox');
+    const accessToken = await getAccessToken(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE || 'live');
+    const captureResult = await captureOrder(accessToken, order_id, PAYPAL_MODE || 'live');
     const captureStatus = captureResult.status;
 
     if (captureStatus === 'COMPLETED') {

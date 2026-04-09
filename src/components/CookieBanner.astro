@@ -7,8 +7,12 @@
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
       <div class="flex-1 text-sm text-slate-300">
         <p>
-          We use cookies to improve your experience and analyze site usage.
-          <a href="/privacy-policy" class="text-teal-400 hover:text-teal-300 underline ml-1">Learn more</a>
+          <span class="cookie-text-en">We use cookies to improve your experience and analyze site usage.</span>
+          <span class="cookie-text-ja" style="display:none">当サイトではCookieを使用して、より良い体験を提供しています。</span>
+          <a id="cookie-privacy-link" href="/privacy-policy" class="text-teal-400 hover:text-teal-300 underline ml-1">
+            <span class="cookie-text-en">Learn more</span>
+            <span class="cookie-text-ja" style="display:none">詳細はこちら</span>
+          </a>
         </p>
       </div>
       <div class="flex items-center gap-3 flex-shrink-0">
@@ -60,4 +64,12 @@
 
   document.getElementById('cookie-accept')?.addEventListener('click', () => setConsent('accepted'));
   document.getElementById('cookie-reject')?.addEventListener('click', () => setConsent('rejected'));
+
+  // Locale detection for cookie banner
+  if (window.location.pathname.startsWith('/ja')) {
+    document.querySelectorAll('.cookie-text-en').forEach(el => (el as HTMLElement).style.display = 'none');
+    document.querySelectorAll('.cookie-text-ja').forEach(el => (el as HTMLElement).style.display = '');
+    const link = document.getElementById('cookie-privacy-link') as HTMLAnchorElement;
+    if (link) link.href = '/ja/privacy-policy';
+  }
 </script>
