@@ -389,10 +389,15 @@ function sortIcon(col: string) {
         <div class="p-6 space-y-4">
           <p class="text-sm text-slate-500">Hotel: <strong id="assign-hotel-name"></strong></p>
           <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Search Owner</label>
+            <input id="assign-search" type="text" placeholder="Owner name or email..."
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" autocomplete="off" />
+            <div id="assign-suggestions" class="border border-slate-200 rounded-lg mt-1 max-h-40 overflow-y-auto hidden"></div>
+          </div>
+          <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Owner Email</label>
             <input id="assign-email" type="email" placeholder="owner@example.com"
               class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
-            <p class="text-xs text-slate-400 mt-1">Must match an existing user with role 'owner'</p>
           </div>
           <div id="assign-error" class="hidden bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-3 py-2"></div>
           <div class="flex gap-3">
@@ -468,10 +473,49 @@ function sortIcon(col: string) {
     assignHotelId = id;
     (document.getElementById('assign-hotel-name') as HTMLElement).textContent = name;
     (document.getElementById('assign-email') as HTMLInputElement).value = email || '';
+    (document.getElementById('assign-search') as HTMLInputElement).value = '';
+    document.getElementById('assign-suggestions')!.classList.add('hidden');
     document.getElementById('assign-error')!.classList.add('hidden');
     assignModal.classList.remove('hidden');
+    (document.getElementById('assign-search') as HTMLInputElement).focus();
   }
   function closeAssign() { assignModal.classList.add('hidden'); }
+
+  // Owner search
+  let searchTimer: any = null;
+  const searchInput = document.getElementById('assign-search') as HTMLInputElement;
+  const suggestions = document.getElementById('assign-suggestions') as HTMLElement;
+
+  searchInput?.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const q = searchInput.value.trim();
+    if (q.length < 2) { suggestions.classList.add('hidden'); return; }
+    searchTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/admin/users?search=${encodeURIComponent(q)}&role=owner&limit=10`);
+        const data = await res.json();
+        const users = data.users || [];
+        if (users.length === 0) {
+          suggestions.innerHTML = '<div class="px-3 py-2 text-xs text-slate-400">No owners found</div>';
+        } else {
+          suggestions.innerHTML = users.map((u: any) =>
+            `<div class="owner-suggestion px-3 py-2 hover:bg-teal-50 cursor-pointer text-sm border-b border-slate-100 last:border-0" data-email="${u.email}">
+              <span class="font-medium text-slate-800">${u.name}</span>
+              <span class="text-xs text-slate-400 ml-2">${u.email}</span>
+            </div>`
+          ).join('');
+          suggestions.querySelectorAll('.owner-suggestion').forEach(el => {
+            el.addEventListener('click', () => {
+              (document.getElementById('assign-email') as HTMLInputElement).value = el.getAttribute('data-email') || '';
+              searchInput.value = el.querySelector('.font-medium')?.textContent || '';
+              suggestions.classList.add('hidden');
+            });
+          });
+        }
+        suggestions.classList.remove('hidden');
+      } catch {}
+    }, 300);
+  });
 
   document.querySelectorAll('.assign-owner-btn').forEach(btn => {
     btn.addEventListener('click', () => {
