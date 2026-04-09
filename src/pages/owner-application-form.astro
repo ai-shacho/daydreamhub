@@ -94,7 +94,10 @@ import Layout from '../layouts/Layout.astro';
                 <option value="+254">🇰🇪 +254 Kenya</option>
                 <option value="+20">🇪🇬 +20 Egypt</option>
                 <option value="+212">🇲🇦 +212 Morocco</option>
+                <option value="other">🌐 Other...</option>
               </select>
+              <input id="hotel_phone_code_manual" type="text" placeholder="+___" maxlength="5"
+                class="hidden w-20 px-2 py-2.5 border border-slate-300 rounded-xl text-sm text-center focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
               <input id="hotel_phone_number" type="tel" required placeholder="3-1234-5678"
                 class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
             </div>
@@ -192,7 +195,10 @@ import Layout from '../layouts/Layout.astro';
                 <option value="+254">🇰🇪 +254 Kenya</option>
                 <option value="+20">🇪🇬 +20 Egypt</option>
                 <option value="+212">🇲🇦 +212 Morocco</option>
+                <option value="other">🌐 Other...</option>
               </select>
+              <input id="contact_phone_code_manual" type="text" placeholder="+___" maxlength="5"
+                class="hidden w-20 px-2 py-2.5 border border-slate-300 rounded-xl text-sm text-center focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
               <input id="contact_phone_number" type="tel" required placeholder="90-1234-5678"
                 class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
             </div>
@@ -291,6 +297,31 @@ import Layout from '../layouts/Layout.astro';
 </Layout>
 
 <script is:inline>
+// Phone code "Other" toggle
+function setupPhoneCodeOther(selectId, manualId) {
+  var sel = document.getElementById(selectId);
+  var manual = document.getElementById(manualId);
+  if (!sel || !manual) return;
+  sel.addEventListener('change', function() {
+    if (sel.value === 'other') {
+      manual.classList.remove('hidden');
+      manual.required = true;
+      manual.focus();
+      sel.classList.add('hidden');
+    }
+  });
+  manual.addEventListener('blur', function() {
+    if (!manual.value.trim()) {
+      manual.classList.add('hidden');
+      manual.required = false;
+      sel.classList.remove('hidden');
+      sel.value = '+81';
+    }
+  });
+}
+setupPhoneCodeOther('hotel_phone_code', 'hotel_phone_code_manual');
+setupPhoneCodeOther('contact_phone_code', 'contact_phone_code_manual');
+
 // VCC toggle
 document.getElementById('payment_method')?.addEventListener('change', function () {
   const isVCC = this.value === 'VCC';
@@ -310,11 +341,19 @@ document.getElementById('owner-application-form')?.addEventListener('submit', as
   successEl.className = 'hidden';
 
   // Combine country code + number into hidden fields
-  const hotelCode = document.getElementById('hotel_phone_code')?.value || '';
+  function getPhoneCode(selectId, manualId) {
+    var sel = document.getElementById(selectId);
+    var manual = document.getElementById(manualId);
+    if (sel && sel.value === 'other' || (sel && sel.classList.contains('hidden'))) {
+      return manual?.value?.trim() || '';
+    }
+    return sel?.value || '';
+  }
+  const hotelCode = getPhoneCode('hotel_phone_code', 'hotel_phone_code_manual');
   const hotelNum = document.getElementById('hotel_phone_number')?.value?.trim() || '';
   document.getElementById('hotel_phone').value = hotelNum ? hotelCode + hotelNum : '';
 
-  const contactCode = document.getElementById('contact_phone_code')?.value || '';
+  const contactCode = getPhoneCode('contact_phone_code', 'contact_phone_code_manual');
   const contactNum = document.getElementById('contact_phone_number')?.value?.trim() || '';
   document.getElementById('contact_phone').value = contactNum ? contactCode + contactNum : '';
 

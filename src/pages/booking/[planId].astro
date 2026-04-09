@@ -226,7 +226,10 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
                     <option value="+254">🇰🇪 +254 Kenya</option>
                     <option value="+20">🇪🇬 +20 Egypt</option>
                     <option value="+212">🇲🇦 +212 Morocco</option>
+                    <option value="other">🌐 Other...</option>
                   </select>
+                  <input type="text" id="phone_code_manual" placeholder="+___" maxlength="5"
+                    class="hidden flex-shrink-0 w-20 px-2 py-2.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors" />
                   <input type="tel" id="phone_local" autocomplete="tel-national"
                     class="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors"
                     placeholder="90-1234-5678" />
@@ -437,15 +440,42 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
 <script define:vars={{ maxGuests }}>
   // Phone: combine country code + local number into hidden #guest_phone
   (function() {
+    var sel = document.getElementById('phone_code') as HTMLSelectElement;
+    var manual = document.getElementById('phone_code_manual') as HTMLInputElement;
+
+    // "Other" toggle
+    if (sel && manual) {
+      sel.addEventListener('change', function() {
+        if (sel.value === 'other') {
+          manual.classList.remove('hidden');
+          manual.focus();
+          sel.classList.add('hidden');
+        }
+        syncPhone();
+      });
+      manual.addEventListener('blur', function() {
+        if (!manual.value.trim()) {
+          manual.classList.add('hidden');
+          sel.classList.remove('hidden');
+          sel.value = '+1';
+        }
+      });
+      manual.addEventListener('input', syncPhone);
+    }
+
     function syncPhone() {
-      var code  = (document.getElementById('phone_code') as HTMLSelectElement)?.value || '';
+      var code = '';
+      if (sel && sel.classList.contains('hidden') && manual) {
+        code = manual.value.trim();
+      } else {
+        code = sel?.value || '';
+      }
       var local = (document.getElementById('phone_local') as HTMLInputElement)?.value.trim() || '';
       // strip "-CA" suffix (Canada shares +1)
       var dialCode = code.replace(/-[A-Z]+$/, '');
       var hidden = document.getElementById('guest_phone') as HTMLInputElement;
       if (hidden) hidden.value = local ? dialCode + local : '';
     }
-    document.getElementById('phone_code')?.addEventListener('change', syncPhone);
     document.getElementById('phone_local')?.addEventListener('input', syncPhone);
     syncPhone();
   })();
