@@ -185,7 +185,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
               });
             }
 
-            // ② ゲストへ予約確認メール
+            // ② DDH管理者へ通知メール
+            const ADMIN_EMAIL = runtime?.env?.ADMIN_EMAIL || 'info@daydreamhub.com';
+            try {
+              await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  from: 'DaydreamHub <noreply@daydreamhub.com>',
+                  to: [ADMIN_EMAIL],
+                  subject: `[New Booking] #${(booking as any).id} — ${(booking as any).guest_name} / ${(hotel as any)?.name || ''}`,
+                  html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${(booking as any).id}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${(booking as any).guest_name} (${(booking as any).guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(plan as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${(booking as any).check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${(booking as any).total_price_usd}</td></tr></table></div>`,
+                }),
+              });
+            } catch {}
+
+            // ③ ゲストへ予約確認メール
             if ((booking as any).guest_email) {
               const guestEmailResult = await sendGuestBookingConfirmation(RESEND_API_KEY, {
                 bookingId: (booking as any).id,
