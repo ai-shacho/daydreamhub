@@ -124,12 +124,14 @@ const isTestHotel = hotelSlug.includes('test-hotel');
       card_error:    { title:'Please check your card details', body:'Your card number, expiry date, or security code (CVV) is incorrect.', tip:'Please check the number on the back of your card and try again.', btn1:'Correct card details and retry', btn2:'Pay with PayPal instead' },
       limit_error:   { title:'Payment could not be completed', body:'Your card may have insufficient funds or has reached its limit.', tip:'Your reservation is saved. You can pay with another card or PayPal.', btn1:'Try a different card', btn2:'Pay with PayPal account' },
       block_error:   { title:'Your card issuer blocked this transaction', body:'Your card may be blocking international transactions for security reasons.', tip:'Please contact your card issuer to enable international use, or try another method.', btn1:'Try a different card', btn2:'Pay with PayPal account' },
+      card_declined: { title:'Your card was declined', body:'Your card issuer declined this transaction.', tip:'Please try a different card or contact your card issuer for details.', btn1:'Try a different card', btn2:'Pay with PayPal account' },
       network_error: { title:'A temporary error occurred', body:'Your card has not been charged.', tip:'Please try again in a moment. Contact support if the issue persists.', btn1:'Try again', btn2:'Contact support' },
       threeds_error: { title:'Authentication could not be completed', body:"Your card issuer's verification (3D Secure) was not completed.", tip:'Please check your SMS or card app for a verification prompt and try again.', btn1:'Try again', btn2:'Try a different card' },
     },
     ja: {
       card_error:    { title:'カード情報をご確認ください', body:'カード番号・有効期限・セキュリティコード（CVV）のいずれかに誤りがあります。', tip:'カード裏面の番号を確認のうえ、再度お試しください。', btn1:'カード情報を修正して再試行する', btn2:'別のお支払い方法を使う（PayPal）' },
       limit_error:   { title:'お支払いを完了できませんでした', body:'残高不足または利用限度額に達している可能性があります。', tip:'ご予約は保持されています。別のカードまたはPayPalでお手続きいただけます。', btn1:'別のカードで試す', btn2:'PayPalアカウントで支払う' },
+      card_declined: { title:'カードが拒否されました', body:'カード会社がこの取引を拒否しました。', tip:'別のカードをお試しいただくか、カード会社にお問い合わせください。', btn1:'別のカードで試す', btn2:'PayPalアカウントで支払う' },
       block_error:   { title:'カード会社が取引をブロックしました', body:'セキュリティ保護のため、海外利用がブロックされている可能性があります。', tip:'カード裏面の番号に電話し「海外利用の解除」を依頼するか、別の方法をお試しください。', btn1:'別のカードで試す', btn2:'PayPalアカウントで支払う' },
       network_error: { title:'一時的な通信エラーが発生しました', body:'お客様のカードには請求されていません。', tip:'しばらく待ってから再度お試しください。繰り返し失敗する場合はサポートへご連絡ください。', btn1:'もう一度試す', btn2:'サポートに連絡する' },
       threeds_error: { title:'本人認証が完了しませんでした', body:'カード会社の本人確認（3Dセキュア）が完了しなかったため、お支払いを処理できませんでした。', tip:'SMSやカード会社アプリの通知を確認し、認証を完了させてから再度お試しください。', btn1:'もう一度試す', btn2:'別のカードで試す' },
@@ -413,6 +415,10 @@ const isTestHotel = hotelSlug.includes('test-hotel');
       // Funds / limit
       if (['INSUFFICIENT_FUNDS', 'CARD_LIMIT_EXCEEDED'].includes(issue))
         return 'limit_error';
+
+      // Card declined by issuer
+      if (['INSTRUMENT_DECLINED', 'PAYER_ACTION_REQUIRED'].includes(issue) || name === 'INSTRUMENT_DECLINED')
+        return 'card_declined';
 
       // Block
       if (['CARD_CLOSED', 'TRANSACTION_REFUSED', 'TRANSACTION_BLOCKED_BY_PAYEE'].includes(issue))

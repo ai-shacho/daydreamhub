@@ -102,7 +102,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   // Debug: record every received event in DB note field
   if (db && logId) {
     await db.prepare(`UPDATE call_logs SET note = COALESCE(note||',','') || ? WHERE id = ?`)
-      .bind(eventType, logId).run().catch(() => {});
+      .bind(eventType, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
   }
 
   switch (eventType) {
@@ -111,7 +111,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       // Store call control id from webhook (v3: format)
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET telnyx_call_id=? WHERE id=?`)
-          .bind(callControlId, logId).run().catch(() => {});
+          .bind(callControlId, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
       }
       break;
     }
@@ -135,7 +135,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       });
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET note = COALESCE(note||',','') || ? WHERE id = ?`)
-          .bind(speakOk ? 'speak:ok' : 'speak:FAIL', logId).run().catch(() => {});
+          .bind(speakOk ? 'speak:ok' : 'speak:FAIL', logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
       }
       break;
     }
@@ -204,11 +204,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             .map(m => `[${m.role === 'assistant' ? 'Agent' : 'Hotel'}]: ${m.content}`)
             .join('\n');
           await db.prepare(`UPDATE call_logs SET status=?, transcription=?, note=? WHERE id=?`)
-            .bind(newStatus, transcript, decision.note || hotelSaid, logId).run().catch(() => {});
+            .bind(newStatus, transcript, decision.note || hotelSaid, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
         }
         if (bookingId && bkStatusMap[decision.action]) {
           await db.prepare(`UPDATE bookings SET status=? WHERE id=?`)
-            .bind(bkStatusMap[decision.action], bookingId).run().catch(() => {});
+            .bind(bkStatusMap[decision.action], bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
         }
       }
 
@@ -224,7 +224,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (db && logId) {
         const log: any = await db.prepare(`SELECT status FROM call_logs WHERE id=?`).bind(logId).first().catch(() => null);
         if (log && !['confirmed', 'declined', 'alternative_offered'].includes(log.status)) {
-          await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(() => {});
+          await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
         }
       }
       break;
