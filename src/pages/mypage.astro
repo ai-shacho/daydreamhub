@@ -222,7 +222,7 @@ function formatDate(dateStr: string): string {
                           )}
                         </button>
                       )}
-                      {(b.status === 'confirmed' || b.status === 'completed') && (
+                      {(b.status === 'confirmed' || b.status === 'completed') && new Date(b.check_in_date) < new Date(new Date().toDateString()) && (
                         <button
                           class="btn-write-review text-xs text-amber-600 hover:text-amber-700 font-medium border border-amber-200 hover:border-amber-400 px-3 py-1.5 rounded-lg transition-colors"
                           data-booking-id={b.id}
