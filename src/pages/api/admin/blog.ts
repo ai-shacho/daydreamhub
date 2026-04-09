@@ -4,6 +4,28 @@ async function verifyAdminRequest(_request: Request, _jwtSecret: string): Promis
   return true;
 }
 
+async function addBlogToNews(db: any, title: string, title_ja: string | null, slug: string, publishedAt: string) {
+  try {
+    // 同じslugのニュースが既にあればスキップ
+    const existing = await db.prepare(
+      "SELECT id FROM news WHERE category = 'blog' AND content = ?"
+    ).bind(slug).first();
+    if (existing) return;
+
+    await db.prepare(
+      "INSERT INTO news (title, title_ja, content, content_ja, category, published_at) VALUES (?, ?, ?, ?, 'blog', ?)"
+    ).bind(
+      `New Blog: ${title}`,
+      title_ja ? `新着ブログ: ${title_ja}` : null,
+      slug,
+      slug,
+      publishedAt
+    ).run();
+  } catch {
+    // news テーブルが存在しない場合は無視
+  }
+}
+
 export const GET: APIRoute = async ({ request, locals }) => {
   const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
   if (!(await verifyAdminRequest(request, jwtSecret))) {
@@ -157,6 +179,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       });
     }
 
+    // 公開時にWhat's Newへ自動追加
+    if (is_published && publishedAt) {
+      const post = await db.prepare('SELECT title, title_ja, slug FROM blog_posts WHERE id = ?').bind(id).first();
+      if (post) await addBlogToNews(db, post.title, post.title_ja, post.slug, publishedAt);
+    }
+
     return new Response(
       JSON.stringify({ message: 'Blog post updated', id, is_published }),
       { headers: { 'Content-Type': 'application/json' } }
@@ -224,6 +252,11 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
       });
     }
 
+    // 公開日がセットされた場合、What's Newへ自動追加
+    if (publishedAtValue) {
+      await addBlogToNews(db, title, title_ja, slug, publishedAtValue);
+    }
+
     return new Response(
       JSON.stringify({ message: 'Blog post updated', id }),
       { headers: { 'Content-Type': 'application/json' } }
@@ -286,11 +319,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     const newId = result.meta.last_row_id;
 
+    // 公開日がセットされている場合、What's Newへ自動追加
+    if (publishedAtValue) {
+      await addBlogToNews(db, title, title_ja, slug, publishedAtValue);
+    }
+
     return new Response(
       JSON.stringify({ message: 'Blog post created', id: newId }),
-      { 
+      {
         status: 201,
-        headers: { 'Content-Type': 'application/json' } 
+        headers: { 'Content-Type': 'application/json' }
       }
     );
   } catch (err) {
