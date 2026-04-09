@@ -1,0 +1,201 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect("/admin/login");
+
+const url = new URL(Astro.request.url);
+const statusFilter = url.searchParams.get("status") || "";
+
+let inquiries: any[] = [];
+let error = "";
+
+if (db) {
+  try {
+    let query = `SELECT * FROM contact_inquiries WHERE 1=1`;
+    const binds: any[] = [];
+    if (statusFilter) { query += " AND status = ?"; binds.push(statusFilter); }
+    query += " ORDER BY created_at DESC LIMIT 200";
+    const result = await db.prepare(query).bind(...binds).all();
+    inquiries = result?.results || [];
+  } catch (e: any) {
+    error = e.message || "Failed to load inquiries";
+  }
+}
+
+const statusColors: Record<string, string> = {
+  new: "bg-blue-100 text-blue-700",
+  replied: "bg-emerald-100 text-emerald-700",
+  closed: "bg-slate-100 text-slate-600",
+};
+
+const categoryLabels: Record<string, string> = {
+  booking: "Booking",
+  payment: "Payment",
+  property: "Property",
+  general: "General",
+};
+---
+
+<AdminLayout title="Contact Inquiries" activeNav="contact-inquiries">
+  {error && <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>}
+
+  <div class="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+    <form method="get" class="flex items-end gap-4">
+      <div>
+        <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+        <select name="status" class="px-3 py-2 border border-slate-200 rounded-lg text-sm">
+          <option value="">All</option>
+          <option value="new" selected={statusFilter === "new"}>New</option>
+          <option value="replied" selected={statusFilter === "replied"}>Replied</option>
+          <option value="closed" selected={statusFilter === "closed"}>Closed</option>
+        </select>
+      </div>
+      <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">Filter</button>
+      <a href="/admin/contact-inquiries" class="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50">Reset</a>
+    </form>
+  </div>
+
+  <p class="text-sm text-slate-500 mb-3">{inquiries.length} inquiries found</p>
+
+  <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200">
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500">ID</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500">Category</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500">Name</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500">Email</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500">Subject</th>
+            <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500">Status</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-slate-500">Date</th>
+            <th class="px-4 py-3 text-center text-xs font-semibold text-slate-500">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {inquiries.map((q: any) => (
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-4 py-3 text-slate-400 text-xs">#{q.id}</td>
+              <td class="px-4 py-3 text-slate-600 text-xs">{categoryLabels[q.category] || q.category}</td>
+              <td class="px-4 py-3 font-medium text-slate-900">{q.name}</td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{q.email}</td>
+              <td class="px-4 py-3 text-slate-600 text-xs truncate max-w-[200px]">{q.subject || q.message?.slice(0, 40) || '-'}</td>
+              <td class="px-4 py-3 text-center">
+                <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[q.status] || "bg-slate-100 text-slate-600"}`}>
+                  {q.status}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{q.created_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-center">
+                <button
+                  class="detail-btn px-2 py-1 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded hover:bg-slate-100 transition-colors"
+                  data-id={q.id}
+                  data-item={JSON.stringify(q)}
+                >
+                  Details
+                </button>
+              </td>
+            </tr>
+          ))}
+          {inquiries.length === 0 && (
+            <tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">No inquiries found</td></tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div id="detail-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/60" id="detail-backdrop"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-slate-900">Inquiry Details</h2>
+          <button id="detail-close" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div><span class="text-slate-400">Name:</span> <span id="d-name" class="font-medium text-slate-900"></span></div>
+            <div><span class="text-slate-400">Email:</span> <span id="d-email" class="text-slate-700"></span></div>
+            <div><span class="text-slate-400">Category:</span> <span id="d-category" class="text-slate-700"></span></div>
+            <div><span class="text-slate-400">Date:</span> <span id="d-date" class="text-slate-700"></span></div>
+          </div>
+          <div class="text-sm">
+            <span class="text-slate-400">Subject:</span>
+            <p id="d-subject" class="font-medium text-slate-900 mt-1"></p>
+          </div>
+          <div class="text-sm">
+            <span class="text-slate-400">Message:</span>
+            <p id="d-message" class="text-slate-700 mt-1 whitespace-pre-wrap bg-slate-50 rounded-lg p-3"></p>
+          </div>
+          <div class="border-t border-slate-200 pt-4">
+            <div class="flex items-end gap-3">
+              <div class="flex-1">
+                <label class="block text-xs text-slate-500 mb-1">Status</label>
+                <select id="d-status" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                  <option value="new">New</option>
+                  <option value="replied">Replied</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs text-slate-500 mb-1">Note</label>
+                <input id="d-note" type="text" placeholder="Internal note" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+              </div>
+              <button id="d-save" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  const modal = document.getElementById('detail-modal')!;
+  let currentId: number | null = null;
+
+  document.querySelectorAll('.detail-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = JSON.parse(btn.getAttribute('data-item') || '{}');
+      currentId = item.id;
+      (document.getElementById('d-name') as HTMLElement).textContent = item.name || '-';
+      (document.getElementById('d-email') as HTMLElement).textContent = item.email || '-';
+      (document.getElementById('d-category') as HTMLElement).textContent = item.category || '-';
+      (document.getElementById('d-date') as HTMLElement).textContent = item.created_at?.slice(0, 16) || '-';
+      (document.getElementById('d-subject') as HTMLElement).textContent = item.subject || '-';
+      (document.getElementById('d-message') as HTMLElement).textContent = item.message || '-';
+      (document.getElementById('d-status') as HTMLSelectElement).value = item.status || 'new';
+      (document.getElementById('d-note') as HTMLInputElement).value = item.note || '';
+      modal.classList.remove('hidden');
+    });
+  });
+
+  document.getElementById('detail-close')?.addEventListener('click', () => modal.classList.add('hidden'));
+  document.getElementById('detail-backdrop')?.addEventListener('click', () => modal.classList.add('hidden'));
+
+  document.getElementById('d-save')?.addEventListener('click', async () => {
+    if (!currentId) return;
+    const status = (document.getElementById('d-status') as HTMLSelectElement).value;
+    const note = (document.getElementById('d-note') as HTMLInputElement).value;
+    const btn = document.getElementById('d-save') as HTMLButtonElement;
+    btn.textContent = 'Saving...'; btn.disabled = true;
+    try {
+      const res = await fetch('/api/admin/contact-inquiries', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentId, status, note }),
+      });
+      if (res.ok) location.reload();
+      else { const d = await res.json(); alert(d.error || 'Failed'); }
+    } catch { alert('Network error'); }
+    btn.textContent = 'Save'; btn.disabled = false;
+  });
+</script>

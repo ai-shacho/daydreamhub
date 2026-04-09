@@ -19,7 +19,21 @@ if (Astro.request.method === 'POST') {
 
     if (!name || !email || !message) {
       error = '必須項目をすべて入力してください。';
-    } else if (RESEND_API_KEY) {
+    }
+
+    // Save to database
+    const db = env?.DB;
+    if (!error && db) {
+      try {
+        await db.prepare(
+          'INSERT INTO contact_inquiries (name, email, subject, message, category) VALUES (?, ?, ?, ?, ?)'
+        ).bind(name, email, subject, message, category).run();
+      } catch (e) {
+        console.error('Failed to save contact inquiry:', e);
+      }
+    }
+
+    if (!error && RESEND_API_KEY) {
       const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
   <h2 style="color:#0d9488">新しいお問い合わせ — DaydreamHub (日本語)</h2>
