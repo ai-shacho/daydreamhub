@@ -88,7 +88,7 @@ export const PATCH: APIRoute = async ({ request, params, locals }) => {
               <p><strong>${hotelName}</strong> has been assigned to your DaydreamHub owner account.</p>
               <p>You can now manage this hotel from the Owner Portal:</p>
               <div style="text-align:center;margin:24px 0">
-                <a href="https://daydreamhub.com/login?redirect=/owner" style="display:inline-block;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:700">Go to Owner Portal →</a>
+                <a href="${runtime?.env?.SITE_URL || 'https://daydreamhub.com'}/login?redirect=/owner" style="display:inline-block;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:700">Go to Owner Portal →</a>
               </div>
             </div>
           </div>`,

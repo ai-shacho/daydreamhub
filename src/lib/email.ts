@@ -107,7 +107,7 @@ export async function sendWelcomeEmail(
     </div>
 
     <div style="text-align:center;margin:28px 0">
-      <a href="https://daydreamhub.com/search"
+      <a href="${SITE_URL}/search"
          style="display:inline-block;padding:14px 32px;background:#46a3c2;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
         Find a Hotel →
       </a>
@@ -149,7 +149,7 @@ export async function sendOwnerAccountEmail(
       </table>
     </div>
     <div style="text-align:center;margin:28px 0">
-      <a href="https://daydreamhub.com/login?redirect=/owner"
+      <a href="${SITE_URL}/login?redirect=/owner"
          style="display:inline-block;padding:14px 32px;background:#46a3c2;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
         Log in to Owner Portal →
       </a>
@@ -219,7 +219,7 @@ export async function sendBookingNotificationToHotel(
     <strong>⚡ Action Required:</strong> Please log in to your Owner Portal to confirm or decline this booking within 24 hours.
   </div>
   <div style="text-align:center;margin:20px 0">
-    <a href="https://daydreamhub.com/owner/bookings" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px">
+    <a href="${SITE_URL}/owner/bookings" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px">
       Confirm or Decline → Owner Portal
     </a>
   </div>
@@ -273,7 +273,7 @@ export async function sendConciergeConfirmation(
       <strong>Important:</strong> The hotel room charge is paid directly at the hotel upon check-in. The $7 service fee was for the AI booking call only.
     </div>
     ${data.aiSummary ? `<div style="margin:16px 0;padding:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px"><strong>Call Summary:</strong><br>${escapeHtml(data.aiSummary)}</div>` : ''}
-    <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub AI Concierge - <a href="https://daydreamhub.com">daydreamhub.com</a></p>
+    <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub AI Concierge - <a href="${SITE_URL}">daydreamhub.com</a></p>
   </div>
 </div>`;
   return sendEmail({
@@ -357,13 +357,13 @@ export async function sendGuestBookingStatusUpdate(
           📍 <strong>Please show this email or your booking ID (#${data.bookingId}) at the hotel front desk.</strong>
         </div>
         <div style="text-align:center;margin:24px 0">
-          <a href="https://daydreamhub.com/mypage" style="display:inline-block;padding:12px 28px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">View My Booking</a>
+          <a href="${SITE_URL}/mypage" style="display:inline-block;padding:12px 28px;background:#059669;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">View My Booking</a>
         </div>`
       : `<div style="background:#fef9c3;border:1px solid #fde68a;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px">
           💳 If you were charged, a full refund will be processed within 5-10 business days.
         </div>
         <div style="text-align:center;margin:24px 0">
-          <a href="https://daydreamhub.com/search" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Find Another Hotel</a>
+          <a href="${SITE_URL}/search" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Find Another Hotel</a>
         </div>`
     }
 
@@ -437,7 +437,7 @@ export async function sendGuestBookingConfirmation(
     </div>
 
     <div style="text-align:center;margin:24px 0">
-      <a href="https://daydreamhub.com/mypage" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Check Booking Status</a>
+      <a href="${SITE_URL}/mypage" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Check Booking Status</a>
     </div>
 
     ${emailFooter()}
@@ -490,7 +490,7 @@ export async function sendPaymentFailureEmail(
     </div>
 
     <div style="text-align:center;margin:24px 0">
-      <a href="https://daydreamhub.com" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Return to DaydreamHub</a>
+      <a href="${SITE_URL}" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Return to DaydreamHub</a>
     </div>
 
     ${emailFooter()}

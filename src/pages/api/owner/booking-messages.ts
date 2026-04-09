@@ -55,7 +55,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           from: 'DaydreamHub <noreply@daydreamhub.com>',
           to: [booking.guest_email],
           subject: `💬 Reply from ${booking.hotel_name} — Booking #${booking_id}`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:600px"><h3>Message from ${booking.hotel_name}</h3><p>Regarding your booking #${booking_id}</p><blockquote style="border-left:3px solid #46a3c2;padding:8px 16px;color:#374151">${content.trim()}</blockquote><a href="https://daydreamhub.com/mypage" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#46a3c2;color:white;text-decoration:none;border-radius:6px">View & Reply in My Bookings</a></div>`,
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px"><h3>Message from ${booking.hotel_name}</h3><p>Regarding your booking #${booking_id}</p><blockquote style="border-left:3px solid #46a3c2;padding:8px 16px;color:#374151">${content.trim()}</blockquote><a href="${runtime?.env?.SITE_URL || 'https://daydreamhub.com'}/mypage" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#46a3c2;color:white;text-decoration:none;border-radius:6px">View & Reply in My Bookings</a></div>`,
         }),
       });
     } catch {}
