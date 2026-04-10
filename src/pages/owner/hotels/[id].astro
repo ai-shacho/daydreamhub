@@ -1,6 +1,6 @@
 ---
 import OwnerLayout from '../../../layouts/OwnerLayout.astro';
-import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { verifyOwner, getOwnerHotelIds, getStaffRole, canEditHotels } from '../../../lib/ownerAuth';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -8,6 +8,10 @@ const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
 
 const owner = await verifyOwner(Astro.request, jwtSecret);
 if (!owner) return Astro.redirect("/login?redirect=/owner/hotels");
+
+// Booking managers cannot edit hotel info
+const staffRole = owner.role === 'staff' ? await getStaffRole(db, owner.sub) : null;
+if (!canEditHotels(owner, staffRole)) return Astro.redirect("/owner");
 
 const { id } = Astro.params;
 const hotelId = parseInt(id || "0");

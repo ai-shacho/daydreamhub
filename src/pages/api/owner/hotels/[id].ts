@@ -53,6 +53,17 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+  // Booking managers cannot edit hotel info
+  if ((owner as any).role === 'staff') {
+    const { getStaffRole } = await import('../../../../lib/ownerAuth');
+    const staffRole = await getStaffRole(db, (owner as any).sub);
+    if (staffRole !== 'co_owner') {
+      return new Response(JSON.stringify({ error: 'Booking managers cannot edit hotel information' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
   const hotelId = parseInt(params.id || '0');
   const ownerHotelIds = await getOwnerHotelIds(db, owner);
   if (!ownerHotelIds.includes(hotelId)) {

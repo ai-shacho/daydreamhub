@@ -13,10 +13,14 @@ export const GET: APIRoute = async ({ request, locals }) => {
     });
   }
   if ((owner as any).role === 'staff') {
-    return new Response(JSON.stringify({ error: 'Only owners can manage staff' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const { getStaffRole } = await import('../../../lib/ownerAuth');
+    const staffRole = await getStaffRole(db, (owner as any).sub);
+    if (staffRole !== 'co_owner') {
+      return new Response(JSON.stringify({ error: 'Only owners and co-owners can manage staff' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
@@ -67,11 +71,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
+  // Allow owners and co_owners to manage staff
   if ((owner as any).role === 'staff') {
-    return new Response(JSON.stringify({ error: 'Only owners can manage staff' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const { getStaffRole } = await import('../../../lib/ownerAuth');
+    const staffRole = await getStaffRole(db, (owner as any).sub);
+    if (staffRole !== 'co_owner') {
+      return new Response(JSON.stringify({ error: 'Only owners and co-owners can manage staff' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
@@ -81,7 +90,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   try {
     const body: any = await request.json();
-    const { email, name, hotel_id } = body;
+    const { email, name, hotel_id, staff_role: requestedRole } = body;
+    const staffRoleValue = (requestedRole === 'co_owner') ? 'co_owner' : 'booking_manager';
     if (!email || !name || !hotel_id) {
       return new Response(
         JSON.stringify({ error: 'Email, name, and hotel_id are required' }),
@@ -132,8 +142,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       userId = insertRes?.meta?.last_row_id;
     }
     await db
-      .prepare('INSERT INTO hotel_staff (hotel_id, user_id, invited_by) VALUES (?, ?, ?)')
-      .bind(Number(hotel_id), userId, owner.sub)
+      .prepare('INSERT INTO hotel_staff (hotel_id, user_id, invited_by, staff_role) VALUES (?, ?, ?, ?)')
+      .bind(Number(hotel_id), userId, owner.sub, staffRoleValue)
       .run();
     return new Response(JSON.stringify({ success: true, user_id: userId }), {
       headers: { 'Content-Type': 'application/json' },
@@ -158,10 +168,14 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
     });
   }
   if ((owner as any).role === 'staff') {
-    return new Response(JSON.stringify({ error: 'Only owners can manage staff' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    const { getStaffRole } = await import('../../../lib/ownerAuth');
+    const staffRole = await getStaffRole(db, (owner as any).sub);
+    if (staffRole !== 'co_owner') {
+      return new Response(JSON.stringify({ error: 'Only owners and co-owners can manage staff' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
