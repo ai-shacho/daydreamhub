@@ -321,8 +321,8 @@ const translations = {
           if (!lat || !lng) {
             const coords = mapData.cityCoords[hotel.city];
             if (coords) {
-              lat = coords[0] + (Math.random() - 0.5) * 0.01;
-              lng = coords[1] + (Math.random() - 0.5) * 0.01;
+              lat = coords[0] + (Math.random() - 0.5) * 0.003;
+              lng = coords[1] + (Math.random() - 0.5) * 0.003;
             }
           }
           if (!lat || !lng) continue;
