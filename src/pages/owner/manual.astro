@@ -132,6 +132,11 @@ const chapters = [
         <div class="p-8">
           <p class="text-slate-600 text-sm mb-5">The Dashboard is the first screen after logging in. It gives you a quick overview of your property performance.</p>
 
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/dashboard.jpg" alt="Dashboard screen" class="w-full" loading="lazy" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">Dashboard — overview of your property performance</div>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Summary Cards</h3>
           <div class="grid grid-cols-2 gap-3 mb-5">
             {[['MY HOTELS','Number of properties registered'],['TOTAL BOOKINGS','Cumulative bookings received'],['THIS MONTH REVENUE','Revenue this month (USD)'],['PENDING BOOKINGS','Awaiting approval — action required']].map(([l,d]) => (
@@ -208,6 +213,11 @@ const chapters = [
         <div class="p-8">
           <p class="text-slate-600 text-sm mb-5">DayDreamHub uses a <strong>booking request system</strong>. When a guest completes payment via PayPal, the booking enters <em>pending</em> status and awaits your approval.</p>
 
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/bookings.jpg" alt="Bookings screen" class="w-full" loading="lazy" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">Bookings — filter by status, hotel, and date range</div>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Booking Status Types</h3>
           <div class="overflow-hidden rounded-xl border border-slate-200 mb-6">
             <table class="w-full text-sm">
@@ -257,6 +267,11 @@ const chapters = [
         <div class="p-8">
           <p class="text-slate-600 text-sm mb-5">Block specific dates when your property is unavailable (maintenance, holidays, etc.).</p>
 
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/calendar.jpg" alt="Calendar screen" class="w-full" loading="lazy" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">Calendar — click any date to block or unblock it</div>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Reading the Calendar</h3>
           <div class="flex gap-6 mb-5">
             <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-lg bg-red-400 shadow-sm"></div><span class="text-sm text-slate-700"><strong>Red</strong> — Blocked (no new bookings)</span></div>
@@ -265,7 +280,7 @@ const chapters = [
 
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Block / Unblock Dates</h3>
           <ol class="space-y-3 mb-4">
-            {['Click Calendar in the left sidebar.','Select your hotel from the dropdown at the top.','Double-click (or Shift+click) a date to block it — it turns red.','Double-click (or Shift+click) again to unblock — it returns to white.','Single-click a date to view bookings for that day.'].map((step, i) => (
+            {['Click Calendar in the left sidebar.','Select your hotel from the dropdown at the top.','Click any date to block it — it turns red.','Click a red date again to unblock — it returns to white.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
@@ -290,6 +305,11 @@ const chapters = [
           <h2 class="text-xl font-bold text-slate-900">Hotel & Plan Management</h2>
         </div>
         <div class="p-8">
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/hotels.jpg" alt="My Hotels screen" class="w-full" loading="lazy" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">My Hotels — manage your registered properties</div>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">My Hotels List</h3>
           <p class="text-sm text-slate-600 mb-3">Click <strong>My Hotels</strong> in the sidebar to see all your registered properties. Each row shows:</p>
           <ul class="space-y-2 mb-5">
@@ -370,6 +390,11 @@ const chapters = [
           <h2 class="text-xl font-bold text-slate-900">Sales Reports</h2>
         </div>
         <div class="p-8">
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/reports.jpg" alt="Reports screen" class="w-full" loading="lazy" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">Reports — view revenue, bookings, and export to CSV</div>
+          </div>
+
           <ol class="space-y-3 mb-5">
             {['Click Reports in the left sidebar.','Select a period: This Month / 3 Months / 6 Months / 1 Year.','If you have multiple hotels, use the hotel filter to narrow results.','Review the summary cards.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
@@ -380,7 +405,7 @@ const chapters = [
           </ol>
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Metrics</h3>
           <div class="grid grid-cols-2 gap-3 mb-5">
-            {[['TOTAL REVENUE','Total sales (USD)'],['TOTAL BOOKINGS','Confirmed bookings count'],['OCCUPANCY RATE','Percentage of available dates booked'],['AVG RATING','Average guest rating for the period']].map(([l,d]) => (
+            {[['TOTAL REVENUE','Total sales (USD)'],['TOTAL BOOKINGS','Confirmed bookings count'],['AVG BOOKING VALUE','Average revenue per booking'],['MONTH-OVER-MONTH','Growth compared to previous period']].map(([l,d]) => (
               <div class="border border-slate-200 rounded-xl p-3 bg-slate-50">
                 <p class="text-xs font-bold text-indigo-600 mb-1">{l}</p>
                 <p class="text-xs text-slate-500">{d}</p>
@@ -552,6 +577,11 @@ const chapters = [
           <h2 class="text-xl font-bold text-slate-900">Settings</h2>
         </div>
         <div class="p-8">
+          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
+            <img src="/manual-screenshots/settings.jpg" alt="Settings screen" class="w-full" loading="lazy" />
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">Settings — update profile and change password</div>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Update Your Profile</h3>
           <ol class="space-y-3 mb-4">
             {['Click Settings in the left sidebar.','Update your Full Name in the Profile Information section.','Click Update Profile to save.'].map((step, i) => (
