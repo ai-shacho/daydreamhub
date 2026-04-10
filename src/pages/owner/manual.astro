@@ -20,9 +20,8 @@ const chapters = [
   { id: 'ch10', num: 10, title: 'Staff Management' },
   { id: 'ch11', num: 11, title: 'Notifications' },
   { id: 'ch12', num: 12, title: 'Call Logs' },
-  { id: 'ch13', num: 13, title: 'Edit Requests' },
-  { id: 'ch14', num: 14, title: 'Settings' },
-  { id: 'ch15', num: 15, title: 'Contact & Support' },
+  { id: 'ch13', num: 13, title: 'Settings' },
+  { id: 'ch14', num: 14, title: 'Contact & Support' },
 ];
 ---
 
@@ -311,17 +310,13 @@ const chapters = [
 
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Editing Property Information</h3>
           <ol class="space-y-3 mb-5">
-            {['Click your property name to open the detail/edit screen.','Update the fields you want to change.','Click Save Changes — your changes will be submitted as an edit request.','Our team will review and approve the changes.'].map((step, i) => (
+            {['Click your property name to open the detail/edit screen.','Update the fields you want to change.','Click Save Changes — your changes are applied immediately.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
               </li>
             ))}
           </ol>
-          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
-            <span class="text-xl">💡</span>
-            <div>Edits are <strong>request-based</strong> — they go through a review process. You can track the status of your edit requests in the <strong>Edit Requests</strong> section (see Chapter 13).</div>
-          </div>
 
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Editable Fields</h3>
           <ul class="space-y-2 mb-6">
@@ -554,29 +549,6 @@ const chapters = [
       <section id="ch13" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
           <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 13</span>
-          <h2 class="text-xl font-bold text-slate-900">Edit Requests</h2>
-        </div>
-        <div class="p-8">
-          <p class="text-slate-600 text-sm mb-5">When you edit hotel information (Chapter 6), changes are submitted as edit requests for review. This page shows the status of all your submissions.</p>
-          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Request Statuses</h3>
-          <div class="overflow-hidden rounded-xl border border-slate-200 mb-5">
-            <table class="w-full text-sm">
-              <thead><tr class="bg-indigo-600 text-white text-left"><th class="px-4 py-3 font-semibold">Status</th><th class="px-4 py-3 font-semibold">Meaning</th></tr></thead>
-              <tbody>
-                <tr class="border-t border-slate-100"><td class="px-4 py-3"><span class="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded-full">Pending Review</span></td><td class="px-4 py-3 text-slate-600">Your changes are waiting for admin approval</td></tr>
-                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3"><span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full">Approved</span></td><td class="px-4 py-3 text-slate-600">Changes have been approved and applied</td></tr>
-                <tr class="border-t border-slate-100"><td class="px-4 py-3"><span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full">Rejected</span></td><td class="px-4 py-3 text-slate-600">Changes were not approved — contact support for details</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="text-sm text-slate-600">Use the status filter buttons at the top to quickly find pending, approved, or rejected requests. You can also filter by hotel.</p>
-        </div>
-      </section>
-
-      <!-- ── CH 14 ── -->
-      <section id="ch14" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
-          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 14</span>
           <h2 class="text-xl font-bold text-slate-900">Settings</h2>
         </div>
         <div class="p-8">
@@ -609,10 +581,10 @@ const chapters = [
         </div>
       </section>
 
-      <!-- ── CH 15 ── -->
-      <section id="ch15" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <!-- ── CH 14 ── -->
+      <section id="ch14" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
-          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 15</span>
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 14</span>
           <h2 class="text-xl font-bold text-slate-900">Contact & Support</h2>
         </div>
         <div class="p-8">
