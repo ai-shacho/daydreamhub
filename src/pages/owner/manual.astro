@@ -17,8 +17,12 @@ const chapters = [
   { id: 'ch7', num: 7, title: 'Sales Reports' },
   { id: 'ch8', num: 8, title: 'Guest Reviews' },
   { id: 'ch9', num: 9, title: 'Messages' },
-  { id: 'ch10', num: 10, title: 'Settings' },
-  { id: 'ch11', num: 11, title: 'Contact & Support' },
+  { id: 'ch10', num: 10, title: 'Staff Management' },
+  { id: 'ch11', num: 11, title: 'Notifications' },
+  { id: 'ch12', num: 12, title: 'Call Logs' },
+  { id: 'ch13', num: 13, title: 'Edit Requests' },
+  { id: 'ch14', num: 14, title: 'Settings' },
+  { id: 'ch15', num: 15, title: 'Contact & Support' },
 ];
 ---
 
@@ -47,7 +51,7 @@ const chapters = [
       <div class="bg-gradient-to-r from-indigo-700 to-indigo-500 rounded-2xl p-8 text-white">
         <p class="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-2">DayDreamHub</p>
         <h1 class="text-3xl font-extrabold mb-2">Owner Panel User Guide</h1>
-        <p class="text-indigo-200">For Hotel Owners & Property Managers — Version 1.0</p>
+        <p class="text-indigo-200">For Hotel Owners & Property Managers — Version 2.0</p>
       </div>
 
       <!-- ── CH 1 ── -->
@@ -63,10 +67,12 @@ const chapters = [
             {[
               ['📅','Approve / Reject Bookings','Review guest requests in real time and confirm or decline.'],
               ['📆','Calendar Management','Block dates to manage availability.'],
+              ['🏨','Hotel & Plan Management','Edit property info, photos, pricing, and plans.'],
               ['📊','Sales Reports','Track revenue and booking stats. Export to CSV.'],
               ['⭐','Reply to Reviews','Post official responses to guest reviews.'],
               ['💬','Messages','Communicate with guests about their bookings.'],
-              ['🏨','Hotel & Plan Management','Edit property info, photos, pricing, and plans.'],
+              ['👥','Staff Management','Invite and manage team members for your properties.'],
+              ['🔔','Notifications','Configure email alerts and auto-call settings per hotel.'],
             ].map(([icon, title, desc]) => (
               <div class="border border-slate-200 rounded-xl p-4 hover:border-indigo-200 hover:bg-indigo-50 transition-colors">
                 <div class="text-2xl mb-2">{icon}</div>
@@ -94,7 +100,7 @@ const chapters = [
           </ul>
           <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
             <span class="text-xl">⚠️</span>
-            <div><strong>Important:</strong> Change your password immediately after your first login. See Chapter 10 for instructions.</div>
+            <div><strong>Important:</strong> Change your password immediately after your first login. See Chapter 14 for instructions.</div>
           </div>
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Login Steps</h3>
           <ol class="space-y-3">
@@ -103,7 +109,7 @@ const chapters = [
               'Enter your email address in the Email field.',
               'Enter your password in the Password field.',
               'Click Sign In.',
-              'After logging in, click 🏨 Owner Portal at the bottom of the page.',
+              'After logging in, click Owner Portal at the bottom of the page.',
             ].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
@@ -127,13 +133,7 @@ const chapters = [
         <div class="p-8">
           <p class="text-slate-600 text-sm mb-5">The Dashboard is the first screen after logging in. It gives you a quick overview of your property performance.</p>
 
-          <!-- Screenshot -->
-          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
-            <img src="/manual-screenshots/dashboard.jpg" alt="Dashboard screen" class="w-full" />
-            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Dashboard screen — overview of your property performance</div>
-          </div>
-
-          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Summary Cards (top 4)</h3>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Summary Cards</h3>
           <div class="grid grid-cols-2 gap-3 mb-5">
             {[['MY HOTELS','Number of properties registered'],['TOTAL BOOKINGS','Cumulative bookings received'],['THIS MONTH REVENUE','Revenue this month (USD)'],['PENDING BOOKINGS','Awaiting approval — action required']].map(([l,d]) => (
               <div class="border border-slate-200 rounded-xl p-3 bg-slate-50">
@@ -146,11 +146,56 @@ const chapters = [
             <span class="text-xl">⚠️</span>
             <div>If <strong>PENDING BOOKINGS</strong> is not 0, guests are waiting. Please approve or reject them as soon as possible.</div>
           </div>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Next 7 Days</h3>
+          <p class="text-sm text-slate-600 mb-5">A mini calendar showing upcoming bookings for the next week, so you can prepare for check-ins at a glance.</p>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Quick Actions</h3>
+          <p class="text-sm text-slate-600 mb-5">Quick-access buttons to jump directly to: My Hotels, Bookings, Calendar, Reviews, Reports, Staff, Settings, and Messages.</p>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Latest Reviews & Recent Bookings</h3>
+          <p class="text-sm text-slate-600 mb-5">The dashboard also shows your 3 most recent guest reviews and a table of recent bookings, giving you a snapshot of activity without navigating to other pages.</p>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Left Sidebar Navigation</h3>
-          <div class="flex flex-wrap gap-2">
-            {['Dashboard','Bookings','Calendar','My Hotels','Reviews','Reports','Messages','Staff','Settings'].map(item => (
-              <span class="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1 rounded-full border border-indigo-200">{item}</span>
-            ))}
+          <div class="space-y-3">
+            <div>
+              <p class="text-xs text-slate-400 font-bold mb-1">Main</p>
+              <div class="flex flex-wrap gap-2">
+                {['Dashboard','Bookings','Calendar'].map(item => (
+                  <span class="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1 rounded-full border border-indigo-200">{item}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 font-bold mb-1">Hotel</p>
+              <div class="flex flex-wrap gap-2">
+                {['My Hotels','Reviews'].map(item => (
+                  <span class="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1 rounded-full border border-indigo-200">{item}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 font-bold mb-1">Insights</p>
+              <div class="flex flex-wrap gap-2">
+                {['Reports','Messages'].map(item => (
+                  <span class="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1 rounded-full border border-indigo-200">{item}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 font-bold mb-1">Settings</p>
+              <div class="flex flex-wrap gap-2">
+                {['Staff','Notifications','Call Logs','Settings'].map(item => (
+                  <span class="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1 rounded-full border border-indigo-200">{item}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p class="text-xs text-slate-400 font-bold mb-1">Help</p>
+              <div class="flex flex-wrap gap-2">
+                <span class="bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1 rounded-full border border-indigo-200">User Guide</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -159,15 +204,10 @@ const chapters = [
       <section id="ch4" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
           <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 4</span>
-          <h2 class="text-xl font-bold text-slate-900">Managing Bookings (Approve / Reject)</h2>
+          <h2 class="text-xl font-bold text-slate-900">Managing Bookings</h2>
         </div>
         <div class="p-8">
           <p class="text-slate-600 text-sm mb-5">DayDreamHub uses a <strong>booking request system</strong>. When a guest completes payment via PayPal, the booking enters <em>pending</em> status and awaits your approval.</p>
-
-          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
-            <img src="/manual-screenshots/bookings.jpg" alt="Bookings screen" class="w-full" />
-            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Bookings screen — filter by status, approve or reject requests</div>
-          </div>
 
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Booking Status Types</h3>
           <div class="overflow-hidden rounded-xl border border-slate-200 mb-6">
@@ -181,9 +221,17 @@ const chapters = [
             </table>
           </div>
 
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Filter & Search</h3>
+          <p class="text-sm text-slate-600 mb-3">Use the filter panel at the top of the Bookings page to narrow results:</p>
+          <ul class="space-y-2 mb-5">
+            {['Status filter — show only pending, confirmed, or cancelled bookings','Hotel filter — filter by specific property','Date range — set From and To dates','Sort by — creation date, check-in date, amount, or status','Sort order — ascending or descending'].map(item => (
+              <li class="flex items-start gap-2 text-sm text-slate-700"><span class="text-indigo-500 font-bold mt-0.5">›</span><span>{item}</span></li>
+            ))}
+          </ul>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">How to Approve or Reject</h3>
           <ol class="space-y-3 mb-5">
-            {['Click Bookings in the left sidebar.','Use the Status filter → select pending to view requests awaiting action.','Review booking details: guest name, plan, check-in date, amount.','Click Approve or Reject in the Actions column.','Confirm in the dialog that appears.'].map((step, i) => (
+            {['Click Bookings in the left sidebar.','Use the Status filter to select pending.','Review booking details: guest name, plan, check-in/out dates, amount.','Click Approve or Reject in the Actions column.','Confirm in the dialog that appears.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
@@ -194,12 +242,10 @@ const chapters = [
             <span class="text-xl">✉️</span>
             <div>Guest receives an automatic email notification after you approve or reject. No manual contact needed.</div>
           </div>
-          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-5 text-sm">
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-sm">
             <span class="text-xl">⚠️</span>
             <div><strong>Rejecting = full refund to the guest.</strong> Only reject when truly necessary. Repeated rejections may result in account suspension.</div>
           </div>
-          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">CSV Export</h3>
-          <p class="text-sm text-slate-600">Click <strong>Export CSV</strong> to download the booking list for Excel or Google Sheets.</p>
         </div>
       </section>
 
@@ -212,11 +258,6 @@ const chapters = [
         <div class="p-8">
           <p class="text-slate-600 text-sm mb-5">Block specific dates when your property is unavailable (maintenance, holidays, etc.).</p>
 
-          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
-            <img src="/manual-screenshots/calendar.jpg" alt="Calendar screen" class="w-full" />
-            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Calendar screen — click any date to block or unblock it</div>
-          </div>
-
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Reading the Calendar</h3>
           <div class="flex gap-6 mb-5">
             <div class="flex items-center gap-2"><div class="w-7 h-7 rounded-lg bg-red-400 shadow-sm"></div><span class="text-sm text-slate-700"><strong>Red</strong> — Blocked (no new bookings)</span></div>
@@ -225,29 +266,21 @@ const chapters = [
 
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Block / Unblock Dates</h3>
           <ol class="space-y-3 mb-4">
-            {['Click Calendar in the left sidebar.','Select your hotel from the dropdown at the top.','Click a date → it turns red (blocked).','Click again → it returns to white (unblocked).'].map((step, i) => (
+            {['Click Calendar in the left sidebar.','Select your hotel from the dropdown at the top.','Double-click (or Shift+click) a date to block it — it turns red.','Double-click (or Shift+click) again to unblock — it returns to white.','Single-click a date to view bookings for that day.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
               </li>
             ))}
           </ol>
-          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex gap-3 mb-4 text-sm">
             <span class="text-xl">✅</span>
             <div>Blocked dates prevent new bookings. Already confirmed reservations are <strong>not</strong> affected.</div>
           </div>
-          <!-- ICAL_HIDDEN_START - iCal sync section hidden. Remove this comment block to restore.
-          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">iCal Sync (Advanced)</h3>
-          <p class="text-sm text-slate-600 mb-3">Automatically sync blocked dates with external OTAs (Booking.com, Airbnb, etc.).</p>
-          <ol class="space-y-3">
-            {['Go to My Hotels and click your property name.','Copy the iCal URL and paste it into the calendar settings of the external service.'].map((step, i) => (
-              <li class="flex items-start gap-3 text-sm text-slate-700">
-                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
-                <span class="mt-1">{step}</span>
-              </li>
-            ))}
-          </ol>
-          ICAL_HIDDEN_END -->
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 text-sm">
+            <span class="text-xl">💡</span>
+            <div>Use the <strong>Previous / Next</strong> month buttons and <strong>Today</strong> button to navigate the calendar.</div>
+          </div>
         </div>
       </section>
 
@@ -258,29 +291,70 @@ const chapters = [
           <h2 class="text-xl font-bold text-slate-900">Hotel & Plan Management</h2>
         </div>
         <div class="p-8">
-          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
-            <img src="/manual-screenshots/hotels.jpg" alt="My Hotels screen" class="w-full" />
-            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ My Hotels screen — manage your registered properties</div>
-          </div>
-          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Editing Property Information</h3>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">My Hotels List</h3>
+          <p class="text-sm text-slate-600 mb-3">Click <strong>My Hotels</strong> in the sidebar to see all your registered properties. Each row shows:</p>
+          <ul class="space-y-2 mb-5">
+            {['Property thumbnail and name (with Japanese name if set)','City and country','Number of active plans','Number of active bookings','Status: Active or Pending Review'].map(item => (
+              <li class="flex items-start gap-2 text-sm text-slate-700"><span class="text-indigo-500 font-bold mt-0.5">›</span><span>{item}</span></li>
+            ))}
+          </ul>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Adding a New Hotel</h3>
           <ol class="space-y-3 mb-5">
-            {['Click My Hotels in the left sidebar.','Click your property name to open the detail/edit screen.','Update the fields and click Save.'].map((step, i) => (
+            {['Click the Add Hotel button at the top right.','Fill in the required fields: Hotel Name, City, Country.','Optionally add: Japanese name, Address, Property Type, Phone, Description.','Click Submit — the hotel will be reviewed by our team before going live.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
               </li>
             ))}
           </ol>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Editing Property Information</h3>
+          <ol class="space-y-3 mb-5">
+            {['Click your property name to open the detail/edit screen.','Update the fields you want to change.','Click Save Changes — your changes will be submitted as an edit request.','Our team will review and approve the changes.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+            <span class="text-xl">💡</span>
+            <div>Edits are <strong>request-based</strong> — they go through a review process. You can track the status of your edit requests in the <strong>Edit Requests</strong> section (see Chapter 13).</div>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Editable Fields</h3>
           <ul class="space-y-2 mb-6">
-            {['Property name & description (English / Japanese)','Address, phone number, and contact email','Check-in and check-out times','Property photos','Plan details: base price, weekend price, max guests'].map(item => (
+            {['Property name & description (English / Japanese)','Address, latitude, and longitude','Property type, amenities, and categories','Thumbnail URL','Gallery photos (upload up to 20 images)'].map(item => (
               <li class="flex items-start gap-2 text-sm text-slate-700"><span class="text-indigo-500 font-bold mt-0.5">›</span><span>{item}</span></li>
             ))}
           </ul>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Gallery Photos</h3>
+          <p class="text-sm text-slate-600 mb-5">On the hotel detail screen, scroll to the Gallery section. You can upload up to 20 images. Drag to reorder, and click the delete button to remove individual photos.</p>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Managing Plans (Room Types & Pricing)</h3>
+          <p class="text-sm text-slate-600 mb-3">Plans are grouped by <strong>Room Type</strong>. Each plan represents a specific booking option guests can choose.</p>
+          <div class="overflow-hidden rounded-xl border border-slate-200 mb-5">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-indigo-600 text-white text-left"><th class="px-4 py-3 font-semibold">Field</th><th class="px-4 py-3 font-semibold">Description</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Room Type</td><td class="px-4 py-3 text-slate-600">Group plans by room type (e.g., Standard Twin, Deluxe Suite)</td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Plan Name</td><td class="px-4 py-3 text-slate-600">Display name for the plan (English and Japanese)</td></tr>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Weekday Price</td><td class="px-4 py-3 text-slate-600">Base price in USD (Monday–Friday)</td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Weekend Price</td><td class="px-4 py-3 text-slate-600">Optional higher price for Saturday/Sunday</td></tr>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Max Guests</td><td class="px-4 py-3 text-slate-600">Maximum number of guests per booking</td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Check-in / Check-out</td><td class="px-4 py-3 text-slate-600">Available time slots (30-minute intervals)</td></tr>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Plan Type</td><td class="px-4 py-3 text-slate-600">Daycation, Morning, Afternoon, Evening, Overnight, Hourly, etc.</td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Cancellation Policy</td><td class="px-4 py-3 text-slate-600">Hours before check-in that cancellation is allowed</td></tr>
+              </tbody>
+            </table>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Pausing a Plan</h3>
           <p class="text-sm text-slate-600 mb-3">Temporarily stop accepting bookings for a plan without deleting it.</p>
           <ol class="space-y-3 mb-4">
-            {['Open the property detail screen and find the plan list.','Click Pause → the plan is hidden from guest search.','Click Resume when ready to accept bookings again.'].map((step, i) => (
+            {['Open the property detail screen and find the plan list.','Click Pause — the plan is hidden from guest search.','Click Resume when ready to accept bookings again.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
@@ -301,12 +375,8 @@ const chapters = [
           <h2 class="text-xl font-bold text-slate-900">Sales Reports</h2>
         </div>
         <div class="p-8">
-          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
-            <img src="/manual-screenshots/reports.jpg" alt="Reports screen" class="w-full" />
-            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Reports screen — view revenue and export to CSV</div>
-          </div>
           <ol class="space-y-3 mb-5">
-            {['Click Reports in the left sidebar.','Select a period: This Month / 3 Months / 6 Months / 1 Year.','Review the summary cards for revenue, bookings, and average value.'].map((step, i) => (
+            {['Click Reports in the left sidebar.','Select a period: This Month / 3 Months / 6 Months / 1 Year.','If you have multiple hotels, use the hotel filter to narrow results.','Review the summary cards.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
@@ -315,7 +385,7 @@ const chapters = [
           </ol>
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Metrics</h3>
           <div class="grid grid-cols-2 gap-3 mb-5">
-            {[['TOTAL REVENUE','Total sales (USD)'],['TOTAL BOOKINGS','Confirmed bookings count'],['AVG BOOKING VALUE','Average per booking'],['MONTH-OVER-MONTH','Growth vs. previous month']].map(([l,d]) => (
+            {[['TOTAL REVENUE','Total sales (USD)'],['TOTAL BOOKINGS','Confirmed bookings count'],['OCCUPANCY RATE','Percentage of available dates booked'],['AVG RATING','Average guest rating for the period']].map(([l,d]) => (
               <div class="border border-slate-200 rounded-xl p-3 bg-slate-50">
                 <p class="text-xs font-bold text-indigo-600 mb-1">{l}</p>
                 <p class="text-xs text-slate-500">{d}</p>
@@ -334,9 +404,10 @@ const chapters = [
         </div>
         <div class="p-8">
           <p class="text-slate-600 text-sm mb-5">Guests can post reviews after checkout. Reviews are publicly visible on your property page.</p>
+          <p class="text-sm text-slate-600 mb-3">At the top of the Reviews page, you can see your <strong>Average Rating</strong> and <strong>Total Approved Reviews</strong>. Use the hotel and rating filters to narrow the list.</p>
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">View & Reply to Reviews</h3>
           <ol class="space-y-3 mb-4">
-            {['Click Reviews in the left sidebar.','Browse the list: rating, comment, and date.','Click Reply on any review to write an official response.','Submit your reply.'].map((step, i) => (
+            {['Click Reviews in the left sidebar.','Browse the list: rating, comment, guest name, and date.','Use the hotel or rating filter to narrow results.','Click Reply on any review to write an official response.','Submit your reply.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
@@ -362,8 +433,14 @@ const chapters = [
         </div>
         <div class="p-8">
           <p class="text-slate-600 text-sm mb-5">Use the built-in messaging system to communicate with guests about their bookings.</p>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Filter Messages</h3>
+          <ul class="space-y-2 mb-5">
+            {['Hotel filter — view messages for a specific property or all hotels','Direction filter — All messages, From Guests (inbound), or From Hotel (outbound)'].map(item => (
+              <li class="flex items-start gap-2 text-sm text-slate-700"><span class="text-indigo-500 font-bold mt-0.5">›</span><span>{item}</span></li>
+            ))}
+          </ul>
           <ol class="space-y-3 mb-4">
-            {['Click Messages in the left sidebar.','Select a conversation from the list.','Type your reply and send.'].map((step, i) => (
+            {['Click Messages in the left sidebar.','Use the filters to find the conversation.','Select a message to view the full thread.','Type your reply and send.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
@@ -381,13 +458,128 @@ const chapters = [
       <section id="ch10" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
           <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 10</span>
+          <h2 class="text-xl font-bold text-slate-900">Staff Management</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">Invite team members to help manage your properties. Staff can access the Owner Panel with limited permissions.</p>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Inviting Staff</h3>
+          <ol class="space-y-3 mb-5">
+            {['Click Staff in the left sidebar.','Fill in the Name and Email fields in the Invite form.','Select which hotel to assign them to.','Click Invite Staff.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Removing Staff</h3>
+          <ol class="space-y-3 mb-4">
+            {['Find the staff member in the table.','Click Remove in the Actions column.','Confirm the removal in the dialog.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 text-sm">
+            <span class="text-xl">💡</span>
+            <div>Staff members cannot access the Staff management page or invite other staff. Only hotel owners can manage team members.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CH 11 ── -->
+      <section id="ch11" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 11</span>
+          <h2 class="text-xl font-bold text-slate-900">Notifications</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">Configure which notifications you receive for each hotel.</p>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Available Settings (per hotel)</h3>
+          <div class="overflow-hidden rounded-xl border border-slate-200 mb-5">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-indigo-600 text-white text-left"><th class="px-4 py-3 font-semibold">Setting</th><th class="px-4 py-3 font-semibold">Description</th><th class="px-4 py-3 font-semibold">Default</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Email on new booking</td><td class="px-4 py-3 text-slate-600">Receive email when a guest makes a booking</td><td class="px-4 py-3"><span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full">ON</span></td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Email on cancellation</td><td class="px-4 py-3 text-slate-600">Receive email when a booking is cancelled</td><td class="px-4 py-3"><span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full">ON</span></td></tr>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Email on new review</td><td class="px-4 py-3 text-slate-600">Receive email when a guest posts a review</td><td class="px-4 py-3"><span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full">ON</span></td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Auto-call enabled</td><td class="px-4 py-3 text-slate-600">Automatically place a phone call for new bookings</td><td class="px-4 py-3"><span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full">ON</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ol class="space-y-3 mb-4">
+            {['Click Notifications in the left sidebar.','Toggle each setting on or off for each hotel.','Click Save to apply your changes.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <!-- ── CH 12 ── -->
+      <section id="ch12" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 12</span>
+          <h2 class="text-xl font-bold text-slate-900">Call Logs</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">When auto-call is enabled, DayDreamHub automatically places phone calls to your hotel for new bookings. The Call Logs page shows the history of these call attempts.</p>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Call Status Types</h3>
+          <div class="grid grid-cols-2 gap-3 mb-5">
+            {[
+              ['confirmed','Hotel confirmed the booking via phone'],
+              ['declined','Hotel declined the booking via phone'],
+              ['no_answer','Call was not answered'],
+              ['voicemail','Reached voicemail'],
+              ['failed','Call could not be completed'],
+              ['queued','Call is scheduled and waiting'],
+            ].map(([status, desc]) => (
+              <div class="border border-slate-200 rounded-xl p-3 bg-slate-50">
+                <p class="text-xs font-bold text-indigo-600 mb-1">{status}</p>
+                <p class="text-xs text-slate-500">{desc}</p>
+              </div>
+            ))}
+          </div>
+          <p class="text-sm text-slate-600 mb-3">Use the <strong>Status</strong> and <strong>Hotel</strong> filters to find specific call records. Each entry shows the booking ID, guest name, hotel, call status, date/time, and duration.</p>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 text-sm">
+            <span class="text-xl">💡</span>
+            <div>To disable auto-calls for a specific hotel, go to <strong>Notifications</strong> and turn off the Auto-call setting.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── CH 13 ── -->
+      <section id="ch13" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 13</span>
+          <h2 class="text-xl font-bold text-slate-900">Edit Requests</h2>
+        </div>
+        <div class="p-8">
+          <p class="text-slate-600 text-sm mb-5">When you edit hotel information (Chapter 6), changes are submitted as edit requests for review. This page shows the status of all your submissions.</p>
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Request Statuses</h3>
+          <div class="overflow-hidden rounded-xl border border-slate-200 mb-5">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-indigo-600 text-white text-left"><th class="px-4 py-3 font-semibold">Status</th><th class="px-4 py-3 font-semibold">Meaning</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3"><span class="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded-full">Pending Review</span></td><td class="px-4 py-3 text-slate-600">Your changes are waiting for admin approval</td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3"><span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2 py-1 rounded-full">Approved</span></td><td class="px-4 py-3 text-slate-600">Changes have been approved and applied</td></tr>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3"><span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full">Rejected</span></td><td class="px-4 py-3 text-slate-600">Changes were not approved — contact support for details</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-sm text-slate-600">Use the status filter buttons at the top to quickly find pending, approved, or rejected requests. You can also filter by hotel.</p>
+        </div>
+      </section>
+
+      <!-- ── CH 14 ── -->
+      <section id="ch14" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 14</span>
           <h2 class="text-xl font-bold text-slate-900">Settings</h2>
         </div>
         <div class="p-8">
-          <div class="rounded-xl overflow-hidden border border-slate-200 shadow-md mb-6">
-            <img src="/manual-screenshots/settings.jpg" alt="Settings screen" class="w-full" />
-            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-xs text-slate-500 text-center">▲ Settings screen — update profile and change password</div>
-          </div>
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Update Your Profile</h3>
           <ol class="space-y-3 mb-4">
             {['Click Settings in the left sidebar.','Update your Full Name in the Profile Information section.','Click Update Profile to save.'].map((step, i) => (
@@ -410,19 +602,17 @@ const chapters = [
               </li>
             ))}
           </ol>
-          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-sm">
             <span class="text-xl">🔑</span>
             <div><strong>Change your password after your first login.</strong> Use a strong, unique password of at least 8 characters.</div>
           </div>
-          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-2">Notification Preferences</h3>
-          <p class="text-sm text-slate-600">Click <strong>Manage Notifications</strong> to control which email alerts you receive (new bookings, guest messages, etc.).</p>
         </div>
       </section>
 
-      <!-- ── CH 11 ── -->
-      <section id="ch11" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <!-- ── CH 15 ── -->
+      <section id="ch15" class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="bg-indigo-50 border-b border-indigo-100 px-8 py-5 flex items-center gap-3">
-          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 11</span>
+          <span class="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full">CHAPTER 15</span>
           <h2 class="text-xl font-bold text-slate-900">Contact & Support</h2>
         </div>
         <div class="p-8">
@@ -439,7 +629,7 @@ const chapters = [
             <span class="text-xl">✅</span>
             <div>When contacting support, include your <strong>property name</strong>, <strong>registered email</strong>, and a description (or screenshot) of the issue for faster assistance.</div>
           </div>
-          <p class="text-center text-slate-400 text-xs mt-8">© 2026 DayDreamHub — Owner Panel User Guide v1.0</p>
+          <p class="text-center text-slate-400 text-xs mt-8">&copy; 2026 DayDreamHub — Owner Panel User Guide v2.0</p>
         </div>
       </section>
 
