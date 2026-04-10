@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { getAirportCoords, haversineKm, nearestAirport } from '../lib/airports';
+import { getAirportCoords, haversineKm, nearestAirport, airportList } from '../lib/airports';
 
 // Get D1 database binding
 const DB = (Astro.locals as any).runtime?.env?.DB;
@@ -106,93 +106,10 @@ if (DB) {
     ).bind(...params, fetchLimit, fetchOffset).all();
     let allResults: any[] = result?.results || [];
 
-    // Inline airport list & nearest-airport calc (avoid module bundling issues)
-    const _airports = [
-      // Southeast Asia
-      { code:'BKK', lat:13.6811, lng:100.7472 }, { code:'DMK', lat:13.9126, lng:100.6067 },
-      { code:'DPS', lat:-8.7482, lng:115.1671 }, { code:'CGK', lat:-6.1256, lng:106.6559 },
-      { code:'KUL', lat:2.7456, lng:101.7072 },  { code:'SIN', lat:1.3644, lng:103.9915 },
-      { code:'MNL', lat:14.5086, lng:121.0194 }, { code:'CEB', lat:10.3075, lng:123.9792 },
-      { code:'SGN', lat:10.8188, lng:106.6520 }, { code:'HAN', lat:21.2187, lng:105.8072 },
-      { code:'DAD', lat:16.0439, lng:108.1993 }, { code:'HKT', lat:8.1132, lng:98.3161 },
-      { code:'USM', lat:9.5479, lng:100.0623 },  { code:'PNH', lat:11.5466, lng:104.8440 },
-      { code:'RGN', lat:16.9073, lng:96.1332 },
-      // East Asia
-      { code:'HND', lat:35.5494, lng:139.7798 }, { code:'NRT', lat:35.7720, lng:140.3929 },
-      { code:'KIX', lat:34.4347, lng:135.2440 }, { code:'ICN', lat:37.4691, lng:126.4510 },
-      { code:'PEK', lat:40.0799, lng:116.6031 }, { code:'PVG', lat:31.1443, lng:121.8083 },
-      { code:'HKG', lat:22.3080, lng:113.9185 }, { code:'TPE', lat:25.0777, lng:121.2328 },
-      // South Asia
-      { code:'BOM', lat:19.0896, lng:72.8656 },  { code:'DEL', lat:28.5562, lng:77.1000 },
-      { code:'CMB', lat:7.1806, lng:79.8841 },   { code:'CCU', lat:22.6547, lng:88.4467 },
-      { code:'MAA', lat:12.9941, lng:80.1709 },
-      // Middle East
-      { code:'DXB', lat:25.2528, lng:55.3644 },  { code:'AUH', lat:24.4330, lng:54.6511 },
-      { code:'DOH', lat:25.2731, lng:51.6081 },  { code:'BAH', lat:26.2708, lng:50.6336 },
-      { code:'KWI', lat:29.2267, lng:47.9689 },  { code:'MCT', lat:23.5933, lng:58.2844 },
-      { code:'AMM', lat:31.7226, lng:35.9932 },  { code:'BEY', lat:33.8209, lng:35.4884 },
-      // Africa
-      { code:'NBO', lat:-1.3192, lng:36.9275 },  { code:'CAI', lat:30.1219, lng:31.4056 },
-      { code:'JNB', lat:-26.1392, lng:28.2460 }, { code:'CPT', lat:-33.9648, lng:18.6017 },
-      { code:'LOS', lat:6.5774, lng:3.3215 },    { code:'ABV', lat:9.0068, lng:7.2632 },
-      { code:'ACC', lat:5.6052, lng:-0.1668 },   { code:'DKR', lat:14.7397, lng:-17.4902 },
-      { code:'CMN', lat:33.3675, lng:-7.5900 },  { code:'TUN', lat:36.8510, lng:10.2272 },
-      { code:'ADD', lat:8.9779, lng:38.7993 },   { code:'DAR', lat:-6.8781, lng:39.2026 },
-      // South Asia (additional)
-      { code:'ISB', lat:33.6167, lng:73.0992 },  { code:'AGR', lat:27.1558, lng:77.9608 },
-      { code:'PBH', lat:27.4032, lng:89.4246 },
-      // Central Asia
-      { code:'TAS', lat:41.2579, lng:69.2813 },  { code:'SKD', lat:39.7005, lng:66.9838 },
-      { code:'ULN', lat:47.8431, lng:106.7666 },
-      // Caucasus
-      { code:'TBS', lat:41.6692, lng:44.9547 },  { code:'EVN', lat:40.1473, lng:44.3959 },
-      { code:'BUS', lat:41.6103, lng:41.5997 },
-      // Europe
-      { code:'LHR', lat:51.4775, lng:-0.4614 },  { code:'CDG', lat:49.0097, lng:2.5479 },
-      { code:'AMS', lat:52.3086, lng:4.7639 },   { code:'FRA', lat:50.0379, lng:8.5622 },
-      { code:'MAD', lat:40.4936, lng:-3.5668 },  { code:'FCO', lat:41.8003, lng:12.2389 },
-      { code:'IST', lat:41.2753, lng:28.7519 },  { code:'VIE', lat:48.1103, lng:16.5697 },
-      { code:'ZRH', lat:47.4647, lng:8.5492 },   { code:'BHX', lat:52.4539, lng:-1.7480 },
-      { code:'HEL', lat:60.3172, lng:24.9633 },  { code:'OUL', lat:64.9301, lng:25.3546 },
-      { code:'LED', lat:59.8003, lng:30.2625 },  { code:'PRG', lat:50.1008, lng:14.2600 },
-      { code:'BEG', lat:44.8184, lng:20.3091 },  { code:'SOF', lat:42.6952, lng:23.4062 },
-      { code:'OPO', lat:41.2481, lng:-8.6814 },  { code:'VLC', lat:39.4893, lng:-0.4816 },
-      { code:'VCE', lat:45.5053, lng:12.3519 },  { code:'TLS', lat:43.6291, lng:1.3678 },
-      { code:'RTM', lat:51.9569, lng:4.4372 },
-      // Americas
-      { code:'JFK', lat:40.6413, lng:-73.7781 }, { code:'LAX', lat:33.9425, lng:-118.4081 },
-      { code:'ORD', lat:41.9742, lng:-87.9073 }, { code:'MIA', lat:25.7959, lng:-80.2870 },
-      { code:'YYZ', lat:43.6777, lng:-79.6248 }, { code:'YYC', lat:51.1315, lng:-114.0105 },
-      { code:'GRU', lat:-23.4356, lng:-46.4731 },{ code:'BOG', lat:4.7016, lng:-74.1469 },
-      { code:'MEX', lat:19.4363, lng:-99.0721 }, { code:'LIM', lat:-12.0219, lng:-77.1143 },
-      // Oceania
-      { code:'SYD', lat:-33.9399, lng:151.1753 },{ code:'MEL', lat:-37.6690, lng:144.8410 },
-      { code:'BNE', lat:-27.3842, lng:153.1175 },{ code:'AKL', lat:-37.0082, lng:174.7850 },
-      { code:'PER', lat:-31.9403, lng:115.9669 },
-    ];
-    function _hvKm(la1: number, lo1: number, la2: number, lo2: number): number {
-      const R = 6371, p = Math.PI / 180;
-      const dLa = (la2 - la1) * p;
-      const dLo = (lo2 - lo1) * p;
-      const sLa = Math.sin(dLa / 2);
-      const sLo = Math.sin(dLo / 2);
-      const a = sLa * sLa + Math.cos(la1 * p) * Math.cos(la2 * p) * sLo * sLo;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-    function _nearestAp(lat: number, lng: number) {
-      let best: {code:string;km:number}|null = null;
-      for (const ap of _airports) {
-        const km = _hvKm(lat, lng, ap.lat, ap.lng);
-        if (!best || km < best.km) best = {code:ap.code, km};
-      }
-      return best;
-    }
-
-    // Always compute nearest airport for each hotel from coordinates
+    // Compute nearest airport for each hotel using shared airport list
     allResults = allResults.map((h: any) => {
       if (h.latitude == null || h.longitude == null) return { ...h, _airport_km: null, _airport_code: null };
-      const ap = _nearestAp(Number(h.latitude), Number(h.longitude));
+      const ap = nearestAirport(Number(h.latitude), Number(h.longitude));
       return { ...h, _airport_km: ap?.km ?? null, _airport_code: ap?.code ?? null };
     });
 
