@@ -66,10 +66,100 @@ const mapHotels = hotels.map((h: any) => ({
   minPrice: h.min_price || null,
 }));
 
+// Build airport markers data (unique major airports with Japanese names)
+const airportMarkersData = [
+  { code: 'BKK', name: 'スワンナプーム国際空港', lat: 13.6811, lng: 100.7472 },
+  { code: 'DMK', name: 'ドンムアン空港', lat: 13.9126, lng: 100.6067 },
+  { code: 'DPS', name: 'ングラライ国際空港', lat: -8.7482, lng: 115.1671 },
+  { code: 'CGK', name: 'スカルノ・ハッタ国際空港', lat: -6.1256, lng: 106.6559 },
+  { code: 'KUL', name: 'クアラルンプール国際空港', lat: 2.7456, lng: 101.7072 },
+  { code: 'SIN', name: 'チャンギ国際空港', lat: 1.3644, lng: 103.9915 },
+  { code: 'MNL', name: 'ニノイ・アキノ国際空港', lat: 14.5086, lng: 121.0194 },
+  { code: 'CEB', name: 'マクタン・セブ国際空港', lat: 10.3075, lng: 123.9792 },
+  { code: 'SGN', name: 'タンソンニャット国際空港', lat: 10.8188, lng: 106.6520 },
+  { code: 'HAN', name: 'ノイバイ国際空港', lat: 21.2187, lng: 105.8072 },
+  { code: 'DAD', name: 'ダナン国際空港', lat: 16.0439, lng: 108.1993 },
+  { code: 'HKT', name: 'プーケット国際空港', lat: 8.1132, lng: 98.3161 },
+  { code: 'USM', name: 'サムイ空港', lat: 9.5479, lng: 100.0623 },
+  { code: 'PNH', name: 'プノンペン国際空港', lat: 11.5466, lng: 104.8440 },
+  { code: 'HND', name: '羽田空港', lat: 35.5494, lng: 139.7798 },
+  { code: 'NRT', name: '成田国際空港', lat: 35.7720, lng: 140.3929 },
+  { code: 'KIX', name: '関西国際空港', lat: 34.4347, lng: 135.2440 },
+  { code: 'FUK', name: '福岡空港', lat: 33.5859, lng: 130.4513 },
+  { code: 'ICN', name: '仁川国際空港', lat: 37.4691, lng: 126.4510 },
+  { code: 'HKG', name: '香港国際空港', lat: 22.3080, lng: 113.9185 },
+  { code: 'TPE', name: '桃園国際空港', lat: 25.0777, lng: 121.2328 },
+  { code: 'PEK', name: '北京首都国際空港', lat: 40.0799, lng: 116.6031 },
+  { code: 'PVG', name: '上海浦東国際空港', lat: 31.1443, lng: 121.8083 },
+  { code: 'BOM', name: 'ムンバイ国際空港', lat: 19.0896, lng: 72.8656 },
+  { code: 'DEL', name: 'デリー国際空港', lat: 28.5562, lng: 77.1000 },
+  { code: 'CMB', name: 'バンダラナイケ国際空港', lat: 7.1806, lng: 79.8841 },
+  { code: 'ISB', name: 'イスラマバード空港', lat: 33.6167, lng: 73.0992 },
+  { code: 'TAS', name: 'タシケント空港', lat: 41.2579, lng: 69.2813 },
+  { code: 'ALA', name: 'アルマティ空港', lat: 43.3521, lng: 77.0405 },
+  { code: 'TBS', name: 'トビリシ空港', lat: 41.6692, lng: 44.9547 },
+  { code: 'DXB', name: 'ドバイ国際空港', lat: 25.2528, lng: 55.3644 },
+  { code: 'DOH', name: 'ハマド国際空港', lat: 25.2731, lng: 51.6081 },
+  { code: 'BAH', name: 'バーレーン国際空港', lat: 26.2708, lng: 50.6336 },
+  { code: 'NBO', name: 'ジョモ・ケニヤッタ国際空港', lat: -1.3192, lng: 36.9275 },
+  { code: 'CAI', name: 'カイロ国際空港', lat: 30.1219, lng: 31.4056 },
+  { code: 'CPT', name: 'ケープタウン空港', lat: -33.9648, lng: 18.6017 },
+  { code: 'ABV', name: 'アブジャ空港', lat: 9.0068, lng: 7.2632 },
+  { code: 'KGL', name: 'キガリ空港', lat: -1.9686, lng: 30.1395 },
+  { code: 'LHR', name: 'ヒースロー空港', lat: 51.4775, lng: -0.4614 },
+  { code: 'CDG', name: 'シャルル・ド・ゴール空港', lat: 49.0097, lng: 2.5479 },
+  { code: 'AMS', name: 'スキポール空港', lat: 52.3086, lng: 4.7639 },
+  { code: 'FRA', name: 'フランクフルト空港', lat: 50.0379, lng: 8.5622 },
+  { code: 'FCO', name: 'フィウミチーノ空港', lat: 41.8003, lng: 12.2389 },
+  { code: 'BCN', name: 'バルセロナ空港', lat: 41.2971, lng: 2.0785 },
+  { code: 'PRG', name: 'プラハ空港', lat: 50.1008, lng: 14.2600 },
+  { code: 'IST', name: 'イスタンブール空港', lat: 41.2753, lng: 28.7519 },
+  { code: 'SYD', name: 'シドニー国際空港', lat: -33.9399, lng: 151.1753 },
+  { code: 'MEL', name: 'メルボルン空港', lat: -37.6690, lng: 144.8410 },
+  { code: 'AKL', name: 'オークランド空港', lat: -37.0082, lng: 174.7850 },
+  { code: 'PER', name: 'パース空港', lat: -31.9403, lng: 115.9672 },
+  { code: 'BNE', name: 'ブリスベン空港', lat: -27.3842, lng: 153.1175 },
+  { code: 'JFK', name: 'JFK国際空港', lat: 40.6413, lng: -73.7781 },
+  { code: 'LAX', name: 'ロサンゼルス国際空港', lat: 33.9425, lng: -118.4081 },
+  { code: 'YYZ', name: 'トロント・ピアソン空港', lat: 43.6777, lng: -79.6248 },
+  { code: 'YVR', name: 'バンクーバー空港', lat: 49.1947, lng: -123.1792 },
+  { code: 'YYC', name: 'カルガリー空港', lat: 51.1215, lng: -114.0076 },
+  { code: 'BOG', name: 'エルドラド空港', lat: 4.7016, lng: -74.1469 },
+  { code: 'UIO', name: 'キト空港', lat: -0.1292, lng: -78.3575 },
+  { code: 'TIJ', name: 'ティファナ空港', lat: 32.5411, lng: -116.9700 },
+  { code: 'HNL', name: 'ホノルル空港', lat: 21.3245, lng: -157.9251 },
+  { code: 'BHX', name: 'バーミンガム空港', lat: 52.4539, lng: -1.7480 },
+  { code: 'VCE', name: 'ヴェネツィア空港', lat: 45.5053, lng: 12.3519 },
+  { code: 'TLS', name: 'トゥールーズ空港', lat: 43.6291, lng: 1.3678 },
+  { code: 'OPO', name: 'ポルト空港', lat: 41.2481, lng: -8.6814 },
+  { code: 'HEL', name: 'ヘルシンキ・ヴァンター空港', lat: 60.3172, lng: 24.9633 },
+  { code: 'OUL', name: 'オウル空港', lat: 64.9301, lng: 25.3546 },
+  { code: 'LED', name: 'プルコヴォ空港', lat: 59.8003, lng: 30.2625 },
+  { code: 'BEG', name: 'ベオグラード空港', lat: 44.8184, lng: 20.3091 },
+  { code: 'SOF', name: 'ソフィア空港', lat: 42.6952, lng: 23.4062 },
+  { code: 'LHE', name: 'ラホール空港', lat: 31.5216, lng: 74.4036 },
+  { code: 'SKD', name: 'サマルカンド空港', lat: 39.7005, lng: 66.9838 },
+  { code: 'ULN', name: 'チンギスハーン空港', lat: 47.8431, lng: 106.7666 },
+  { code: 'AGR', name: 'アグラ空港', lat: 27.1558, lng: 77.9608 },
+  { code: 'PBH', name: 'パロ空港', lat: 27.4032, lng: 89.4246 },
+  { code: 'AQP', name: 'アレキパ空港', lat: -16.3411, lng: -71.5680 },
+  { code: 'MCT', name: 'マスカット空港', lat: 23.5933, lng: 58.2844 },
+  { code: 'RUH', name: 'リヤド空港', lat: 24.9576, lng: 46.6988 },
+  { code: 'JNB', name: 'O.R.タンボ国際空港', lat: -26.1392, lng: 28.2460 },
+  { code: 'EVN', name: 'ズヴァルトノッツ空港', lat: 40.1473, lng: 44.3959 },
+  { code: 'BUS', name: 'バトゥミ空港', lat: 41.6103, lng: 41.5997 },
+  { code: 'VLC', name: 'バレンシア空港', lat: 39.4893, lng: -0.4816 },
+  { code: 'AUH', name: 'アブダビ国際空港', lat: 24.4330, lng: 54.6511 },
+  { code: 'SHJ', name: 'シャルジャ空港', lat: 25.3286, lng: 55.5172 },
+  { code: 'DAR', name: 'ダルエスサラーム空港', lat: -6.8781, lng: 39.2026 },
+  { code: 'KAN', name: 'カノ空港', lat: 12.0476, lng: 8.5247 },
+];
+
 const mapData = {
   hotels: mapHotels,
   cities: citiesArray,
   cityCoords,
+  airports: airportMarkersData,
 };
 
 const translations = {
@@ -77,6 +167,9 @@ const translations = {
   fromPrice: '${price}~',
   hotelsCount: '{count}件のホテル',
   hotelFrom: '料金',
+  nearestAirport: '最寄りの空港',
+  fromAirport: '{airport}から{dist}km',
+  showAirports: '空港を表示',
 };
 ---
 
@@ -118,6 +211,15 @@ const translations = {
         </select>
       </div>
 
+      <!-- Airport toggle -->
+      <div class="mb-3">
+        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+          <input type="checkbox" id="toggle-airports" checked class="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>
+          {translations.showAirports}
+        </label>
+      </div>
+
       <!-- Results count -->
       <div id="results-count" class="text-xs text-slate-500"></div>
     </div>
@@ -138,12 +240,39 @@ const translations = {
 <script is:inline define:vars={{ mapData, translations }}>
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
+      // Haversine distance calculation (km)
+      function haversineKm(lat1, lng1, lat2, lng2) {
+        var R = 6371;
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLng = (lng2 - lng1) * Math.PI / 180;
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      // Find nearest airport to given coordinates
+      function findNearestAirport(lat, lng) {
+        var best = null;
+        for (var i = 0; i < mapData.airports.length; i++) {
+          var ap = mapData.airports[i];
+          var km = haversineKm(lat, lng, ap.lat, ap.lng);
+          if (!best || km < best.km) {
+            best = { code: ap.code, name: ap.name, km: km };
+          }
+        }
+        return best;
+      }
+
       const map = L.map('map', { zoomControl: true }).setView([13.7, 105.0], 5);
 
       L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         maxZoom: 19,
       }).addTo(map);
+
+      // Add scale bar
+      L.control.scale({ metric: true, imperial: false, position: 'bottomright' }).addTo(map);
 
       const hotelIcon = L.divIcon({
         html: '<div style="background-color: #0f766e; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V7a2 2 0 012-2h14a2 2 0 012 2v14"/><path d="M3 11h18"/><path d="M9 21V11"/><path d="M15 21V11"/></svg></div>',
@@ -155,11 +284,33 @@ const translations = {
         className: '', iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36],
       });
 
+      const airportIcon = L.divIcon({
+        html: '<div style="background-color: #6366f1; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg></div>',
+        className: '', iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -28],
+      });
+
       let hotelMarkers = [];
       let cityMarkers = [];
       const hotelLayer = L.layerGroup().addTo(map);
       const cityLayer = L.layerGroup().addTo(map);
+      const airportLayer = L.layerGroup().addTo(map);
       const basePath = '/ja';
+
+      // Create airport markers
+      function createAirportMarkers() {
+        airportLayer.clearLayers();
+        for (var i = 0; i < mapData.airports.length; i++) {
+          var ap = mapData.airports[i];
+          var popupContent = '<div style="min-width:140px;font-family:system-ui,sans-serif;padding:4px;">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+            '<span style="background:#6366f1;color:white;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;">' + ap.code + '</span>' +
+            '<span style="font-size:13px;font-weight:600;color:#334155;">' + ap.name + '</span>' +
+            '</div></div>';
+          var marker = L.marker([ap.lat, ap.lng], { icon: airportIcon })
+            .bindPopup(popupContent, { maxWidth: 240 });
+          airportLayer.addLayer(marker);
+        }
+      }
 
       function createHotelMarkers(filteredHotels) {
         hotelLayer.clearLayers();
@@ -175,6 +326,18 @@ const translations = {
             }
           }
           if (!lat || !lng) continue;
+
+          // Find nearest airport
+          var nearest = findNearestAirport(lat, lng);
+          var airportHtml = '';
+          if (nearest) {
+            var distStr = nearest.km < 1 ? nearest.km.toFixed(1) : Math.round(nearest.km);
+            airportHtml = '<p style="margin:0 0 6px;font-size:11px;color:#6366f1;display:flex;align-items:center;gap:4px;">' +
+              '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>' +
+              translations.fromAirport.replace('{dist}', distStr).replace('{airport}', nearest.name + ' (' + nearest.code + ')') +
+              '</p>';
+          }
+
           const priceStr = hotel.minPrice ? translations.fromPrice.replace('${price}', hotel.minPrice) : '';
           const thumbnailHtml = hotel.thumbnail
             ? '<img src="' + hotel.thumbnail + '" alt="' + hotel.name + '" style="width:100%;height:100px;object-fit:cover;border-radius:8px 8px 0 0;margin-bottom:8px;" />' : '';
@@ -182,6 +345,7 @@ const translations = {
             thumbnailHtml + '<div style="padding:0 4px 4px;">' +
             '<h3 style="margin:0 0 4px;font-size:14px;font-weight:700;color:#0f766e;">' + hotel.name + '</h3>' +
             '<p style="margin:0 0 4px;font-size:12px;color:#64748b;">' + hotel.city + ', ' + hotel.country + '</p>' +
+            airportHtml +
             (priceStr ? '<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#d97706;">' + priceStr + '</p>' : '') +
             '<a href="' + basePath + '/hotel/' + hotel.slug + '" style="display:inline-block;background:#0f766e;color:white;padding:6px 16px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">' + translations.viewDetails + '</a>' +
             '</div></div>';
@@ -251,6 +415,7 @@ const translations = {
         if (match) citySelect.value = match.value;
       }
 
+      createAirportMarkers();
       createHotelMarkers(mapData.hotels);
       createCityMarkers('', '');
       document.getElementById('results-count').textContent =
@@ -260,6 +425,18 @@ const translations = {
 
       document.getElementById('filter-city').addEventListener('change', applyFilters);
       document.getElementById('filter-category').addEventListener('change', applyFilters);
+
+      // Airport toggle
+      var airportToggle = document.getElementById('toggle-airports');
+      if (airportToggle) {
+        airportToggle.addEventListener('change', function() {
+          if (this.checked) {
+            map.addLayer(airportLayer);
+          } else {
+            map.removeLayer(airportLayer);
+          }
+        });
+      }
 
       const toggleBtn = document.getElementById('toggle-panel');
       const panel = document.querySelector('.absolute.top-4.left-4');

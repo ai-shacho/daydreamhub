@@ -67,10 +67,100 @@ const mapHotels = hotels.map((h: any) => ({
   minPrice: h.min_price || null,
 }));
 
+// Build airport markers data (unique major airports with display names)
+const airportMarkersData = [
+  { code: 'BKK', name: 'Suvarnabhumi Airport', lat: 13.6811, lng: 100.7472 },
+  { code: 'DMK', name: 'Don Mueang Airport', lat: 13.9126, lng: 100.6067 },
+  { code: 'DPS', name: 'Ngurah Rai Airport', lat: -8.7482, lng: 115.1671 },
+  { code: 'CGK', name: 'Soekarno-Hatta Airport', lat: -6.1256, lng: 106.6559 },
+  { code: 'KUL', name: 'Kuala Lumpur Intl Airport', lat: 2.7456, lng: 101.7072 },
+  { code: 'SIN', name: 'Changi Airport', lat: 1.3644, lng: 103.9915 },
+  { code: 'MNL', name: 'Ninoy Aquino Airport', lat: 14.5086, lng: 121.0194 },
+  { code: 'CEB', name: 'Mactan-Cebu Airport', lat: 10.3075, lng: 123.9792 },
+  { code: 'SGN', name: 'Tan Son Nhat Airport', lat: 10.8188, lng: 106.6520 },
+  { code: 'HAN', name: 'Noi Bai Airport', lat: 21.2187, lng: 105.8072 },
+  { code: 'DAD', name: 'Da Nang Airport', lat: 16.0439, lng: 108.1993 },
+  { code: 'HKT', name: 'Phuket Airport', lat: 8.1132, lng: 98.3161 },
+  { code: 'USM', name: 'Samui Airport', lat: 9.5479, lng: 100.0623 },
+  { code: 'PNH', name: 'Phnom Penh Airport', lat: 11.5466, lng: 104.8440 },
+  { code: 'HND', name: 'Haneda Airport', lat: 35.5494, lng: 139.7798 },
+  { code: 'NRT', name: 'Narita Airport', lat: 35.7720, lng: 140.3929 },
+  { code: 'KIX', name: 'Kansai Airport', lat: 34.4347, lng: 135.2440 },
+  { code: 'FUK', name: 'Fukuoka Airport', lat: 33.5859, lng: 130.4513 },
+  { code: 'ICN', name: 'Incheon Airport', lat: 37.4691, lng: 126.4510 },
+  { code: 'HKG', name: 'Hong Kong Airport', lat: 22.3080, lng: 113.9185 },
+  { code: 'TPE', name: 'Taoyuan Airport', lat: 25.0777, lng: 121.2328 },
+  { code: 'PEK', name: 'Beijing Capital Airport', lat: 40.0799, lng: 116.6031 },
+  { code: 'PVG', name: 'Pudong Airport', lat: 31.1443, lng: 121.8083 },
+  { code: 'BOM', name: 'Mumbai Airport', lat: 19.0896, lng: 72.8656 },
+  { code: 'DEL', name: 'Delhi Airport', lat: 28.5562, lng: 77.1000 },
+  { code: 'CMB', name: 'Bandaranaike Airport', lat: 7.1806, lng: 79.8841 },
+  { code: 'ISB', name: 'Islamabad Airport', lat: 33.6167, lng: 73.0992 },
+  { code: 'TAS', name: 'Tashkent Airport', lat: 41.2579, lng: 69.2813 },
+  { code: 'ALA', name: 'Almaty Airport', lat: 43.3521, lng: 77.0405 },
+  { code: 'TBS', name: 'Tbilisi Airport', lat: 41.6692, lng: 44.9547 },
+  { code: 'DXB', name: 'Dubai Airport', lat: 25.2528, lng: 55.3644 },
+  { code: 'DOH', name: 'Hamad Airport', lat: 25.2731, lng: 51.6081 },
+  { code: 'BAH', name: 'Bahrain Airport', lat: 26.2708, lng: 50.6336 },
+  { code: 'NBO', name: 'Jomo Kenyatta Airport', lat: -1.3192, lng: 36.9275 },
+  { code: 'CAI', name: 'Cairo Airport', lat: 30.1219, lng: 31.4056 },
+  { code: 'CPT', name: 'Cape Town Airport', lat: -33.9648, lng: 18.6017 },
+  { code: 'ABV', name: 'Abuja Airport', lat: 9.0068, lng: 7.2632 },
+  { code: 'KGL', name: 'Kigali Airport', lat: -1.9686, lng: 30.1395 },
+  { code: 'LHR', name: 'Heathrow Airport', lat: 51.4775, lng: -0.4614 },
+  { code: 'CDG', name: 'Charles de Gaulle Airport', lat: 49.0097, lng: 2.5479 },
+  { code: 'AMS', name: 'Schiphol Airport', lat: 52.3086, lng: 4.7639 },
+  { code: 'FRA', name: 'Frankfurt Airport', lat: 50.0379, lng: 8.5622 },
+  { code: 'FCO', name: 'Fiumicino Airport', lat: 41.8003, lng: 12.2389 },
+  { code: 'BCN', name: 'Barcelona Airport', lat: 41.2971, lng: 2.0785 },
+  { code: 'PRG', name: 'Václav Havel Airport', lat: 50.1008, lng: 14.2600 },
+  { code: 'IST', name: 'Istanbul Airport', lat: 41.2753, lng: 28.7519 },
+  { code: 'SYD', name: 'Sydney Airport', lat: -33.9399, lng: 151.1753 },
+  { code: 'MEL', name: 'Melbourne Airport', lat: -37.6690, lng: 144.8410 },
+  { code: 'AKL', name: 'Auckland Airport', lat: -37.0082, lng: 174.7850 },
+  { code: 'PER', name: 'Perth Airport', lat: -31.9403, lng: 115.9672 },
+  { code: 'BNE', name: 'Brisbane Airport', lat: -27.3842, lng: 153.1175 },
+  { code: 'JFK', name: 'JFK Airport', lat: 40.6413, lng: -73.7781 },
+  { code: 'LAX', name: 'LAX Airport', lat: 33.9425, lng: -118.4081 },
+  { code: 'YYZ', name: 'Toronto Pearson Airport', lat: 43.6777, lng: -79.6248 },
+  { code: 'YVR', name: 'Vancouver Airport', lat: 49.1947, lng: -123.1792 },
+  { code: 'YYC', name: 'Calgary Airport', lat: 51.1215, lng: -114.0076 },
+  { code: 'BOG', name: 'El Dorado Airport', lat: 4.7016, lng: -74.1469 },
+  { code: 'UIO', name: 'Quito Airport', lat: -0.1292, lng: -78.3575 },
+  { code: 'TIJ', name: 'Tijuana Airport', lat: 32.5411, lng: -116.9700 },
+  { code: 'HNL', name: 'Honolulu Airport', lat: 21.3245, lng: -157.9251 },
+  { code: 'BHX', name: 'Birmingham Airport', lat: 52.4539, lng: -1.7480 },
+  { code: 'VCE', name: 'Venice Airport', lat: 45.5053, lng: 12.3519 },
+  { code: 'TLS', name: 'Toulouse Airport', lat: 43.6291, lng: 1.3678 },
+  { code: 'OPO', name: 'Porto Airport', lat: 41.2481, lng: -8.6814 },
+  { code: 'HEL', name: 'Helsinki-Vantaa Airport', lat: 60.3172, lng: 24.9633 },
+  { code: 'OUL', name: 'Oulu Airport', lat: 64.9301, lng: 25.3546 },
+  { code: 'LED', name: 'Pulkovo Airport', lat: 59.8003, lng: 30.2625 },
+  { code: 'BEG', name: 'Belgrade Airport', lat: 44.8184, lng: 20.3091 },
+  { code: 'SOF', name: 'Sofia Airport', lat: 42.6952, lng: 23.4062 },
+  { code: 'LHE', name: 'Lahore Airport', lat: 31.5216, lng: 74.4036 },
+  { code: 'SKD', name: 'Samarkand Airport', lat: 39.7005, lng: 66.9838 },
+  { code: 'ULN', name: 'Chinggis Khaan Airport', lat: 47.8431, lng: 106.7666 },
+  { code: 'AGR', name: 'Agra Airport', lat: 27.1558, lng: 77.9608 },
+  { code: 'PBH', name: 'Paro Airport', lat: 27.4032, lng: 89.4246 },
+  { code: 'AQP', name: 'Arequipa Airport', lat: -16.3411, lng: -71.5680 },
+  { code: 'MCT', name: 'Muscat Airport', lat: 23.5933, lng: 58.2844 },
+  { code: 'RUH', name: 'Riyadh Airport', lat: 24.9576, lng: 46.6988 },
+  { code: 'JNB', name: 'O.R. Tambo Airport', lat: -26.1392, lng: 28.2460 },
+  { code: 'EVN', name: 'Zvartnots Airport', lat: 40.1473, lng: 44.3959 },
+  { code: 'BUS', name: 'Batumi Airport', lat: 41.6103, lng: 41.5997 },
+  { code: 'VLC', name: 'Valencia Airport', lat: 39.4893, lng: -0.4816 },
+  { code: 'AUH', name: 'Abu Dhabi Airport', lat: 24.4330, lng: 54.6511 },
+  { code: 'SHJ', name: 'Sharjah Airport', lat: 25.3286, lng: 55.5172 },
+  { code: 'DAR', name: 'Dar es Salaam Airport', lat: -6.8781, lng: 39.2026 },
+  { code: 'KAN', name: 'Kano Airport', lat: 12.0476, lng: 8.5247 },
+];
+
 const mapData = {
   hotels: mapHotels,
   cities: citiesArray,
   cityCoords,
+  airports: airportMarkersData,
 };
 const locale = 'en';
 const translations = {
@@ -78,6 +168,9 @@ const translations = {
   fromPrice: 'From ${price} USD',
   hotelsCount: '{count} hotels',
   hotelFrom: 'From',
+  nearestAirport: 'Nearest airport',
+  fromAirport: '{dist} km from {airport}',
+  showAirports: 'Show Airports',
 };
 ---
 
@@ -119,6 +212,15 @@ const translations = {
         </select>
       </div>
 
+      <!-- Airport toggle -->
+      <div class="mb-3">
+        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+          <input type="checkbox" id="toggle-airports" checked class="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>
+          {translations.showAirports}
+        </label>
+      </div>
+
       <!-- Results count -->
       <div id="results-count" class="text-xs text-slate-500"></div>
     </div>
@@ -139,6 +241,30 @@ const translations = {
 <script is:inline define:vars={{ mapData, locale, translations }}>
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
+      // Haversine distance calculation (km)
+      function haversineKm(lat1, lng1, lat2, lng2) {
+        var R = 6371;
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLng = (lng2 - lng1) * Math.PI / 180;
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      // Find nearest airport to given coordinates
+      function findNearestAirport(lat, lng) {
+        var best = null;
+        for (var i = 0; i < mapData.airports.length; i++) {
+          var ap = mapData.airports[i];
+          var km = haversineKm(lat, lng, ap.lat, ap.lng);
+          if (!best || km < best.km) {
+            best = { code: ap.code, name: ap.name, km: km };
+          }
+        }
+        return best;
+      }
+
       // Initialize map
       const map = L.map('map', {
         zoomControl: true,
@@ -149,6 +275,9 @@ const translations = {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         maxZoom: 19,
       }).addTo(map);
+
+      // Add scale bar
+      L.control.scale({ metric: true, imperial: true, position: 'bottomright' }).addTo(map);
 
       // Custom icons
       const hotelIcon = L.divIcon({
@@ -167,13 +296,38 @@ const translations = {
         popupAnchor: [0, -36],
       });
 
+      const airportIcon = L.divIcon({
+        html: '<div style="background-color: #6366f1; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg></div>',
+        className: '',
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+        popupAnchor: [0, -28],
+      });
+
       // Store all markers and layers
       let hotelMarkers = [];
       let cityMarkers = [];
       const hotelLayer = L.layerGroup().addTo(map);
       const cityLayer = L.layerGroup().addTo(map);
+      const airportLayer = L.layerGroup().addTo(map);
 
       const basePath = locale === 'ja' ? '/ja' : '';
+
+      // Create airport markers
+      function createAirportMarkers() {
+        airportLayer.clearLayers();
+        for (var i = 0; i < mapData.airports.length; i++) {
+          var ap = mapData.airports[i];
+          var popupContent = '<div style="min-width:140px;font-family:system-ui,sans-serif;padding:4px;">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+            '<span style="background:#6366f1;color:white;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;">' + ap.code + '</span>' +
+            '<span style="font-size:13px;font-weight:600;color:#334155;">' + ap.name + '</span>' +
+            '</div></div>';
+          var marker = L.marker([ap.lat, ap.lng], { icon: airportIcon })
+            .bindPopup(popupContent, { maxWidth: 240 });
+          airportLayer.addLayer(marker);
+        }
+      }
 
       // Create hotel markers
       function createHotelMarkers(filteredHotels) {
@@ -196,6 +350,17 @@ const translations = {
 
           if (!lat || !lng) continue;
 
+          // Find nearest airport
+          var nearest = findNearestAirport(lat, lng);
+          var airportHtml = '';
+          if (nearest) {
+            var distStr = nearest.km < 1 ? nearest.km.toFixed(1) : Math.round(nearest.km);
+            airportHtml = '<p style="margin:0 0 6px;font-size:11px;color:#6366f1;display:flex;align-items:center;gap:4px;">' +
+              '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>' +
+              translations.fromAirport.replace('{dist}', distStr).replace('{airport}', nearest.name + ' (' + nearest.code + ')') +
+              '</p>';
+          }
+
           const priceStr = hotel.minPrice
             ? translations.fromPrice.replace('${price}', hotel.minPrice)
             : '';
@@ -209,6 +374,7 @@ const translations = {
             '<div style="padding:0 4px 4px;">' +
             '<h3 style="margin:0 0 4px;font-size:14px;font-weight:700;color:#0f766e;">' + hotel.name + '</h3>' +
             '<p style="margin:0 0 4px;font-size:12px;color:#64748b;">' + hotel.city + ', ' + hotel.country + '</p>' +
+            airportHtml +
             (priceStr ? '<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#d97706;">' + priceStr + '</p>' : '') +
             '<a href="' + basePath + '/hotel/' + hotel.slug + '" style="display:inline-block;background:#0f766e;color:white;padding:6px 16px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">' + translations.viewDetails + '</a>' +
             '</div></div>';
@@ -326,6 +492,7 @@ const translations = {
       }
 
       // Initial render
+      createAirportMarkers();
       createHotelMarkers(mapData.hotels);
       createCityMarkers('', '');
       document.getElementById('results-count').textContent =
@@ -350,6 +517,18 @@ const translations = {
       // Event listeners for filters
       document.getElementById('filter-city').addEventListener('change', applyFilters);
       document.getElementById('filter-category').addEventListener('change', applyFilters);
+
+      // Airport toggle
+      var airportToggle = document.getElementById('toggle-airports');
+      if (airportToggle) {
+        airportToggle.addEventListener('change', function() {
+          if (this.checked) {
+            map.addLayer(airportLayer);
+          } else {
+            map.removeLayer(airportLayer);
+          }
+        });
+      }
 
       // Mobile panel toggle
       const toggleBtn = document.getElementById('toggle-panel');
