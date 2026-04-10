@@ -28,6 +28,7 @@ async function verifyJWT(token: string, secret: string): Promise<Record<string, 
     return payload;
   } catch { return null; }
 }
+let currentUser: { name?: string; email?: string; phone?: string } = {};
 {
   const env = (Astro.locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'ddh-secret-2025';
@@ -36,6 +37,15 @@ async function verifyJWT(token: string, secret: string): Promise<Record<string, 
   const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
   if (!authPayload) {
     return Astro.redirect(`/ja/login?redirect=/ja/booking/${planId}`);
+  }
+  currentUser.name = authPayload.name || '';
+  currentUser.email = authPayload.email || '';
+  const db = env?.DB;
+  if (db && authPayload.sub) {
+    try {
+      const userRow = await db.prepare('SELECT phone FROM users WHERE id = ?').bind(authPayload.sub).first();
+      currentUser.phone = userRow?.phone || '';
+    } catch {}
   }
 }
 
@@ -126,7 +136,7 @@ const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_
                 <label for="guest_name" class="block text-sm font-medium text-gray-700 mb-1">
                   お名前 <span class="text-red-500">*</span>
                 </label>
-                <input type="text" id="guest_name" name="guest_name" required
+                <input type="text" id="guest_name" name="guest_name" required value={currentUser.name || ''}
                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors"
                   placeholder="山田 太郎" />
                 <p id="err-guest_name" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
@@ -136,7 +146,7 @@ const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_
                 <label for="guest_email" class="block text-sm font-medium text-gray-700 mb-1">
                   メールアドレス <span class="text-red-500">*</span>
                 </label>
-                <input type="email" id="guest_email" name="guest_email" required
+                <input type="email" id="guest_email" name="guest_email" required value={currentUser.email || ''}
                   class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors"
                   placeholder="email@example.com" />
                 <p id="err-guest_email" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
@@ -375,7 +385,7 @@ const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_
                     <span>${plan.price_usd.toFixed(2)}</span>
                   </div>
                   <div class="flex justify-between text-gray-600">
-                    <span>決済手数料 (6%)</span>
+                    <span>決済手数料</span>
                     <span>${processingFee.toFixed(2)}</span>
                   </div>
                   {serviceFee > 0 && (
@@ -448,7 +458,32 @@ const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_
     document.head.appendChild(s);
   })();
 </script>
-<script define:vars={{ maxGuests }}>
+<script define:vars={{ maxGuests, currentUserPhone: currentUser.phone || '' }}>
+  // Pre-fill phone number from user profile
+  (function() {
+    if (currentUserPhone) {
+      var phoneLocal = document.getElementById('phone_local');
+      var phoneSel = document.getElementById('phone_code');
+      var knownCodes = ['+880','+855','+856','+971','+966','+974','+972','+358','+420','+380','+234','+254','+212','+351','+852','+886','+977','+95','+92','+94','+91','+86','+82','+81','+66','+84','+65','+62','+63','+61','+64','+55','+57','+56','+54','+52','+51','+49','+48','+47','+46','+45','+44','+43','+41','+39','+36','+34','+33','+32','+31','+30','+27','+20','+90','+7','+1'];
+      var matchedCode = '';
+      var localPart = currentUserPhone;
+      for (var i = 0; i < knownCodes.length; i++) {
+        if (currentUserPhone.startsWith(knownCodes[i])) {
+          matchedCode = knownCodes[i];
+          localPart = currentUserPhone.slice(knownCodes[i].length);
+          break;
+        }
+      }
+      if (phoneLocal) phoneLocal.value = localPart;
+      if (phoneSel && matchedCode) {
+        for (var j = 0; j < phoneSel.options.length; j++) {
+          var optVal = phoneSel.options[j].value.replace(/-[A-Z]+$/, '');
+          if (optVal === matchedCode) { phoneSel.selectedIndex = j; break; }
+        }
+      }
+    }
+  })();
+
   // Phone: combine country code + local number into hidden #guest_phone
   (function() {
     var sel = document.getElementById('phone_code') as HTMLSelectElement;
