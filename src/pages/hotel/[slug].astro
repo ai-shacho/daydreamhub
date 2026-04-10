@@ -370,18 +370,19 @@ for (const img of images) {
             </div>
           )}
 
-          {displayDescription && (
-            <div class="mb-6">
-              <h2 class="text-lg font-semibold text-slate-900 mb-2">
-                {t('hotel.description', locale)}
-              </h2>
-              <p class="text-gray-600 leading-relaxed text-sm" set:html={displayDescription.replace(/\.\s+/g, '.<br />').replace(/。/g, '。<br />')} />
-            </div>
-          )}
-
           {/* Contact section hidden intentionally - prevent direct bookings bypassing the platform */}
         </div>
       </div>
+
+      <!-- Description Section (full width below gallery + info) -->
+      {displayDescription && (
+        <div class="mb-10">
+          <h2 class="text-lg font-semibold text-slate-900 mb-2">
+            {t('hotel.description', locale)}
+          </h2>
+          <p class="text-gray-600 leading-relaxed text-sm" set:html={displayDescription.replace(/\.\s+/g, '.<br />').replace(/。/g, '。<br />')} />
+        </div>
+      )}
 
       <!-- Amenities Section -->
       {amenities.length > 0 && (
