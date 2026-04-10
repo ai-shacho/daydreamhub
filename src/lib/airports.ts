@@ -194,19 +194,55 @@ export const airportList: Array<{ code: string; name: string; lat: number; lng: 
   { code: 'NBO', name: 'NBO', lat: -1.3192, lng: 36.9275 },
   { code: 'CAI', name: 'CAI', lat: 30.1219, lng: 31.4056 },
   { code: 'JNB', name: 'JNB', lat: -26.1392, lng: 28.2460 },
+  // South Asia (additional)
+  { code: 'ISB', name: 'ISB', lat: 33.6167, lng: 73.0992 },
+  { code: 'AGR', name: 'AGR', lat: 27.1558, lng: 77.9608 },
+  { code: 'PBH', name: 'PBH', lat: 27.4032, lng: 89.4246 },
+  // Central Asia
+  { code: 'TAS', name: 'TAS', lat: 41.2579, lng: 69.2813 },
+  { code: 'SKD', name: 'SKD', lat: 39.7005, lng: 66.9838 },
+  { code: 'ULN', name: 'ULN', lat: 47.8431, lng: 106.7666 },
+  // Caucasus
+  { code: 'TBS', name: 'TBS', lat: 41.6692, lng: 44.9547 },
+  { code: 'EVN', name: 'EVN', lat: 40.1473, lng: 44.3959 },
+  { code: 'BUS', name: 'BUS', lat: 41.6103, lng: 41.5997 },
   // Europe
   { code: 'LHR', name: 'LHR', lat: 51.4775, lng: -0.4614 },
   { code: 'CDG', name: 'CDG', lat: 49.0097, lng: 2.5479 },
   { code: 'AMS', name: 'AMS', lat: 52.3086, lng: 4.7639 },
   { code: 'FRA', name: 'FRA', lat: 50.0379, lng: 8.5622 },
   { code: 'BHX', name: 'BHX', lat: 52.4539, lng: -1.7480 },
+  { code: 'HEL', name: 'HEL', lat: 60.3172, lng: 24.9633 },
+  { code: 'OUL', name: 'OUL', lat: 64.9301, lng: 25.3546 },
+  { code: 'LED', name: 'LED', lat: 59.8003, lng: 30.2625 },
+  { code: 'PRG', name: 'PRG', lat: 50.1008, lng: 14.2600 },
+  { code: 'BEG', name: 'BEG', lat: 44.8184, lng: 20.3091 },
+  { code: 'SOF', name: 'SOF', lat: 42.6952, lng: 23.4062 },
+  { code: 'OPO', name: 'OPO', lat: 41.2481, lng: -8.6814 },
+  { code: 'VLC', name: 'VLC', lat: 39.4893, lng: -0.4816 },
+  { code: 'FCO', name: 'FCO', lat: 41.8003, lng: 12.2389 },
+  { code: 'VCE', name: 'VCE', lat: 45.5053, lng: 12.3519 },
+  { code: 'TLS', name: 'TLS', lat: 43.6291, lng: 1.3678 },
+  { code: 'RTM', name: 'RTM', lat: 51.9569, lng: 4.4372 },
   // Americas
   { code: 'JFK', name: 'JFK', lat: 40.6413, lng: -73.7781 },
   { code: 'LAX', name: 'LAX', lat: 33.9425, lng: -118.4081 },
+  { code: 'BWI', name: 'BWI', lat: 39.1754, lng: -76.6684 },
+  { code: 'YYC', name: 'YYC', lat: 51.1215, lng: -114.0076 },
+  { code: 'BOG', name: 'BOG', lat: 4.7016, lng: -74.1469 },
+  { code: 'UIO', name: 'UIO', lat: -0.1292, lng: -78.3575 },
+  { code: 'AQP', name: 'AQP', lat: -16.3411, lng: -71.5680 },
+  { code: 'TIJ', name: 'TIJ', lat: 32.5411, lng: -116.9700 },
+  // Africa (additional)
+  { code: 'ABV', name: 'ABV', lat: 9.0068, lng: 7.2632 },
+  { code: 'CPT', name: 'CPT', lat: -33.9648, lng: 18.6017 },
+  { code: 'KGL', name: 'KGL', lat: -1.9686, lng: 30.1395 },
   // Oceania
   { code: 'SYD', name: 'SYD', lat: -33.9399, lng: 151.1753 },
   { code: 'MEL', name: 'MEL', lat: -37.6690, lng: 144.8410 },
   { code: 'AKL', name: 'AKL', lat: -37.0082, lng: 174.7850 },
+  { code: 'PER', name: 'PER', lat: -31.9403, lng: 115.9672 },
+  { code: 'BNE', name: 'BNE', lat: -27.3842, lng: 153.1175 },
 ];
 
 // Full airport names for display
@@ -233,9 +269,19 @@ export const airportNames: Record<string, string> = {
   'LHR': 'Heathrow Airport', 'CDG': 'Charles de Gaulle Airport',
   'AMS': 'Schiphol Airport', 'FRA': 'Frankfurt Airport',
   'BHX': 'Birmingham Airport',
+  'ISB': 'Islamabad Airport', 'AGR': 'Agra Airport', 'PBH': 'Paro Airport',
+  'TAS': 'Tashkent Airport', 'SKD': 'Samarkand Airport', 'ULN': 'Chinggis Khaan Airport',
+  'TBS': 'Tbilisi Airport', 'EVN': 'Zvartnots Airport', 'BUS': 'Batumi Airport',
+  'HEL': 'Helsinki-Vantaa Airport', 'OUL': 'Oulu Airport', 'LED': 'Pulkovo Airport',
+  'PRG': 'Václav Havel Airport', 'BEG': 'Belgrade Airport', 'SOF': 'Sofia Airport',
+  'OPO': 'Porto Airport', 'VLC': 'Valencia Airport', 'FCO': 'Fiumicino Airport',
+  'VCE': 'Venice Airport', 'TLS': 'Toulouse Airport', 'RTM': 'Rotterdam Airport',
   'JFK': 'JFK Airport', 'LAX': 'LAX Airport',
+  'BWI': 'Baltimore Airport', 'YYC': 'Calgary Airport',
+  'BOG': 'El Dorado Airport', 'UIO': 'Quito Airport', 'AQP': 'Arequipa Airport', 'TIJ': 'Tijuana Airport',
+  'ABV': 'Abuja Airport', 'CPT': 'Cape Town Airport', 'KGL': 'Kigali Airport',
   'SYD': 'Sydney Airport', 'MEL': 'Melbourne Airport',
-  'AKL': 'Auckland Airport',
+  'AKL': 'Auckland Airport', 'PER': 'Perth Airport', 'BNE': 'Brisbane Airport',
 };
 
 // Japanese airport names
@@ -262,9 +308,19 @@ export const airportNamesJa: Record<string, string> = {
   'LHR': 'ヒースロー空港', 'CDG': 'シャルル・ド・ゴール空港',
   'AMS': 'スキポール空港', 'FRA': 'フランクフルト空港',
   'BHX': 'バーミンガム空港',
+  'ISB': 'イスラマバード空港', 'AGR': 'アグラ空港', 'PBH': 'パロ空港',
+  'TAS': 'タシケント空港', 'SKD': 'サマルカンド空港', 'ULN': 'チンギスハーン空港',
+  'TBS': 'トビリシ空港', 'EVN': 'ズヴァルトノッツ空港', 'BUS': 'バトゥミ空港',
+  'HEL': 'ヘルシンキ・ヴァンター空港', 'OUL': 'オウル空港', 'LED': 'プルコヴォ空港',
+  'PRG': 'プラハ空港', 'BEG': 'ベオグラード空港', 'SOF': 'ソフィア空港',
+  'OPO': 'ポルト空港', 'VLC': 'バレンシア空港', 'FCO': 'フィウミチーノ空港',
+  'VCE': 'ヴェネツィア空港', 'TLS': 'トゥールーズ空港', 'RTM': 'ロッテルダム空港',
   'JFK': 'JFK国際空港', 'LAX': 'ロサンゼルス国際空港',
+  'BWI': 'ボルチモア空港', 'YYC': 'カルガリー空港',
+  'BOG': 'エルドラド空港', 'UIO': 'キト空港', 'AQP': 'アレキパ空港', 'TIJ': 'ティファナ空港',
+  'ABV': 'アブジャ空港', 'CPT': 'ケープタウン空港', 'KGL': 'キガリ空港',
   'SYD': 'シドニー国際空港', 'MEL': 'メルボルン空港',
-  'AKL': 'オークランド空港',
+  'AKL': 'オークランド空港', 'PER': 'パース空港', 'BNE': 'ブリスベン空港',
 };
 
 // Find nearest airport from hotel coordinates
