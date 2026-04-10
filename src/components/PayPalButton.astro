@@ -486,7 +486,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     }
 
     const script = document.createElement('script');
-    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&locale=${locale}`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&locale=${locale}&intent=capture&commit=true`;
     script.onload = () => {
       const loadingEl = document.getElementById('paypal-loading');
       if (loadingEl) loadingEl.style.display = 'none';
