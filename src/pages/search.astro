@@ -703,9 +703,9 @@ function buildUrl(overrides: Record<string, string>) {
                     {hotel.city}{hotel.country ? `, ${hotel.country}` : ''}
                   </p>
                   {hotel._airport_km != null && hotel._airport_code != null && hotel._airport_km < 500 && (
-                    <p class="text-xs text-teal-600 mt-1 flex items-center gap-1">
+                    <p class="text-xs text-teal-600 mt-1 flex items-center gap-1" title="Straight-line distance from the nearest airport">
                       <span>✈</span>
-                      {Math.round(hotel._airport_km)}km from {hotel._airport_code}
+                      ~{Math.round(hotel._airport_km)}km from {hotel._airport_code}
                     </p>
                   )}
 

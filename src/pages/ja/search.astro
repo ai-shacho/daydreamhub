@@ -609,9 +609,9 @@ function getHotelName(hotel: any) {
                     {hotel.city}{hotel.country ? `, ${hotel.country}` : ''}
                   </p>
                   {hotel._airport_km != null && hotel._airport_code != null && hotel._airport_km < 500 && (
-                    <p class="text-xs text-teal-600 mt-1 flex items-center gap-1">
+                    <p class="text-xs text-teal-600 mt-1 flex items-center gap-1" title="最寄り空港からの直線距離">
                       <span>✈</span>
-                      {hotel._airport_code}空港から{Math.round(hotel._airport_km)}km
+                      {hotel._airport_code}空港から約{Math.round(hotel._airport_km)}km
                     </p>
                   )}
 
