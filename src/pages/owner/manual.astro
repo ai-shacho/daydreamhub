@@ -62,7 +62,7 @@ const chapters = [
           <div class="grid grid-cols-2 gap-3">
             {[
               ['📅','Approve / Reject Bookings','Review guest requests in real time and confirm or decline.'],
-              ['📆','Calendar Management','Block dates and sync with external OTAs via iCal.'],
+              ['📆','Calendar Management','Block dates to manage availability.'],
               ['📊','Sales Reports','Track revenue and booking stats. Export to CSV.'],
               ['⭐','Reply to Reviews','Post official responses to guest reviews.'],
               ['💬','Messages','Communicate with guests about their bookings.'],
@@ -236,6 +236,7 @@ const chapters = [
             <span class="text-xl">✅</span>
             <div>Blocked dates prevent new bookings. Already confirmed reservations are <strong>not</strong> affected.</div>
           </div>
+          <!-- ICAL_HIDDEN_START - iCal sync section hidden. Remove this comment block to restore.
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">iCal Sync (Advanced)</h3>
           <p class="text-sm text-slate-600 mb-3">Automatically sync blocked dates with external OTAs (Booking.com, Airbnb, etc.).</p>
           <ol class="space-y-3">
@@ -246,6 +247,7 @@ const chapters = [
               </li>
             ))}
           </ol>
+          ICAL_HIDDEN_END -->
         </div>
       </section>
 

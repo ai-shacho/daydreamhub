@@ -375,9 +375,7 @@ for (const img of images) {
               <h2 class="text-lg font-semibold text-slate-900 mb-2">
                 {t('hotel.description', locale)}
               </h2>
-              <p class="text-gray-600 leading-relaxed text-sm">
-                {displayDescription}
-              </p>
+              <p class="text-gray-600 leading-relaxed text-sm" set:html={displayDescription.replace(/\.\s+/g, '.<br />').replace(/。/g, '。<br />')} />
             </div>
           )}
 
