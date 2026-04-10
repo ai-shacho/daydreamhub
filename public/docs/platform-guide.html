@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DayDreamHub プラットフォーム仕様書</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Noto Sans JP', sans-serif; color: #1e293b; line-height: 1.7; background: #f8fafc; }
+  @media print {
+    body { background: white; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    section { break-inside: avoid; }
+    .card { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+  /* Cover */
+  .cover { background: linear-gradient(135deg, #0f766e 0%, #0d9488 50%, #14b8a6 100%); color: white; padding: 80px 40px; border-radius: 16px; margin-bottom: 40px; text-align: center; }
+  .cover h1 { font-size: 36px; font-weight: 700; margin-bottom: 8px; }
+  .cover .subtitle { font-size: 18px; opacity: 0.85; margin-bottom: 24px; }
+  .cover .meta { font-size: 13px; opacity: 0.7; }
+
+  /* TOC */
+  .toc { background: white; border-radius: 12px; padding: 32px; margin-bottom: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .toc h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; color: #0f766e; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 6px; font-size: 14px; }
+  .toc a { color: #334155; text-decoration: none; }
+  .toc a:hover { color: #0f766e; }
+
+  /* Section */
+  section { background: white; border-radius: 12px; padding: 32px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  section h2 { font-size: 22px; font-weight: 700; color: #0f766e; margin-bottom: 20px; padding-bottom: 8px; border-bottom: 2px solid #ccfbf1; }
+  section h3 { font-size: 16px; font-weight: 600; color: #334155; margin: 20px 0 10px; }
+  section h4 { font-size: 14px; font-weight: 600; color: #475569; margin: 16px 0 8px; }
+  p, li { font-size: 14px; }
+  p { margin-bottom: 12px; }
+
+  /* Cards */
+  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+  .card-title { font-weight: 600; font-size: 14px; color: #0f766e; margin-bottom: 4px; }
+  .card-body { font-size: 13px; color: #64748b; }
+
+  /* Grid */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 600px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+  th { background: #0f766e; color: white; padding: 10px 12px; text-align: left; font-weight: 600; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+
+  /* Badge */
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+  .badge-teal { background: #ccfbf1; color: #0f766e; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+  .badge-purple { background: #ede9fe; color: #6d28d9; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+
+  /* Screenshot */
+  .screenshot { border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .screenshot img { width: 100%; display: block; }
+  .screenshot .caption { background: #f1f5f9; padding: 8px 12px; font-size: 12px; color: #64748b; text-align: center; }
+
+  /* List */
+  ul, ol { padding-left: 20px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; font-size: 13px; }
+
+  /* Highlight box */
+  .highlight { padding: 14px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+  .highlight-teal { background: #f0fdfa; border-left: 4px solid #0f766e; }
+  .highlight-amber { background: #fffbeb; border-left: 4px solid #f59e0b; }
+  .highlight-blue { background: #eff6ff; border-left: 4px solid #3b82f6; }
+
+  /* Role header */
+  .role-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-radius: 10px; margin-bottom: 20px; }
+  .role-header.guest { background: linear-gradient(135deg, #ecfdf5, #d1fae5); }
+  .role-header.owner { background: linear-gradient(135deg, #eef2ff, #e0e7ff); }
+  .role-header.admin { background: linear-gradient(135deg, #fef2f2, #fee2e2); }
+  .role-icon { font-size: 32px; }
+  .role-label { font-size: 20px; font-weight: 700; }
+
+  /* Print button */
+  .print-btn { position: fixed; bottom: 24px; right: 24px; background: #0f766e; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 100; }
+  .print-btn:hover { background: #0d5f58; }
+</style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">PDF / 印刷</button>
+
+<div class="container">
+
+<!-- ═══════════════ COVER ═══════════════ -->
+<div class="cover">
+  <p style="font-size:14px;opacity:0.8;margin-bottom:8px;">社内向け資料</p>
+  <h1>DayDreamHub</h1>
+  <p class="subtitle">プラットフォーム仕様・機能ガイド</p>
+  <p class="meta">デイユースホテル予約プラットフォーム<br>Version 2.0 | 2026年4月</p>
+</div>
+
+<!-- ═══════════════ TOC ═══════════════ -->
+<div class="toc">
+  <h2>目次</h2>
+  <ol>
+    <li><a href="#overview">プラットフォーム概要</a></li>
+    <li><a href="#tech">技術構成</a></li>
+    <li><a href="#guest">ゲスト向け機能</a></li>
+    <li><a href="#owner">オーナー向け機能</a></li>
+    <li><a href="#admin">管理者向け機能</a></li>
+    <li><a href="#booking-flow">予約・決済フロー</a></li>
+    <li><a href="#fees">料金体系</a></li>
+    <li><a href="#email">メール通知</a></li>
+    <li><a href="#concierge">コンシェルジュ機能</a></li>
+    <li><a href="#map">マップ機能</a></li>
+    <li><a href="#i18n">多言語・多通貨対応</a></li>
+    <li><a href="#staff">スタッフ権限管理</a></li>
+    <li><a href="#pages">全ページ一覧</a></li>
+  </ol>
+</div>
+
+<!-- ═══════════════ 1. OVERVIEW ═══════════════ -->
+<section id="overview">
+  <h2>1. プラットフォーム概要</h2>
+  <p><strong>DayDreamHub</strong>は、世界中のホテルをデイユース（時間単位）で予約できるオンライン旅行代理店（OTA）プラットフォームです。</p>
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-title">ゲスト</div>
+      <div class="card-body">ホテルを検索・予約し、時間単位で利用。PayPalで決済。</div>
+    </div>
+    <div class="card">
+      <div class="card-title">オーナー</div>
+      <div class="card-body">ホテル情報・料金・空室を管理。予約の承認/拒否。</div>
+    </div>
+    <div class="card">
+      <div class="card-title">管理者</div>
+      <div class="card-body">全体の運営管理。ホテル・ユーザー・ブログ・クーポン管理。</div>
+    </div>
+  </div>
+  <div class="highlight highlight-teal">
+    <strong>対応エリア:</strong> 東南アジア、東アジア、中央アジア、中東、アフリカ、ヨーロッパ、オセアニア、南北アメリカなど世界80都市以上
+  </div>
+</section>
+
+<!-- ═══════════════ 2. TECH ═══════════════ -->
+<section id="tech">
+  <h2>2. 技術構成</h2>
+  <table>
+    <tr><th>カテゴリ</th><th>技術</th><th>用途</th></tr>
+    <tr><td>フレームワーク</td><td>Astro 5.4 (SSR)</td><td>フロントエンド + API</td></tr>
+    <tr><td>ホスティング</td><td>Cloudflare Pages</td><td>デプロイ・CDN</td></tr>
+    <tr><td>データベース</td><td>Cloudflare D1 (SQLite)</td><td>全データ保存</td></tr>
+    <tr><td>決済</td><td>PayPal REST API</td><td>クレカ・PayPal決済</td></tr>
+    <tr><td>メール</td><td>Resend API</td><td>通知メール送信</td></tr>
+    <tr><td>電話</td><td>Telnyx API</td><td>AI自動電話</td></tr>
+    <tr><td>AI</td><td>Cloudflare Workers AI / Claude</td><td>コンシェルジュチャット</td></tr>
+    <tr><td>地図</td><td>Leaflet.js</td><td>ホテルマップ表示</td></tr>
+    <tr><td>スタイリング</td><td>Tailwind CSS</td><td>UIデザイン</td></tr>
+    <tr><td>CI/CD</td><td>GitHub Actions</td><td>自動デプロイ</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════ 3. GUEST ═══════════════ -->
+<section id="guest" class="page-break">
+  <h2>3. ゲスト向け機能</h2>
+  <div class="role-header guest">
+    <span class="role-icon">🧳</span>
+    <span class="role-label">ゲスト（旅行者）ができること</span>
+  </div>
+
+  <h3>3.1 ホテル検索・フィルタリング</h3>
+  <p>多彩なフィルターでホテルを絞り込み検索できます。</p>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">検索フィルター</div>
+      <div class="card-body">
+        <ul style="padding-left:16px;margin:0;">
+          <li>フリーワード（ホテル名・都市名）</li>
+          <li>カテゴリー（デイケーション、カップル向け、ワーク向け、ラグジュアリー等）</li>
+          <li>物件タイプ（ホテル、ゲストハウス、ヴィラ等）</li>
+          <li>国・都市</li>
+          <li>評価（星数）</li>
+          <li>アメニティ</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">並び替え</div>
+      <div class="card-body">
+        <ul style="padding-left:16px;margin:0;">
+          <li>おすすめ順（デフォルト）</li>
+          <li>料金（安い順 / 高い順）</li>
+          <li>空港からの距離</li>
+          <li>評価（高い順）</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h3>3.2 ホテル詳細ページ</h3>
+  <ul>
+    <li>画像ギャラリー（メイン画像 + サムネイル一覧）</li>
+    <li>最寄り空港と距離の表示（例: Tbilisi Airport (TBS) — ~14 km）</li>
+    <li>カテゴリータグ（色分け表示）</li>
+    <li>アメニティ一覧（Wi-Fi、プール、ジム等）</li>
+    <li>説明文（ピリオドごとに改行表示）</li>
+    <li>プラン一覧（チェックイン/アウト時間、料金、人数）</li>
+    <li>ゲストレビュー（星評価 + コメント + オーナー返信）</li>
+    <li>マップ表示リンク</li>
+    <li>ウィッシュリスト保存ボタン</li>
+  </ul>
+
+  <h3>3.3 予約</h3>
+  <ul>
+    <li>ログイン必須（未ログインの場合はログインページへリダイレクト）</li>
+    <li>ログイン済みユーザーの氏名・メール・電話番号は自動入力</li>
+    <li>チェックイン日、大人/子供/乳児の人数を選択</li>
+    <li>PayPalまたはクレジットカードで決済</li>
+    <li>予約リクエスト制（オーナーの承認が必要）</li>
+    <li>キャンセルポリシー表示</li>
+  </ul>
+
+  <h3>3.4 マイページ</h3>
+  <ul>
+    <li>予約履歴の閲覧</li>
+    <li>予約ステータスの確認（pending / confirmed / cancelled）</li>
+    <li>レビューの投稿</li>
+  </ul>
+
+  <h3>3.5 インタラクティブマップ</h3>
+  <ul>
+    <li>世界中のホテルをマップ上にマーカー表示</li>
+    <li>国際空港のマーカー表示（表示ON/OFF切替可能）</li>
+    <li>都市・カテゴリーでのフィルタリング</li>
+    <li>ホテルポップアップに最寄り空港からの距離を表示</li>
+    <li>スケールバー（距離目盛）表示</li>
+  </ul>
+
+  <h3>3.6 ウィッシュリスト</h3>
+  <p>気に入ったホテルをブックマークし、後から一覧で確認できます。</p>
+
+  <h3>3.7 ブログ・ニュース</h3>
+  <ul>
+    <li>旅行情報のブログ記事（都市・国別フィルター付き）</li>
+    <li>プラットフォームのアップデート・お知らせ</li>
+    <li>日本語/英語の二言語対応</li>
+  </ul>
+
+  <h3>3.8 コンシェルジュチャット</h3>
+  <p>AIアシスタントによるホテル検索・予約サポート。テキストと画像の送信に対応。</p>
+</section>
+
+<!-- ═══════════════ 4. OWNER ═══════════════ -->
+<section id="owner" class="page-break">
+  <h2>4. オーナー向け機能</h2>
+  <div class="role-header owner">
+    <span class="role-icon">🏨</span>
+    <span class="role-label">オーナー（ホテル管理者）ができること</span>
+  </div>
+
+  <div class="screenshot">
+    <img src="/manual-screenshots/dashboard.jpg" alt="オーナーダッシュボード">
+    <div class="caption">オーナーダッシュボード — 物件パフォーマンスの概要</div>
+  </div>
+
+  <h3>4.1 ダッシュボード</h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">サマリーカード</div>
+      <div class="card-body">登録ホテル数、累計予約数、今月の売上、保留中予約数</div>
+    </div>
+    <div class="card">
+      <div class="card-title">クイックアクション</div>
+      <div class="card-body">各機能への1クリックアクセスボタン</div>
+    </div>
+    <div class="card">
+      <div class="card-title">直近7日間</div>
+      <div class="card-body">今後1週間の予約カレンダービュー</div>
+    </div>
+    <div class="card">
+      <div class="card-title">最新レビュー・予約</div>
+      <div class="card-body">直近3件のレビューと最新予約一覧</div>
+    </div>
+  </div>
+
+  <h3>4.2 予約管理</h3>
+  <div class="screenshot">
+    <img src="/manual-screenshots/bookings.jpg" alt="予約管理画面">
+    <div class="caption">予約管理 — ステータス・ホテル・日付でフィルタリング</div>
+  </div>
+  <table>
+    <tr><th>ステータス</th><th>意味</th><th>必要なアクション</th></tr>
+    <tr><td><span class="badge badge-amber">pending</span></td><td>ゲスト決済済み — 承認待ち</td><td>承認 or 拒否</td></tr>
+    <tr><td><span class="badge badge-teal">confirmed</span></td><td>承認済み・確定</td><td>チェックイン準備</td></tr>
+    <tr><td><span class="badge badge-red">cancelled</span></td><td>キャンセル済み</td><td>対応不要</td></tr>
+  </table>
+  <div class="highlight highlight-amber">
+    <strong>注意:</strong> リクエスト拒否は問題ありませんが、確定後のキャンセルを繰り返すとアカウント停止の可能性があります。
+  </div>
+
+  <h3>4.3 カレンダー・空室管理</h3>
+  <div class="screenshot">
+    <img src="/manual-screenshots/calendar.jpg" alt="カレンダー画面">
+    <div class="caption">カレンダー — 日付をクリックしてブロック/解除</div>
+  </div>
+  <ul>
+    <li>日付をクリックしてブロック（赤）/解除（白）</li>
+    <li>ブロックされた日は新規予約を受付けない</li>
+    <li>既に確定済みの予約には影響なし</li>
+    <li>月送り・「Today」ボタンでナビゲーション</li>
+  </ul>
+
+  <h3>4.4 ホテル・プラン管理</h3>
+  <div class="screenshot">
+    <img src="/manual-screenshots/hotels.jpg" alt="マイホテル画面">
+    <div class="caption">マイホテル — 登録物件の一覧と管理</div>
+  </div>
+  <h4>ホテル情報の編集</h4>
+  <ul>
+    <li>物件名・説明（英語/日本語）</li>
+    <li>住所・位置情報（緯度/経度）</li>
+    <li>物件タイプ・アメニティ・カテゴリー</li>
+    <li>ギャラリー写真（最大20枚アップロード）</li>
+    <li>変更は即時反映</li>
+  </ul>
+  <h4>プラン管理</h4>
+  <table>
+    <tr><th>項目</th><th>説明</th></tr>
+    <tr><td>ルームタイプ</td><td>部屋タイプ別にプランをグループ化</td></tr>
+    <tr><td>プラン名</td><td>表示名（英語/日本語）</td></tr>
+    <tr><td>平日料金</td><td>USD基準の基本料金</td></tr>
+    <tr><td>休日料金</td><td>土日の特別料金（任意）</td></tr>
+    <tr><td>最大人数</td><td>1予約あたりの最大ゲスト数</td></tr>
+    <tr><td>チェックイン/アウト</td><td>30分刻みの時間帯</td></tr>
+    <tr><td>プランタイプ</td><td>Daycation, Morning, Afternoon, Evening, Overnight等</td></tr>
+    <tr><td>キャンセルポリシー</td><td>チェックイン前の無料キャンセル時間</td></tr>
+  </table>
+  <p>プランの一時停止（Pause）/再開（Resume）が可能。停止中も設定は保持されます。</p>
+
+  <h3>4.5 売上レポート</h3>
+  <div class="screenshot">
+    <img src="/manual-screenshots/reports.jpg" alt="レポート画面">
+    <div class="caption">レポート — 売上と予約分析、CSV出力対応</div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><div class="card-title">TOTAL REVENUE</div><div class="card-body">合計売上（USD）</div></div>
+    <div class="card"><div class="card-title">TOTAL BOOKINGS</div><div class="card-body">確定済み予約数</div></div>
+    <div class="card"><div class="card-title">AVG BOOKING VALUE</div><div class="card-body">予約あたり平均単価</div></div>
+    <div class="card"><div class="card-title">MONTH-OVER-MONTH</div><div class="card-body">前期間比の成長率</div></div>
+  </div>
+  <p>期間選択（今月 / 3ヶ月 / 6ヶ月 / 1年）、CSV出力対応。</p>
+
+  <h3>4.6 ゲストレビュー</h3>
+  <ul>
+    <li>星評価・コメントの一覧表示</li>
+    <li>ホテル別・評価別のフィルタリング</li>
+    <li>各レビューに公式返信（1回）</li>
+    <li>平均評価・総レビュー数の表示</li>
+  </ul>
+
+  <h3>4.7 メッセージ</h3>
+  <ul>
+    <li>ゲストとの予約関連コミュニケーション</li>
+    <li>ホテル別・方向別（受信/送信）フィルター</li>
+  </ul>
+
+  <h3>4.8 スタッフ管理</h3>
+  <p>チームメンバーを招待し、2種類の権限レベルを付与できます。</p>
+  <table>
+    <tr><th>権限レベル</th><th>予約管理</th><th>カレンダー</th><th>レビュー</th><th>ホテル編集</th><th>レポート</th><th>スタッフ招待</th></tr>
+    <tr><td><span class="badge badge-purple">共同オーナー</span></td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td></tr>
+    <tr><td><span class="badge badge-blue">予約管理者</span></td><td>○</td><td>○</td><td>○</td><td>×</td><td>×</td><td>×</td></tr>
+  </table>
+  <p>複数ホテルへの一括招待（チェックボックス選択）に対応。</p>
+
+  <h3>4.9 通知設定</h3>
+  <p>ホテルごとに以下の通知をON/OFF設定できます。</p>
+  <ul>
+    <li>新規予約時のメール通知</li>
+    <li>キャンセル時のメール通知</li>
+    <li>レビュー投稿時のメール通知</li>
+    <li>自動電話通知（Auto-call）</li>
+  </ul>
+
+  <h3>4.10 通話ログ</h3>
+  <p>自動電話の履歴を確認できます（confirmed / declined / no_answer / voicemail / failed / queued）。</p>
+
+  <h3>4.11 設定</h3>
+  <div class="screenshot">
+    <img src="/manual-screenshots/settings.jpg" alt="設定画面">
+    <div class="caption">設定 — プロフィール更新とパスワード変更</div>
+  </div>
+  <ul>
+    <li>氏名の変更</li>
+    <li>パスワードの変更（最低8文字）</li>
+    <li>メールアドレスの変更はサポートへ連絡</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ 5. ADMIN ═══════════════ -->
+<section id="admin" class="page-break">
+  <h2>5. 管理者向け機能</h2>
+  <div class="role-header admin">
+    <span class="role-icon">🛡️</span>
+    <span class="role-label">管理者（DayDreamHub運営）ができること</span>
+  </div>
+
+  <h3>5.1 ダッシュボード</h3>
+  <p>システム全体の状況を一目で把握。ホテル数、予約数、ユーザー数等のKPIを表示。</p>
+
+  <h3>5.2 ホテル管理</h3>
+  <ul>
+    <li>全ホテルの一覧・検索・編集・削除</li>
+    <li>ホテルへのオーナー紐付け（emailベース）</li>
+    <li>新規ホテルの作成</li>
+    <li>ホテル情報の全項目編集（名前、説明、料金、位置情報、アメニティ等）</li>
+  </ul>
+
+  <h3>5.3 ユーザー管理</h3>
+  <ul>
+    <li>全ユーザーの一覧・作成・編集・削除</li>
+    <li>ロール管理: user / owner / staff / admin</li>
+    <li>オーナーアカウントの作成と認証情報の送信</li>
+  </ul>
+
+  <h3>5.4 予約管理</h3>
+  <p>全予約の閲覧・ステータス管理。個別予約の詳細確認。</p>
+
+  <h3>5.5 コンテンツ管理</h3>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">ブログ</div>
+      <div class="card-body">旅行記事の作成・編集・削除。多言語対応（EN/JA）。</div>
+    </div>
+    <div class="card">
+      <div class="card-title">ニュース</div>
+      <div class="card-body">お知らせの作成・管理。カテゴリー: update / feature / policy / maintenance</div>
+    </div>
+    <div class="card">
+      <div class="card-title">レビュー管理</div>
+      <div class="card-body">ゲストレビューのモデレーション。承認/非承認の管理。</div>
+    </div>
+    <div class="card">
+      <div class="card-title">クーポン</div>
+      <div class="card-body">割引クーポンの作成と管理。</div>
+    </div>
+  </div>
+
+  <h3>5.6 オーナー申請</h3>
+  <p>新規オーナーの申請を審査し、承認/拒否を行います。</p>
+
+  <h3>5.7 問い合わせ管理</h3>
+  <p>コンタクトフォームからの問い合わせを一覧で確認・対応。</p>
+
+  <h3>5.8 コンシェルジュ管理</h3>
+  <ul>
+    <li>AIチャットセッションのモニタリング</li>
+    <li>通話ログの全体閲覧</li>
+    <li>Telnyx電話サービスの設定・診断</li>
+  </ul>
+
+  <h3>5.9 SQLコンソール</h3>
+  <p>D1データベースに直接SQLを実行できる管理者専用ツール。</p>
+
+  <h3>5.10 都市管理・アウトリーチ</h3>
+  <ul>
+    <li>都市情報のカテゴリー管理</li>
+    <li>営業メールのキャンペーン管理</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ 6. BOOKING FLOW ═══════════════ -->
+<section id="booking-flow" class="page-break">
+  <h2>6. 予約・決済フロー</h2>
+
+  <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="background:#0f766e;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">1</div>
+      <div style="flex:1;background:#f0fdfa;padding:10px 14px;border-radius:8px;font-size:13px;">ゲストがプランを選択し、予約フォームに情報を入力</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="background:#0f766e;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">2</div>
+      <div style="flex:1;background:#f0fdfa;padding:10px 14px;border-radius:8px;font-size:13px;">PayPal / クレジットカードで決済（Processing Fee + Service Fee含む）</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="background:#f59e0b;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">3</div>
+      <div style="flex:1;background:#fffbeb;padding:10px 14px;border-radius:8px;font-size:13px;">予約ステータス「pending」でホテルに通知（メール + 自動電話）</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="background:#6366f1;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">4</div>
+      <div style="flex:1;background:#eef2ff;padding:10px 14px;border-radius:8px;font-size:13px;">オーナーがOwner Panelで承認 → ステータス「confirmed」に変更</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div style="background:#0f766e;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">5</div>
+      <div style="flex:1;background:#f0fdfa;padding:10px 14px;border-radius:8px;font-size:13px;">ゲストに確認メール送信（予約詳細・チェックイン情報）</div>
+    </div>
+  </div>
+
+  <div class="highlight highlight-amber">
+    <strong>拒否の場合:</strong> オーナーが拒否 → ゲストに全額返金 → 代替ホテルの提案メール送信
+  </div>
+</section>
+
+<!-- ═══════════════ 7. FEES ═══════════════ -->
+<section id="fees">
+  <h2>7. 料金体系</h2>
+  <table>
+    <tr><th>項目</th><th>計算方法</th><th>例（プラン$50の場合）</th></tr>
+    <tr><td>プラン料金</td><td>ホテルが設定した基本価格</td><td>$50.00</td></tr>
+    <tr><td>Processing Fee</td><td>プラン料金 × 6%</td><td>$3.00</td></tr>
+    <tr><td>Service Fee</td><td>max($0, $10 - プラン料金 × 10%)</td><td>$5.00</td></tr>
+    <tr><td><strong>合計</strong></td><td>プラン + Processing + Service</td><td><strong>$58.00</strong></td></tr>
+  </table>
+  <div class="highlight highlight-blue">
+    <strong>Service Fee の仕組み:</strong> プラン料金が$100以上の場合、Service Feeは$0になります（$100 × 10% = $10 ≧ $10）。低価格プランほどService Feeが高くなる仕組みです。
+  </div>
+</section>
+
+<!-- ═══════════════ 8. EMAIL ═══════════════ -->
+<section id="email">
+  <h2>8. メール通知</h2>
+  <table>
+    <tr><th>メール種別</th><th>送信先</th><th>タイミング</th></tr>
+    <tr><td>ウェルカムメール</td><td>ゲスト</td><td>新規アカウント登録時</td></tr>
+    <tr><td>オーナーアカウント通知</td><td>オーナー</td><td>管理者がアカウント作成時</td></tr>
+    <tr><td>予約通知</td><td>ホテル</td><td>新規予約リクエスト受信時</td></tr>
+    <tr><td>予約確認</td><td>ゲスト</td><td>オーナーが予約を承認した時</td></tr>
+    <tr><td>ステータス更新</td><td>ゲスト</td><td>予約ステータスが変更された時</td></tr>
+    <tr><td>決済失敗通知</td><td>ゲスト</td><td>PayPal決済が失敗した時</td></tr>
+    <tr><td>代替ホテル提案</td><td>ゲスト</td><td>予約拒否後の代替提案時</td></tr>
+    <tr><td>コンシェルジュ確認</td><td>ゲスト</td><td>コンシェルジュ予約完了時</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════ 9. CONCIERGE ═══════════════ -->
+<section id="concierge">
+  <h2>9. コンシェルジュ機能</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">AIチャット</div>
+      <div class="card-body">ゲストがテキスト・画像でホテル検索や予約相談ができるAIアシスタント。多言語対応。</div>
+    </div>
+    <div class="card">
+      <div class="card-title">AI自動電話</div>
+      <div class="card-body">新規予約時にホテルへ自動電話。予約の承認/拒否をIVRで確認。Telnyx API使用。</div>
+    </div>
+  </div>
+  <h3>通話ステータス</h3>
+  <div class="grid-3">
+    <div class="card"><div class="card-title" style="color:#059669;">confirmed</div><div class="card-body">電話で承認</div></div>
+    <div class="card"><div class="card-title" style="color:#dc2626;">declined</div><div class="card-body">電話で拒否</div></div>
+    <div class="card"><div class="card-title" style="color:#6b7280;">no_answer</div><div class="card-body">応答なし</div></div>
+    <div class="card"><div class="card-title" style="color:#6b7280;">voicemail</div><div class="card-body">留守電</div></div>
+    <div class="card"><div class="card-title" style="color:#dc2626;">failed</div><div class="card-body">発信失敗</div></div>
+    <div class="card"><div class="card-title" style="color:#2563eb;">queued</div><div class="card-body">発信待ち</div></div>
+  </div>
+</section>
+
+<!-- ═══════════════ 10. MAP ═══════════════ -->
+<section id="map">
+  <h2>10. マップ機能</h2>
+  <ul>
+    <li>Leaflet.jsによるインタラクティブマップ</li>
+    <li>CARTO Positronベースマップ（ラベルなし）+ 自前の都市名ラベル表示</li>
+    <li>英語版は英語、日本語版は日本語で都市名を表示（言語統一）</li>
+    <li>3種類のマーカー:
+      <span class="badge badge-teal">ホテル（緑）</span>
+      <span class="badge badge-amber">都市（黄）</span>
+      <span class="badge badge-purple">空港（紫）</span>
+    </li>
+    <li>ホテルポップアップ: サムネイル、名前、都市、最寄り空港距離、料金、詳細リンク</li>
+    <li>空港マーカーのON/OFF切替（チェックボックス）</li>
+    <li>都市・カテゴリーフィルター</li>
+    <li>スケールバー表示</li>
+    <li>主要80空港の位置情報を登録済み</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ 11. I18N ═══════════════ -->
+<section id="i18n">
+  <h2>11. 多言語・多通貨対応</h2>
+  <h3>言語対応</h3>
+  <table>
+    <tr><th>項目</th><th>英語 (EN)</th><th>日本語 (JA)</th></tr>
+    <tr><td>URL構造</td><td>/search, /hotel/...</td><td>/ja/search, /ja/hotel/...</td></tr>
+    <tr><td>ゲストページ</td><td>○ 全ページ</td><td>○ 全ページ</td></tr>
+    <tr><td>ホテル名・説明</td><td>○</td><td>○（name_ja, description_ja）</td></tr>
+    <tr><td>プラン名</td><td>○</td><td>○（name_ja）</td></tr>
+    <tr><td>マップ地名</td><td>○ 英語表記</td><td>○ 日本語表記</td></tr>
+    <tr><td>空港名</td><td>○ 英語名</td><td>○ 日本語名</td></tr>
+  </table>
+  <h3>通貨</h3>
+  <p>基本通貨はUSD。為替レートのキャッシュを保持し、ゲスト向けに現地通貨での参考表示に対応。</p>
+</section>
+
+<!-- ═══════════════ 12. STAFF ═══════════════ -->
+<section id="staff">
+  <h2>12. スタッフ権限管理</h2>
+  <p>オーナーは自身のホテルにスタッフを招待し、権限を付与できます。</p>
+
+  <h3>権限マトリクス</h3>
+  <table>
+    <tr><th>機能</th><th>オーナー</th><th>共同オーナー</th><th>予約管理者</th></tr>
+    <tr><td>予約の承認/拒否</td><td>○</td><td>○</td><td>○</td></tr>
+    <tr><td>カレンダー管理</td><td>○</td><td>○</td><td>○</td></tr>
+    <tr><td>レビュー返信</td><td>○</td><td>○</td><td>○</td></tr>
+    <tr><td>メッセージ</td><td>○</td><td>○</td><td>○</td></tr>
+    <tr><td>ホテル情報編集</td><td>○</td><td>○</td><td>×</td></tr>
+    <tr><td>料金・プラン設定</td><td>○</td><td>○</td><td>×</td></tr>
+    <tr><td>レポート閲覧</td><td>○</td><td>○</td><td>×</td></tr>
+    <tr><td>スタッフ招待/削除</td><td>○</td><td>○</td><td>×</td></tr>
+  </table>
+
+  <h3>招待方法</h3>
+  <ul>
+    <li>名前・メールアドレスを入力</li>
+    <li>チェックボックスで対象ホテルを選択（All Hotels で全選択可能）</li>
+    <li>権限レベル（共同オーナー / 予約管理者）を選択</li>
+    <li>複数ホテルへの一括招待に対応</li>
+  </ul>
+</section>
+
+<!-- ═══════════════ 13. PAGES ═══════════════ -->
+<section id="pages" class="page-break">
+  <h2>13. 全ページ一覧</h2>
+
+  <h3>ゲスト向けページ</h3>
+  <table>
+    <tr><th>ページ</th><th>パス</th><th>機能</th></tr>
+    <tr><td>トップページ</td><td>/</td><td>ヒーロー、おすすめホテル、カテゴリー</td></tr>
+    <tr><td>検索</td><td>/search</td><td>フィルター付きホテル検索</td></tr>
+    <tr><td>マップ</td><td>/map</td><td>インタラクティブ地図</td></tr>
+    <tr><td>ホテル詳細</td><td>/hotel/[slug]</td><td>画像・プラン・レビュー</td></tr>
+    <tr><td>都市ページ</td><td>/city/[slug]</td><td>都市別ホテル一覧</td></tr>
+    <tr><td>予約フォーム</td><td>/booking/[planId]</td><td>予約入力・決済</td></tr>
+    <tr><td>予約確認</td><td>/booking/confirmation</td><td>決済完了・予約詳細</td></tr>
+    <tr><td>マイページ</td><td>/mypage</td><td>予約履歴・レビュー投稿</td></tr>
+    <tr><td>ウィッシュリスト</td><td>/wishlist</td><td>お気に入りホテル一覧</td></tr>
+    <tr><td>ブログ</td><td>/blog</td><td>旅行記事一覧</td></tr>
+    <tr><td>ニュース</td><td>/news</td><td>お知らせ・更新情報</td></tr>
+    <tr><td>コンシェルジュ</td><td>/concierge</td><td>AIチャットアシスタント</td></tr>
+    <tr><td>使い方</td><td>/how-it-works</td><td>プラットフォーム利用ガイド</td></tr>
+    <tr><td>FAQ</td><td>/faq</td><td>よくある質問</td></tr>
+    <tr><td>お問い合わせ</td><td>/contact</td><td>問い合わせフォーム</td></tr>
+    <tr><td>About</td><td>/about</td><td>会社・サービス説明</td></tr>
+  </table>
+
+  <h3>オーナーパネル</h3>
+  <table>
+    <tr><th>ページ</th><th>パス</th><th>機能</th></tr>
+    <tr><td>ダッシュボード</td><td>/owner</td><td>KPI・クイックアクション</td></tr>
+    <tr><td>予約管理</td><td>/owner/bookings</td><td>承認/拒否・フィルタリング</td></tr>
+    <tr><td>カレンダー</td><td>/owner/calendar</td><td>空室管理・日付ブロック</td></tr>
+    <tr><td>マイホテル</td><td>/owner/hotels</td><td>物件一覧・新規追加</td></tr>
+    <tr><td>ホテル編集</td><td>/owner/hotels/[id]</td><td>情報編集・プラン管理</td></tr>
+    <tr><td>レビュー</td><td>/owner/reviews</td><td>レビュー閲覧・返信</td></tr>
+    <tr><td>レポート</td><td>/owner/reports</td><td>売上分析・CSV出力</td></tr>
+    <tr><td>メッセージ</td><td>/owner/messages</td><td>ゲストとの連絡</td></tr>
+    <tr><td>スタッフ</td><td>/owner/staff</td><td>チームメンバー管理</td></tr>
+    <tr><td>通知設定</td><td>/owner/notifications</td><td>メール・電話通知設定</td></tr>
+    <tr><td>通話ログ</td><td>/owner/call-logs</td><td>自動電話履歴</td></tr>
+    <tr><td>設定</td><td>/owner/settings</td><td>プロフィール・パスワード</td></tr>
+    <tr><td>マニュアル</td><td>/owner/manual</td><td>操作ガイド</td></tr>
+  </table>
+
+  <h3>管理者パネル</h3>
+  <table>
+    <tr><th>ページ</th><th>パス</th><th>機能</th></tr>
+    <tr><td>ダッシュボード</td><td>/admin</td><td>システム概要</td></tr>
+    <tr><td>ホテル管理</td><td>/admin/hotels</td><td>全ホテル管理・オーナー紐付け</td></tr>
+    <tr><td>ユーザー管理</td><td>/admin/users</td><td>アカウント作成・編集</td></tr>
+    <tr><td>予約管理</td><td>/admin/bookings</td><td>全予約の閲覧・管理</td></tr>
+    <tr><td>ブログ</td><td>/admin/blog</td><td>記事の作成・編集</td></tr>
+    <tr><td>ニュース</td><td>/admin/news</td><td>お知らせ管理</td></tr>
+    <tr><td>レビュー</td><td>/admin/reviews</td><td>レビューモデレーション</td></tr>
+    <tr><td>クーポン</td><td>/admin/coupons</td><td>割引クーポン管理</td></tr>
+    <tr><td>オーナー申請</td><td>/admin/owner-applications</td><td>申請の審査</td></tr>
+    <tr><td>問い合わせ</td><td>/admin/contact-inquiries</td><td>問い合わせ対応</td></tr>
+    <tr><td>コンシェルジュ</td><td>/admin/concierge</td><td>AIチャット監視</td></tr>
+    <tr><td>SQLコンソール</td><td>/admin/sql</td><td>D1直接操作</td></tr>
+  </table>
+</section>
+
+<!-- Footer -->
+<div style="text-align:center;padding:32px 0;color:#94a3b8;font-size:12px;">
+  <p>&copy; 2026 DayDreamHub — プラットフォーム仕様書 v2.0</p>
+  <p>社内限定資料 — 外部への共有はご遠慮ください</p>
+</div>
+
+</div>
+</body>
+</html>
