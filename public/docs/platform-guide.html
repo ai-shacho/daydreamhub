@@ -110,7 +110,6 @@
   <h2>目次</h2>
   <ol>
     <li><a href="#overview">プラットフォーム概要</a></li>
-    <li><a href="#tech">技術構成</a></li>
     <li><a href="#guest">ゲスト向け機能</a></li>
     <li><a href="#owner">オーナー向け機能</a></li>
     <li><a href="#admin">管理者向け機能</a></li>
@@ -148,34 +147,29 @@
   </div>
 </section>
 
-<!-- ═══════════════ 2. TECH ═══════════════ -->
-<section id="tech">
-  <h2>2. 技術構成</h2>
-  <table>
-    <tr><th>カテゴリ</th><th>技術</th><th>用途</th></tr>
-    <tr><td>フレームワーク</td><td>Astro 5.4 (SSR)</td><td>フロントエンド + API</td></tr>
-    <tr><td>ホスティング</td><td>Cloudflare Pages</td><td>デプロイ・CDN</td></tr>
-    <tr><td>データベース</td><td>Cloudflare D1 (SQLite)</td><td>全データ保存</td></tr>
-    <tr><td>決済</td><td>PayPal REST API</td><td>クレカ・PayPal決済</td></tr>
-    <tr><td>メール</td><td>Resend API</td><td>通知メール送信</td></tr>
-    <tr><td>電話</td><td>Telnyx API</td><td>AI自動電話</td></tr>
-    <tr><td>AI</td><td>Cloudflare Workers AI / Claude</td><td>コンシェルジュチャット</td></tr>
-    <tr><td>地図</td><td>Leaflet.js</td><td>ホテルマップ表示</td></tr>
-    <tr><td>スタイリング</td><td>Tailwind CSS</td><td>UIデザイン</td></tr>
-    <tr><td>CI/CD</td><td>GitHub Actions</td><td>自動デプロイ</td></tr>
-  </table>
-</section>
-
-<!-- ═══════════════ 3. GUEST ═══════════════ -->
+<!-- ═══════════════ 2. GUEST ═══════════════ -->
 <section id="guest" class="page-break">
-  <h2>3. ゲスト向け機能</h2>
+  <h2>2. ゲスト向け機能</h2>
   <div class="role-header guest">
     <span class="role-icon">🧳</span>
     <span class="role-label">ゲスト（旅行者）ができること</span>
   </div>
 
-  <h3>3.1 ホテル検索・フィルタリング</h3>
-  <p>多彩なフィルターでホテルを絞り込み検索できます。</p>
+  <h3>2.1 トップページ</h3>
+  <p>サイトのランディングページ。ヒーロー画像、カテゴリータブ、おすすめホテル、人気都市、ブログ記事などが並びます。</p>
+  <div class="screenshot">
+    <img src="/guest-screenshots/home.jpg" alt="トップページ" onerror="this.parentElement.style.display='none';this.parentElement.nextElementSibling.style.display='block';">
+    <div class="caption">トップページ — カテゴリータブと人気ホテル</div>
+  </div>
+  <div class="highlight highlight-blue" style="display:none;">📷 <code>/public/guest-screenshots/home.jpg</code> に画像を配置するとここに表示されます</div>
+
+  <h3>2.2 ホテル検索・フィルタリング</h3>
+  <p>多彩なフィルターでホテルを絞り込み検索できます。サイドパネルのフィルターとメインの検索結果グリッドで構成されます。</p>
+  <div class="screenshot">
+    <img src="/guest-screenshots/search.jpg" alt="検索ページ" onerror="this.parentElement.style.display='none';this.parentElement.nextElementSibling.style.display='block';">
+    <div class="caption">検索ページ — フィルターと結果一覧</div>
+  </div>
+  <div class="highlight highlight-blue" style="display:none;">📷 <code>/public/guest-screenshots/search.jpg</code> に画像を配置するとここに表示されます</div>
   <div class="grid-2">
     <div class="card">
       <div class="card-title">検索フィルター</div>
@@ -203,7 +197,13 @@
     </div>
   </div>
 
-  <h3>3.2 ホテル詳細ページ</h3>
+  <h3>2.3 ホテル詳細ページ</h3>
+  <p>ホテル個別の詳細情報ページ。画像ギャラリー、情報、プラン、レビューが並びます。</p>
+  <div class="screenshot">
+    <img src="/guest-screenshots/hotel-detail.jpg" alt="ホテル詳細ページ" onerror="this.parentElement.style.display='none';this.parentElement.nextElementSibling.style.display='block';">
+    <div class="caption">ホテル詳細ページ — 画像・情報・空港距離・プラン・レビュー</div>
+  </div>
+  <div class="highlight highlight-blue" style="display:none;">📷 <code>/public/guest-screenshots/hotel-detail.jpg</code> に画像を配置するとここに表示されます</div>
   <ul>
     <li>画像ギャラリー（メイン画像 + サムネイル一覧）</li>
     <li>最寄り空港と距離の表示（例: Tbilisi Airport (TBS) — ~14 km）</li>
@@ -216,7 +216,13 @@
     <li>ウィッシュリスト保存ボタン</li>
   </ul>
 
-  <h3>3.3 予約</h3>
+  <h3>2.4 予約フォーム</h3>
+  <p>プラン選択後の予約入力画面。ゲスト情報と決済を1ページで完結。</p>
+  <div class="screenshot">
+    <img src="/guest-screenshots/booking.jpg" alt="予約フォーム" onerror="this.parentElement.style.display='none';this.parentElement.nextElementSibling.style.display='block';">
+    <div class="caption">予約フォーム — ゲスト情報入力と決済サマリー</div>
+  </div>
+  <div class="highlight highlight-blue" style="display:none;">📷 <code>/public/guest-screenshots/booking.jpg</code> に画像を配置するとここに表示されます</div>
   <ul>
     <li>ログイン必須（未ログインの場合はログインページへリダイレクト）</li>
     <li>ログイン済みユーザーの氏名・メール・電話番号は自動入力</li>
@@ -224,41 +230,72 @@
     <li>PayPalまたはクレジットカードで決済</li>
     <li>予約リクエスト制（オーナーの承認が必要）</li>
     <li>キャンセルポリシー表示</li>
+    <li>サマリーにProcessing Fee・Service Feeが明記</li>
   </ul>
 
-  <h3>3.4 マイページ</h3>
+  <h3>2.5 マイページ</h3>
+  <p>ログイン後のゲスト専用ダッシュボード。予約履歴とレビュー投稿機能。</p>
+  <div class="screenshot">
+    <img src="/guest-screenshots/mypage.jpg" alt="マイページ" onerror="this.parentElement.style.display='none';this.parentElement.nextElementSibling.style.display='block';">
+    <div class="caption">マイページ — 予約履歴の一覧</div>
+  </div>
+  <div class="highlight highlight-blue" style="display:none;">📷 <code>/public/guest-screenshots/mypage.jpg</code> に画像を配置するとここに表示されます</div>
   <ul>
     <li>予約履歴の閲覧</li>
     <li>予約ステータスの確認（pending / confirmed / cancelled）</li>
     <li>レビューの投稿</li>
   </ul>
 
-  <h3>3.5 インタラクティブマップ</h3>
+  <h3>2.6 インタラクティブマップ</h3>
+  <p>世界中のホテル・空港を地図上で確認。距離感も把握しやすいスケールバー付き。</p>
+  <div class="screenshot">
+    <img src="/guest-screenshots/map.jpg" alt="マップページ" onerror="this.parentElement.style.display='none';this.parentElement.nextElementSibling.style.display='block';">
+    <div class="caption">マップ — ホテル・空港・都市マーカーと距離表示</div>
+  </div>
+  <div class="highlight highlight-blue" style="display:none;">📷 <code>/public/guest-screenshots/map.jpg</code> に画像を配置するとここに表示されます</div>
   <ul>
     <li>世界中のホテルをマップ上にマーカー表示</li>
-    <li>国際空港のマーカー表示（表示ON/OFF切替可能）</li>
+    <li>主要80国際空港のマーカー表示（表示ON/OFF切替可能）</li>
     <li>都市・カテゴリーでのフィルタリング</li>
     <li>ホテルポップアップに最寄り空港からの距離を表示</li>
     <li>スケールバー（距離目盛）表示</li>
+    <li>英語/日本語で地名ラベルを統一表示</li>
   </ul>
 
-  <h3>3.6 ウィッシュリスト</h3>
+  <h3>2.7 ウィッシュリスト</h3>
   <p>気に入ったホテルをブックマークし、後から一覧で確認できます。</p>
+  <div class="screenshot">
+    <img src="/guest-screenshots/wishlist.jpg" alt="ウィッシュリスト" onerror="this.parentElement.style.display='none';this.parentElement.nextElementSibling.style.display='block';">
+    <div class="caption">ウィッシュリスト — 保存したホテル一覧</div>
+  </div>
+  <div class="highlight highlight-blue" style="display:none;">📷 <code>/public/guest-screenshots/wishlist.jpg</code> に画像を配置するとここに表示されます</div>
 
-  <h3>3.7 ブログ・ニュース</h3>
+  <h3>2.8 コンシェルジュチャット</h3>
+  <p>AIアシスタントによるホテル検索・予約サポート。テキストと画像の送信に対応。</p>
+  <div class="screenshot">
+    <img src="/guest-screenshots/concierge.jpg" alt="コンシェルジュ" onerror="this.parentElement.style.display='none';this.parentElement.nextElementSibling.style.display='block';">
+    <div class="caption">AIコンシェルジュチャット</div>
+  </div>
+  <div class="highlight highlight-blue" style="display:none;">📷 <code>/public/guest-screenshots/concierge.jpg</code> に画像を配置するとここに表示されます</div>
+
+  <h3>2.9 ブログ・ニュース</h3>
   <ul>
     <li>旅行情報のブログ記事（都市・国別フィルター付き）</li>
     <li>プラットフォームのアップデート・お知らせ</li>
     <li>日本語/英語の二言語対応</li>
   </ul>
 
-  <h3>3.8 コンシェルジュチャット</h3>
-  <p>AIアシスタントによるホテル検索・予約サポート。テキストと画像の送信に対応。</p>
+  <div class="highlight highlight-teal">
+    <strong>📷 スクリーンショットの配置場所:</strong> <code>/public/guest-screenshots/</code> ディレクトリに以下のファイル名で配置してください —
+    <strong>home.jpg</strong> / <strong>search.jpg</strong> / <strong>hotel-detail.jpg</strong> /
+    <strong>booking.jpg</strong> / <strong>mypage.jpg</strong> / <strong>map.jpg</strong> /
+    <strong>wishlist.jpg</strong> / <strong>concierge.jpg</strong>
+  </div>
 </section>
 
-<!-- ═══════════════ 4. OWNER ═══════════════ -->
+<!-- ═══════════════ 3. OWNER ═══════════════ -->
 <section id="owner" class="page-break">
-  <h2>4. オーナー向け機能</h2>
+  <h2>3. オーナー向け機能</h2>
   <div class="role-header owner">
     <span class="role-icon">🏨</span>
     <span class="role-label">オーナー（ホテル管理者）ができること</span>
@@ -269,7 +306,7 @@
     <div class="caption">オーナーダッシュボード — 物件パフォーマンスの概要</div>
   </div>
 
-  <h3>4.1 ダッシュボード</h3>
+  <h3>3.1 ダッシュボード</h3>
   <div class="grid-2">
     <div class="card">
       <div class="card-title">サマリーカード</div>
@@ -289,7 +326,7 @@
     </div>
   </div>
 
-  <h3>4.2 予約管理</h3>
+  <h3>3.2 予約管理</h3>
   <div class="screenshot">
     <img src="/manual-screenshots/bookings.jpg" alt="予約管理画面">
     <div class="caption">予約管理 — ステータス・ホテル・日付でフィルタリング</div>
@@ -304,7 +341,7 @@
     <strong>注意:</strong> リクエスト拒否は問題ありませんが、確定後のキャンセルを繰り返すとアカウント停止の可能性があります。
   </div>
 
-  <h3>4.3 カレンダー・空室管理</h3>
+  <h3>3.3 カレンダー・空室管理</h3>
   <div class="screenshot">
     <img src="/manual-screenshots/calendar.jpg" alt="カレンダー画面">
     <div class="caption">カレンダー — 日付をクリックしてブロック/解除</div>
@@ -316,7 +353,7 @@
     <li>月送り・「Today」ボタンでナビゲーション</li>
   </ul>
 
-  <h3>4.4 ホテル・プラン管理</h3>
+  <h3>3.4 ホテル・プラン管理</h3>
   <div class="screenshot">
     <img src="/manual-screenshots/hotels.jpg" alt="マイホテル画面">
     <div class="caption">マイホテル — 登録物件の一覧と管理</div>
@@ -343,7 +380,7 @@
   </table>
   <p>プランの一時停止（Pause）/再開（Resume）が可能。停止中も設定は保持されます。</p>
 
-  <h3>4.5 売上レポート</h3>
+  <h3>3.5 売上レポート</h3>
   <div class="screenshot">
     <img src="/manual-screenshots/reports.jpg" alt="レポート画面">
     <div class="caption">レポート — 売上と予約分析、CSV出力対応</div>
@@ -356,7 +393,7 @@
   </div>
   <p>期間選択（今月 / 3ヶ月 / 6ヶ月 / 1年）、CSV出力対応。</p>
 
-  <h3>4.6 ゲストレビュー</h3>
+  <h3>3.6 ゲストレビュー</h3>
   <ul>
     <li>星評価・コメントの一覧表示</li>
     <li>ホテル別・評価別のフィルタリング</li>
@@ -364,13 +401,13 @@
     <li>平均評価・総レビュー数の表示</li>
   </ul>
 
-  <h3>4.7 メッセージ</h3>
+  <h3>3.7 メッセージ</h3>
   <ul>
     <li>ゲストとの予約関連コミュニケーション</li>
     <li>ホテル別・方向別（受信/送信）フィルター</li>
   </ul>
 
-  <h3>4.8 スタッフ管理</h3>
+  <h3>3.8 スタッフ管理</h3>
   <p>チームメンバーを招待し、2種類の権限レベルを付与できます。</p>
   <table>
     <tr><th>権限レベル</th><th>予約管理</th><th>カレンダー</th><th>レビュー</th><th>ホテル編集</th><th>レポート</th><th>スタッフ招待</th></tr>
@@ -379,7 +416,7 @@
   </table>
   <p>複数ホテルへの一括招待（チェックボックス選択）に対応。</p>
 
-  <h3>4.9 通知設定</h3>
+  <h3>3.9 通知設定</h3>
   <p>ホテルごとに以下の通知をON/OFF設定できます。</p>
   <ul>
     <li>新規予約時のメール通知</li>
@@ -388,10 +425,10 @@
     <li>自動電話通知（Auto-call）</li>
   </ul>
 
-  <h3>4.10 通話ログ</h3>
+  <h3>3.10 通話ログ</h3>
   <p>自動電話の履歴を確認できます（confirmed / declined / no_answer / voicemail / failed / queued）。</p>
 
-  <h3>4.11 設定</h3>
+  <h3>3.11 設定</h3>
   <div class="screenshot">
     <img src="/manual-screenshots/settings.jpg" alt="設定画面">
     <div class="caption">設定 — プロフィール更新とパスワード変更</div>
@@ -403,18 +440,18 @@
   </ul>
 </section>
 
-<!-- ═══════════════ 5. ADMIN ═══════════════ -->
+<!-- ═══════════════ 4. ADMIN ═══════════════ -->
 <section id="admin" class="page-break">
-  <h2>5. 管理者向け機能</h2>
+  <h2>4. 管理者向け機能</h2>
   <div class="role-header admin">
     <span class="role-icon">🛡️</span>
     <span class="role-label">管理者（DayDreamHub運営）ができること</span>
   </div>
 
-  <h3>5.1 ダッシュボード</h3>
+  <h3>4.1 ダッシュボード</h3>
   <p>システム全体の状況を一目で把握。ホテル数、予約数、ユーザー数等のKPIを表示。</p>
 
-  <h3>5.2 ホテル管理</h3>
+  <h3>4.2 ホテル管理</h3>
   <ul>
     <li>全ホテルの一覧・検索・編集・削除</li>
     <li>ホテルへのオーナー紐付け（emailベース）</li>
@@ -422,17 +459,17 @@
     <li>ホテル情報の全項目編集（名前、説明、料金、位置情報、アメニティ等）</li>
   </ul>
 
-  <h3>5.3 ユーザー管理</h3>
+  <h3>4.3 ユーザー管理</h3>
   <ul>
     <li>全ユーザーの一覧・作成・編集・削除</li>
     <li>ロール管理: user / owner / staff / admin</li>
     <li>オーナーアカウントの作成と認証情報の送信</li>
   </ul>
 
-  <h3>5.4 予約管理</h3>
+  <h3>4.4 予約管理</h3>
   <p>全予約の閲覧・ステータス管理。個別予約の詳細確認。</p>
 
-  <h3>5.5 コンテンツ管理</h3>
+  <h3>4.5 コンテンツ管理</h3>
   <div class="grid-2">
     <div class="card">
       <div class="card-title">ブログ</div>
@@ -452,32 +489,32 @@
     </div>
   </div>
 
-  <h3>5.6 オーナー申請</h3>
+  <h3>4.6 オーナー申請</h3>
   <p>新規オーナーの申請を審査し、承認/拒否を行います。</p>
 
-  <h3>5.7 問い合わせ管理</h3>
+  <h3>4.7 問い合わせ管理</h3>
   <p>コンタクトフォームからの問い合わせを一覧で確認・対応。</p>
 
-  <h3>5.8 コンシェルジュ管理</h3>
+  <h3>4.8 コンシェルジュ管理</h3>
   <ul>
     <li>AIチャットセッションのモニタリング</li>
     <li>通話ログの全体閲覧</li>
     <li>Telnyx電話サービスの設定・診断</li>
   </ul>
 
-  <h3>5.9 SQLコンソール</h3>
+  <h3>4.9 SQLコンソール</h3>
   <p>D1データベースに直接SQLを実行できる管理者専用ツール。</p>
 
-  <h3>5.10 都市管理・アウトリーチ</h3>
+  <h3>4.10 都市管理・アウトリーチ</h3>
   <ul>
     <li>都市情報のカテゴリー管理</li>
     <li>営業メールのキャンペーン管理</li>
   </ul>
 </section>
 
-<!-- ═══════════════ 6. BOOKING FLOW ═══════════════ -->
+<!-- ═══════════════ 5. BOOKING FLOW ═══════════════ -->
 <section id="booking-flow" class="page-break">
-  <h2>6. 予約・決済フロー</h2>
+  <h2>5. 予約・決済フロー</h2>
 
   <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
     <div style="display:flex;align-items:center;gap:12px;">
@@ -507,9 +544,9 @@
   </div>
 </section>
 
-<!-- ═══════════════ 7. FEES ═══════════════ -->
+<!-- ═══════════════ 6. FEES ═══════════════ -->
 <section id="fees">
-  <h2>7. 料金体系</h2>
+  <h2>6. 料金体系</h2>
   <table>
     <tr><th>項目</th><th>計算方法</th><th>例（プラン$50の場合）</th></tr>
     <tr><td>プラン料金</td><td>ホテルが設定した基本価格</td><td>$50.00</td></tr>
@@ -522,9 +559,9 @@
   </div>
 </section>
 
-<!-- ═══════════════ 8. EMAIL ═══════════════ -->
+<!-- ═══════════════ 7. EMAIL ═══════════════ -->
 <section id="email">
-  <h2>8. メール通知</h2>
+  <h2>7. メール通知</h2>
   <table>
     <tr><th>メール種別</th><th>送信先</th><th>タイミング</th></tr>
     <tr><td>ウェルカムメール</td><td>ゲスト</td><td>新規アカウント登録時</td></tr>
@@ -538,9 +575,9 @@
   </table>
 </section>
 
-<!-- ═══════════════ 9. CONCIERGE ═══════════════ -->
+<!-- ═══════════════ 8. CONCIERGE ═══════════════ -->
 <section id="concierge">
-  <h2>9. コンシェルジュ機能</h2>
+  <h2>8. コンシェルジュ機能</h2>
   <div class="grid-2">
     <div class="card">
       <div class="card-title">AIチャット</div>
@@ -562,9 +599,9 @@
   </div>
 </section>
 
-<!-- ═══════════════ 10. MAP ═══════════════ -->
+<!-- ═══════════════ 9. MAP ═══════════════ -->
 <section id="map">
-  <h2>10. マップ機能</h2>
+  <h2>9. マップ機能</h2>
   <ul>
     <li>Leaflet.jsによるインタラクティブマップ</li>
     <li>CARTO Positronベースマップ（ラベルなし）+ 自前の都市名ラベル表示</li>
@@ -582,9 +619,9 @@
   </ul>
 </section>
 
-<!-- ═══════════════ 11. I18N ═══════════════ -->
+<!-- ═══════════════ 10. I18N ═══════════════ -->
 <section id="i18n">
-  <h2>11. 多言語・多通貨対応</h2>
+  <h2>10. 多言語・多通貨対応</h2>
   <h3>言語対応</h3>
   <table>
     <tr><th>項目</th><th>英語 (EN)</th><th>日本語 (JA)</th></tr>
@@ -599,9 +636,9 @@
   <p>基本通貨はUSD。為替レートのキャッシュを保持し、ゲスト向けに現地通貨での参考表示に対応。</p>
 </section>
 
-<!-- ═══════════════ 12. STAFF ═══════════════ -->
+<!-- ═══════════════ 11. STAFF ═══════════════ -->
 <section id="staff">
-  <h2>12. スタッフ権限管理</h2>
+  <h2>11. スタッフ権限管理</h2>
   <p>オーナーは自身のホテルにスタッフを招待し、権限を付与できます。</p>
 
   <h3>権限マトリクス</h3>
@@ -624,11 +661,30 @@
     <li>権限レベル（共同オーナー / 予約管理者）を選択</li>
     <li>複数ホテルへの一括招待に対応</li>
   </ul>
+
+  <h3>スタッフのログイン方法</h3>
+  <div class="highlight highlight-amber">
+    <strong>⚠️ 現状の実装:</strong> スタッフ招待時、システムはランダムなパスワードを自動生成してDBに保存しますが、<strong>このパスワードはスタッフ本人には通知されません</strong>。
+  </div>
+  <p>したがって、招待されたスタッフは初回ログイン時に以下の手順でパスワードを設定する必要があります：</p>
+  <ol style="padding-left:24px;">
+    <li>ログインページ (<code>/login</code>) にアクセス</li>
+    <li><strong>「パスワードを忘れましたか？」</strong>リンクをクリック</li>
+    <li>招待されたメールアドレスを入力してリセットリンクを受信</li>
+    <li>メール内のリンクから新しいパスワードを設定</li>
+    <li>設定したパスワードでログイン</li>
+  </ol>
+  <div class="highlight highlight-blue">
+    <strong>💡 運用上のポイント:</strong> オーナーはスタッフを招待したあと、本人に「メールアドレスで『パスワードを忘れた』からリセットしてログインしてください」と別途連絡する必要があります。
+  </div>
+  <div class="highlight highlight-teal">
+    <strong>🔧 今後の改善案:</strong> 招待時にスタッフへ自動で「アカウント作成のご案内」メールを送信し、メール内のリンクから直接パスワード設定できるようにする改修が推奨されます。
+  </div>
 </section>
 
-<!-- ═══════════════ 13. PAGES ═══════════════ -->
+<!-- ═══════════════ 12. PAGES ═══════════════ -->
 <section id="pages" class="page-break">
-  <h2>13. 全ページ一覧</h2>
+  <h2>12. 全ページ一覧</h2>
 
   <h3>ゲスト向けページ</h3>
   <table>
