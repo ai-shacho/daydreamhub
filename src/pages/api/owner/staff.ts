@@ -1,5 +1,12 @@
 import type { APIRoute } from 'astro';
 import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { sendStaffInvitationEmail } from '../../../lib/email';
+
+function generateInvitationToken(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
@@ -105,11 +112,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    const normalizedEmail = email.trim().toLowerCase();
     const existingUser = await db
       .prepare('SELECT id, role FROM users WHERE email = ?')
-      .bind(email.trim().toLowerCase())
+      .bind(normalizedEmail)
       .first();
     let userId: number;
+    let isNewUser = false;
     if (existingUser) {
       if ((existingUser as any).role !== 'staff') {
         return new Response(
@@ -137,15 +146,57 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const passwordHash = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
       const insertRes = await db
         .prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
-        .bind(name.trim(), email.trim().toLowerCase(), passwordHash, 'staff')
+        .bind(name.trim(), normalizedEmail, passwordHash, 'staff')
         .run();
       userId = insertRes?.meta?.last_row_id;
+      isNewUser = true;
     }
     await db
       .prepare('INSERT INTO hotel_staff (hotel_id, user_id, invited_by, staff_role) VALUES (?, ?, ?, ?)')
       .bind(Number(hotel_id), userId, owner.sub, staffRoleValue)
       .run();
-    return new Response(JSON.stringify({ success: true, user_id: userId }), {
+
+    // Send invitation email with password setup link (for new users only)
+    let emailSent = false;
+    if (isNewUser) {
+      const resendApiKey = runtime?.env?.RESEND_API_KEY;
+      if (resendApiKey) {
+        try {
+          // Generate invitation token (7 days expiry)
+          const token = generateInvitationToken();
+          const expiresAt = Math.floor(Date.now() / 1000) + 7 * 24 * 3600;
+          await db
+            .prepare('INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)')
+            .bind(normalizedEmail, token, expiresAt)
+            .run();
+
+          // Get hotel name
+          const hotelRow = await db
+            .prepare('SELECT name FROM hotels WHERE id = ?')
+            .bind(Number(hotel_id))
+            .first();
+          const hotelName = (hotelRow as any)?.name || 'DayDreamHub';
+
+          // Build invitation link
+          const origin = request.headers.get('origin') || new URL(request.url).origin || 'https://daydreamhub.com';
+          const invitationLink = `${origin}/auth/new-password?token=${token}`;
+
+          const result = await sendStaffInvitationEmail(resendApiKey, {
+            name: name.trim(),
+            email: normalizedEmail,
+            staffRole: staffRoleValue as 'co_owner' | 'booking_manager',
+            hotelName,
+            inviterName: (owner as any).name || '',
+            invitationLink,
+          });
+          emailSent = result.success;
+        } catch (e) {
+          console.error('Failed to send staff invitation email:', e);
+        }
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, user_id: userId, email_sent: emailSent, is_new_user: isNewUser }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (e: any) {

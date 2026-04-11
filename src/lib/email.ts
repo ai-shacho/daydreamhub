@@ -126,6 +126,74 @@ export async function sendWelcomeEmail(
   });
 }
 
+export async function sendStaffInvitationEmail(
+  apiKey: string,
+  data: {
+    name: string;
+    email: string;
+    staffRole: 'co_owner' | 'booking_manager';
+    hotelName: string;
+    inviterName?: string;
+    invitationLink: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const roleLabel = data.staffRole === 'co_owner' ? 'Co-owner' : 'Booking Manager';
+  const roleDesc = data.staffRole === 'co_owner'
+    ? 'You have <strong>full access</strong> — same permissions as the hotel owner, including hotel editing, reports, and staff management.'
+    : 'You can <strong>manage bookings, calendar, messages, and reviews</strong>. Hotel editing, reports, and staff management are restricted.';
+  const subject = `You're invited to DaydreamHub Owner Portal 🏨`;
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#46a3c2;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
+    <div style="font-size:40px;margin-bottom:12px">🏨</div>
+    <h1 style="margin:0;font-size:24px;font-weight:700">You've Been Invited!</h1>
+    <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Join the DaydreamHub Owner Portal</p>
+  </div>
+  <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+    <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.name)}</strong> 👋</p>
+    <p style="color:#374151;line-height:1.6">
+      ${data.inviterName ? `<strong>${escapeHtml(data.inviterName)}</strong> has invited you` : 'You have been invited'} to join <strong>${escapeHtml(data.hotelName)}</strong> on DaydreamHub Owner Portal as a <strong>${roleLabel}</strong>.
+    </p>
+
+    <div style="background:#eef7fb;border:1px solid #b3d9e8;border-radius:8px;padding:20px;margin:24px 0">
+      <h2 style="margin:0 0 10px;font-size:14px;color:#46a3c2;font-weight:700">👤 Your Role: ${roleLabel}</h2>
+      <p style="margin:0;color:#374151;font-size:13px;line-height:1.6">${roleDesc}</p>
+    </div>
+
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:20px;margin:24px 0">
+      <h2 style="margin:0 0 10px;font-size:14px;color:#92400e;font-weight:700">🔑 Set Your Password</h2>
+      <p style="margin:0 0 12px;color:#374151;font-size:13px;line-height:1.6">
+        Click the button below to create your password and activate your account. This link will expire in <strong>7 days</strong>.
+      </p>
+    </div>
+
+    <div style="text-align:center;margin:28px 0">
+      <a href="${data.invitationLink}"
+         style="display:inline-block;padding:14px 32px;background:#46a3c2;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
+        Set Password & Activate Account →
+      </a>
+    </div>
+
+    <p style="color:#6b7280;font-size:12px;margin-top:24px;border-top:1px solid #f3f4f6;padding-top:16px;word-break:break-all">
+      If the button does not work, copy and paste this link into your browser:<br>
+      <a href="${data.invitationLink}" style="color:#46a3c2">${data.invitationLink}</a>
+    </p>
+    <p style="color:#9ca3af;font-size:11px;margin-top:12px">
+      Your login email: <strong>${escapeHtml(data.email)}</strong>
+    </p>
+    ${emailFooter()}
+  </div>
+</div>`;
+
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.email,
+    subject,
+    html,
+  });
+}
+
 export async function sendOwnerAccountEmail(
   apiKey: string,
   data: { name: string; email: string; password: string }

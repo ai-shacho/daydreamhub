@@ -663,22 +663,19 @@
   </ul>
 
   <h3>スタッフのログイン方法</h3>
-  <div class="highlight highlight-amber">
-    <strong>⚠️ 現状の実装:</strong> スタッフ招待時、システムはランダムなパスワードを自動生成してDBに保存しますが、<strong>このパスワードはスタッフ本人には通知されません</strong>。
-  </div>
-  <p>したがって、招待されたスタッフは初回ログイン時に以下の手順でパスワードを設定する必要があります：</p>
+  <p>オーナーが招待フォームからスタッフを追加すると、自動的に <strong>招待メール</strong> が送信されます。スタッフは以下の流れでアカウントを有効化します：</p>
   <ol style="padding-left:24px;">
-    <li>ログインページ (<code>/login</code>) にアクセス</li>
-    <li><strong>「パスワードを忘れましたか？」</strong>リンクをクリック</li>
-    <li>招待されたメールアドレスを入力してリセットリンクを受信</li>
-    <li>メール内のリンクから新しいパスワードを設定</li>
-    <li>設定したパスワードでログイン</li>
+    <li>招待メール（件名「You're invited to DaydreamHub Owner Portal」）を受信</li>
+    <li>メール内の <strong>「Set Password &amp; Activate Account」</strong>ボタンをクリック</li>
+    <li>パスワード設定画面で新しいパスワードを入力（最低8文字）</li>
+    <li>設定完了後、自動的にログインページへリダイレクト</li>
+    <li>メールアドレスと設定したパスワードでログイン</li>
   </ol>
-  <div class="highlight highlight-blue">
-    <strong>💡 運用上のポイント:</strong> オーナーはスタッフを招待したあと、本人に「メールアドレスで『パスワードを忘れた』からリセットしてログインしてください」と別途連絡する必要があります。
+  <div class="highlight highlight-amber">
+    <strong>⏱️ 招待リンクの有効期限:</strong> 招待メール内のパスワード設定リンクは<strong>7日間</strong>有効です。期限が切れた場合は、オーナーに再度招待してもらうか、<code>/login</code>の「パスワードを忘れましたか？」からリセットできます。
   </div>
-  <div class="highlight highlight-teal">
-    <strong>🔧 今後の改善案:</strong> 招待時にスタッフへ自動で「アカウント作成のご案内」メールを送信し、メール内のリンクから直接パスワード設定できるようにする改修が推奨されます。
+  <div class="highlight highlight-blue">
+    <strong>💡 既存ユーザーの招待:</strong> 既にDayDreamHubにアカウントを持っている人を招待した場合は、そのまま既存のパスワードでログインできます（メールは送信されません）。
   </div>
 </section>
 

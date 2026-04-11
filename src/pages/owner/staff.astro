@@ -206,6 +206,8 @@ if (db) {
       try {
         let successCount = 0;
         let lastError = '';
+        let anyEmailSent = false;
+        let anyNewUser = false;
         for (const hid of hotelIds) {
           const res = await fetch('/api/owner/staff', {
             method: 'POST',
@@ -215,14 +217,22 @@ if (db) {
           const data = await res.json();
           if (res.ok && data.success) {
             successCount++;
+            if (data.email_sent) anyEmailSent = true;
+            if (data.is_new_user) anyNewUser = true;
           } else {
             lastError = data.error || 'Failed to invite staff member.';
           }
         }
 
         if (successCount > 0) {
-          showMessage(`Staff member invited to ${successCount} hotel${successCount > 1 ? 's' : ''} successfully!`, 'success');
-          setTimeout(() => window.location.reload(), 1000);
+          let msg = `Staff member invited to ${successCount} hotel${successCount > 1 ? 's' : ''} successfully!`;
+          if (anyNewUser && anyEmailSent) {
+            msg += ' An invitation email with a password setup link has been sent.';
+          } else if (anyNewUser && !anyEmailSent) {
+            msg += ' (Email not sent — please ask the staff to use "Forgot password" to set their password.)';
+          }
+          showMessage(msg, 'success');
+          setTimeout(() => window.location.reload(), 2000);
         } else {
           showMessage(lastError || 'Failed to invite staff member.', 'error');
         }
