@@ -29,17 +29,8 @@ function decodeState(raw: string | null | undefined): any {
   }
 }
 
-async function aiDecide(apiKey: string, conversation: any[], hotelSaid: string) {
-  const system = `You are a DayDreamHub booking agent on a phone call with a hotel.
-Based on what the hotel just said, decide:
-- "confirmed" if they confirm availability
-- "declined" if they are fully booked / unavailable
-- "alternative_offered" if they offer different terms (price, time, room)
-- "ask_followup" if unclear — ask ONE short natural question
-
-Reply JSON only: {"action":"...","reply":"...","note":"..."}
-reply = natural conversational English, max 2 short sentences`;
-
+// AI to extract price from hotel's spoken response
+async function aiExtractPrice(apiKey: string, hotelSaid: string): Promise<{ amount: number | null; raw: string }> {
   try {
     const r = await fetch('https://api.telnyx.com/v2/ai/chat/completions', {
       method: 'POST',
@@ -47,26 +38,37 @@ reply = natural conversational English, max 2 short sentences`;
       body: JSON.stringify({
         model: 'openai/gpt-4o-mini',
         messages: [
-          { role: 'system', content: system },
-          ...conversation,
+          { role: 'system', content: 'Extract the price in USD from what the hotel said. Reply JSON only: {"amount": 50, "raw": "fifty dollars"}. If no clear price found, reply {"amount": null, "raw": ""}' },
           { role: 'user', content: `Hotel said: "${hotelSaid}"` },
         ],
-        max_tokens: 150,
+        max_tokens: 50,
       }),
     });
     const d: any = await r.json();
     const content = d.choices?.[0]?.message?.content || '';
     const m = content.match(/\{[\s\S]*\}/);
     if (m) return JSON.parse(m[0]);
-  } catch (e) { console.error('AI error:', e); }
+  } catch (e) { console.error('AI price extract error:', e); }
+  // Fallback: try to find number in speech
+  const numMatch = hotelSaid.match(/(\d+)/);
+  if (numMatch) return { amount: parseInt(numMatch[1]), raw: numMatch[1] };
+  return { amount: null, raw: '' };
+}
 
-  // keyword fallback
-  const l = hotelSaid.toLowerCase();
-  if (l.includes('yes') && !l.includes('but') && !l.includes('however') && !l.includes('price'))
-    return { action: 'confirmed', reply: "Oh great, perfect! Thanks so much. I'll get that confirmed on our end. Have a great day!", note: 'confirmed via keyword' };
-  if (l.includes('no') || l.includes('full') || l.includes('unavailable') || l.includes('booked'))
-    return { action: 'declined', reply: "Ah okay, no worries at all. I'll let the guest know. Thanks for letting me know!", note: 'declined via keyword' };
-  return { action: 'ask_followup', reply: "Oh sorry, just to clarify — are you able to take the reservation?", note: 'fallback followup' };
+// Classify yes/no from speech (button or voice)
+function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | null {
+  if (digits === '1') return 'yes';
+  if (digits === '2') return 'no';
+  if (speech) {
+    const l = speech.toLowerCase();
+    if (l.includes('yes') || l.includes('yeah') || l.includes('sure') || l.includes('ok') ||
+        l.includes('confirm') || l.includes('available') || l.includes('we do') || l.includes('we can'))
+      return 'yes';
+    if (l.includes('no') || l.includes('don\'t') || l.includes('not') || l.includes('unavailable') ||
+        l.includes('full') || l.includes('booked') || l.includes('decline') || l.includes('can\'t') || l.includes('cannot'))
+      return 'no';
+  }
+  return null;
 }
 
 export const POST: APIRoute = async ({ request, locals, url }) => {
@@ -84,22 +86,20 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   const callControlId: string = payload.call_control_id || '';
   const state = decodeState(payload.client_state);
 
-  // AIアシスタントによるコンシェルジュ発信は telnyx-voice.ts では処理しない
-  // (telnyx-ai-insights.ts が担当)
+  // Skip concierge AI calls (handled by telnyx-ai-insights.ts)
   if (state.type === 'concierge' || state.call_id) {
-    console.log(`[telnyx-voice] Skipping concierge AI call (type=${state.type}, call_id=${state.call_id})`);
+    console.log(`[telnyx-voice] Skipping concierge AI call`);
     return new Response(JSON.stringify({ ok: true, skipped: 'concierge_ai_call' }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
-  // IDs: prefer client_state, fallback to query params
   const bookingId = state.booking_id ?? url.searchParams.get('bid') ?? url.searchParams.get('booking_id');
   const logId = state.call_log_id ?? url.searchParams.get('lid') ?? url.searchParams.get('log_id');
 
-  console.log(`[${eventType}] ctrl=${callControlId.slice(0, 16)} bid=${bookingId} lid=${logId} phase=${state.phase}`);
+  console.log(`[${eventType}] ctrl=${callControlId.slice(0, 16)} bid=${bookingId} lid=${logId} step=${state.step} phase=${state.phase}`);
 
-  // Debug: record every received event in DB note field
+  // Record every event in DB
   if (db && logId) {
     await db.prepare(`UPDATE call_logs SET note = COALESCE(note||',','') || ? WHERE id = ?`)
       .bind(eventType, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
@@ -108,7 +108,6 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   switch (eventType) {
 
     case 'call.initiated': {
-      // Store call control id from webhook (v3: format)
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET telnyx_call_id=? WHERE id=?`)
           .bind(callControlId, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
@@ -117,44 +116,40 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     }
 
     case 'call.answered': {
-      const plan = (state.plan_name || 'day use').replace(/[^\x00-\x7F]/g, '').trim() || 'day use';
+      // STEP 1: Introduce DayDreamHub + ask about day-use availability
       const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
       const guests = state.guests || 1;
-      const greeting = `Hi there, this is DayDreamHub. I'm calling to check on a day use reservation — ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, ${plan}. Are you able to accommodate that?`;
 
-      // Update DB first so we have a record even if speak fails
+      const greeting = `Hello, this is DayDreamHub, a platform that connects hotels with travelers looking for day-use stays. We have a guest interested in a day-use stay at your property on ${checkIn}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes, press 2 or say no.`;
+
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
           .bind(callControlId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('DB err:', e));
       }
 
-      // Speak — log result to DB for debugging
-      const speakOk = await telnyxCmd(apiKey, callControlId, 'speak', {
+      await telnyxCmd(apiKey, callControlId, 'speak', {
         payload: greeting,
         voice: 'Polly.Joanna',
+        client_state: encodeState({ ...state, step: 'ask_dayuse', booking_id: bookingId, call_log_id: logId }),
       });
-      if (db && logId) {
-        await db.prepare(`UPDATE call_logs SET note = COALESCE(note||',','') || ? WHERE id = ?`)
-          .bind(speakOk ? 'speak:ok' : 'speak:FAIL', logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
-      }
       break;
     }
 
     case 'call.speak.ended': {
-      const phase = state.phase || 'listening';
+      const phase = state.phase || '';
       if (phase === 'ending') {
         await telnyxCmd(apiKey, callControlId, 'hangup', {});
         break;
       }
-      // After any speech (greeting or followup), start listening
+      // After any speech, start listening for DTMF or voice
       await telnyxCmd(apiKey, callControlId, 'gather', {
         maximum_digits: 1,
         minimum_digits: 0,
-        timeout_millis: 20000,
+        timeout_millis: 15000,
         speech_timeout: 'auto',
         speech_end_timeout: 2000,
         input: ['speech', 'dtmf'],
-        client_state: encodeState({ ...state, phase: 'listening', booking_id: bookingId, call_log_id: logId }),
+        client_state: encodeState({ ...state, booking_id: bookingId, call_log_id: logId }),
       });
       break;
     }
@@ -163,67 +158,190 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const speech: string = payload.speech || '';
       const digits: string = payload.digits || '';
       const reason: string = payload.reason || '';
-      const hotelSaid = speech || (digits ? ({ '1': 'yes', '2': 'no', '3': 'alternative' } as any)[digits] || '' : '');
+      const step = state.step || 'ask_dayuse';
+      const retryCount = state.retry_count || 0;
 
-      console.log(`[gather] speech="${speech}" digits=${digits} reason=${reason}`);
+      console.log(`[gather] step=${step} speech="${speech}" digits=${digits} reason=${reason}`);
 
-      if (!hotelSaid || reason === 'timeout') {
-        await telnyxCmd(apiKey, callControlId, 'speak', {
-          payload: "Sorry, I didn't quite catch that. Could you let me know if the reservation is available?",
-          voice: 'Polly.Joanna',
-          client_state: encodeState({ ...state, phase: 'followup' }),
-        });
+      // ─── STEP 1: Do you offer day-use plans? ───
+      if (step === 'ask_dayuse') {
+        const answer = classifyYesNo(speech, digits);
+
+        if (answer === 'yes') {
+          // → STEP 2A: Ask for price
+          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
+          const guests = state.guests || 1;
+          const priceAsk = `Great! Could you tell us the price for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars.`;
+
+          if (db && logId) {
+            await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+              .bind(`[Hotel]: ${speech || 'pressed 1 (yes)'}\n[Agent]: ${priceAsk}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+          }
+
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: priceAsk,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, step: 'ask_price', retry_count: 0 }),
+          });
+
+        } else if (answer === 'no') {
+          // → STEP 2B: No day-use → record as potential partner
+          const farewell = "Thank you for letting us know. We do have guests interested in day-use stays at your property. We'd love to reach out again to discuss how we can work together. Thank you for your time. Goodbye!";
+
+          if (db) {
+            if (logId) {
+              await db.prepare(`UPDATE call_logs SET status='no_dayuse', transcription = COALESCE(transcription||'\n','') || ?, note='potential_partner' WHERE id=?`)
+                .bind(`[Hotel]: ${speech || 'pressed 2 (no)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+            if (bookingId) {
+              await db.prepare(`UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id=?`)
+                .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+          }
+
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: farewell,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, phase: 'ending' }),
+          });
+
+        } else {
+          // Timeout or unclear → retry
+          if (retryCount >= 1) {
+            await telnyxCmd(apiKey, callControlId, 'hangup', {});
+            if (db && logId) {
+              await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+          } else {
+            await telnyxCmd(apiKey, callControlId, 'speak', {
+              payload: "Sorry, I didn't catch your response. Press 1 or say yes if you offer day-use plans, or press 2 or say no if you don't.",
+              voice: 'Polly.Joanna',
+              client_state: encodeState({ ...state, step: 'ask_dayuse', retry_count: retryCount + 1 }),
+            });
+          }
+        }
         break;
       }
 
-      const conv = state.conversation || [];
-      const decision = await aiDecide(apiKey, conv, hotelSaid);
-      console.log('[AI]', decision);
+      // ─── STEP 2A-1: Price inquiry ───
+      if (step === 'ask_price') {
+        const hotelSaid = speech || '';
+        const priceResult = await aiExtractPrice(apiKey, hotelSaid);
 
-      if (decision.action === 'ask_followup') {
-        await telnyxCmd(apiKey, callControlId, 'speak', {
-          payload: decision.reply,
-          voice: 'Polly.Joanna',
-          client_state: encodeState({
-            ...state,
-            phase: 'followup',
-            conversation: [...conv, { role: 'user', content: hotelSaid }, { role: 'assistant', content: decision.reply }],
-          }),
-        });
+        if (priceResult.amount && priceResult.amount > 0) {
+          // Got price → confirm reservation
+          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
+          const guests = state.guests || 1;
+          const confirmAsk = `Thank you. So that's ${priceResult.amount} dollars for ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}. Can we confirm this reservation? Press 1 or say yes to confirm, press 2 or say no to decline.`;
+
+          if (db && logId) {
+            await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+              .bind(`[Hotel]: ${hotelSaid}\n[Agent]: ${confirmAsk}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+          }
+
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: confirmAsk,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, step: 'confirm_booking', price_quoted: priceResult.amount, retry_count: 0 }),
+          });
+
+        } else {
+          // Couldn't extract price → retry
+          if (retryCount >= 1) {
+            // 2 failures → give up, record what we have
+            const farewell = "I'm sorry, I wasn't able to catch the price. We'll follow up with you by other means. Thank you for your time. Goodbye!";
+            if (db && logId) {
+              await db.prepare(`UPDATE call_logs SET status='price_unclear', note='potential_partner', transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+                .bind(`[Hotel]: ${hotelSaid}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+            await telnyxCmd(apiKey, callControlId, 'speak', {
+              payload: farewell,
+              voice: 'Polly.Joanna',
+              client_state: encodeState({ ...state, phase: 'ending' }),
+            });
+          } else {
+            await telnyxCmd(apiKey, callControlId, 'speak', {
+              payload: "Sorry, could you repeat the price? For example, fifty dollars.",
+              voice: 'Polly.Joanna',
+              client_state: encodeState({ ...state, step: 'ask_price', retry_count: retryCount + 1 }),
+            });
+          }
+        }
         break;
       }
 
-      // Final: confirmed / declined / alternative_offered
-      const statusMap: Record<string, string> = { confirmed: 'confirmed', declined: 'declined', alternative_offered: 'alternative_offered' };
-      const bkStatusMap: Record<string, string> = { confirmed: 'confirmed', declined: 'cancelled', alternative_offered: 'pending_alternative' };
-      const newStatus = statusMap[decision.action] || 'no_answer';
+      // ─── STEP 2A-2: Confirm booking ───
+      if (step === 'confirm_booking') {
+        const answer = classifyYesNo(speech, digits);
+        const priceQuoted = state.price_quoted || 0;
 
-      if (db) {
-        if (logId) {
-          const transcript = [...conv, { role: 'user', content: hotelSaid }, { role: 'assistant', content: decision.reply }]
-            .map(m => `[${m.role === 'assistant' ? 'Agent' : 'Hotel'}]: ${m.content}`)
-            .join('\n');
-          await db.prepare(`UPDATE call_logs SET status=?, transcription=?, note=? WHERE id=?`)
-            .bind(newStatus, transcript, decision.note || hotelSaid, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+        if (answer === 'yes') {
+          // → Confirmed!
+          const farewell = `Wonderful, thank you! The reservation is confirmed at ${priceQuoted} dollars. Have a great day!`;
+
+          if (db) {
+            if (logId) {
+              await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+                .bind(priceQuoted, `[Hotel]: ${speech || 'pressed 1 (yes)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+            if (bookingId) {
+              await db.prepare(`UPDATE bookings SET status='confirmed', updated_at=datetime('now') WHERE id=?`)
+                .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+          }
+
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: farewell,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, phase: 'ending' }),
+          });
+
+        } else if (answer === 'no') {
+          // → Declined (but potential partner)
+          const farewell = "No problem at all. We'd love to reach out again to discuss how we can work together on day-use plans. Thank you for your time. Goodbye!";
+
+          if (db) {
+            if (logId) {
+              await db.prepare(`UPDATE call_logs SET status='declined', note='potential_partner', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+                .bind(priceQuoted, `[Hotel]: ${speech || 'pressed 2 (no)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+            if (bookingId) {
+              await db.prepare(`UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id=?`)
+                .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+          }
+
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: farewell,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, phase: 'ending' }),
+          });
+
+        } else {
+          // Timeout or unclear → retry
+          if (retryCount >= 1) {
+            await telnyxCmd(apiKey, callControlId, 'hangup', {});
+            if (db && logId) {
+              await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+            }
+          } else {
+            await telnyxCmd(apiKey, callControlId, 'speak', {
+              payload: "Sorry, I didn't catch that. Press 1 or say yes to confirm the reservation, or press 2 or say no to decline.",
+              voice: 'Polly.Joanna',
+              client_state: encodeState({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }),
+            });
+          }
         }
-        if (bookingId && bkStatusMap[decision.action]) {
-          await db.prepare(`UPDATE bookings SET status=? WHERE id=?`)
-            .bind(bkStatusMap[decision.action], bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
-        }
+        break;
       }
 
-      await telnyxCmd(apiKey, callControlId, 'speak', {
-        payload: decision.reply,
-        voice: 'Polly.Joanna',
-        client_state: encodeState({ ...state, phase: 'ending' }),
-      });
       break;
     }
 
     case 'call.hangup': {
       if (db && logId) {
         const log: any = await db.prepare(`SELECT status FROM call_logs WHERE id=?`).bind(logId).first().catch(() => null);
-        if (log && !['confirmed', 'declined', 'alternative_offered'].includes(log.status)) {
+        if (log && !['confirmed', 'declined', 'no_dayuse', 'price_unclear'].includes(log.status)) {
           await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
         }
       }
