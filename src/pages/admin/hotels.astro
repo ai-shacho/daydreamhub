@@ -332,9 +332,17 @@ function sortIcon(col: string) {
                       </button>
                     </div>
                   ) : (
-                    <button class="assign-owner-btn inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded hover:bg-teal-50 hover:text-teal-700 hover:border-teal-200 transition-colors" data-id={hotel.id} data-name={hotel.name} data-email="">
-                      + Assign Owner
-                    </button>
+                    <div class="flex items-center gap-2">
+                      <div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200">
+                          No Email
+                        </span>
+                        <div class="text-xs text-orange-500 mt-0.5">📞 Auto-call ON</div>
+                      </div>
+                      <button class="assign-owner-btn flex-shrink-0 text-red-400 hover:text-teal-600 transition-colors" data-id={hotel.id} data-name={hotel.name} data-email="" title="Assign Owner">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+                      </button>
+                    </div>
                   )}
                 </td>
 

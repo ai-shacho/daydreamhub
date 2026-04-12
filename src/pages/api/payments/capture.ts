@@ -124,18 +124,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
         .bind(captureId, (booking as any).id)
         .run();
 
+      // Auto-call: only for non-partner hotels (no email = no owner account)
+      // Partner hotels receive email notifications instead.
+      // To re-enable for all hotels, remove the email check below.
       try {
-        const bookingInfo = await getBookingInfoForCall(db, (booking as any).id);
-        if (bookingInfo) {
-          await triggerAutoCall(
-            {
-              DB: db,
-              TELNYX_API_KEY: runtime?.env?.TELNYX_API_KEY || '',
-              TELNYX_CONNECTION_ID: runtime?.env?.TELNYX_CONNECTION_ID || '',
-              TELNYX_FROM_NUMBER: runtime?.env?.TELNYX_FROM_NUMBER || '',
-            },
-            bookingInfo
-          );
+        const hotelForCall = await db.prepare('SELECT email FROM hotels WHERE id = ?').bind((booking as any).hotel_id).first() as any;
+        const isPartnerHotel = hotelForCall?.email && hotelForCall.email.trim() !== '';
+        if (!isPartnerHotel) {
+          const bookingInfo = await getBookingInfoForCall(db, (booking as any).id);
+          if (bookingInfo) {
+            await triggerAutoCall(
+              {
+                DB: db,
+                TELNYX_API_KEY: runtime?.env?.TELNYX_API_KEY || '',
+                TELNYX_CONNECTION_ID: runtime?.env?.TELNYX_CONNECTION_ID || '',
+                TELNYX_FROM_NUMBER: runtime?.env?.TELNYX_FROM_NUMBER || '',
+              },
+              bookingInfo
+            );
+          }
         }
       } catch (callError) {
         console.error('Auto-call trigger failed:', callError);
