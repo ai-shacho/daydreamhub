@@ -1143,15 +1143,16 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     var hotels = [];
     var lines = text.split('\n');
     lines.forEach(function(line) {
-      var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/);
+      if (line.indexOf('/hotel/') !== -1) return;
+      var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
+                       line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
       if (!phoneMatch) return;
       var phone = phoneMatch[1].trim();
       var nameParts = line.match(/\*\*(.*?)\*\*/);
-      if (!nameParts) nameParts = line.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞)/);
-      if (!nameParts) nameParts = line.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞)/);
+      if (!nameParts) nameParts = line.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞|\s*\+\d)/);
+      if (!nameParts) nameParts = line.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞|\s*\+\d)/);
       var name = nameParts ? nameParts[1].replace(/\*\*/g, '').trim() : '';
       if (!name || name.length < 2) return;
-      if (line.indexOf('/hotel/') !== -1) return;
       hotels.push({ name: name, phone: phone });
     });
     return hotels;

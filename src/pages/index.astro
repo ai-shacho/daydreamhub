@@ -1100,18 +1100,19 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     var hotels = [];
     var lines = text.split('\n');
     lines.forEach(function(line) {
-      // 📞または電話番号パターンを含む行を探す
-      var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/);
+      // /hotel/slug がある行（自社ホテル）は除外
+      if (line.indexOf('/hotel/') !== -1) return;
+      // 📞付き or 📞なしの電話番号パターンを検出
+      var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
+                       line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
       if (!phoneMatch) return;
       var phone = phoneMatch[1].trim();
       // ホテル名を抽出: **名前** または行頭の数字. 名前
       var nameParts = line.match(/\*\*(.*?)\*\*/);
-      if (!nameParts) nameParts = line.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞)/);
-      if (!nameParts) nameParts = line.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞)/);
+      if (!nameParts) nameParts = line.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞|\s*\+\d)/);
+      if (!nameParts) nameParts = line.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*📍|\s*📞|\s*\+\d)/);
       var name = nameParts ? nameParts[1].replace(/\*\*/g, '').trim() : '';
       if (!name || name.length < 2) return;
-      // /hotel/slug がある行（自社ホテル）は除外
-      if (line.indexOf('/hotel/') !== -1) return;
       hotels.push({ name: name, phone: phone });
     });
     return hotels;
