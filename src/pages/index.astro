@@ -1094,35 +1094,39 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     return html;
   }
 
-  // 外部ホテル情報をテキストから抽出（複数行対応）
+  // 外部ホテル情報をテキストから抽出（複数行対応：電話番号行から前方向にホテル名を探す）
   function extractExternalHotels(text) {
     var hotels = [];
-    // 番号付きリスト or 空行でブロック分割
-    var blocks = text.split(/(?=\n\s*\d+\.\s)|\n\s*\n/);
-    blocks.forEach(function(block) {
-      // /hotel/slug があるブロック（自社ホテル）は除外
-      if (block.indexOf('/hotel/') !== -1) return;
-      // ブロック全体から電話番号を検出
-      var phoneMatch = block.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
-                       block.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
-      if (!phoneMatch) return;
+    if (!text) return hotels;
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      // /hotel/slug がある行（自社ホテル）は除外
+      if (line.indexOf('/hotel/') !== -1) continue;
+      // 電話番号を検出
+      var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
+                       line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
+      if (!phoneMatch) continue;
       var phone = phoneMatch[1].trim();
-      // ブロック内の各行からホテル名を探す
+      // 現在行 + 前方3行以内でホテル名を探す
       var name = '';
-      var lines = block.split('\n');
-      for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-        var nameParts = line.match(/\*\*(.*?)\*\*/);
-        if (!nameParts) nameParts = line.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜⭐★]|\s*📍|\s*📞|\s*\+\d|$)/);
-        if (!nameParts) nameParts = line.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜⭐★]|\s*📍|\s*📞|\s*\+\d|$)/);
-        if (nameParts) {
-          name = nameParts[1].replace(/\*\*/g, '').trim();
+      for (var j = i; j >= Math.max(0, i - 3); j--) {
+        var checkLine = lines[j];
+        if (checkLine.indexOf('/hotel/') !== -1) break; // 自社ホテル行に当たったら中断
+        var np = checkLine.match(/\*\*(.*?)\*\*/) ||
+                 checkLine.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+\d|$)/) ||
+                 checkLine.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+\d|$)/);
+        if (np) {
+          name = np[1].replace(/\*\*/g, '').trim();
           if (name.length >= 2) break;
         }
       }
-      if (!name || name.length < 2) return;
-      hotels.push({ name: name, phone: phone });
-    });
+      if (!name || name.length < 2) continue;
+      // 重複チェック
+      if (!hotels.some(function(h){ return h.phone === phone; })) {
+        hotels.push({ name: name, phone: phone });
+      }
+    }
     return hotels;
   }
 
