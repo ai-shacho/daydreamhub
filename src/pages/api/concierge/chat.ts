@@ -280,12 +280,24 @@ async function telnyxOrchestrate(
         try {
           const { searchHotelsExternal, searchHotelsBrave } = await import('../../../lib/tools');
           let extHotels: any[] = [];
-          const gResult = await searchHotelsExternal(env, { query: `day use hotel ${city}`, location: city, language: locale });
-          if (gResult?.hotels?.length > 0) {
-            extHotels = gResult.hotels.slice(0, 3);
-          } else {
-            extHotels = await searchHotelsBrave(env, city, locale);
-            extHotels = extHotels.slice(0, 3);
+          // 複数クエリで検索して候補を増やす
+          const queries = [
+            `day use hotel ${city}`,
+            `hourly hotel ${city}`,
+            `hotel ${city}`
+          ];
+          const seen = new Set<string>();
+          for (const q of queries) {
+            if (extHotels.length >= 5) break;
+            const gResult = await searchHotelsExternal(env, { query: q, location: city, language: locale });
+            for (const h of (gResult?.hotels || [])) {
+              const key = h.name?.toLowerCase().slice(0, 20) || '';
+              if (!seen.has(key)) { seen.add(key); extHotels.push(h); }
+              if (extHotels.length >= 5) break;
+            }
+          }
+          if (extHotels.length === 0) {
+            extHotels = (await searchHotelsBrave(env, city, locale)).slice(0, 5);
           }
 
           if (extHotels.length > 0) {
