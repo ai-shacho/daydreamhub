@@ -549,7 +549,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         </p>
         <div class="bg-white border border-amber-400/60 shadow-lg shadow-amber-500/20 rounded-xl p-3 flex items-center gap-2 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/40 transition-all">
           <!-- Upload flight photo -->
-          <label for="hero-flight-upload" class="flex-shrink-0 cursor-pointer text-gray-400 hover:text-amber-500 transition-colors p-1.5 rounded-lg hover:bg-amber-50" title="フライト写真をアップロード / Upload flight photo">
+          <label for="hero-flight-upload" class="flex-shrink-0 cursor-pointer text-gray-400 hover:text-amber-500 transition-colors p-1.5 rounded-lg hover:bg-amber-50" title="Upload flight photo">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -565,7 +565,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
           <input
             type="text"
             id="hero-chat-input"
-            placeholder="例: Tokyo, Dubai, Bangkok... / e.g. Paris, New York"
+            placeholder="e.g. Tokyo, Dubai, Bangkok, Paris, New York"
             class="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm focus:outline-none font-medium"
             maxlength="300"
           />
@@ -1170,7 +1170,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
       '<div class="bg-white/20 text-white/80 rounded-xl rounded-tl-none px-3 py-2 text-sm border border-white/10">' +
         '<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse mr-2"></span>' +
-        '📞 AIがホテルに電話中... / Calling hotel...' +
+        '📞 Calling hotel...' +
       '</div>';
     messagesEl.appendChild(waitEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1180,7 +1180,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       if (attempt > maxAttempts) {
         clearInterval(timer);
         waitEl.remove();
-        addMsg('⏱️ 電話の結果を取得できませんでした。しばらく後に確認してください。 / Call timed out.', 'assistant');
+        addMsg('⏱️ Call timed out. Please check back later.', 'assistant');
         return;
       }
       try {
@@ -1200,9 +1200,9 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         if (status === 'failed' && d.metadata?.failed_count >= 1) {
           setTimeout(function(){
             addMsg(
-              '💸 **全ホテルへの電話が繋がりませんでした。**\n\n' +
-              '$7の料金は自動的に全額返金されます（PayPal処理に2〜5営業日）。\n\n' +
-              '別の日時や別の都市で再度お試しください。',
+              '💸 **Could not reach any hotels.**\n\n' +
+              'Your $7 fee will be fully refunded automatically (PayPal processing takes 2–5 business days).\n\n' +
+              'Please try a different date/time or another city.',
               'assistant'
             );
           }, 1000);
@@ -1227,32 +1227,32 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     formDiv.innerHTML =
       '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
       '<div class="bg-gray-900/80 border border-white/20 text-white rounded-xl rounded-tl-none px-4 py-3 text-sm max-w-[92%] w-full" id="call-booking-form">' +
-        '<p class="font-bold text-base mb-1">📞 AI電話予約代行</p>' +
+        '<p class="font-bold text-base mb-1">📞 AI Phone Booking</p>' +
         '<p class="text-amber-300 text-xs font-medium mb-3">🏨 ' + safeName + '</p>' +
-        '<p class="text-white/70 text-xs mb-3">AIがホテルに電話して空き状況を確認します。<br>サービス料 <strong class="text-amber-400">$7</strong>（全件不成立時は全額返金）</p>' +
+        '<p class="text-white/70 text-xs mb-3">Our AI will call the hotel to check availability.<br>Service fee: <strong class="text-amber-400">$7</strong> (full refund if no booking is made)</p>' +
         '<div class="space-y-2">' +
           '<div>' +
-            '<label class="text-xs text-white/60 block mb-1">お名前 / Your Name</label>' +
+            '<label class="text-xs text-white/60 block mb-1">Your Name</label>' +
             '<input id="call-guest-name" type="text" placeholder="Taro Yamada" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
           '</div>' +
           '<div>' +
-            '<label class="text-xs text-white/60 block mb-1">メール / Email</label>' +
+            '<label class="text-xs text-white/60 block mb-1">Email</label>' +
             '<input id="call-guest-email" type="email" placeholder="your@email.com" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
           '</div>' +
           '<div class="grid grid-cols-2 gap-2">' +
             '<div>' +
-              '<label class="text-xs text-white/60 block mb-1">📅 チェックイン日</label>' +
+              '<label class="text-xs text-white/60 block mb-1">📅 Check-in Date</label>' +
               '<input id="call-checkin-date" type="text" readonly placeholder="YYYY-MM-DD" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
             '</div>' +
             '<div>' +
-              '<label class="text-xs text-white/60 block mb-1">🕐 チェックイン時間</label>' +
+              '<label class="text-xs text-white/60 block mb-1">🕐 Check-in Time</label>' +
               '<select id="call-checkin-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
                 ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'].map(function(t){ return '<option value="' + t + '"' + (t==='10:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
               '</select>' +
             '</div>' +
           '</div>' +
           '<div>' +
-            '<label class="text-xs text-white/60 block mb-1">🕔 チェックアウト時間</label>' +
+            '<label class="text-xs text-white/60 block mb-1">🕔 Check-out Time</label>' +
             '<select id="call-checkout-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
               ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'].map(function(t){ return '<option value="' + t + '"' + (t==='18:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
             '</select>' +
@@ -1260,10 +1260,10 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         '</div>' +
         '<button onclick="window._heroSubmitCallBook(\'' + safeName + '\',\'' + safePhone + '\')" ' +
           'class="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">' +
-          '💳 PayPalで$7支払い → AI電話予約へ進む' +
+          '💳 Pay $7 via PayPal → Proceed to AI Booking' +
         '</button>' +
         '<button onclick="document.getElementById(\'call-booking-form\').closest(\'.flex\').remove()" ' +
-          'class="mt-2 w-full text-white/40 hover:text-white/70 text-xs py-1 transition-colors">キャンセル / Cancel</button>' +
+          'class="mt-2 w-full text-white/40 hover:text-white/70 text-xs py-1 transition-colors">Cancel</button>' +
       '</div>';
     messagesEl.appendChild(formDiv);
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1286,11 +1286,11 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     var checkinTime = document.getElementById('call-checkin-time')?.value || '10:00';
     var checkoutTime = document.getElementById('call-checkout-time')?.value || '18:00';
     if (!name || !email || !date) {
-      alert('お名前・メール・日付を入力してください / Please fill in name, email, and date');
+      alert('Please fill in name, email, and date');
       return;
     }
     var submitBtn = event?.target;
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '処理中...'; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Processing...'; }
 
     try {
       // セッションIDを取得
@@ -1313,18 +1313,18 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       var data = await res.json();
       if (data.paypal_url) {
         window.open(data.paypal_url, '_blank');
-        addMsg('✅ PayPalページを開きました。支払い完了後、AIがホテルに電話します。\n\n📞 ' + hotelName + '\n👤 ' + name + '\n📅 ' + date, 'assistant');
+        addMsg('✅ PayPal page opened. After payment, our AI will call the hotel.\n\n📞 ' + hotelName + '\n👤 ' + name + '\n📅 ' + date, 'assistant');
       // PayPal完了後にポーリング開始を案内
       setTimeout(function(){
-        addMsg('💡 支払い完了後、このチャットに「電話済み」と入力すると結果を確認できます。または自動で結果が届きます。', 'assistant');
+        addMsg('💡 After payment, type "check call" in this chat to see results, or wait for automatic updates.', 'assistant');
       }, 2000);
       } else if (data.error) {
-        addMsg('❌ エラー: ' + data.error, 'assistant');
+        addMsg('❌ Error: ' + data.error, 'assistant');
       } else {
-        addMsg(data.response || '予約リクエストを受け付けました。', 'assistant');
+        addMsg(data.response || 'Booking request received.', 'assistant');
       }
     } catch(e) {
-      addMsg('❌ 通信エラーが発生しました。もう一度お試しください。', 'assistant');
+      addMsg('❌ Network error. Please try again.', 'assistant');
     }
   };
 
@@ -1613,13 +1613,13 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       return;
     }
 
-    var parts = ['Please recommend 3 day-use hotels in ' + location];
+    var parts = ['Find day-use hotels in ' + location];
     if (date) parts.push('for ' + date);
     if (ciTime && coTime) parts.push('from ' + ciTime + ' to ' + coTime);
     if (guests) parts.push('for ' + guests + ' guest' + (parseInt(guests) > 1 ? 's' : ''));
     if (budget) parts.push('with ' + budget + ' budget');
     if (spec) parts.push('(' + spec + ')');
-    parts.push('. Show the top 3 options with price, time slot, and booking link.');
+    parts.push('. Show all available options with price, time slot, and booking link.');
 
     var autoMsg = parts.join(' ');
     inputEl.value = autoMsg;

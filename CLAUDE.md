@@ -106,6 +106,7 @@ Total = price_usd + Processing Fee + Service Fee
 - `TELNYX_API_KEY`, `TELNYX_CONNECTION_ID`, `TELNYX_FROM_NUMBER`
 - `JWT_SECRET`
 - `ADMIN_EMAIL` (default: info@daydreamhub.com)
+- `GOOGLE_PLACES_API_KEY` (external hotel search for AI concierge)
 - `CRON_SECRET`
 - `DB` (D1 binding)
 - `AI` (Workers AI binding)
