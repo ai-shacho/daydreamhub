@@ -1,0 +1,29 @@
+name: Check Cloudflare Zone & DNS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check zone exists in Cloudflare
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "=== Checking zones ==="
+          curl -s "https://api.cloudflare.com/client/v4/zones?name=daydreamhub.com" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -m json.tool
+
+      - name: Check token permissions
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "=== Checking token ==="
+          curl -s "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -m json.tool
+
+      - name: Check current nameservers
+        run: |
+          echo "=== Current nameservers for daydreamhub.com ==="
+          dig NS daydreamhub.com +short
