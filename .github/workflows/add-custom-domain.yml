@@ -1,0 +1,62 @@
+name: Add Custom Domain to Cloudflare Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Domain to add (e.g. daydreamhub.com)'
+        required: true
+        default: 'daydreamhub.com'
+
+jobs:
+  add-domain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add custom domain via Cloudflare API
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          DOMAIN="${{ github.event.inputs.domain }}"
+          echo "Adding domain: $DOMAIN"
+
+          RESPONSE=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/daydreamhub/domains" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"${DOMAIN}\"}")
+
+          echo "$RESPONSE" | python3 -m json.tool
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          if r.get('success'):
+              print('✅ Domain added successfully!')
+          else:
+              print('❌ Failed:', r.get('errors'))
+              sys.exit(1)
+          "
+
+      - name: Add www subdomain
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          DOMAIN="www.${{ github.event.inputs.domain }}"
+          echo "Adding domain: $DOMAIN"
+
+          RESPONSE=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/daydreamhub/domains" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"${DOMAIN}\"}")
+
+          echo "$RESPONSE" | python3 -m json.tool
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          if r.get('success'):
+              print('✅ www domain added successfully!')
+          else:
+              print('⚠️  www domain:', r.get('errors'))
+          "
