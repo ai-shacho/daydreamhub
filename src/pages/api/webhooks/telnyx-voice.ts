@@ -183,7 +183,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           // → STEP 2A: Ask for price
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
-          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? You may say the amount in US dollars, or enter the amount on your keypad followed by the pound key. For example, 50 pound for fifty dollars. Press 3 to hear this again.`;
+          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -241,7 +241,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
           await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: `What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? You may say the amount in US dollars, or enter the amount on your keypad followed by the pound key. For example, 50 pound for fifty dollars. Press 3 to hear this again.`,
+            payload: `What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`,
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, step: 'ask_price' }),
           });
@@ -287,7 +287,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             });
           } else {
             await telnyxCmd(apiKey, callControlId, 'speak', {
-              payload: "I'm sorry, could you repeat the price? You may say it, or enter the amount on your keypad followed by the pound key. For example, 50 pound for fifty dollars.",
+              payload: "I'm sorry, could you repeat the price? Please say the amount in US dollars, or enter the number on your keypad and press the hash key when done.",
               voice: 'Polly.Joanna',
               client_state: encodeState({ ...state, step: 'ask_price', retry_count: retryCount + 1 }),
             });
