@@ -143,16 +143,17 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       // After any speech, start listening for DTMF or voice
       const isPriceStep = state.step === 'ask_price';
-      await telnyxCmd(apiKey, callControlId, 'gather', {
-        maximum_digits: isPriceStep ? 6 : 1,  // price: up to 6 digits (e.g. "999" + "#"), yes/no: 1 digit
-        minimum_digits: 0,
-        terminating_digit: isPriceStep ? '#' : '',
+      const gatherParams: any = {
+        maximum_digits: isPriceStep ? 6 : 1,
+        minimum_digits: 1,
         timeout_millis: isPriceStep ? 20000 : 15000,
         speech_timeout: 'auto',
         speech_end_timeout: 2000,
         input: ['speech', 'dtmf'],
         client_state: encodeState({ ...state, booking_id: bookingId, call_log_id: logId }),
-      });
+      };
+      if (isPriceStep) gatherParams.terminating_digit = '#';
+      await telnyxCmd(apiKey, callControlId, 'gather', gatherParams);
       break;
     }
 
