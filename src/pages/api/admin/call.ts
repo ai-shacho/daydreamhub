@@ -39,6 +39,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       guest_name: 'Guest',
       plan_name: 'Day-use',
       check_in_date: 'TBD',
+      check_in_time: null,
+      check_out_time: null,
       guests: 1,
     };
     let resolvedHotelId = hotel_id || null;
@@ -57,6 +59,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
             guest_name: bk.guest_name || 'Guest',
             plan_name: bk.plan_name || 'Day-use',
             check_in_date: bk.check_in_date || 'TBD',
+            check_in_time: bk.check_in_time || null,
+            check_out_time: bk.check_out_time || null,
             guests: (bk.adults || 1) + (bk.children || 0),
           };
           resolvedHotelId = bk.hotel_id || hotel_id;

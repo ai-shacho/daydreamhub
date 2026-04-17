@@ -120,8 +120,13 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       // STEP 1: Introduce DayDreamHub + ask about day-use availability
       const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
       const guests = state.guests || 1;
+      const checkInTime = state.check_in_time || null;
+      const checkOutTime = state.check_out_time || null;
+      const timeInfo = checkInTime && checkOutTime
+        ? ` from ${checkInTime} to ${checkOutTime}`
+        : '';
 
-      const greeting = `Hello, this is DayDreamHub, a booking platform that connects hotels with travelers seeking day-use accommodations. We have a guest looking to book a day-use stay on ${checkIn}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
+      const greeting = `Hello, this is DayDreamHub, a booking platform that connects hotels with travelers seeking day-use accommodations. We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
 
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
@@ -183,7 +188,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           // → STEP 2A: Ask for price
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
-          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
+          const checkInTime = state.check_in_time || null;
+          const checkOutTime = state.check_out_time || null;
+          const timeInfo = checkInTime && checkOutTime ? ` from ${checkInTime} to ${checkOutTime}` : '';
+          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -258,7 +266,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           // Got price → confirm reservation
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
-          const confirmAsk = `Thank you. To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceResult.amount} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`;
+          const checkInTime = state.check_in_time || null;
+          const checkOutTime = state.check_out_time || null;
+          const timeInfo = checkInTime && checkOutTime ? `, ${checkInTime} to ${checkOutTime}` : '';
+          const confirmAsk = `Thank you. To confirm: ${checkIn}${timeInfo}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceResult.amount} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
