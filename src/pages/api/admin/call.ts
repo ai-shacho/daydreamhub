@@ -24,7 +24,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   // Manual call to a hotel phone number
   if (action === 'dial') {
-    const { to_number, hotel_id, booking_id, note } = body;
+    const { to_number, hotel_id, note } = body;
     if (!to_number) {
       return new Response(JSON.stringify({ error: 'to_number is required' }), { status: 400 });
     }
@@ -34,61 +34,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
     const baseUrl = env.SITE_URL || 'https://daydreamhub-1sv.pages.dev';
 
-    // Fetch booking details if booking_id provided
-    let bookingState: any = {
-      guest_name: 'Guest',
-      plan_name: 'Day-use',
-      check_in_date: 'TBD',
-      check_in_time: null,
-      check_out_time: null,
-      guests: 1,
-    };
-    let resolvedHotelId = hotel_id || null;
-
-    if (db && booking_id) {
-      try {
-        const bk: any = await db.prepare(`
-          SELECT b.*, p.name as plan_name, h.name as hotel_name, h.id as hotel_id
-          FROM bookings b
-          LEFT JOIN plans p ON p.id = b.plan_id
-          LEFT JOIN hotels h ON h.id = b.hotel_id
-          WHERE b.id = ?1
-        `).bind(booking_id).first();
-        if (bk) {
-          bookingState = {
-            guest_name: bk.guest_name || 'Guest',
-            plan_name: bk.plan_name || 'Day-use',
-            check_in_date: bk.check_in_date || 'TBD',
-            check_in_time: bk.check_in_time || null,
-            check_out_time: bk.check_out_time || null,
-            guests: (bk.adults || 1) + (bk.children || 0),
-          };
-          resolvedHotelId = bk.hotel_id || hotel_id;
-        }
-      } catch (e) { /* ignore */ }
-    }
-
     try {
-      // Create call_log entry first to get the ID for client_state
       let callLogId: number | null = null;
       if (db) {
         await db.prepare(`
-          INSERT INTO call_logs (hotel_id, booking_id, status, note, created_at)
-          VALUES (?1, ?2, 'queued', ?3, datetime('now'))
-        `).bind(resolvedHotelId, booking_id || null, note || `Call to ${to_number}`).run();
+          INSERT INTO call_logs (hotel_id, status, note, created_at)
+          VALUES (?1, 'queued', ?2, datetime('now'))
+        `).bind(hotel_id || null, note || `Call to ${to_number}`).run();
         const row: any = await db.prepare(`SELECT last_insert_rowid() as id`).first();
         callLogId = row?.id || null;
       }
 
-      // Encode booking info + log ID in client_state for webhook
-      // Unicode-safe base64 encoding for Cloudflare Workers
       const stateJson = JSON.stringify({
-        ...bookingState,
         call_log_id: callLogId,
-        booking_id: booking_id || null,
-        hotel_id: resolvedHotelId,
+        hotel_id: hotel_id || null,
         phase: 'ivr',
-        conversation_history: [],
       });
       const bytes = new TextEncoder().encode(stateJson);
       let binary = '';
@@ -102,11 +62,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          connection_id: env.TELNYX_CONNECTION_ID || env.TELNYX_TEXML_APP_ID,
+          connection_id: env.TELNYX_CONNECTION_ID,
           to: to_number,
           from: fromNumber,
           from_display_name: 'DayDreamHub',
-          webhook_url: `${baseUrl}/api/webhooks/telnyx-voice?bid=${booking_id || ''}&lid=${callLogId || ''}`,
+          webhook_url: `${baseUrl}/api/webhooks/telnyx-voice?lid=${callLogId || ''}`,
           webhook_url_method: 'POST',
           client_state: clientState,
           timeout_secs: 30,
@@ -128,7 +88,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
         success: true,
         call_sid: callSid,
         log_id: callLogId,
-        booking_state: bookingState,
       }), { headers: { 'Content-Type': 'application/json' } });
     } catch (e: any) {
       return new Response(JSON.stringify({ error: e.message }), { status: 500 });
@@ -158,9 +117,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const cfg = {
       TELNYX_API_KEY: env?.TELNYX_API_KEY ? '✅ Set' : '❌ Not set',
       TELNYX_FROM_NUMBER: env?.TELNYX_FROM_NUMBER || '❌ Not set',
-      TELNYX_AI_ASSISTANT_ID: env?.TELNYX_AI_ASSISTANT_ID || '❌ Not set',
-      TELNYX_TEXML_APP_ID: env?.TELNYX_TEXML_APP_ID || '❌ Not set',
-      ANTHROPIC_API_KEY: env?.ANTHROPIC_API_KEY ? '✅ Set' : '❌ Not set',
+      TELNYX_CONNECTION_ID: env?.TELNYX_CONNECTION_ID || '❌ Not set',
     };
     return new Response(JSON.stringify(cfg), { headers: { 'Content-Type': 'application/json' } });
   }
