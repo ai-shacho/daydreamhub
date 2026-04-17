@@ -55,10 +55,11 @@ async function aiExtractPrice(apiKey: string, hotelSaid: string): Promise<{ amou
   return { amount: null, raw: '' };
 }
 
-// Classify yes/no from speech (button or voice)
-function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | null {
+// Classify yes/no/repeat from speech (button or voice)
+function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | 'repeat' | null {
   if (digits === '1') return 'yes';
   if (digits === '2') return 'no';
+  if (digits === '3') return 'repeat';
   if (speech) {
     const l = speech.toLowerCase();
     if (l.includes('yes') || l.includes('yeah') || l.includes('sure') || l.includes('ok') ||
@@ -120,7 +121,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
       const guests = state.guests || 1;
 
-      const greeting = `Hello, this is DayDreamHub, a booking platform that connects hotels with travelers seeking day-use accommodations. We have a guest looking to book a day-use stay on ${checkIn}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. You may also respond by voice.`;
+      const greeting = `Hello, this is DayDreamHub, a booking platform that connects hotels with travelers seeking day-use accommodations. We have a guest looking to book a day-use stay on ${checkIn}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
 
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
@@ -170,11 +171,19 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (step === 'ask_dayuse') {
         const answer = classifyYesNo(speech, digits);
 
-        if (answer === 'yes') {
+        if (answer === 'repeat') {
+          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
+          const guests = state.guests || 1;
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: `We have a guest looking to book a day-use stay on ${checkIn}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, step: 'ask_dayuse' }),
+          });
+        } else if (answer === 'yes') {
           // → STEP 2A: Ask for price
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
-          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? You may say the amount in US dollars, or enter the amount on your keypad followed by the pound key. For example, 50 pound for fifty dollars, or 100 pound for one hundred dollars.`;
+          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? You may say the amount in US dollars, or enter the amount on your keypad followed by the pound key. For example, 50 pound for fifty dollars. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -228,6 +237,16 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       // ─── STEP 2A-1: Price inquiry ───
       if (step === 'ask_price') {
+        if (digits === '3') {
+          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
+          const guests = state.guests || 1;
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: `What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? You may say the amount in US dollars, or enter the amount on your keypad followed by the pound key. For example, 50 pound for fifty dollars. Press 3 to hear this again.`,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, step: 'ask_price' }),
+          });
+          break;
+        }
         const hotelSaid = speech || '';
         // DTMF digits (e.g. "50#" → digits="50") take priority over speech
         const dtmfPrice = digits ? parseInt(digits.replace(/\D/g, ''), 10) : NaN;
@@ -239,7 +258,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           // Got price → confirm reservation
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
-          const confirmAsk = `Thank you. To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceResult.amount} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline.`;
+          const confirmAsk = `Thank you. To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceResult.amount} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -282,7 +301,15 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const answer = classifyYesNo(speech, digits);
         const priceQuoted = state.price_quoted || 0;
 
-        if (answer === 'yes') {
+        if (answer === 'repeat') {
+          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
+          const guests = state.guests || 1;
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceQuoted} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, step: 'confirm_booking' }),
+          });
+        } else if (answer === 'yes') {
           // → Confirmed!
           const farewell = `Thank you! The reservation is confirmed at ${priceQuoted} dollars. Have a wonderful day!`;
 
