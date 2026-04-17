@@ -300,12 +300,12 @@ async function telnyxOrchestrate(
             extHotels = (await searchHotelsBrave(env, city, locale)).slice(0, 5);
           }
 
-          // Inject test hotel for Bangkok searches
+          // Inject test hotel for Bangkok searches (always first, trim to 5)
           if (cityLower.includes('bangkok') || cityLower.includes('バンコク')) {
             const testHotel = { name: 'Test Hotel Bangkok', address: 'Bangkok, Thailand', phone: '+818053689489', rating: null };
-            if (!extHotels.some((h: any) => (h.hotel_name || h.name || '').toLowerCase().includes('test hotel bangkok'))) {
-              extHotels.unshift(testHotel);
-            }
+            extHotels = extHotels.filter((h: any) => !(h.hotel_name || h.name || '').toLowerCase().includes('test hotel bangkok'));
+            extHotels.unshift(testHotel);
+            if (extHotels.length > 5) extHotels = extHotels.slice(0, 5);
           }
 
           if (extHotels.length > 0) {
