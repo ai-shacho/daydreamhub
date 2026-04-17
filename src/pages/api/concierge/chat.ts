@@ -319,10 +319,10 @@ async function telnyxOrchestrate(
 
             if (results.length > 0) {
               // 自社あり＋外部あり: 外部は「追加オプション」として表示
-              hotelContext += `\n\n## EXTERNAL HOTELS (Optional add-on - $7 AI phone booking fee if selected):\n${extLines}\n\nAfter showing the free DDH hotels above, add a section "Want more options? (+$7 AI call fee)" with these external hotels. The $7 only applies IF the user chooses to add external hotels.`;
+              hotelContext += `\n\n## EXTERNAL HOTELS (Optional add-on - $7 AI phone booking fee if selected):\n${extLines}\n\nAFTER showing DDH hotels, you MUST show ALL ${extHotels.length} external hotels above in a "Want more options? (+$7 AI call fee)" section. Show EVERY hotel listed — do not skip any.`;
             } else {
               // 自社なし＋外部あり: 外部のみ表示
-              hotelContext = `\n\n## EXTERNAL HOTELS (AI phone booking - $7 service fee):\n${extLines}\n\nDaydreamHub has no registered hotels in ${city}. Show these external options with clear note about the $7 AI phone booking fee.`;
+              hotelContext = `\n\n## EXTERNAL HOTELS (AI phone booking - $7 service fee):\n${extLines}\n\nYou MUST show ALL ${extHotels.length} external hotels listed above. Do not skip any. Include the $7 AI phone booking fee note.`;
             }
           } else if (results.length === 0) {
             hotelContext = `\n\nNo hotels found for "${city}". Tell the user DaydreamHub doesn't have partner hotels in ${city} yet, but our AI concierge can search and call local hotels for $7.`;
