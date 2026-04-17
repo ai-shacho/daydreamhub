@@ -26,6 +26,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const mode = env.PAYPAL_MODE || 'live';
 
   try {
+    if (action === 'config') {
+      return new Response(
+        JSON.stringify({ client_id: env?.PAYPAL_CLIENT_ID || '' }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (action === 'create') {
       if (!session_id) {
         return new Response(JSON.stringify({ error: 'session_id required' }), {

@@ -1306,9 +1306,9 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Processing...'; }
 
     try {
-      // セッションIDを取得
       var sessionId = window._heroSessionId || ('hero-' + Date.now());
-      // call_groupを作成（外部ホテル1件）
+
+      // Step 1: call_group作成
       var res = await fetch('/api/concierge/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1324,20 +1324,114 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         })
       });
       var data = await res.json();
-      if (data.paypal_url) {
-        window.open(data.paypal_url, '_blank');
-        addMsg('✅ PayPal page opened. After payment, our AI will call the hotel.\n\n📞 ' + hotelName + '\n👤 ' + name + '\n📅 ' + date, 'assistant');
-      // PayPal完了後にポーリング開始を案内
-      setTimeout(function(){
-        addMsg('💡 After payment, type "check call" in this chat to see results, or wait for automatic updates.', 'assistant');
-      }, 2000);
-      } else if (data.error) {
-        addMsg('❌ Error: ' + data.error, 'assistant');
-      } else {
-        addMsg(data.response || 'Booking request received.', 'assistant');
+      if (data.error) { addMsg('❌ Error: ' + data.error, 'assistant'); if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; } return; }
+
+      var groupId = data.group_id;
+      var paypalOrderId = data.paypal_order_id;
+
+      if (!groupId || !paypalOrderId) {
+        addMsg('❌ Failed to create booking request.', 'assistant');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+        return;
       }
+
+      // Step 2: PayPal JS SDKでページ内決済
+      var paypalContainer = document.getElementById('call-paypal-container');
+      if (!paypalContainer) {
+        // コンテナを動的に挿入
+        paypalContainer = document.createElement('div');
+        paypalContainer.id = 'call-paypal-container';
+        paypalContainer.style.marginTop = '8px';
+        submitBtn?.parentNode?.insertBefore(paypalContainer, submitBtn);
+        submitBtn.style.display = 'none';
+      }
+
+      // PayPal SDKをロード（未ロードの場合）
+      var loadPayPalSDK = function(clientId) {
+        return new Promise(function(resolve, reject) {
+          if (window.paypal) { resolve(window.paypal); return; }
+          var script = document.createElement('script');
+          script.src = 'https://www.paypal.com/sdk/js?client-id=' + clientId + '&currency=USD&intent=capture';
+          script.onload = function() { resolve(window.paypal); };
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      };
+
+      // PayPal client IDをAPIから取得
+      var configRes = await fetch('/api/concierge/pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'config' })
+      });
+      var configData = await configRes.json();
+      var clientId = configData.client_id || '';
+
+      if (!clientId) {
+        addMsg('❌ PayPal configuration error.', 'assistant');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+        return;
+      }
+
+      await loadPayPalSDK(clientId);
+
+      window.paypal.Buttons({
+        createOrder: function() { return paypalOrderId; },
+        onApprove: async function(ppData) {
+          paypalContainer.innerHTML = '<p style="color:#4ade80;font-size:12px;text-align:center;">Processing payment...</p>';
+          // Step 3: capture
+          var capRes = await fetch('/api/concierge/pay', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'capture',
+              order_id: ppData.orderID,
+              group_id: groupId,
+              session_id: sessionId,
+              guest_name: name,
+              guest_email: email
+            })
+          });
+          var capData = await capRes.json();
+          if (capData.status === 'paid') {
+            paypalContainer.innerHTML = '';
+            // Step 4: 電話発信
+            var callRes = await fetch('/api/concierge/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                session_id: sessionId,
+                message: '__confirm_group_payment:' + groupId,
+                locale: document.documentElement.lang || 'en',
+                guest_name: name,
+                guest_email: email
+              })
+            });
+            var callData = await callRes.json();
+            addMsg('✅ Payment confirmed! Our AI is now calling **' + hotelName + '**.\n\n👤 ' + name + '\n📅 ' + date + ' ' + checkinTime + '–' + checkoutTime, 'assistant');
+          } else {
+            paypalContainer.innerHTML = '';
+            addMsg('❌ Payment failed. Please try again.', 'assistant');
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+          }
+        },
+        onCancel: function() {
+          paypalContainer.innerHTML = '';
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+          addMsg('Payment cancelled.', 'assistant');
+        },
+        onError: function(err) {
+          paypalContainer.innerHTML = '';
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+          addMsg('❌ PayPal error. Please try again.', 'assistant');
+        }
+      }).render('#call-paypal-container');
+
+      if (submitBtn) submitBtn.textContent = 'Complete payment above ↑';
+
     } catch(e) {
       addMsg('❌ Network error. Please try again.', 'assistant');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
     }
   };
 
