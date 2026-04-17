@@ -120,7 +120,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
       const guests = state.guests || 1;
 
-      const greeting = `Hello, this is DayDreamHub, a platform that connects hotels with travelers looking for day-use stays. We have a guest interested in a day-use stay at your property on ${checkIn}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes, press 2 or say no.`;
+      const greeting = `Hello, this is DayDreamHub, a booking platform that connects hotels with travelers seeking day-use accommodations. We have a guest looking to book a day-use stay on ${checkIn}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. You may also respond by voice.`;
 
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
@@ -142,10 +142,12 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         break;
       }
       // After any speech, start listening for DTMF or voice
+      const isPriceStep = state.step === 'ask_price';
       await telnyxCmd(apiKey, callControlId, 'gather', {
-        maximum_digits: 1,
+        maximum_digits: isPriceStep ? 6 : 1,  // price: up to 6 digits (e.g. "999" + "#"), yes/no: 1 digit
         minimum_digits: 0,
-        timeout_millis: 15000,
+        terminating_digit: isPriceStep ? '#' : '',
+        timeout_millis: isPriceStep ? 20000 : 15000,
         speech_timeout: 'auto',
         speech_end_timeout: 2000,
         input: ['speech', 'dtmf'],
@@ -171,7 +173,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           // → STEP 2A: Ask for price
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
-          const priceAsk = `Great! Could you tell us the price for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars.`;
+          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? You may say the amount in US dollars, or enter the amount on your keypad followed by the pound key. For example, 50 pound for fifty dollars, or 100 pound for one hundred dollars.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -186,7 +188,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         } else if (answer === 'no') {
           // → STEP 2B: No day-use → record as potential partner
-          const farewell = "Thank you for letting us know. We do have guests interested in day-use stays at your property. We'd love to reach out again to discuss how we can work together. Thank you for your time. Goodbye!";
+          const farewell = "Understood. We currently have guests seeking day-use stays in your area. We may follow up to discuss whether a day-use plan could work for your property. Thank you for your time. Goodbye!";
 
           if (db) {
             if (logId) {
@@ -214,7 +216,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             }
           } else {
             await telnyxCmd(apiKey, callControlId, 'speak', {
-              payload: "Sorry, I didn't catch your response. Press 1 or say yes if you offer day-use plans, or press 2 or say no if you don't.",
+              payload: "I'm sorry, I did not receive a response. If you offer day-use plans, press 1 or say yes. If not, press 2 or say no.",
               voice: 'Polly.Joanna',
               client_state: encodeState({ ...state, step: 'ask_dayuse', retry_count: retryCount + 1 }),
             });
@@ -226,13 +228,17 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       // ─── STEP 2A-1: Price inquiry ───
       if (step === 'ask_price') {
         const hotelSaid = speech || '';
-        const priceResult = await aiExtractPrice(apiKey, hotelSaid);
+        // DTMF digits (e.g. "50#" → digits="50") take priority over speech
+        const dtmfPrice = digits ? parseInt(digits.replace(/\D/g, ''), 10) : NaN;
+        const priceResult = (!isNaN(dtmfPrice) && dtmfPrice > 0)
+          ? { amount: dtmfPrice, raw: digits }
+          : await aiExtractPrice(apiKey, hotelSaid);
 
         if (priceResult.amount && priceResult.amount > 0) {
           // Got price → confirm reservation
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
-          const confirmAsk = `Thank you. So that's ${priceResult.amount} dollars for ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}. Can we confirm this reservation? Press 1 or say yes to confirm, press 2 or say no to decline.`;
+          const confirmAsk = `Thank you. To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceResult.amount} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -249,7 +255,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           // Couldn't extract price → retry
           if (retryCount >= 1) {
             // 2 failures → give up, record what we have
-            const farewell = "I'm sorry, I wasn't able to catch the price. We'll follow up with you by other means. Thank you for your time. Goodbye!";
+            const farewell = "I sincerely apologize for the inconvenience. We were unable to confirm the price on this call. We truly appreciate your patience and your time. We will be in touch again soon. Thank you so much, and have a wonderful day. Goodbye!";
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='price_unclear', note='potential_partner', transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
                 .bind(`[Hotel]: ${hotelSaid}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
@@ -261,7 +267,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             });
           } else {
             await telnyxCmd(apiKey, callControlId, 'speak', {
-              payload: "Sorry, could you repeat the price? For example, fifty dollars.",
+              payload: "I'm sorry, could you repeat the price? You may say it, or enter the amount on your keypad followed by the pound key. For example, 50 pound for fifty dollars.",
               voice: 'Polly.Joanna',
               client_state: encodeState({ ...state, step: 'ask_price', retry_count: retryCount + 1 }),
             });
@@ -277,7 +283,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         if (answer === 'yes') {
           // → Confirmed!
-          const farewell = `Wonderful, thank you! The reservation is confirmed at ${priceQuoted} dollars. Have a great day!`;
+          const farewell = `Thank you! The reservation is confirmed at ${priceQuoted} dollars. Have a wonderful day!`;
 
           if (db) {
             if (logId) {
@@ -298,7 +304,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         } else if (answer === 'no') {
           // → Declined (but potential partner)
-          const farewell = "No problem at all. We'd love to reach out again to discuss how we can work together on day-use plans. Thank you for your time. Goodbye!";
+          const farewell = "Understood. We may reach out in the future to explore potential collaboration on day-use plans. Thank you for your time. Goodbye!";
 
           if (db) {
             if (logId) {
@@ -326,7 +332,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             }
           } else {
             await telnyxCmd(apiKey, callControlId, 'speak', {
-              payload: "Sorry, I didn't catch that. Press 1 or say yes to confirm the reservation, or press 2 or say no to decline.",
+              payload: "I'm sorry, I did not receive a response. Press 1 or say yes to confirm the reservation, or press 2 or say no to decline.",
               voice: 'Polly.Joanna',
               client_state: encodeState({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }),
             });
