@@ -55,6 +55,15 @@ async function aiExtractPrice(apiKey: string, hotelSaid: string): Promise<{ amou
   return { amount: null, raw: '' };
 }
 
+function toAmPm(time: string | null): string {
+  if (!time) return '';
+  const [h, m] = time.split(':').map(Number);
+  if (isNaN(h)) return time;
+  const period = h < 12 ? 'AM' : 'PM';
+  const hour = h % 12 || 12;
+  return m ? `${hour}:${String(m).padStart(2, '0')} ${period}` : `${hour} ${period}`;
+}
+
 // Classify yes/no/repeat from speech (button or voice)
 function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | 'repeat' | null {
   if (digits === '1') return 'yes';
@@ -123,7 +132,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const checkInTime = state.check_in_time || null;
       const checkOutTime = state.check_out_time || null;
       const timeInfo = checkInTime && checkOutTime
-        ? ` from ${checkInTime} to ${checkOutTime}`
+        ? ` from ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}`
         : '';
 
       const greeting = `Hello, this is DayDreamHub, a booking platform that connects hotels with travelers seeking day-use accommodations. We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
@@ -268,7 +277,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const guests = state.guests || 1;
           const checkInTime = state.check_in_time || null;
           const checkOutTime = state.check_out_time || null;
-          const timeInfo = checkInTime && checkOutTime ? `, ${checkInTime} to ${checkOutTime}` : '';
+          const timeInfo = checkInTime && checkOutTime ? `, ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
           const confirmAsk = `Thank you. To confirm: ${checkIn}${timeInfo}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceResult.amount} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`;
 
           if (db && logId) {
