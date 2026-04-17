@@ -500,42 +500,51 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
   }
 
   try {
-    const langConfig = getLanguageConfig(params.language);
-    const response = await fetch(
-      `https://api.telnyx.com/v2/texml/ai_calls/${env.TELNYX_TEXML_APP_ID}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.TELNYX_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          From: env.TELNYX_FROM_NUMBER,
-          To: params.hotel_phone,
-          AIAssistantId: env.TELNYX_AI_ASSISTANT_ID,
-          TimeoutSecs: 60,
-          ClientState: btoa(JSON.stringify({ type: "concierge", call_id: callId, session_id: sessionId })),
-          AIAssistantDynamicVariables: {
-            hotel_name: params.hotel_name, guest_name: params.guest_name,
-            date: params.date, check_in: params.check_in_time,
-            check_out: params.check_out_time, guests: String(params.guests),
-            language_code: langConfig.code, language_name: langConfig.name,
-            greeting: langConfig.greeting, special_requests: params.special_requests || "",
-            max_price: params.call_mode === "callback_confirm" && params.confirmed_price ? params.confirmed_price : (params.max_price || "no limit"),
-            call_mode: params.call_mode || "initial",
-            confirmed_price: params.confirmed_price || ""
-          }
-        })
-      }
-    );
+    const webhookUrl = (env?.SITE_URL || 'https://daydreamhub-1sv.pages.dev') + '/api/webhooks/telnyx-voice';
+
+    // Unicode-safe base64 encoding
+    const stateJson = JSON.stringify({
+      call_log_id: null,
+      concierge_call_id: callId,
+      session_id: sessionId,
+      booking_id: null,
+      hotel_id: null,
+      guest_name: params.guest_name || 'Guest',
+      check_in_date: params.date || params.check_in_date || 'the requested date',
+      check_in_time: params.check_in_time || null,
+      check_out_time: params.check_out_time || null,
+      guests: params.guests || 1,
+      phase: 'ivr',
+    });
+    const bytes = new TextEncoder().encode(stateJson);
+    let binary = ''; bytes.forEach((b: number) => binary += String.fromCharCode(b));
+    const clientState = btoa(binary);
+
+    const response = await fetch('https://api.telnyx.com/v2/calls', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.TELNYX_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        connection_id: env.TELNYX_CONNECTION_ID,
+        to: params.hotel_phone,
+        from: env.TELNYX_FROM_NUMBER,
+        from_display_name: 'DayDreamHub',
+        webhook_url: webhookUrl,
+        webhook_url_method: 'POST',
+        client_state: clientState,
+        timeout_secs: 30,
+      }),
+    });
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error(`Telnyx AI API error: ${response.status} ${err}`);
+      throw new Error(`Telnyx API error: ${response.status} ${err}`);
     }
 
     const resData: any = await response.json();
-    const telnyxCallId = resData.call_sid || resData.call_control_id || "";
+    const telnyxCallId = resData.data?.call_control_id || resData.data?.call_session_id || "";
     await db.prepare(`UPDATE concierge_calls SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now') WHERE id = ?`).bind(telnyxCallId, callId).run();
 
     return { call_id: callId, status: "calling", message: `Calling ${params.hotel_name}...` };

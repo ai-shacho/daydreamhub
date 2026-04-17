@@ -96,9 +96,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   const callControlId: string = payload.call_control_id || '';
   const state = decodeState(payload.client_state);
 
-  // Skip concierge AI calls (handled by telnyx-ai-insights.ts)
-  if (state.type === 'concierge' || state.call_id) {
-    console.log(`[telnyx-voice] Skipping concierge AI call`);
+  // Skip old-style concierge AI calls (handled by telnyx-ai-insights.ts)
+  if (state.type === 'concierge') {
+    console.log(`[telnyx-voice] Skipping old concierge AI call`);
     return new Response(JSON.stringify({ ok: true, skipped: 'concierge_ai_call' }), {
       headers: { 'Content-Type': 'application/json' }
     });
@@ -106,6 +106,16 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
   const bookingId = state.booking_id ?? url.searchParams.get('bid') ?? url.searchParams.get('booking_id');
   const logId = state.call_log_id ?? url.searchParams.get('lid') ?? url.searchParams.get('log_id');
+  const conciergeCallId = state.concierge_call_id ?? null;
+
+  // Helper: update concierge_calls status in sync with call_logs
+  async function updateConciergeCall(status: string, extra: Record<string, any> = {}) {
+    if (!db || !conciergeCallId) return;
+    const fields = Object.entries({ status, ...extra }).map(([k]) => `${k} = ?`).join(', ');
+    const values = [...Object.values({ status, ...extra }), conciergeCallId];
+    await db.prepare(`UPDATE concierge_calls SET ${fields}, updated_at = datetime('now') WHERE id = ?`)
+      .bind(...values).run().catch((e: any) => console.error('[telnyx-voice] concierge update failed:', e));
+  }
 
   console.log(`[${eventType}] ctrl=${callControlId.slice(0, 16)} bid=${bookingId} lid=${logId} step=${state.step} phase=${state.phase}`);
 
@@ -126,6 +136,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     }
 
     case 'call.answered': {
+      await updateConciergeCall('calling');
       // STEP 1: Introduce DayDreamHub + ask about day-use availability
       const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
       const guests = state.guests || 1;
@@ -221,6 +232,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             if (logId) {
               await db.prepare(`UPDATE call_logs SET status='no_dayuse', transcription = COALESCE(transcription||'\n','') || ?, note='potential_partner' WHERE id=?`)
                 .bind(`[Hotel]: ${speech || 'pressed 2 (no)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+              await updateConciergeCall('completed', { outcome: 'unavailable', ai_summary: 'Hotel does not offer day-use plans.' });
             }
             if (bookingId) {
               await db.prepare(`UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id=?`)
@@ -337,6 +349,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             if (logId) {
               await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
                 .bind(priceQuoted, `[Hotel]: ${speech || 'pressed 1 (yes)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+              await updateConciergeCall('completed', { outcome: 'booked', price_quoted: String(priceQuoted), ai_summary: `Confirmed at $${priceQuoted}` });
             }
             if (bookingId) {
               await db.prepare(`UPDATE bookings SET status='confirmed', updated_at=datetime('now') WHERE id=?`)
@@ -358,6 +371,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             if (logId) {
               await db.prepare(`UPDATE call_logs SET status='declined', note='potential_partner', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
                 .bind(priceQuoted, `[Hotel]: ${speech || 'pressed 2 (no)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+              await updateConciergeCall('completed', { outcome: 'unavailable', price_quoted: String(priceQuoted), ai_summary: 'Hotel declined to confirm the booking.' });
             }
             if (bookingId) {
               await db.prepare(`UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id=?`)
@@ -397,7 +411,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const log: any = await db.prepare(`SELECT status FROM call_logs WHERE id=?`).bind(logId).first().catch(() => null);
         if (log && !['confirmed', 'declined', 'no_dayuse', 'price_unclear'].includes(log.status)) {
           await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+          await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No answer or call disconnected.' });
         }
+      } else if (conciergeCallId) {
+        // concierge call with no call_log — still update status
+        await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No answer or call disconnected.' });
       }
       break;
     }
