@@ -1,0 +1,126 @@
+name: Fix Domain CNAME and Attach
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Zone ID
+        id: zone
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          RESPONSE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=daydreamhub.com" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}")
+          ZONE_ID=$(echo "$RESPONSE" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          print(r['result'][0]['id'])
+          ")
+          echo "zone_id=$ZONE_ID" >> $GITHUB_OUTPUT
+
+      - name: Delete old CNAMEs for @ and www
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+        run: |
+          for NAME in daydreamhub.com www.daydreamhub.com; do
+            for TYPE in A CNAME; do
+              RECORDS=$(curl -s "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?type=${TYPE}&name=${NAME}" \
+                -H "Authorization: Bearer ${CF_API_TOKEN}")
+              IDS=$(echo "$RECORDS" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          for rec in r.get('result', []):
+              print(rec['id'])
+          ")
+              for RID in $IDS; do
+                echo "Deleting ${TYPE} ${NAME} record $RID"
+                curl -s -X DELETE \
+                  "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${RID}" \
+                  -H "Authorization: Bearer ${CF_API_TOKEN}" > /dev/null
+              done
+            done
+          done
+
+      - name: Attach custom domain to Pages project (daydreamhub.com)
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "=== Attach daydreamhub.com ==="
+          curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/daydreamhub/domains" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "daydreamhub.com"}' | python3 -m json.tool
+
+          echo "=== Attach www.daydreamhub.com ==="
+          curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/daydreamhub/domains" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "www.daydreamhub.com"}' | python3 -m json.tool
+
+      - name: Verify DNS records were created automatically
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+        run: |
+          sleep 5
+          echo "=== Current DNS records ==="
+          curl -s "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?per_page=100" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          for rec in r.get('result', []):
+              print(f\"{rec['type']:6} {rec['name']:50} {rec['content']}\")
+          "
+
+      - name: If no CNAME was auto-created, create one pointing to daydreamhub-1sv.pages.dev
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+        run: |
+          check_and_create() {
+            local NAME="$1"
+            local FULL="$2"
+            EXISTING=$(curl -s "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?name=${FULL}" \
+              -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          print(len([x for x in r.get('result', []) if x['type'] in ('A', 'CNAME', 'AAAA')]))
+          ")
+            if [ "$EXISTING" = "0" ]; then
+              echo "No A/CNAME for $FULL — creating CNAME to daydreamhub-1sv.pages.dev"
+              curl -s -X POST \
+                "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+                -H "Authorization: Bearer ${CF_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -d "{\"type\":\"CNAME\",\"name\":\"${NAME}\",\"content\":\"daydreamhub-1sv.pages.dev\",\"proxied\":true,\"ttl\":1}" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          print('✅ created' if r.get('success') else '❌ ' + str(r.get('errors')))
+          "
+            else
+              echo "A/CNAME already exists for $FULL"
+            fi
+          }
+          check_and_create "@" "daydreamhub.com"
+          check_and_create "www" "www.daydreamhub.com"
+
+      - name: Final DNS check
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+        run: |
+          echo "=== Final DNS records ==="
+          curl -s "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?per_page=100" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          for rec in r.get('result', []):
+              print(f\"{rec['type']:6} {rec['name']:50} {rec['content']}\")
+          "
