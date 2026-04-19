@@ -30,6 +30,19 @@ jobs:
                   print('  custom domains:', domains)
           "
 
-          echo "=== Zone account ID (first 8 chars) ==="
-          echo "4f2fb14e"
-          echo "(zone account: 4f2fb14e751ec75ab0666c9413a233bc)"
+          echo "=== All projects with custom domains ==="
+          curl -s "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects?per_page=25" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          for p in r.get('result', []):
+              domains = p.get('domains', [])
+              all_domains = domains + [p.get('subdomain','')]
+              if any('daydreamhub' in d for d in all_domains):
+                  print('Project:', p['name'])
+                  print('  custom domains:', domains)
+          "
+
+          echo "=== Check daydreamhub project domains detail ==="
+          curl -s "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/daydreamhub/domains" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -m json.tool
