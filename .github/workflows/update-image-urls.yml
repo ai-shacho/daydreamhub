@@ -1,0 +1,86 @@
+name: Update Image URLs in D1
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (show changes without applying)'
+        type: boolean
+        default: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update image URLs in D1
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          python3 <<'EOF'
+          import os, json, urllib.request, re
+
+          account = os.environ['CF_ACCOUNT_ID']
+          token = os.environ['CF_API_TOKEN']
+          dry_run = os.environ['DRY_RUN'] == 'true'
+
+          OLD = 'https://daydreamhub.com/wp-content/uploads/'
+          NEW = 'https://pub-a2a3ab958ff24a8e93517b65c3d66820.r2.dev/wp-content/uploads/'
+
+          # Get DB ID
+          req = urllib.request.Request(
+              f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database",
+              headers={"Authorization": f"Bearer {token}"}
+          )
+          dbs = json.loads(urllib.request.urlopen(req).read())
+          db_id = next(db['uuid'] for db in dbs['result'] if db['name'] == 'daydreamhub-db')
+          print(f"DB ID: {db_id}")
+
+          def query(sql, params=None):
+              payload = {"sql": sql}
+              if params:
+                  payload["params"] = params
+              data = json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db_id}/query",
+                  data=data,
+                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+              )
+              r = json.loads(urllib.request.urlopen(req).read())
+              return r['result'][0]
+
+          # --- thumbnail_url in blog_posts ---
+          rows = query(f"SELECT COUNT(*) as cnt FROM blog_posts WHERE thumbnail_url LIKE '{OLD}%'")
+          cnt = rows['results'][0]['cnt']
+          print(f"blog_posts.thumbnail_url: {cnt} rows to update")
+          if not dry_run and cnt > 0:
+              r = query(f"UPDATE blog_posts SET thumbnail_url = REPLACE(thumbnail_url, '{OLD}', '{NEW}') WHERE thumbnail_url LIKE '{OLD}%'")
+              print(f"  -> updated: {r.get('meta', {}).get('changes', '?')} rows")
+
+          # --- thumbnail_url in hotels ---
+          rows = query(f"SELECT COUNT(*) as cnt FROM hotels WHERE thumbnail_url LIKE '{OLD}%'")
+          cnt = rows['results'][0]['cnt']
+          print(f"hotels.thumbnail_url: {cnt} rows to update")
+          if not dry_run and cnt > 0:
+              r = query(f"UPDATE hotels SET thumbnail_url = REPLACE(thumbnail_url, '{OLD}', '{NEW}') WHERE thumbnail_url LIKE '{OLD}%'")
+              print(f"  -> updated: {r.get('meta', {}).get('changes', '?')} rows")
+
+          # --- image_url in hotel_images ---
+          rows = query(f"SELECT COUNT(*) as cnt FROM hotel_images WHERE image_url LIKE '{OLD}%'")
+          cnt = rows['results'][0]['cnt']
+          print(f"hotel_images.image_url: {cnt} rows to update")
+          if not dry_run and cnt > 0:
+              r = query(f"UPDATE hotel_images SET image_url = REPLACE(image_url, '{OLD}', '{NEW}') WHERE image_url LIKE '{OLD}%'")
+              print(f"  -> updated: {r.get('meta', {}).get('changes', '?')} rows")
+
+          # --- content in blog_posts ---
+          rows = query(f"SELECT COUNT(*) as cnt FROM blog_posts WHERE content LIKE '%{OLD}%'")
+          cnt = rows['results'][0]['cnt']
+          print(f"blog_posts.content: {cnt} posts to update")
+          if not dry_run and cnt > 0:
+              r = query(f"UPDATE blog_posts SET content = REPLACE(content, '{OLD}', '{NEW}') WHERE content LIKE '%{OLD}%'")
+              print(f"  -> updated: {r.get('meta', {}).get('changes', '?')} rows")
+
+          print(f"\n=== {'DRY RUN - no changes made' if dry_run else 'DONE'} ===")
+          EOF
