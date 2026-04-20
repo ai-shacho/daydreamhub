@@ -1,3 +1,3 @@
 -- Add staff_role column to hotel_staff table
--- Values: 'co_owner' (same permissions as owner) or 'booking_manager' (limited)
-ALTER TABLE hotel_staff ADD COLUMN staff_role TEXT DEFAULT 'booking_manager';
+-- Already applied manually to production DB. This is a no-op to mark it as applied.
+-- ALTER TABLE hotel_staff ADD COLUMN staff_role TEXT DEFAULT 'booking_manager';
