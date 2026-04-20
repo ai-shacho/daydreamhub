@@ -81,12 +81,15 @@ jobs:
 
           # blog_posts.content (extract URLs)
           rows = query("SELECT id, content FROM blog_posts WHERE content LIKE '%daydreamhub.com/wp-content%'")
-          pattern = re.compile(r'https://daydreamhub\.com/wp-content/uploads/[^\s"\'\\)<>]+')
+          # Stop at any query/fragment/whitespace/HTML-entity-start/etc
+          pattern = re.compile(r'https://daydreamhub\.com/wp-content/uploads/[^\s"\'\\)<>&?#]+')
           content_matches = 0
           for r in rows:
               for m in pattern.findall(r['content'] or ''):
-                  urls.add(m)
-                  content_matches += 1
+                  # Only image file extensions
+                  if re.search(r'\.(jpe?g|png|gif|webp|svg|bmp|avif)$', m, re.IGNORECASE):
+                      urls.add(m)
+                      content_matches += 1
           print(f"blog_posts.content refs: {content_matches} in {len(rows)} posts")
 
           urls = sorted(urls)
