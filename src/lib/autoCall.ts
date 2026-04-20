@@ -120,6 +120,8 @@ export async function initiateCall(env: any, callLogId: number, booking: any): P
             plan_id: booking.plan_id,
             guest_name: booking.guest_name,
             check_in_date: booking.check_in_date,
+            check_in_time: booking.check_in_time,
+            check_out_time: booking.check_out_time,
             guests: booking.guests,
             plan_name: booking.plan_name,
             hotel_name: booking.hotel_name,
@@ -154,6 +156,7 @@ export async function getBookingInfoForCall(db: any, bookingId: number): Promise
   const row = await db
     .prepare(
       `SELECT b.id as booking_id, b.hotel_id, b.plan_id, b.guest_name, b.check_in_date,
+              b.check_in_time, b.check_out_time,
               (b.adults + b.children) as guests,
               h.name as hotel_name, h.phone as hotel_phone, h.country as hotel_country,
               p.name as plan_name
@@ -174,6 +177,8 @@ export async function getBookingInfoForCall(db: any, bookingId: number): Promise
     hotel_country: row.hotel_country || '',
     guest_name: row.guest_name || 'Guest',
     check_in_date: row.check_in_date || '',
+    check_in_time: row.check_in_time || '',
+    check_out_time: row.check_out_time || '',
     guests: row.guests || 1,
     plan_name: row.plan_name || 'Room',
   };

@@ -1,4 +1,6 @@
 import type { APIRoute } from 'astro';
+import { sendConciergeConfirmation } from '../../../lib/email';
+import { autoRefundBooking } from '../../../lib/autoRefund';
 
 async function telnyxCmd(apiKey: string, callControlId: string, cmd: string, body: any = {}) {
   const res = await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/${cmd}`, {
@@ -354,6 +356,30 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             if (bookingId) {
               await db.prepare(`UPDATE bookings SET status='confirmed', updated_at=datetime('now') WHERE id=?`)
                 .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+
+              // Send confirmation email to guest
+              const resendKey = env?.RESEND_API_KEY;
+              if (resendKey) {
+                const bk = await db.prepare(
+                  `SELECT b.guest_name, b.guest_email, b.check_in_date, b.check_in_time, b.check_out_time, b.adults, b.children,
+                          h.name as hotel_name, h.phone as hotel_phone
+                   FROM bookings b LEFT JOIN hotels h ON h.id = b.hotel_id WHERE b.id = ?`
+                ).bind(bookingId).first().catch(() => null);
+                if (bk?.guest_email) {
+                  await sendConciergeConfirmation(resendKey, {
+                    guestName: bk.guest_name || 'Guest',
+                    guestEmail: bk.guest_email,
+                    hotelName: bk.hotel_name || state.hotel_name || 'Hotel',
+                    hotelPhone: bk.hotel_phone || '',
+                    date: bk.check_in_date || state.check_in_date || '',
+                    checkIn: bk.check_in_time || state.check_in_time || '',
+                    checkOut: bk.check_out_time || state.check_out_time || '',
+                    guests: (bk.adults || 1) + (bk.children || 0),
+                    priceQuoted: priceQuoted ? `$${priceQuoted}` : undefined,
+                    aiSummary: `Confirmed at $${priceQuoted} by AI phone call.`,
+                  }).catch(e => console.error('[telnyx-voice] confirmation email failed:', e));
+                }
+              }
             }
           }
 
@@ -376,6 +402,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             if (bookingId) {
               await db.prepare(`UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id=?`)
                 .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+
+              // Refund $7 and send decline email to guest
+              await autoRefundBooking(env, Number(bookingId), 'ホテルが電話で予約を拒否しました')
+                .catch(e => console.error('[telnyx-voice] refund failed:', e));
             }
           }
 
