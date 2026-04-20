@@ -1,0 +1,211 @@
+name: Migrate Images to R2
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (do not upload or update DB)'
+        type: boolean
+        default: true
+      batch_size:
+        description: 'Max images to process this run (0 = no limit)'
+        default: '100'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          pip install boto3 requests
+
+      - name: Extract image URLs from D1
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          python3 <<'EOF'
+          import os, json, urllib.request, re
+          import ssl
+
+          account = os.environ['CF_ACCOUNT_ID']
+          token = os.environ['CF_API_TOKEN']
+
+          # Find D1 database ID
+          req = urllib.request.Request(
+              f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database",
+              headers={"Authorization": f"Bearer {token}"}
+          )
+          dbs = json.loads(urllib.request.urlopen(req).read())
+          db_id = None
+          for db in dbs.get('result', []):
+              if db['name'] == 'daydreamhub-db':
+                  db_id = db['uuid']
+                  break
+          print(f"D1 DB ID: {db_id}")
+          with open('db_id.txt', 'w') as f:
+              f.write(db_id)
+
+          def query(sql):
+              data = json.dumps({"sql": sql}).encode()
+              req = urllib.request.Request(
+                  f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db_id}/query",
+                  data=data,
+                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+              )
+              r = json.loads(urllib.request.urlopen(req).read())
+              return r['result'][0]['results']
+
+          urls = set()
+
+          # blog_posts.thumbnail_url
+          rows = query("SELECT thumbnail_url FROM blog_posts WHERE thumbnail_url LIKE '%daydreamhub.com/wp-content%'")
+          for r in rows:
+              urls.add(r['thumbnail_url'])
+          print(f"blog_posts.thumbnail_url: {len(rows)}")
+
+          # hotels.thumbnail_url
+          rows = query("SELECT thumbnail_url FROM hotels WHERE thumbnail_url LIKE '%daydreamhub.com/wp-content%'")
+          for r in rows:
+              urls.add(r['thumbnail_url'])
+          print(f"hotels.thumbnail_url: {len(rows)}")
+
+          # hotel_images.image_url
+          rows = query("SELECT image_url FROM hotel_images WHERE image_url LIKE '%daydreamhub.com/wp-content%'")
+          for r in rows:
+              urls.add(r['image_url'])
+          print(f"hotel_images.image_url: {len(rows)}")
+
+          # blog_posts.content (extract URLs)
+          rows = query("SELECT id, content FROM blog_posts WHERE content LIKE '%daydreamhub.com/wp-content%'")
+          pattern = re.compile(r'https://daydreamhub\.com/wp-content/uploads/[^\s"\'\\)<>]+')
+          content_matches = 0
+          for r in rows:
+              for m in pattern.findall(r['content'] or ''):
+                  urls.add(m)
+                  content_matches += 1
+          print(f"blog_posts.content refs: {content_matches} in {len(rows)} posts")
+
+          urls = sorted(urls)
+          print(f"Total unique URLs: {len(urls)}")
+          with open('urls.txt', 'w') as f:
+              for u in urls:
+                  f.write(u + '\n')
+          EOF
+
+      - name: Show URL stats
+        run: |
+          echo "Total URLs to migrate:"
+          wc -l urls.txt
+          echo "Sample:"
+          head -5 urls.txt
+
+      - name: Download from old server and upload to R2
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          BATCH_SIZE: ${{ github.event.inputs.batch_size }}
+        run: |
+          python3 <<'EOF'
+          import os, boto3, requests
+          from urllib.parse import urlparse
+          from botocore.config import Config
+
+          dry_run = os.environ['DRY_RUN'] == 'true'
+          batch_size = int(os.environ['BATCH_SIZE'])
+          account = os.environ['CF_ACCOUNT_ID']
+
+          s3 = boto3.client(
+              's3',
+              endpoint_url=f"https://{account}.r2.cloudflarestorage.com",
+              aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
+              aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
+              config=Config(signature_version='s3v4', region_name='auto'),
+          )
+
+          with open('urls.txt') as f:
+              urls = [l.strip() for l in f if l.strip()]
+
+          if batch_size > 0:
+              urls = urls[:batch_size]
+
+          # Preload existing R2 keys to skip
+          existing = set()
+          paginator = s3.get_paginator('list_objects_v2')
+          try:
+              for page in paginator.paginate(Bucket='daydreamhub-media'):
+                  for obj in page.get('Contents', []):
+                      existing.add(obj['Key'])
+          except Exception as e:
+              print(f"(list_objects_v2 warn: {e})")
+          print(f"Existing R2 objects: {len(existing)}")
+
+          success, skipped, failed = 0, 0, 0
+          url_to_key = {}
+          for i, url in enumerate(urls, 1):
+              path = urlparse(url).path  # /wp-content/uploads/2025/09/1.jpg
+              key = path.lstrip('/')      # wp-content/uploads/2025/09/1.jpg
+              url_to_key[url] = key
+
+              if key in existing:
+                  skipped += 1
+                  continue
+
+              if dry_run:
+                  if i <= 3:
+                      print(f"[DRY] {url} -> {key}")
+                  continue
+
+              try:
+                  # Access via IP direct (old server)
+                  r = requests.get(url, headers={'Host': 'daydreamhub.com'},
+                                   timeout=30, allow_redirects=True,
+                                   # Use IP override via custom DNS not trivial — use URL unchanged since we haven't cleaned DNS
+                                   )
+                  # DNS now points to Cloudflare (new site), so we need to fetch via old IP
+                  # Use --resolve equivalent:
+                  raise Exception("direct URL won't reach old server")
+              except Exception:
+                  # Fetch via old IP
+                  try:
+                      old_url = url.replace('https://daydreamhub.com', 'https://192.252.156.122')
+                      r = requests.get(old_url, headers={'Host': 'daydreamhub.com'},
+                                       verify=False, timeout=30)
+                      if r.status_code != 200:
+                          print(f"❌ {r.status_code} {url}")
+                          failed += 1
+                          continue
+                      ctype = r.headers.get('Content-Type', 'application/octet-stream')
+                      s3.put_object(Bucket='daydreamhub-media', Key=key, Body=r.content, ContentType=ctype)
+                      success += 1
+                      if success % 50 == 0:
+                          print(f"Progress: {success} uploaded")
+                  except Exception as e:
+                      print(f"❌ {url}: {e}")
+                      failed += 1
+
+          print(f"\n=== Result ===")
+          print(f"Total: {len(urls)}")
+          print(f"Uploaded: {success}")
+          print(f"Skipped (already in R2): {skipped}")
+          print(f"Failed: {failed}")
+
+          # Write mapping for DB update step
+          import json
+          with open('url_to_key.json', 'w') as f:
+              json.dump(url_to_key, f)
+          EOF
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-data
+          path: |
+            urls.txt
+            url_to_key.json
+            db_id.txt
