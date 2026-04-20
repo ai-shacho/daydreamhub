@@ -14,7 +14,7 @@ on:
 jobs:
   migrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
 
@@ -112,20 +112,25 @@ jobs:
           BATCH_SIZE: ${{ github.event.inputs.batch_size }}
         run: |
           python3 <<'EOF'
-          import os, boto3, requests
+          import os, boto3, requests, json, threading, time
           from urllib.parse import urlparse
           from botocore.config import Config
+          from concurrent.futures import ThreadPoolExecutor, as_completed
 
           dry_run = os.environ['DRY_RUN'] == 'true'
           batch_size = int(os.environ['BATCH_SIZE'])
           account = os.environ['CF_ACCOUNT_ID']
+
+          # Disable SSL warning noise
+          import urllib3
+          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
           s3 = boto3.client(
               's3',
               endpoint_url=f"https://{account}.r2.cloudflarestorage.com",
               aws_access_key_id=os.environ['R2_ACCESS_KEY_ID'],
               aws_secret_access_key=os.environ['R2_SECRET_ACCESS_KEY'],
-              config=Config(signature_version='s3v4', region_name='auto'),
+              config=Config(signature_version='s3v4', region_name='auto', max_pool_connections=50),
           )
 
           with open('urls.txt') as f:
@@ -145,49 +150,68 @@ jobs:
               print(f"(list_objects_v2 warn: {e})")
           print(f"Existing R2 objects: {len(existing)}")
 
-          success, skipped, failed = 0, 0, 0
           url_to_key = {}
-          for i, url in enumerate(urls, 1):
-              path = urlparse(url).path  # /wp-content/uploads/2025/09/1.jpg
-              key = path.lstrip('/')      # wp-content/uploads/2025/09/1.jpg
+          tasks = []
+          for url in urls:
+              path = urlparse(url).path
+              key = path.lstrip('/')
               url_to_key[url] = key
+              if key not in existing:
+                  tasks.append((url, key))
 
-              if key in existing:
-                  skipped += 1
-                  continue
+          skipped = len(urls) - len(tasks)
+          print(f"To process: {len(tasks)}, skipped: {skipped}")
 
-              if dry_run:
-                  if i <= 3:
-                      print(f"[DRY] {url} -> {key}")
-                  continue
+          if dry_run:
+              for url, key in tasks[:3]:
+                  print(f"[DRY] {url} -> {key}")
+              print(f"\n=== Result (DRY) ===")
+              print(f"Total: {len(urls)}")
+              print(f"Would upload: {len(tasks)}")
+              print(f"Skipped: {skipped}")
+              with open('url_to_key.json', 'w') as f:
+                  json.dump(url_to_key, f)
+              exit(0)
 
+          success = 0
+          failed = 0
+          lock = threading.Lock()
+          start = time.time()
+
+          session = requests.Session()
+          adapter = requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50)
+          session.mount('https://', adapter)
+
+          def process(task):
+              url, key = task
               try:
-                  # Access via IP direct (old server)
-                  r = requests.get(url, headers={'Host': 'daydreamhub.com'},
-                                   timeout=30, allow_redirects=True,
-                                   # Use IP override via custom DNS not trivial — use URL unchanged since we haven't cleaned DNS
-                                   )
-                  # DNS now points to Cloudflare (new site), so we need to fetch via old IP
-                  # Use --resolve equivalent:
-                  raise Exception("direct URL won't reach old server")
-              except Exception:
-                  # Fetch via old IP
-                  try:
-                      old_url = url.replace('https://daydreamhub.com', 'https://192.252.156.122')
-                      r = requests.get(old_url, headers={'Host': 'daydreamhub.com'},
-                                       verify=False, timeout=30)
-                      if r.status_code != 200:
-                          print(f"❌ {r.status_code} {url}")
+                  old_url = url.replace('https://daydreamhub.com', 'https://192.252.156.122')
+                  r = session.get(old_url, headers={'Host': 'daydreamhub.com'},
+                                  verify=False, timeout=30)
+                  if r.status_code != 200:
+                      return (url, False, f"HTTP {r.status_code}")
+                  ctype = r.headers.get('Content-Type', 'application/octet-stream')
+                  s3.put_object(Bucket='daydreamhub-media', Key=key, Body=r.content, ContentType=ctype)
+                  return (url, True, None)
+              except Exception as e:
+                  return (url, False, str(e))
+
+          with ThreadPoolExecutor(max_workers=20) as ex:
+              futures = [ex.submit(process, t) for t in tasks]
+              for fut in as_completed(futures):
+                  url, ok, err = fut.result()
+                  with lock:
+                      if ok:
+                          success += 1
+                          if success % 100 == 0:
+                              elapsed = time.time() - start
+                              rate = success / elapsed if elapsed > 0 else 0
+                              remaining = (len(tasks) - success - failed) / rate if rate > 0 else 0
+                              print(f"Progress: {success}/{len(tasks)} ({rate:.1f}/s, ETA {remaining:.0f}s)")
+                      else:
                           failed += 1
-                          continue
-                      ctype = r.headers.get('Content-Type', 'application/octet-stream')
-                      s3.put_object(Bucket='daydreamhub-media', Key=key, Body=r.content, ContentType=ctype)
-                      success += 1
-                      if success % 50 == 0:
-                          print(f"Progress: {success} uploaded")
-                  except Exception as e:
-                      print(f"❌ {url}: {e}")
-                      failed += 1
+                          if failed <= 10:
+                              print(f"❌ {err}: {url}")
 
           print(f"\n=== Result ===")
           print(f"Total: {len(urls)}")
@@ -195,8 +219,7 @@ jobs:
           print(f"Skipped (already in R2): {skipped}")
           print(f"Failed: {failed}")
 
-          # Write mapping for DB update step
-          import json
+
           with open('url_to_key.json', 'w') as f:
               json.dump(url_to_key, f)
           EOF
