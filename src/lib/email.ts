@@ -650,7 +650,7 @@ export async function sendConciergeDeclineToGuest(
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>
     </table>
     <div style="margin:16px 0;padding:12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:4px">
-      <strong>Refund Notice:</strong> Your $7 service fee will be refunded within a few business days. No action is required on your part.
+      <strong>Refund Notice:</strong> Your $7 service fee will be refunded within 5–10 business days. No action is required on your part.
     </div>
     <p>We're sorry for the inconvenience. Please visit <a href="${SITE_URL}">daydreamhub.com</a> to search for other available hotels.</p>
     <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub AI Concierge - <a href="${SITE_URL}">daydreamhub.com</a></p>
