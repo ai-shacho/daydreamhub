@@ -1351,7 +1351,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         return new Promise(function(resolve, reject) {
           if (window.paypal) { resolve(window.paypal); return; }
           var script = document.createElement('script');
-          script.src = 'https://www.paypal.com/sdk/js?client-id=' + clientId + '&currency=USD&intent=capture';
+          script.src = 'https://www.paypal.com/sdk/js?client-id=' + clientId + '&currency=USD&intent=capture&locale=en_US';
           script.onload = function() { resolve(window.paypal); };
           script.onerror = reject;
           document.head.appendChild(script);
