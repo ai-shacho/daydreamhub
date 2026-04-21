@@ -43,8 +43,8 @@ if (Astro.request.method === 'POST') {
           error = 'Slug already exists. Please use a unique slug.';
         } else {
           const result = await db.prepare(`
-            INSERT INTO blog_posts (title, title_ja, slug, excerpt, city, thumbnail_url, content, content_ja, published_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            INSERT INTO blog_posts (title, title_ja, slug, excerpt, city, thumbnail_url, content, content_ja, published_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `).bind(title, title_ja || null, slug, excerpt || null, city || null, finalThumbnailUrl || null, content || null, content_ja || null, published_at).run();
 
           if (result.meta.last_row_id) {

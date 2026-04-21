@@ -306,15 +306,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const publishedAtValue = published_at === '' || published_at === undefined ? null : published_at;
-  const created_at = new Date().toISOString();
 
   try {
     const result = await db
       .prepare(
-        `INSERT INTO blog_posts (title, title_ja, slug, excerpt, city, thumbnail_url, content, content_ja, published_at, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO blog_posts (title, title_ja, slug, excerpt, city, thumbnail_url, content, content_ja, published_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .bind(title, title_ja || null, slug, excerpt || null, city || null, thumbnail_url || null, content || null, content_ja || null, publishedAtValue, created_at)
+      .bind(title, title_ja || null, slug, excerpt || null, city || null, thumbnail_url || null, content || null, content_ja || null, publishedAtValue)
       .run();
 
     const newId = result.meta.last_row_id;
