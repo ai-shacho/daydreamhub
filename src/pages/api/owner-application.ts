@@ -69,28 +69,36 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   // Save to database
   const db = env?.DB;
-  if (db) {
-    try {
-      await db.prepare(`
-        INSERT INTO owner_applications (
-          hotel_name, booking_email, hotel_phone, management_company, site_url,
-          contact_name, contact_email, contact_phone, contact_method,
-          messenger_url, whatsapp_url, line_url, other_sns_url,
-          payment_method, paypal_account, wise_account, payoneer_account
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        data.hotel_name, data.booking_email, data.hotel_phone,
-        data.management_company || '', data.site_url || '',
-        data.contact_name, data.contact_email, data.contact_phone,
-        data.contact_method || '',
-        data.messenger_url || '', data.whatsapp_url || '',
-        data.line_url || '', data.other_sns_url || '',
-        data.payment_method || '', data.paypal_account || '',
-        data.wise_account || '', data.payoneer_account || ''
-      ).run();
-    } catch (e) {
-      console.error('Failed to save owner application to DB:', e);
-    }
+  if (!db) {
+    return new Response(JSON.stringify({ error: 'DB binding not available', debug: 'env.DB is undefined' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  try {
+    await db.prepare(`
+      INSERT INTO owner_applications (
+        hotel_name, booking_email, hotel_phone, management_company, site_url,
+        contact_name, contact_email, contact_phone, contact_method,
+        messenger_url, whatsapp_url, line_url, other_sns_url,
+        payment_method, paypal_account, wise_account, payoneer_account
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      data.hotel_name, data.booking_email, data.hotel_phone,
+      data.management_company || '', data.site_url || '',
+      data.contact_name, data.contact_email, data.contact_phone,
+      data.contact_method || '',
+      data.messenger_url || '', data.whatsapp_url || '',
+      data.line_url || '', data.other_sns_url || '',
+      data.payment_method || '', data.paypal_account || '',
+      data.wise_account || '', data.payoneer_account || ''
+    ).run();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return new Response(JSON.stringify({ error: 'DB insert failed', details: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   if (!apiKey) {
