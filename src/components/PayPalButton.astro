@@ -49,7 +49,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
   <div>
     <!-- Card form + PayPal button container -->
     <div id="paypal-card-wrapper" class="relative">
-      <div id="paypal-button-container"></div>
+      <div id="paypal-button-container" data-locale={locale}></div>
       <div id="paypal-loading" class="text-center py-4 text-sm text-gray-500">
         Loading payment options...
       </div>
@@ -392,7 +392,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
   } else {
     // PayPal mode
 
-    // locale is injected from server via define:vars
+    const locale = document.getElementById('paypal-button-container')?.dataset?.locale || 'en_US';
 
     // ─── Error type classifier ────────────────────────────────────────────────
     function classifyError(err) {
