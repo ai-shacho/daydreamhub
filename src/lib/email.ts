@@ -619,3 +619,98 @@ export async function sendAltChoiceEmail(
     html,
   });
 }
+
+export async function sendConciergeDeclineToGuest(
+  apiKey: string,
+  data: {
+    guestName: string;
+    guestEmail: string;
+    hotelName: string;
+    date: string;
+    checkIn: string;
+    checkOut: string;
+    guests: number;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = `Your Booking Request at ${data.hotelName} Was Declined - DaydreamHub`;
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+  <div style="background:#dc2626;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:24px">Booking Not Available</h1>
+    <p style="margin:8px 0 0;opacity:0.9">DaydreamHub AI Concierge</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+    <p style="font-size:16px">Hello ${escapeHtml(data.guestName)},</p>
+    <p>Unfortunately, <strong>${escapeHtml(data.hotelName)}</strong> was unable to accommodate your booking request via our AI phone call.</p>
+    <table style="border-collapse:collapse;width:100%;margin:16px 0">
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.date)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-in</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-out</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkOut)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>
+    </table>
+    <div style="margin:16px 0;padding:12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:4px">
+      <strong>Refund Notice:</strong> Your $7 service fee will be refunded within a few business days. No action is required on your part.
+    </div>
+    <p>We're sorry for the inconvenience. Please visit <a href="${SITE_URL}">daydreamhub.com</a> to search for other available hotels.</p>
+    <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub AI Concierge - <a href="${SITE_URL}">daydreamhub.com</a></p>
+  </div>
+</div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.guestEmail,
+    subject,
+    html,
+  });
+}
+
+export async function sendAdminRefundAlert(
+  apiKey: string,
+  data: {
+    adminEmail: string;
+    bookingId: number;
+    guestName: string;
+    guestEmail: string;
+    hotelName: string;
+    date: string;
+    checkIn: string;
+    checkOut: string;
+    guests: number;
+    paypalCaptureId?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = `[Action Required] Refund $7 - Booking #${data.bookingId} Declined by Hotel`;
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+  <div style="background:#92400e;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:22px">[Action Required] Manual Refund Needed</h1>
+    <p style="margin:8px 0 0;opacity:0.9">AI Phone Call - Hotel Declined</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+    <p>The hotel declined the booking via AI phone call. Please process a <strong>$7 refund</strong> manually.</p>
+    <table style="border-collapse:collapse;width:100%;margin:16px 0">
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Booking ID</td><td style="padding:8px 12px;border:1px solid #ddd">#${data.bookingId}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guest</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.guestName)} (${escapeHtml(data.guestEmail)})</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.date)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-in</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-out</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkOut)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>
+      ${data.paypalCaptureId ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">PayPal Capture ID</td><td style="padding:8px 12px;border:1px solid #ddd;font-family:monospace">${escapeHtml(data.paypalCaptureId)}</td></tr>` : ''}
+    </table>
+    <div style="margin:16px 0;padding:12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:4px">
+      <strong>Refund amount: $7.00</strong><br>
+      Guest has already been notified that a refund is being processed.
+    </div>
+    <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub Admin Alert</p>
+  </div>
+</div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.adminEmail,
+    subject,
+    html,
+  });
+}

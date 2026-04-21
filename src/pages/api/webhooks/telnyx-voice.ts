@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
-import { sendConciergeConfirmation } from '../../../lib/email';
-import { autoRefundBooking } from '../../../lib/autoRefund';
+import { sendConciergeConfirmation, sendConciergeDeclineToGuest, sendAdminRefundAlert } from '../../../lib/email';
 
 async function telnyxCmd(apiKey: string, callControlId: string, cmd: string, body: any = {}) {
   const res = await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/${cmd}`, {
@@ -403,9 +402,36 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
               await db.prepare(`UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id=?`)
                 .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
 
-              // Refund $7 and send decline email to guest
-              await autoRefundBooking(env, Number(bookingId), 'ホテルが電話で予約を拒否しました')
-                .catch(e => console.error('[telnyx-voice] refund failed:', e));
+              const resendKey = env?.RESEND_API_KEY;
+              const adminEmail = env?.ADMIN_EMAIL || 'info@daydreamhub.com';
+              if (resendKey) {
+                const bk = await db.prepare(
+                  `SELECT b.guest_name, b.guest_email, b.check_in_date, b.check_in_time, b.check_out_time,
+                          b.adults, b.children, b.paypal_capture_id,
+                          h.name as hotel_name
+                   FROM bookings b LEFT JOIN hotels h ON h.id = b.hotel_id WHERE b.id = ?`
+                ).bind(bookingId).first().catch(() => null);
+
+                if (bk?.guest_email) {
+                  const declineData = {
+                    guestName: bk.guest_name || 'Guest',
+                    guestEmail: bk.guest_email,
+                    hotelName: bk.hotel_name || state.hotel_name || 'Hotel',
+                    date: bk.check_in_date || state.check_in_date || '',
+                    checkIn: bk.check_in_time || state.check_in_time || '',
+                    checkOut: bk.check_out_time || state.check_out_time || '',
+                    guests: (bk.adults || 1) + (bk.children || 0),
+                  };
+                  await sendConciergeDeclineToGuest(resendKey, declineData)
+                    .catch(e => console.error('[telnyx-voice] decline email to guest failed:', e));
+                  await sendAdminRefundAlert(resendKey, {
+                    adminEmail,
+                    bookingId: Number(bookingId),
+                    ...declineData,
+                    paypalCaptureId: bk.paypal_capture_id || undefined,
+                  }).catch(e => console.error('[telnyx-voice] admin refund alert failed:', e));
+                }
+              }
             }
           }
 
