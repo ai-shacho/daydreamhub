@@ -11,6 +11,7 @@ if (!admin) return Astro.redirect("/admin/login");
 
 const url = new URL(Astro.request.url);
 const statusFilter = url.searchParams.get("status") || "";
+const searchQuery = url.searchParams.get("q") || "";
 
 let applications: any[] = [];
 let error = "";
@@ -20,6 +21,11 @@ if (db) {
     let query = `SELECT * FROM owner_applications WHERE 1=1`;
     const binds: any[] = [];
     if (statusFilter) { query += " AND status = ?"; binds.push(statusFilter); }
+    if (searchQuery) {
+      query += " AND (hotel_name LIKE ? OR contact_name LIKE ? OR contact_email LIKE ? OR booking_email LIKE ?)";
+      const like = `%${searchQuery}%`;
+      binds.push(like, like, like, like);
+    }
     query += " ORDER BY created_at DESC LIMIT 200";
     const result = await db.prepare(query).bind(...binds).all();
     applications = result?.results || [];
@@ -41,7 +47,17 @@ const statusColors: Record<string, string> = {
 
   <!-- Filter -->
   <div class="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-    <form method="get" class="flex items-end gap-4">
+    <form method="get" class="flex flex-wrap items-end gap-3">
+      <div class="flex-1 min-w-48">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+        <input
+          type="text"
+          name="q"
+          value={searchQuery}
+          placeholder="Hotel name, email, contact..."
+          class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+        />
+      </div>
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
         <select name="status" class="px-3 py-2 border border-slate-200 rounded-lg text-sm">
@@ -52,7 +68,7 @@ const statusColors: Record<string, string> = {
           <option value="rejected" selected={statusFilter === "rejected"}>Rejected</option>
         </select>
       </div>
-      <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">Filter</button>
+      <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">Search</button>
       <a href="/admin/owner-applications" class="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50">Reset</a>
     </form>
   </div>
