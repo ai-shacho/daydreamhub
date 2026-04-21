@@ -1146,22 +1146,39 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
           '</button>';
       }).join('');
 
-      // 外部ホテル: Call to Book ボタン（$7）
-      var callBtns = externalHotels.map(function(h) {
-        var safePhone = h.phone.replace(/'/g, '');
-        var safeName = h.name.replace(/'/g, '').slice(0, 40);
-        return '<button onclick="window._heroCallBook(\'' + safeName + '\',\'' + safePhone + '\', this)" ' +
-          'class="flex items-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">' +
-          '📞 Call to Book (+$7) — ' + h.name.slice(0, 28) +
-          '</button>';
-      }).join('');
+      // 外部ホテル: 複数選択チェックボックス + まとめて電話ボタン（最大3件、合計$7）
+      var callBtns = '';
+      if (externalHotels.length > 0) {
+        var top3 = externalHotels.slice(0, 3);
+        window._heroExternalHotels = top3; // 後で _heroCallBook が参照
+        var items = top3.map(function(h, i) {
+          var safeName = (h.name || '').replace(/"/g, '&quot;').slice(0, 60);
+          var safePhone = (h.phone || '').replace(/"/g, '');
+          return '<label class="flex items-start gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition-colors">' +
+            '<input type="checkbox" class="hero-ext-hotel-cb mt-0.5 accent-amber-400" data-name="' + safeName + '" data-phone="' + safePhone + '" checked />' +
+            '<span class="flex-1 text-xs text-white/90">' +
+              '<span class="font-semibold block">' + safeName + '</span>' +
+              '<span class="text-white/50 text-[11px]">' + safePhone + '</span>' +
+            '</span>' +
+          '</label>';
+        }).join('');
+        callBtns =
+          '<div class="mt-2 space-y-1.5">' +
+            '<p class="text-[11px] text-white/60 mb-1">📞 AI calls up to 3 hotels for you — <strong class="text-amber-300">$7 total</strong> (refund if none available)</p>' +
+            items +
+            '<button onclick="window._heroCallBook(this)" class="mt-1 w-full flex items-center justify-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">' +
+              '📞 Call selected hotels ($7)' +
+            '</button>' +
+          '</div>';
+      }
 
-      var allBtns = bookBtns + callBtns;
+      var allBtns = bookBtns ? '<div class="flex flex-wrap gap-2 mt-2.5">' + bookBtns + '</div>' : '';
+      allBtns += callBtns;
       wrap.innerHTML =
         '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
         '<div class="bg-white/20 text-white rounded-xl rounded-tl-none px-3 py-2.5 text-sm max-w-[85%] shadow border border-white/10">' +
           '<div class="whitespace-pre-wrap leading-relaxed">' + renderMsgContent(text) + '</div>' +
-          (allBtns ? '<div class="flex flex-wrap gap-2 mt-2.5">' + allBtns + '</div>' : '') +
+          allBtns +
         '</div>';
     } else {
       wrap.innerHTML =
@@ -1223,8 +1240,20 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     }, 5000); // 5秒ごとにポーリング
   };
 
-  // ===== External Hotel Call Booking Flow ($7) =====
-  window._heroCallBook = async function(hotelName, hotelPhone, btn) {
+  // ===== External Hotel Call Booking Flow ($7 for up to 3 hotels) =====
+  window._heroCallBook = async function(btn) {
+    // チェックボックスから選択中のホテルを収集
+    var container = btn.parentElement;
+    var checkboxes = container.querySelectorAll('.hero-ext-hotel-cb:checked');
+    if (checkboxes.length === 0) {
+      alert('Please select at least one hotel.');
+      return;
+    }
+    var selected = Array.prototype.map.call(checkboxes, function(cb) {
+      return { name: cb.getAttribute('data-name'), phone: cb.getAttribute('data-phone') };
+    }).slice(0, 3);
+    window._heroSelectedHotels = selected;
+
     btn.disabled = true;
     btn.textContent = 'Loading...';
 
@@ -1232,15 +1261,15 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     var messagesEl = document.getElementById('hero-chat-messages');
     var formDiv = document.createElement('div');
     formDiv.className = 'flex gap-2';
-    // 今日の日付をデフォルト値に
-    var today = new Date().toISOString().split('T')[0];
-    var safeName = hotelName.replace(/'/g, '&#39;');
-    var safePhone = hotelPhone.replace(/'/g, '');
+    var hotelListHtml = selected.map(function(h, i) {
+      return '<li class="text-white/80"><span class="text-amber-300 font-bold">' + (i+1) + '.</span> ' + h.name + '</li>';
+    }).join('');
     formDiv.innerHTML =
       '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
       '<div class="bg-gray-900/80 border border-white/20 text-white rounded-xl rounded-tl-none px-4 py-3 text-sm max-w-[92%] w-full" id="call-booking-form">' +
-        '<p class="font-bold text-sm mb-0.5">📞 AI Phone Booking — <span class="text-amber-300">' + safeName + '</span></p>' +
-        '<p class="text-white/60 text-xs mb-2">AI calls the hotel for you. Fee: <strong class="text-amber-400">$7</strong> (refund if unavailable)</p>' +
+        '<p class="font-bold text-sm mb-0.5">📞 AI Phone Booking — <span class="text-amber-300">' + selected.length + ' hotel' + (selected.length > 1 ? 's' : '') + '</span></p>' +
+        '<ul class="text-xs mb-2 space-y-0.5 pl-1">' + hotelListHtml + '</ul>' +
+        '<p class="text-white/60 text-xs mb-2">AI calls these hotels in order until one confirms. Fee: <strong class="text-amber-400">$7 total</strong> (refund if none available)</p>' +
         '<div class="space-y-1.5">' +
           '<div class="grid grid-cols-2 gap-2">' +
             '<div>' +
@@ -1271,7 +1300,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
             '</div>' +
           '</div>' +
         '</div>' +
-        '<button onclick="window._heroSubmitCallBook(\'' + safeName + '\',\'' + safePhone + '\')" ' +
+        '<button onclick="window._heroSubmitCallBook()" ' +
           'class="mt-2 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5">' +
           '💳 Pay $7 via PayPal → AI Booking' +
         '</button>' +
@@ -1280,7 +1309,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       '</div>';
     messagesEl.appendChild(formDiv);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-    btn.textContent = '📞 Call to Book (+$7)';
+    btn.textContent = '📞 Call selected hotels ($7)';
     btn.disabled = false;
     // Init flatpickr for call-checkin-date (English locale)
     if (window.flatpickr) {
@@ -1292,7 +1321,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     }
   };
 
-  window._heroSubmitCallBook = async function(hotelName, hotelPhone) {
+  window._heroSubmitCallBook = async function() {
     var name = document.getElementById('call-guest-name')?.value?.trim();
     var email = document.getElementById('call-guest-email')?.value?.trim();
     var date = document.getElementById('call-checkin-date')?.value;
@@ -1300,6 +1329,11 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     var checkoutTime = document.getElementById('call-checkout-time')?.value || '18:00';
     if (!name || !email || !date) {
       alert('Please fill in name, email, and date');
+      return;
+    }
+    var selectedHotels = window._heroSelectedHotels || [];
+    if (selectedHotels.length === 0) {
+      alert('No hotels selected.');
       return;
     }
     var submitBtn = event?.target;
@@ -1317,7 +1351,9 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
           message: '__create_call_group_direct',
           locale: document.documentElement.lang || 'en',
           _call_group: {
-            hotels: [{ hotel_name: hotelName, hotel_phone: hotelPhone, hotel_source: 'external' }],
+            hotels: selectedHotels.map(function(h) {
+              return { hotel_name: h.name, hotel_phone: h.phone, hotel_source: 'external' };
+            }),
             guest_name: name, guest_email: email, check_in_date: date,
             check_in_time: checkinTime, check_out_time: checkoutTime
           }
@@ -1408,7 +1444,13 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
               })
             });
             var callData = await callRes.json();
-            addMsg('✅ Payment confirmed! Our AI is now calling **' + hotelName + '**.\n\n👤 ' + name + '\n📅 ' + date + ' ' + checkinTime + '–' + checkoutTime, 'assistant');
+            var hotelListText = selectedHotels.map(function(h, i){ return (i+1) + '. ' + h.name; }).join('\n');
+            addMsg('✅ Payment confirmed! Our AI will call the following hotel' + (selectedHotels.length > 1 ? 's in order' : '') + ':\n\n' + hotelListText + '\n\n👤 ' + name + '\n📅 ' + date + ' ' + checkinTime + '–' + checkoutTime, 'assistant');
+            // 発信開始 → 1件目の通話状態ポーリングを開始
+            var firstCallId = callData?.metadata?.call_id;
+            if (firstCallId) {
+              window._startCallPolling(firstCallId, sessionId, document.documentElement.lang || 'en');
+            }
           } else {
             paypalContainer.innerHTML = '';
             addMsg('❌ Payment failed. Please try again.', 'assistant');

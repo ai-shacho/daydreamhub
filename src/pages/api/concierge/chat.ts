@@ -634,7 +634,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       };
       const group = await createCallGroup(env, {
         session_id,
-        hotels: callGroupData.hotels,
+        hotels: callGroupData.hotels.slice(0, 3),
         request_details: requestDetails,
       });
       if (!group?.group_id) {
