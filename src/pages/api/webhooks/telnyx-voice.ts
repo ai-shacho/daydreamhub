@@ -176,10 +176,13 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         timeout_millis: isPriceStep ? 20000 : 15000,
         speech_timeout: 'auto',
         speech_end_timeout: 2000,
-        input: ['speech', 'dtmf'],
+        input: ['dtmf', 'speech'],
+        language: 'en-US',
+        profanity_filter: false,
         client_state: encodeState({ ...state, booking_id: bookingId, call_log_id: logId }),
       };
       if (isPriceStep) gatherParams.terminating_digit = '#';
+      console.log(`[telnyx-voice] gather sent: step=${state.step} isPriceStep=${isPriceStep}`);
       await telnyxCmd(apiKey, callControlId, 'gather', gatherParams);
       break;
     }
@@ -200,8 +203,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         if (answer === 'repeat') {
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
           const guests = state.guests || 1;
+          const checkInTime = state.check_in_time || null;
+          const checkOutTime = state.check_out_time || null;
+          const timeInfo = checkInTime && checkOutTime ? ` from ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
           await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: `We have a guest looking to book a day-use stay on ${checkIn}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`,
+            payload: `We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`,
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, step: 'ask_dayuse' }),
           });
@@ -270,8 +276,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         if (digits === '3') {
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
+          const checkInTimeR = state.check_in_time || null;
+          const checkOutTimeR = state.check_out_time || null;
+          const timeInfoR = checkInTimeR && checkOutTimeR ? ` from ${toAmPm(checkInTimeR)} to ${toAmPm(checkOutTimeR)}` : '';
           await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: `What is the rate for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`,
+            payload: `What is the rate for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`,
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, step: 'ask_price' }),
           });
