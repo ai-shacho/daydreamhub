@@ -427,7 +427,7 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
                 </p>
               </div>
             </div>
-            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} testMode={isTestMode} hotelSlug={plan.hotel_slug} />
+            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} testMode={isTestMode} hotelSlug={plan.hotel_slug} locale="en_US" />
           </div>
         </div>
       </div>

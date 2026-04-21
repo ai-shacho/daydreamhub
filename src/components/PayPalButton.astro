@@ -5,9 +5,10 @@ interface Props {
   clientId: string;
   testMode?: boolean;
   hotelSlug?: string;
+  locale?: string;
 }
 
-const { planId, priceUsd, clientId, testMode = false, hotelSlug = '' } = Astro.props;
+const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = 'en_US' } = Astro.props;
 const usePayPal = !testMode && clientId && clientId !== 'sandbox' && clientId.length > 10;
 // Evaluated at build/SSR time — becomes `false` in production bundle
 const isDev = import.meta.env.DEV;
@@ -116,7 +117,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
 </div>
 
-<script define:vars={{ planId, priceUsd, clientId, usePayPal, testMode, isDev, isTestHotel }}>
+<script define:vars={{ planId, priceUsd, clientId, usePayPal, testMode, isDev, isTestHotel, locale }}>
   function init() {
   // ─── i18n messages (shared across all payment modes) ─────────────────────
   const POPUP_MESSAGES = {
@@ -391,7 +392,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
   } else {
     // PayPal mode
 
-    const locale = isJapanese ? 'ja_JP' : 'en_US';
+    // locale is injected from server via define:vars
 
     // ─── Error type classifier ────────────────────────────────────────────────
     function classifyError(err) {

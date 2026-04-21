@@ -414,7 +414,7 @@ const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_
               </div>
             </div>
             <!-- PayPal ボタン -->
-            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} testMode={isTestMode} hotelSlug={plan.hotel_slug} />
+            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} testMode={isTestMode} hotelSlug={plan.hotel_slug} locale="ja_JP" />
           </div>
         </div>
       </div>
