@@ -495,20 +495,26 @@
   <h3>4.7 問い合わせ管理</h3>
   <p>コンタクトフォームからの問い合わせを一覧で確認・対応。</p>
 
-  <h3>4.8 コンシェルジュ管理</h3>
+  <h3>4.8 コンシェルジュ・通話管理</h3>
   <ul>
-    <li>AIチャットセッションのモニタリング</li>
-    <li>通話ログの全体閲覧</li>
-    <li>Telnyx電話サービスの設定・診断</li>
+    <li>AIチャットセッションのモニタリング（/admin/concierge）</li>
+    <li>コンシェルジュ会話ログの全文閲覧（/admin/chat）</li>
+    <li>自動電話の全履歴閲覧（/admin/call-logs）</li>
+    <li>Telnyx電話サービスの設定・診断（/admin/telnyx）</li>
   </ul>
 
-  <h3>4.9 SQLコンソール</h3>
-  <p>D1データベースに直接SQLを実行できる管理者専用ツール。</p>
+  <h3>4.9 メッセージ管理</h3>
+  <p>予約に紐づく全メール送受信履歴を閲覧できます（/admin/messages）。方向（送信/受信）・ステータス・ホテルでフィルタリング可能。</p>
 
-  <h3>4.10 都市管理・アウトリーチ</h3>
+  <h3>4.10 SQLコンソール</h3>
+  <p>D1データベースに直接SQLを実行できる管理者専用ツール（/admin/sql）。SELECT/INSERT/UPDATE/DELETE すべて対応。</p>
+
+  <h3>4.11 都市・iCal・アウトリーチ管理</h3>
   <ul>
-    <li>都市情報のカテゴリー管理</li>
-    <li>営業メールのキャンペーン管理</li>
+    <li><strong>都市管理（/admin/cities）:</strong> 都市情報・カテゴリーの管理</li>
+    <li><strong>iCal管理（/admin/ical）:</strong> iCalendar連携の設定・管理</li>
+    <li><strong>アウトリーチ（/admin/outreach）:</strong> 営業メールキャンペーンの作成・送信管理</li>
+    <li><strong>編集リクエスト（/admin/edit-requests）:</strong> オーナーから申請されたホテル情報の変更を審査・承認</li>
   </ul>
 </section>
 
@@ -707,36 +713,45 @@
   <h3>オーナーパネル</h3>
   <table>
     <tr><th>ページ</th><th>パス</th><th>機能</th></tr>
-    <tr><td>ダッシュボード</td><td>/owner</td><td>KPI・クイックアクション</td></tr>
-    <tr><td>予約管理</td><td>/owner/bookings</td><td>承認/拒否・フィルタリング</td></tr>
+    <tr><td>ダッシュボード</td><td>/owner</td><td>KPI・クイックアクション・直近予約</td></tr>
+    <tr><td>予約管理</td><td>/owner/bookings</td><td>承認/拒否・フィルタリング・CSV出力</td></tr>
     <tr><td>カレンダー</td><td>/owner/calendar</td><td>空室管理・日付ブロック</td></tr>
     <tr><td>マイホテル</td><td>/owner/hotels</td><td>物件一覧・新規追加</td></tr>
-    <tr><td>ホテル編集</td><td>/owner/hotels/[id]</td><td>情報編集・プラン管理</td></tr>
+    <tr><td>ホテル編集</td><td>/owner/hotels/[id]</td><td>情報編集・プラン管理・ギャラリー</td></tr>
     <tr><td>レビュー</td><td>/owner/reviews</td><td>レビュー閲覧・返信</td></tr>
     <tr><td>レポート</td><td>/owner/reports</td><td>売上分析・CSV出力</td></tr>
-    <tr><td>メッセージ</td><td>/owner/messages</td><td>ゲストとの連絡</td></tr>
-    <tr><td>スタッフ</td><td>/owner/staff</td><td>チームメンバー管理</td></tr>
-    <tr><td>通知設定</td><td>/owner/notifications</td><td>メール・電話通知設定</td></tr>
+    <tr><td>メッセージ</td><td>/owner/messages</td><td>ゲストとの予約関連連絡</td></tr>
+    <tr><td>スタッフ</td><td>/owner/staff</td><td>チームメンバー招待・権限管理</td></tr>
+    <tr><td>通知設定</td><td>/owner/notifications</td><td>メール・電話通知のON/OFF設定</td></tr>
     <tr><td>通話ログ</td><td>/owner/call-logs</td><td>自動電話履歴</td></tr>
-    <tr><td>設定</td><td>/owner/settings</td><td>プロフィール・パスワード</td></tr>
-    <tr><td>マニュアル</td><td>/owner/manual</td><td>操作ガイド</td></tr>
+    <tr><td>編集リクエスト</td><td>/owner/edit-requests</td><td>ホテル情報変更申請の履歴</td></tr>
+    <tr><td>設定</td><td>/owner/settings</td><td>プロフィール・パスワード変更</td></tr>
+    <tr><td>マニュアル</td><td>/owner/manual</td><td>オーナー向け操作ガイド</td></tr>
   </table>
 
   <h3>管理者パネル</h3>
   <table>
     <tr><th>ページ</th><th>パス</th><th>機能</th></tr>
-    <tr><td>ダッシュボード</td><td>/admin</td><td>システム概要</td></tr>
-    <tr><td>ホテル管理</td><td>/admin/hotels</td><td>全ホテル管理・オーナー紐付け</td></tr>
-    <tr><td>ユーザー管理</td><td>/admin/users</td><td>アカウント作成・編集</td></tr>
+    <tr><td>ダッシュボード</td><td>/admin</td><td>システム概要・KPI</td></tr>
+    <tr><td>ホテル管理</td><td>/admin/hotels</td><td>全ホテル管理・オーナー紐付け・新規作成</td></tr>
+    <tr><td>ユーザー管理</td><td>/admin/users</td><td>アカウント作成・編集・削除</td></tr>
     <tr><td>予約管理</td><td>/admin/bookings</td><td>全予約の閲覧・管理</td></tr>
-    <tr><td>ブログ</td><td>/admin/blog</td><td>記事の作成・編集</td></tr>
+    <tr><td>ブログ</td><td>/admin/blog</td><td>旅行記事の作成・編集（EN/JA）</td></tr>
     <tr><td>ニュース</td><td>/admin/news</td><td>お知らせ管理</td></tr>
-    <tr><td>レビュー</td><td>/admin/reviews</td><td>レビューモデレーション</td></tr>
+    <tr><td>レビュー</td><td>/admin/reviews</td><td>レビューモデレーション（承認/非承認）</td></tr>
     <tr><td>クーポン</td><td>/admin/coupons</td><td>割引クーポン管理</td></tr>
-    <tr><td>オーナー申請</td><td>/admin/owner-applications</td><td>申請の審査</td></tr>
+    <tr><td>オーナー申請</td><td>/admin/owner-applications</td><td>申請の審査・承認/拒否</td></tr>
     <tr><td>問い合わせ</td><td>/admin/contact-inquiries</td><td>問い合わせ対応</td></tr>
-    <tr><td>コンシェルジュ</td><td>/admin/concierge</td><td>AIチャット監視</td></tr>
-    <tr><td>SQLコンソール</td><td>/admin/sql</td><td>D1直接操作</td></tr>
+    <tr><td>メッセージ</td><td>/admin/messages</td><td>予約関連メール送受信履歴</td></tr>
+    <tr><td>コンシェルジュ</td><td>/admin/concierge</td><td>AIチャットセッション監視</td></tr>
+    <tr><td>チャット</td><td>/admin/chat</td><td>コンシェルジュ会話ログ閲覧</td></tr>
+    <tr><td>通話ログ</td><td>/admin/call-logs</td><td>自動電話の全履歴閲覧</td></tr>
+    <tr><td>Telnyx</td><td>/admin/telnyx</td><td>電話サービスの設定・診断</td></tr>
+    <tr><td>都市管理</td><td>/admin/cities</td><td>都市情報・カテゴリー管理</td></tr>
+    <tr><td>iCal管理</td><td>/admin/ical</td><td>iCalendar連携の管理</td></tr>
+    <tr><td>アウトリーチ</td><td>/admin/outreach</td><td>営業メールキャンペーン管理</td></tr>
+    <tr><td>編集リクエスト</td><td>/admin/edit-requests</td><td>オーナーからの情報変更申請管理</td></tr>
+    <tr><td>SQLコンソール</td><td>/admin/sql</td><td>D1データベース直接操作</td></tr>
   </table>
 </section>
 

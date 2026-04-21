@@ -481,16 +481,56 @@ const chapters = [
           <h2 class="text-xl font-bold text-slate-900">Staff Management</h2>
         </div>
         <div class="p-8">
-          <p class="text-slate-600 text-sm mb-5">Invite team members to help manage your properties. Staff can access the Owner Panel with limited permissions.</p>
+          <p class="text-slate-600 text-sm mb-5">Invite team members to help manage your properties. You can assign two permission levels depending on what each person needs to do.</p>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Permission Levels</h3>
+          <div class="overflow-hidden rounded-xl border border-slate-200 mb-6">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-indigo-600 text-white text-left"><th class="px-4 py-3 font-semibold">Feature</th><th class="px-4 py-3 font-semibold text-center">Co-owner</th><th class="px-4 py-3 font-semibold text-center">Booking Manager</th></tr></thead>
+              <tbody>
+                {[
+                  ['Approve / Reject Bookings', true, true],
+                  ['Calendar Management', true, true],
+                  ['Reply to Reviews', true, true],
+                  ['Messages', true, true],
+                  ['Edit Hotel Info & Plans', true, false],
+                  ['Sales Reports', true, false],
+                  ['Invite / Remove Staff', true, false],
+                ].map(([feature, co, bm]) => (
+                  <tr class="border-t border-slate-100 even:bg-slate-50">
+                    <td class="px-4 py-3 text-slate-700">{feature}</td>
+                    <td class="px-4 py-3 text-center">{co ? <span class="text-emerald-600 font-bold">✓</span> : <span class="text-slate-300">✕</span>}</td>
+                    <td class="px-4 py-3 text-center">{bm ? <span class="text-emerald-600 font-bold">✓</span> : <span class="text-slate-300">✕</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Inviting Staff</h3>
           <ol class="space-y-3 mb-5">
-            {['Click Staff in the left sidebar.','Fill in the Name and Email fields in the Invite form.','Select which hotel to assign them to.','Click Invite Staff.'].map((step, i) => (
+            {[
+              'Click Staff in the left sidebar.',
+              'Enter the staff member\'s Name and Email address.',
+              'Select the permission level: Co-owner or Booking Manager.',
+              'Check the hotels to assign them to (check "All Hotels" to select all at once).',
+              'Click Invite Staff — an invitation email is sent automatically.',
+            ].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>
               </li>
             ))}
           </ol>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mb-5 text-sm">
+            <span class="text-xl">✉️</span>
+            <div>The invited person receives an email with subject <strong>"You're invited to DaydreamHub Owner Portal"</strong>. They click the link to set their password and activate their account. The link is valid for <strong>7 days</strong>.</div>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+            <span class="text-xl">💡</span>
+            <div>If the invited person already has a DayDreamHub account, no email is sent — they can log in with their existing password right away.</div>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-4">Removing Staff</h3>
           <ol class="space-y-3 mb-4">
             {['Find the staff member in the table.','Click Remove in the Actions column.','Confirm the removal in the dialog.'].map((step, i) => (
@@ -500,9 +540,9 @@ const chapters = [
               </li>
             ))}
           </ol>
-          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 text-sm">
-            <span class="text-xl">💡</span>
-            <div>Staff members cannot access the Staff management page or invite other staff. Only hotel owners can manage team members.</div>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 text-sm">
+            <span class="text-xl">⚠️</span>
+            <div>Only owners and co-owners can manage staff. Booking Managers cannot access the Staff page or invite others.</div>
           </div>
         </div>
       </section>
