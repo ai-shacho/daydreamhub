@@ -117,9 +117,16 @@ const roleColors: Record<string, string> = {
               <td class="px-4 py-3 font-medium text-slate-900">{u.name || "-"}</td>
               <td class="px-4 py-3 text-slate-600">{u.email || "-"}</td>
               <td class="px-4 py-3 text-center">
-                <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${roleColors[u.role] || "bg-slate-100 text-slate-600"}`}>
-                  {u.role}
-                </span>
+                <select
+                  class={`role-select inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer border-0 outline-none ${roleColors[u.role] || "bg-slate-100 text-slate-600"}`}
+                  data-id={u.id}
+                  data-original={u.role}
+                >
+                  <option value="user" selected={u.role === 'user'}>user</option>
+                  <option value="owner" selected={u.role === 'owner'}>owner</option>
+                  <option value="staff" selected={u.role === 'staff'}>staff</option>
+                  <option value="inactive" selected={u.role === 'inactive'}>inactive</option>
+                </select>
               </td>
               <td class="px-4 py-3 text-slate-500 text-xs">{u.created_at?.slice(0, 16) || "-"}</td>
               <td class="px-4 py-3 text-center">
@@ -290,6 +297,45 @@ const roleColors: Record<string, string> = {
         if (res.ok) { location.reload(); }
         else { const d = await res.json(); alert('Failed: ' + (d.error || 'Unknown error')); }
       } catch { alert('Network error'); }
+    });
+  });
+
+  const roleColors: Record<string, string> = {
+    user: 'bg-slate-100 text-slate-600',
+    admin: 'bg-purple-100 text-purple-700',
+    owner: 'bg-teal-100 text-teal-700',
+    staff: 'bg-blue-100 text-blue-700',
+    inactive: 'bg-red-50 text-red-500',
+  };
+
+  document.querySelectorAll('.role-select').forEach((sel) => {
+    sel.addEventListener('change', async (e) => {
+      const select = e.target as HTMLSelectElement;
+      const id = select.getAttribute('data-id');
+      const original = select.getAttribute('data-original') || '';
+      const newRole = select.value;
+      if (!confirm(`Change role from "${original}" to "${newRole}"?`)) {
+        select.value = original;
+        return;
+      }
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, role: newRole }),
+        });
+        if (res.ok) {
+          select.setAttribute('data-original', newRole);
+          select.className = `role-select inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer border-0 outline-none ${roleColors[newRole] || 'bg-slate-100 text-slate-600'}`;
+        } else {
+          const d = await res.json();
+          alert('Failed: ' + (d.error || 'Unknown error'));
+          select.value = original;
+        }
+      } catch {
+        alert('Network error');
+        select.value = original;
+      }
     });
   });
 
