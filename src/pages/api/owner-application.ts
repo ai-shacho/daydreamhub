@@ -93,6 +93,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
       data.payment_method || '', data.paypal_account || '',
       data.wise_account || '', data.payoneer_account || ''
     ).run();
+
+    // Register as inactive hotel
+    const baseSlug = data.hotel_name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const uniqueSlug = `${baseSlug}-${Date.now()}`;
+    await db.prepare(`
+      INSERT INTO hotels (name, slug, city, country, email, phone, is_active, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'))
+    `).bind(
+      data.hotel_name,
+      uniqueSlug,
+      data.city || '',
+      data.country || '',
+      data.booking_email || '',
+      data.hotel_phone || ''
+    ).run();
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return new Response(JSON.stringify({ error: 'DB insert failed', details: message }), {
