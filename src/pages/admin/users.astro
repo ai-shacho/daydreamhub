@@ -314,10 +314,6 @@ const roleColors: Record<string, string> = {
       const id = select.getAttribute('data-id');
       const original = select.getAttribute('data-original') || '';
       const newRole = select.value;
-      if (!confirm(`Change role from "${original}" to "${newRole}"?`)) {
-        select.value = original;
-        return;
-      }
       try {
         const res = await fetch('/api/admin/users', {
           method: 'PUT',
