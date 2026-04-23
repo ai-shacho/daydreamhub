@@ -255,30 +255,26 @@ import Layout from '../layouts/Layout.astro';
               <option value="VCC">VCC (Virtual Credit Card)</option>
             </select>
           </div>
-          <div id="payment-account-fields" class="space-y-4">
-            <div>
-              <label for="paypal_account" class="block text-sm font-medium text-slate-700 mb-1.5">PayPal Account</label>
-              <input id="paypal_account" name="paypal_account" type="text" placeholder="PayPal email or account ID"
-                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
-            </div>
-            <div>
-              <label for="wise_account" class="block text-sm font-medium text-slate-700 mb-1.5">Wise Account</label>
-              <input id="wise_account" name="wise_account" type="text" placeholder="Wise email or account details"
-                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
-            </div>
-            <div>
-              <label for="payoneer_account" class="block text-sm font-medium text-slate-700 mb-1.5">Payoneer Account</label>
-              <input id="payoneer_account" name="payoneer_account" type="text" placeholder="Payoneer email or account details"
-                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
-            </div>
-            <div id="bank-account-field" class="hidden">
-              <label for="bank_account" class="block text-sm font-medium text-slate-700 mb-1.5">Bank Account Details</label>
-              <textarea id="bank_account" name="bank_account" rows="3" placeholder="Bank name, account number, SWIFT/BIC, etc."
-                class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all resize-none"></textarea>
-            </div>
+          <div id="paypal-field" class="hidden">
+            <label for="paypal_account" class="block text-sm font-medium text-slate-700 mb-1.5">PayPal Account</label>
+            <input id="paypal_account" name="paypal_account" type="text" placeholder="PayPal email or account ID"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
           </div>
-          <div id="bank-notice" class="hidden bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-lg px-4 py-3">
-            ℹ️ If the amount to be paid via bank transfer is less than USD 100, payment will be accumulated and processed once the total amount exceeds USD 100, with transfer fees covered by DayDreamHub. However, if the Owner agrees to bear the transfer fees, payment may be processed even if the amount is less than USD 100.
+          <div id="wise-field" class="hidden">
+            <label for="wise_account" class="block text-sm font-medium text-slate-700 mb-1.5">Wise Account</label>
+            <input id="wise_account" name="wise_account" type="text" placeholder="Wise email or account details"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div id="payoneer-field" class="hidden">
+            <label for="payoneer_account" class="block text-sm font-medium text-slate-700 mb-1.5">Payoneer Account</label>
+            <input id="payoneer_account" name="payoneer_account" type="text" placeholder="Payoneer email or account details"
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all" />
+          </div>
+          <div id="bank-field" class="hidden">
+            <label for="bank_account" class="block text-sm font-medium text-slate-700 mb-1.5">Bank Account Details</label>
+            <textarea id="bank_account" name="bank_account" rows="3" placeholder="Bank name, account number, SWIFT/BIC, etc."
+              class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-teal-400 focus:border-transparent outline-none transition-all resize-none"></textarea>
+            <p class="mt-2 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">ℹ️ If the amount to be paid via bank transfer is less than USD 100, payment will be accumulated and processed once the total amount exceeds USD 100, with transfer fees covered by DayDreamHub. However, if the Owner agrees to bear the transfer fees, payment may be processed even if the amount is less than USD 100.</p>
           </div>
           <div id="vcc-notice" class="hidden bg-teal-50 border border-teal-200 text-teal-700 text-sm rounded-lg px-4 py-3">
             ✅ VCC (Virtual Credit Card) selected. Once you approve the booking request, we will provide you with the VCC details to process the payment.
@@ -340,16 +336,12 @@ setupPhoneCodeOther('contact_phone_code', 'contact_phone_code_manual');
 
 // Payment method toggle
 document.getElementById('payment_method')?.addEventListener('change', function () {
-  const isVCC = this.value === 'VCC';
-  const isBank = this.value === 'Bank Transfer';
-  document.getElementById('payment-account-fields').style.display = isVCC ? 'none' : '';
-  document.getElementById('bank-account-field').className = isBank
-    ? 'block'
-    : 'hidden';
-  document.getElementById('bank-notice').className = isBank
-    ? 'block bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-lg px-4 py-3'
-    : 'hidden bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-lg px-4 py-3';
-  document.getElementById('vcc-notice').className = isVCC
+  const v = this.value;
+  document.getElementById('paypal-field').className = v === 'PayPal' ? 'block' : 'hidden';
+  document.getElementById('wise-field').className = v === 'Wise' ? 'block' : 'hidden';
+  document.getElementById('payoneer-field').className = v === 'Payoneer' ? 'block' : 'hidden';
+  document.getElementById('bank-field').className = v === 'Bank Transfer' ? 'block' : 'hidden';
+  document.getElementById('vcc-notice').className = v === 'VCC'
     ? 'block bg-teal-50 border border-teal-200 text-teal-700 text-sm rounded-lg px-4 py-3'
     : 'hidden bg-teal-50 border border-teal-200 text-teal-700 text-sm rounded-lg px-4 py-3';
 });
