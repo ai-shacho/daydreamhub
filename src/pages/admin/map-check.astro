@@ -11,7 +11,15 @@ if (!admin) return Astro.redirect('/admin/login');
 
 let hotels: any[] = [];
 if (db) {
-  const result = await db.prepare("SELECT id, name, city, country, latitude, longitude FROM hotels WHERE is_active = 1 AND name NOT LIKE '%Test%' AND name NOT LIKE '%test%' ORDER BY name").all();
+  const result = await db.prepare(`
+    SELECT h.id, h.name, h.city, h.country, h.latitude, h.longitude,
+           h.email as hotel_email,
+           u.name as owner_name, u.email as owner_email
+    FROM hotels h
+    LEFT JOIN users u ON u.email = h.email AND u.role IN ('owner', 'inactive')
+    WHERE h.is_active = 1 AND h.name NOT LIKE '%Test%' AND h.name NOT LIKE '%test%'
+    ORDER BY h.name
+  `).all();
   hotels = result?.results || [];
 }
 ---
@@ -268,10 +276,12 @@ if (db) {
 
   document.getElementById('export-btn').addEventListener('click', () => {
     const rows = [
-      ['ID', 'Hotel Name', 'Status', 'DB Lat', 'DB Lng', 'Google Lat', 'Google Lng', 'Google Address', 'Distance (m)', 'Google Maps Link', 'Google Maps Detail Page', 'Note'],
+      ['ID', 'Hotel Name', 'Owner Name', 'Owner Email', 'Status', 'DB Lat', 'DB Lng', 'Google Lat', 'Google Lng', 'Google Address', 'Distance (m)', 'Google Maps Link', 'Google Maps Detail Page', 'Note'],
       ...problems.map(r => [
         r.id,
         csvEscape(r.name),
+        csvEscape(r.owner_name ?? ''),
+        csvEscape(r.owner_email ?? ''),
         r.status,
         r.db_lat ?? '',
         r.db_lng ?? '',
@@ -333,14 +343,19 @@ if (db) {
       detail = `<div class="mt-2 text-xs text-purple-700">Skipped — ${field}. Check manually.</div>`;
     }
 
+    const ownerHtml = data.owner_name
+      ? `<span class="text-xs text-slate-500">Owner: ${data.owner_name} (${data.owner_email})</span>`
+      : `<span class="text-xs text-slate-400">No owner assigned</span>`;
+
     el.innerHTML = `
       <div class="border rounded-lg p-4 ${colors}">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             ${badgeHtml}
             <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="font-medium text-slate-800 hover:underline">${data.name}</a>
+            ${ownerHtml}
           </div>
-          <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="text-xs text-teal-600 hover:underline">Edit →</a>
+          <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="text-xs text-teal-600 hover:underline shrink-0">Edit →</a>
         </div>
         ${detail}
       </div>`;

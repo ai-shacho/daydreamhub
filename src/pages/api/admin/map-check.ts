@@ -51,7 +51,13 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const hotelId = url.searchParams.get('id');
   if (!hotelId) return new Response(JSON.stringify({ error: 'id required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
-  const hotel = await db.prepare('SELECT id, name, city, country, latitude, longitude FROM hotels WHERE id = ?').bind(Number(hotelId)).first() as any;
+  const hotel = await db.prepare(`
+    SELECT h.id, h.name, h.city, h.country, h.latitude, h.longitude,
+           u.name as owner_name, u.email as owner_email
+    FROM hotels h
+    LEFT JOIN users u ON u.email = h.email AND u.role IN ('owner', 'inactive')
+    WHERE h.id = ?
+  `).bind(Number(hotelId)).first() as any;
   if (!hotel) return new Response(JSON.stringify({ error: 'Hotel not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 
   const isProperty = looksLikePropertyName(hotel.name);
@@ -60,7 +66,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`);
   const geo = await res.json() as any;
 
-  const base = { id: hotel.id, name: hotel.name, is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude, db_country: hotel.country, db_city: hotel.city };
+  const base = { id: hotel.id, name: hotel.name, is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude, db_country: hotel.country, db_city: hotel.city, owner_name: hotel.owner_name || '', owner_email: hotel.owner_email || '' };
 
   if (geo.status !== 'OK' || !geo.results?.length) {
     return new Response(JSON.stringify({ ...base, status: 'not_found' }), { headers: { 'Content-Type': 'application/json' } });
