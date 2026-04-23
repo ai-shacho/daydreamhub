@@ -11,7 +11,7 @@ if (!admin) return Astro.redirect('/admin/login');
 
 let hotels: any[] = [];
 if (db) {
-  const result = await db.prepare('SELECT id, name, city, country, latitude, longitude FROM hotels ORDER BY name').all();
+  const result = await db.prepare("SELECT id, name, city, country, latitude, longitude FROM hotels WHERE is_active = 1 AND name NOT LIKE '%Test%' AND name NOT LIKE '%test%' ORDER BY name").all();
   hotels = result?.results || [];
 }
 ---
