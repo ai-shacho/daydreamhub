@@ -134,7 +134,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     },
     body: JSON.stringify({
       from: 'DayDreamHub <noreply@daydreamhub.com>',
-      to: ['customer@daydreamhub.com'],
+      to: ['contact@daydreamhub.com'],
       subject: `New Owner Application: ${data.hotel_name}`,
       html,
       reply_to: data.contact_email,
