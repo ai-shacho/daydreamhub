@@ -69,8 +69,65 @@ if (db) {
 </AdminLayout>
 
 <script define:vars={{ hotels }}>
+  const STORAGE_KEY = 'mapCheckResults_v1';
   let running = false;
   let problems = [];
+  let counts = { mismatch: 0, issue: 0, locMismatch: 0, manual: 0, ok: 0 };
+
+  function saveResults() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        problems,
+        counts,
+      }));
+    } catch {}
+  }
+
+  function loadResults() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch { return null; }
+  }
+
+  function renderFromCache(cache) {
+    problems = cache.problems || [];
+    counts = cache.counts || { mismatch: 0, issue: 0, locMismatch: 0, manual: 0, ok: 0 };
+
+    document.getElementById('summary').classList.remove('hidden');
+    document.getElementById('count-mismatch').textContent = counts.mismatch;
+    document.getElementById('count-issue').textContent = counts.issue;
+    document.getElementById('count-location-mismatch').textContent = counts.locMismatch;
+    document.getElementById('count-manual').textContent = counts.manual;
+    document.getElementById('count-ok').textContent = counts.ok;
+
+    const resultsEl = document.getElementById('results');
+    resultsEl.innerHTML = '';
+    for (const p of problems) renderRow(p);
+
+    const fixable = problems.filter(p => p.is_property && (p.status === 'mismatch' || p.status === 'no_coords'));
+    if (fixable.length > 0) {
+      const btn = document.getElementById('autofix-btn');
+      btn.textContent = `🔧 Auto-fix ${fixable.length} Hotel Entr${fixable.length === 1 ? 'y' : 'ies'}`;
+      btn.classList.remove('hidden');
+    }
+
+    const ts = new Date(cache.timestamp).toLocaleString();
+    const banner = document.createElement('div');
+    banner.className = 'mb-3 text-xs text-slate-500 text-right';
+    banner.innerHTML = `Showing cached results from ${ts} · <button id="clear-cache" class="text-teal-600 hover:underline">Clear cache</button>`;
+    resultsEl.parentNode.insertBefore(banner, resultsEl);
+    document.getElementById('clear-cache').addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY);
+      location.reload();
+    });
+  }
+
+  // Show cached results on page load
+  const cached = loadResults();
+  if (cached) renderFromCache(cached);
 
   document.getElementById('run-btn').addEventListener('click', async () => {
     if (running) return;
@@ -84,6 +141,8 @@ if (db) {
 
     let countMismatch = 0, countIssue = 0, countOk = 0, countManual = 0, countLocationMismatch = 0;
     problems = [];
+    // Remove any cached-results banner from a previous run
+    document.querySelectorAll('#clear-cache').forEach((b) => b.parentElement?.remove());
 
     for (let i = 0; i < hotels.length; i++) {
       const hotel = hotels[i];
@@ -129,6 +188,9 @@ if (db) {
     document.getElementById('run-btn').disabled = false;
     running = false;
 
+    counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, ok: countOk };
+    saveResults();
+
     // Show auto-fix button if there are fixable property entries
     const fixable = problems.filter(p => p.is_property && (p.status === 'mismatch' || p.status === 'no_coords'));
     if (fixable.length > 0) {
@@ -173,6 +235,7 @@ if (db) {
     }
 
     btn.textContent = `✅ Updated ${done}${failed ? ` (${failed} failed)` : ''}`;
+    localStorage.removeItem(STORAGE_KEY);
     setTimeout(() => location.reload(), 2000);
   });
 
