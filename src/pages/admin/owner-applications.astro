@@ -168,6 +168,7 @@ const statusColors: Record<string, string> = {
               <div><span class="text-slate-400">PayPal:</span> <span id="d-paypal" class="text-slate-700"></span></div>
               <div><span class="text-slate-400">Wise:</span> <span id="d-wise" class="text-slate-700"></span></div>
               <div><span class="text-slate-400">Payoneer:</span> <span id="d-payoneer" class="text-slate-700"></span></div>
+              <div class="col-span-2"><span class="text-slate-400">Bank Account:</span> <span id="d-bank" class="text-slate-700 whitespace-pre-wrap"></span></div>
             </div>
           </div>
 
@@ -218,6 +219,7 @@ const statusColors: Record<string, string> = {
     (document.getElementById('d-paypal') as HTMLElement).textContent = app.paypal_account || '-';
     (document.getElementById('d-wise') as HTMLElement).textContent = app.wise_account || '-';
     (document.getElementById('d-payoneer') as HTMLElement).textContent = app.payoneer_account || '-';
+    (document.getElementById('d-bank') as HTMLElement).textContent = app.bank_account || '-';
     (document.getElementById('d-status') as HTMLSelectElement).value = app.status || 'new';
     (document.getElementById('d-note') as HTMLInputElement).value = app.note || '';
     modal.classList.remove('hidden');

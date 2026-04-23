@@ -62,7 +62,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
       ${row('PayPal Account', data.paypal_account)}
       ${row('Wise Account', data.wise_account)}
       ${row('Payoneer Account', data.payoneer_account)}
+      ${row('Bank Account Details', data.bank_account)}
     </table>
+    ${data.payment_method === 'Bank Transfer' ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:12px 16px;color:#1d4ed8;font-size:13px;margin-bottom:16px">ℹ️ <strong>Bank Transfer Policy:</strong> If the amount to be paid via bank transfer is less than USD 100, payment will be accumulated and processed once the total amount exceeds USD 100, with transfer fees covered by DayDreamHub. However, if the Owner agrees to bear the transfer fees, payment may be processed even if the amount is less than USD 100.</div>` : ''}
     <p style="color:#666;font-size:12px;margin-top:24px">Submitted via DayDreamHub Owner Application Form</p>
   </div>
 </div>`;
@@ -81,8 +83,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         hotel_name, booking_email, hotel_phone, management_company, site_url,
         contact_name, contact_email, contact_phone, contact_method,
         messenger_url, whatsapp_url, line_url, other_sns_url,
-        payment_method, paypal_account, wise_account, payoneer_account
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        payment_method, paypal_account, wise_account, payoneer_account, bank_account
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       data.hotel_name, data.booking_email, data.hotel_phone,
       data.management_company || '', data.site_url || '',
@@ -91,7 +93,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       data.messenger_url || '', data.whatsapp_url || '',
       data.line_url || '', data.other_sns_url || '',
       data.payment_method || '', data.paypal_account || '',
-      data.wise_account || '', data.payoneer_account || ''
+      data.wise_account || '', data.payoneer_account || '',
+      data.bank_account || ''
     ).run();
 
     // Register as inactive hotel
