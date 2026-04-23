@@ -28,11 +28,11 @@ function getAddressComponent(components: any[], type: string): string {
   return components?.find((c: any) => c.types.includes(type))?.long_name?.toLowerCase() || '';
 }
 
-// Loose country match: DB value appears in Google's country name or vice versa
-function countriesMatch(dbCountry: string, googleCountry: string): boolean {
-  if (!dbCountry || !googleCountry) return true; // can't verify, give benefit of the doubt
-  const a = dbCountry.toLowerCase();
-  const b = googleCountry.toLowerCase();
+// Loose match: DB value appears in Google's value or vice versa
+function looseMatch(dbVal: string, googleVal: string): boolean {
+  if (!dbVal || !googleVal) return true; // can't verify, give benefit of the doubt
+  const a = dbVal.toLowerCase();
+  const b = googleVal.toLowerCase();
   return a.includes(b) || b.includes(a);
 }
 
@@ -60,7 +60,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`);
   const geo = await res.json() as any;
 
-  const base = { id: hotel.id, name: hotel.name, is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude, db_country: hotel.country };
+  const base = { id: hotel.id, name: hotel.name, is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude, db_country: hotel.country, db_city: hotel.city };
 
   if (geo.status !== 'OK' || !geo.results?.length) {
     return new Response(JSON.stringify({ ...base, status: 'not_found' }), { headers: { 'Content-Type': 'application/json' } });
@@ -70,13 +70,28 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const loc = result.geometry.location;
   const googleAddress = result.formatted_address;
   const googleCountry = getAddressComponent(result.address_components, 'country');
+  const googleCity =
+    getAddressComponent(result.address_components, 'locality') ||
+    getAddressComponent(result.address_components, 'administrative_area_level_2') ||
+    getAddressComponent(result.address_components, 'administrative_area_level_1');
 
-  // Verify country matches to avoid false positives from same-named hotels in other countries
-  if (hotel.country && !countriesMatch(hotel.country, googleCountry)) {
+  // Country must match (if DB has one)
+  if (hotel.country && !looseMatch(hotel.country, googleCountry)) {
     return new Response(JSON.stringify({
-      ...base, status: 'country_mismatch',
+      ...base, status: 'location_mismatch',
       google_address: googleAddress,
       google_country: googleCountry,
+      mismatch_field: 'country',
+    }), { headers: { 'Content-Type': 'application/json' } });
+  }
+
+  // City must also match (if DB has one)
+  if (hotel.city && !looseMatch(hotel.city, googleCity)) {
+    return new Response(JSON.stringify({
+      ...base, status: 'location_mismatch',
+      google_address: googleAddress,
+      google_city: googleCity,
+      mismatch_field: 'city',
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 

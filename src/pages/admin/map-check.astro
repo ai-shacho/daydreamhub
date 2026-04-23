@@ -93,8 +93,8 @@ if (db) {
 
         if (data.status === 'ok') {
           countOk++;
-        } else if (data.status === 'country_mismatch') {
-          // skip — unreliable result, don't surface as actionable
+        } else if (data.status === 'location_mismatch') {
+          // skip — unreliable result (country or city mismatch), don't surface as actionable
         } else {
           if (!data.is_property) countManual++;
           else if (data.status === 'mismatch') countMismatch++;
@@ -186,7 +186,7 @@ if (db) {
       mismatch: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Mismatch</span>',
       no_coords: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">No coords</span>',
       not_found: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Not found</span>',
-      country_mismatch: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Country mismatch</span>',
+      location_mismatch: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Location mismatch</span>',
       error: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Error</span>',
     };
     const badgeHtml = isManual ? manualBadge : (statusBadges[data.status] || '');
@@ -203,8 +203,11 @@ if (db) {
       detail = `<div class="mt-2 text-xs text-slate-600">Google suggests: ${data.google_lat?.toFixed(6)}, ${data.google_lng?.toFixed(6)} — ${data.google_address || ''}</div>`;
     } else if (data.status === 'not_found') {
       detail = `<div class="mt-2 text-xs text-slate-500">Could not find this hotel on Google Maps by name.</div>`;
-    } else if (data.status === 'country_mismatch') {
-      detail = `<div class="mt-2 text-xs text-purple-700">Google returned a result in "${data.google_country}" but DB country is "${data.db_country || '(none)'}". Skipped to avoid false match.</div>`;
+    } else if (data.status === 'location_mismatch') {
+      const field = data.mismatch_field === 'city'
+        ? `city: Google returned "${data.google_city}", DB has "${data.db_city || '(none)'}"`
+        : `country: Google returned "${data.google_country}", DB has "${data.db_country || '(none)'}"`;
+      detail = `<div class="mt-2 text-xs text-purple-700">Skipped — ${field}. Check manually.</div>`;
     }
 
     el.innerHTML = `
