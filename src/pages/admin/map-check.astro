@@ -22,9 +22,14 @@ if (db) {
       <h1 class="text-xl font-bold text-slate-800">Map Coordinate Check</h1>
       <p class="text-sm text-slate-500 mt-1">{hotels.length} hotels · Checks if DB coordinates match hotel name via Google</p>
     </div>
-    <button id="run-btn" class="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
-      ▶ Run Check
-    </button>
+    <div class="flex items-center gap-2">
+      <button id="run-btn" class="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+        ▶ Run Check
+      </button>
+      <button id="autofix-btn" class="hidden px-5 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors">
+        🔧 Auto-fix Hotel Entries
+      </button>
+    </div>
   </div>
 
   <div id="progress-bar-wrap" class="hidden mb-4">
@@ -37,7 +42,7 @@ if (db) {
     </div>
   </div>
 
-  <div id="summary" class="hidden mb-4 grid grid-cols-3 gap-4 text-center">
+  <div id="summary" class="hidden mb-4 grid grid-cols-4 gap-4 text-center">
     <div class="bg-red-50 border border-red-200 rounded-lg p-3">
       <div id="count-mismatch" class="text-2xl font-bold text-red-600">0</div>
       <div class="text-xs text-red-500 mt-1">Mismatch (&gt;500m off)</div>
@@ -45,6 +50,10 @@ if (db) {
     <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
       <div id="count-issue" class="text-2xl font-bold text-amber-600">0</div>
       <div class="text-xs text-amber-500 mt-1">No coords / Not found</div>
+    </div>
+    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+      <div id="count-manual" class="text-2xl font-bold text-slate-500">0</div>
+      <div class="text-xs text-slate-500 mt-1">Manual review (room type)</div>
     </div>
     <div class="bg-green-50 border border-green-200 rounded-lg p-3">
       <div id="count-ok" class="text-2xl font-bold text-green-600">0</div>
@@ -57,18 +66,20 @@ if (db) {
 
 <script define:vars={{ hotels }}>
   let running = false;
+  let problems = [];
 
   document.getElementById('run-btn').addEventListener('click', async () => {
     if (running) return;
     running = true;
     document.getElementById('run-btn').disabled = true;
     document.getElementById('run-btn').textContent = '⏳ Running...';
+    document.getElementById('autofix-btn').classList.add('hidden');
     document.getElementById('progress-bar-wrap').classList.remove('hidden');
     document.getElementById('summary').classList.remove('hidden');
     document.getElementById('results').innerHTML = '';
 
-    let countMismatch = 0, countIssue = 0, countOk = 0;
-    const problems = [];
+    let countMismatch = 0, countIssue = 0, countOk = 0, countManual = 0;
+    problems = [];
 
     for (let i = 0; i < hotels.length; i++) {
       const hotel = hotels[i];
@@ -83,19 +94,21 @@ if (db) {
         if (data.status === 'ok') {
           countOk++;
         } else {
-          if (data.status === 'mismatch') countMismatch++;
+          if (!data.is_property) countManual++;
+          else if (data.status === 'mismatch') countMismatch++;
           else countIssue++;
           problems.push(data);
           renderRow(data);
         }
       } catch {
         countIssue++;
-        problems.push({ id: hotel.id, name: hotel.name, status: 'error' });
-        renderRow({ id: hotel.id, name: hotel.name, status: 'error' });
+        problems.push({ id: hotel.id, name: hotel.name, status: 'error', is_property: false });
+        renderRow({ id: hotel.id, name: hotel.name, status: 'error', is_property: false });
       }
 
       document.getElementById('count-mismatch').textContent = countMismatch;
       document.getElementById('count-issue').textContent = countIssue;
+      document.getElementById('count-manual').textContent = countManual;
       document.getElementById('count-ok').textContent = countOk;
 
       // Small delay to avoid rate limiting
@@ -107,25 +120,71 @@ if (db) {
     document.getElementById('run-btn').disabled = false;
     running = false;
 
+    // Show auto-fix button if there are fixable property entries
+    const fixable = problems.filter(p => p.is_property && (p.status === 'mismatch' || p.status === 'no_coords'));
+    if (fixable.length > 0) {
+      const btn = document.getElementById('autofix-btn');
+      btn.textContent = `🔧 Auto-fix ${fixable.length} Hotel Entr${fixable.length === 1 ? 'y' : 'ies'}`;
+      btn.classList.remove('hidden');
+    }
+
     if (problems.length === 0) {
       document.getElementById('results').innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center text-green-700 font-medium">✅ All coordinates look correct!</div>';
     }
   });
 
+  document.getElementById('autofix-btn').addEventListener('click', async () => {
+    const fixable = problems.filter(p => p.is_property && (p.status === 'mismatch' || p.status === 'no_coords'));
+    if (!fixable.length) return;
+    if (!confirm(`Update ${fixable.length} hotels' coordinates and addresses with Google Maps data?`)) return;
+
+    const btn = document.getElementById('autofix-btn');
+    btn.disabled = true;
+    btn.textContent = `⏳ Updating 0 / ${fixable.length}...`;
+
+    let done = 0, failed = 0;
+    for (const p of fixable) {
+      try {
+        const res = await fetch('/api/admin/map-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: p.id,
+            latitude: p.google_lat,
+            longitude: p.google_lng,
+            address: p.google_address,
+          }),
+        });
+        if (res.ok) done++;
+        else failed++;
+      } catch {
+        failed++;
+      }
+      btn.textContent = `⏳ Updating ${done + failed} / ${fixable.length}...`;
+    }
+
+    btn.textContent = `✅ Updated ${done}${failed ? ` (${failed} failed)` : ''}`;
+    setTimeout(() => location.reload(), 2000);
+  });
+
   function renderRow(data) {
     const el = document.createElement('div');
-    const colors = {
+    const isManual = !data.is_property;
+    const colors = isManual ? 'border-slate-200 bg-slate-50' : {
       mismatch: 'border-red-200 bg-red-50',
       no_coords: 'border-amber-200 bg-amber-50',
       not_found: 'border-amber-200 bg-amber-50',
       error: 'border-slate-200 bg-slate-50',
-    };
-    const badges = {
+    }[data.status] || 'border-slate-200 bg-slate-50';
+
+    const manualBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-700">Manual review</span>';
+    const statusBadges = {
       mismatch: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Mismatch</span>',
       no_coords: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">No coords</span>',
       not_found: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Not found</span>',
       error: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Error</span>',
     };
+    const badgeHtml = isManual ? manualBadge : (statusBadges[data.status] || '');
 
     let detail = '';
     if (data.status === 'mismatch') {
@@ -142,10 +201,10 @@ if (db) {
     }
 
     el.innerHTML = `
-      <div class="border rounded-lg p-4 ${colors[data.status] || 'border-slate-200 bg-slate-50'}">
+      <div class="border rounded-lg p-4 ${colors}">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            ${badges[data.status] || ''}
+            ${badgeHtml}
             <a href="/admin/hotels/${data.id}/edit" class="font-medium text-slate-800 hover:underline">${data.name}</a>
           </div>
           <a href="/admin/hotels/${data.id}/edit" class="text-xs text-teal-600 hover:underline">Edit →</a>
