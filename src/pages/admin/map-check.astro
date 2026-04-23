@@ -1,0 +1,157 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
+
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect('/admin/login');
+
+let hotels: any[] = [];
+if (db) {
+  const result = await db.prepare('SELECT id, name, city, country, latitude, longitude FROM hotels ORDER BY name').all();
+  hotels = result?.results || [];
+}
+---
+
+<AdminLayout title="Map Check" activeNav="map-check">
+  <div class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold text-slate-800">Map Coordinate Check</h1>
+      <p class="text-sm text-slate-500 mt-1">{hotels.length} hotels · Checks if DB coordinates match hotel name via Google</p>
+    </div>
+    <button id="run-btn" class="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+      ▶ Run Check
+    </button>
+  </div>
+
+  <div id="progress-bar-wrap" class="hidden mb-4">
+    <div class="flex items-center justify-between text-xs text-slate-500 mb-1">
+      <span id="progress-label">Checking...</span>
+      <span id="progress-count">0 / {hotels.length}</span>
+    </div>
+    <div class="w-full bg-slate-200 rounded-full h-2">
+      <div id="progress-bar" class="bg-teal-500 h-2 rounded-full transition-all duration-300" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div id="summary" class="hidden mb-4 grid grid-cols-3 gap-4 text-center">
+    <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+      <div id="count-mismatch" class="text-2xl font-bold text-red-600">0</div>
+      <div class="text-xs text-red-500 mt-1">Mismatch (&gt;500m off)</div>
+    </div>
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+      <div id="count-issue" class="text-2xl font-bold text-amber-600">0</div>
+      <div class="text-xs text-amber-500 mt-1">No coords / Not found</div>
+    </div>
+    <div class="bg-green-50 border border-green-200 rounded-lg p-3">
+      <div id="count-ok" class="text-2xl font-bold text-green-600">0</div>
+      <div class="text-xs text-green-500 mt-1">OK</div>
+    </div>
+  </div>
+
+  <div id="results" class="space-y-2"></div>
+</AdminLayout>
+
+<script define:vars={{ hotels }}>
+  let running = false;
+
+  document.getElementById('run-btn').addEventListener('click', async () => {
+    if (running) return;
+    running = true;
+    document.getElementById('run-btn').disabled = true;
+    document.getElementById('run-btn').textContent = '⏳ Running...';
+    document.getElementById('progress-bar-wrap').classList.remove('hidden');
+    document.getElementById('summary').classList.remove('hidden');
+    document.getElementById('results').innerHTML = '';
+
+    let countMismatch = 0, countIssue = 0, countOk = 0;
+    const problems = [];
+
+    for (let i = 0; i < hotels.length; i++) {
+      const hotel = hotels[i];
+      document.getElementById('progress-label').textContent = `Checking: ${hotel.name}`;
+      document.getElementById('progress-count').textContent = `${i + 1} / ${hotels.length}`;
+      document.getElementById('progress-bar').style.width = `${Math.round((i + 1) / hotels.length * 100)}%`;
+
+      try {
+        const res = await fetch(`/api/admin/map-check?id=${hotel.id}`);
+        const data = await res.json();
+
+        if (data.status === 'ok') {
+          countOk++;
+        } else {
+          if (data.status === 'mismatch') countMismatch++;
+          else countIssue++;
+          problems.push(data);
+          renderRow(data);
+        }
+      } catch {
+        countIssue++;
+        problems.push({ id: hotel.id, name: hotel.name, status: 'error' });
+        renderRow({ id: hotel.id, name: hotel.name, status: 'error' });
+      }
+
+      document.getElementById('count-mismatch').textContent = countMismatch;
+      document.getElementById('count-issue').textContent = countIssue;
+      document.getElementById('count-ok').textContent = countOk;
+
+      // Small delay to avoid rate limiting
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    document.getElementById('progress-label').textContent = 'Done';
+    document.getElementById('run-btn').textContent = '▶ Run Again';
+    document.getElementById('run-btn').disabled = false;
+    running = false;
+
+    if (problems.length === 0) {
+      document.getElementById('results').innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center text-green-700 font-medium">✅ All coordinates look correct!</div>';
+    }
+  });
+
+  function renderRow(data) {
+    const el = document.createElement('div');
+    const colors = {
+      mismatch: 'border-red-200 bg-red-50',
+      no_coords: 'border-amber-200 bg-amber-50',
+      not_found: 'border-amber-200 bg-amber-50',
+      error: 'border-slate-200 bg-slate-50',
+    };
+    const badges = {
+      mismatch: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Mismatch</span>',
+      no_coords: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">No coords</span>',
+      not_found: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Not found</span>',
+      error: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Error</span>',
+    };
+
+    let detail = '';
+    if (data.status === 'mismatch') {
+      detail = `
+        <div class="mt-2 text-xs text-slate-600 space-y-0.5">
+          <div>DB: ${data.db_lat?.toFixed(6)}, ${data.db_lng?.toFixed(6)}</div>
+          <div>Google: ${data.google_lat?.toFixed(6)}, ${data.google_lng?.toFixed(6)} — ${data.google_address || ''}</div>
+          <div class="text-red-600 font-medium">Distance: ${data.distance_m?.toLocaleString()} m off</div>
+        </div>`;
+    } else if (data.status === 'no_coords') {
+      detail = `<div class="mt-2 text-xs text-slate-600">Google suggests: ${data.google_lat?.toFixed(6)}, ${data.google_lng?.toFixed(6)} — ${data.google_address || ''}</div>`;
+    } else if (data.status === 'not_found') {
+      detail = `<div class="mt-2 text-xs text-slate-500">Could not find this hotel on Google Maps by name.</div>`;
+    }
+
+    el.innerHTML = `
+      <div class="border rounded-lg p-4 ${colors[data.status] || 'border-slate-200 bg-slate-50'}">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            ${badges[data.status] || ''}
+            <a href="/admin/hotels/${data.id}/edit" class="font-medium text-slate-800 hover:underline">${data.name}</a>
+          </div>
+          <a href="/admin/hotels/${data.id}/edit" class="text-xs text-teal-600 hover:underline">Edit →</a>
+        </div>
+        ${detail}
+      </div>`;
+    document.getElementById('results').appendChild(el);
+  }
+</script>
