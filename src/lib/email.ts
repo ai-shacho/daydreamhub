@@ -714,3 +714,83 @@ export async function sendAdminRefundAlert(
     html,
   });
 }
+
+// Sent to contact@daydreamhub.com when an owner submits a listing review request
+export async function sendReviewRequestNotification(
+  apiKey: string,
+  data: { ownerName: string; ownerEmail: string; hotelName: string; hotelId: number }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = `Listing Review Request: ${data.hotelName}`;
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#0d9488;color:white;padding:24px;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:20px">Listing Review Request</h1>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+    <p>An owner has completed their listing setup and is requesting review for publication.</p>
+    <table style="border-collapse:collapse;width:100%;margin:16px 0">
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Owner</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.ownerName)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Email</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.ownerEmail)}</td></tr>
+    </table>
+    <div style="text-align:center;margin:24px 0">
+      <a href="${SITE_URL}/admin/hotels/${data.hotelId}"
+         style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:bold">
+        Review in Admin →
+      </a>
+    </div>
+    ${emailFooter()}
+  </div>
+</div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: 'contact@daydreamhub.com',
+    subject,
+    html,
+  });
+}
+
+// Sent to owner when admin sets is_active = 1 (listing approved)
+export async function sendListingApprovedEmail(
+  apiKey: string,
+  data: { ownerName: string; ownerEmail: string; hotelName: string; hotelSlug: string }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = `Your listing is now live! – ${data.hotelName}`;
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#0d9488;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
+    <div style="font-size:40px;margin-bottom:12px">🎉</div>
+    <h1 style="margin:0;font-size:24px;font-weight:700">Your listing is now live!</h1>
+    <p style="margin:8px 0 0;opacity:0.9">${escapeHtml(data.hotelName)}</p>
+  </div>
+  <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+    <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.ownerName)}</strong> 👋</p>
+    <p style="color:#374151;line-height:1.6">
+      Great news! We've reviewed your listing and it's now published on DayDreamHub. Travelers can now find and book your property.
+    </p>
+    <p style="color:#374151;line-height:1.6">
+      Next steps:
+    </p>
+    <ul style="color:#374151;line-height:2">
+      <li>Make sure your calendar is up to date</li>
+      <li>Respond promptly to booking requests</li>
+      <li>Contact us anytime at <a href="mailto:contact@daydreamhub.com" style="color:#0d9488">contact@daydreamhub.com</a></li>
+    </ul>
+    <div style="text-align:center;margin:28px 0">
+      <a href="${SITE_URL}/hotel/${escapeHtml(data.hotelSlug)}"
+         style="display:inline-block;padding:14px 32px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
+        View Your Listing →
+      </a>
+    </div>
+    ${emailFooter()}
+  </div>
+</div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.ownerEmail,
+    subject,
+    html,
+  });
+}

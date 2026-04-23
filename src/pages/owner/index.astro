@@ -19,11 +19,24 @@ let recentBookings: any[] = [];
 let calendarDays: any[] = [];
 let latestReviews: any[] = [];
 
-
-
+// Setup guide: inactiveホテルのみ対象
+let setupHotel: any = null;
+let setupPlansCount = 0;
 
 if (db) {
   try {
+    // inactive ホテル（セットアップ中）を取得
+    const inactiveRes = await db.prepare(
+      "SELECT id, name, slug, description, images, review_requested_at FROM hotels WHERE email = ? AND is_active = 0 LIMIT 1"
+    ).bind(owner.email).first() as any;
+    if (inactiveRes) {
+      setupHotel = inactiveRes;
+      const plansRes = await db.prepare(
+        "SELECT COUNT(*) as count FROM plans WHERE hotel_id = ?"
+      ).bind(inactiveRes.id).first() as any;
+      setupPlansCount = plansRes?.count ?? 0;
+    }
+
     const ownerHotelIds = await getOwnerHotelIds(db, owner);
     myHotelsCount = ownerHotelIds.length;
 
@@ -140,6 +153,140 @@ const quickActions = [
     <h2 class="text-2xl font-bold text-slate-900">Welcome back, {owner.name}</h2>
     <p class="mt-1 text-sm text-slate-500">Here is an overview of your properties on DayDreamHub.</p>
   </div>
+
+  {setupHotel && (
+    <div class="mb-8 bg-white border border-teal-200 rounded-2xl overflow-hidden shadow-sm">
+      <div class="bg-teal-600 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h3 class="text-white font-bold text-base">Setup Guide — {setupHotel.name}</h3>
+          <p class="text-teal-100 text-sm mt-0.5">Complete the steps below to get your listing published.</p>
+        </div>
+        {setupHotel.review_requested_at && (
+          <span class="bg-amber-400 text-amber-900 text-xs font-semibold px-3 py-1 rounded-full">Under Review</span>
+        )}
+      </div>
+      <div class="divide-y divide-slate-100">
+        {/* Step 1: 施設情報 */}
+        {(() => {
+          const done = !!setupHotel.description;
+          return (
+            <div class={`flex items-center gap-4 px-6 py-4 ${done ? 'opacity-60' : ''}`}>
+              <div class={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${done ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-400'}`}>
+                {done ? '✓' : '1'}
+              </div>
+              <div class="flex-1">
+                <p class={`text-sm font-medium ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>Enter property information</p>
+                <p class="text-xs text-slate-400">Name, description, address, amenities</p>
+              </div>
+              {!done && (
+                <a href={`/owner/hotels/${setupHotel.id}`} class="flex-shrink-0 px-4 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
+                  Set up →
+                </a>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Step 2: 写真 */}
+        {(() => {
+          let imgCount = 0;
+          try { imgCount = JSON.parse(setupHotel.images || '[]').length; } catch {}
+          const done = imgCount >= 1;
+          return (
+            <div class={`flex items-center gap-4 px-6 py-4 ${done ? 'opacity-60' : ''}`}>
+              <div class={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${done ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-400'}`}>
+                {done ? '✓' : '2'}
+              </div>
+              <div class="flex-1">
+                <p class={`text-sm font-medium ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>Upload photos</p>
+                <p class="text-xs text-slate-400">{done ? `${imgCount} photo(s) uploaded` : 'At least 1 photo required'}</p>
+              </div>
+              {!done && (
+                <a href={`/owner/hotels/${setupHotel.id}`} class="flex-shrink-0 px-4 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
+                  Upload →
+                </a>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Step 3: プラン */}
+        {(() => {
+          const done = setupPlansCount >= 1;
+          return (
+            <div class={`flex items-center gap-4 px-6 py-4 ${done ? 'opacity-60' : ''}`}>
+              <div class={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${done ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-400'}`}>
+                {done ? '✓' : '3'}
+              </div>
+              <div class="flex-1">
+                <p class={`text-sm font-medium ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>Set up plans & pricing</p>
+                <p class="text-xs text-slate-400">{done ? `${setupPlansCount} plan(s) created` : 'Add at least 1 plan'}</p>
+              </div>
+              {!done && (
+                <a href={`/owner/hotels/${setupHotel.id}`} class="flex-shrink-0 px-4 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
+                  Add plan →
+                </a>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Step 4: カレンダー */}
+        {(() => {
+          const done = setupPlansCount >= 1;
+          return (
+            <div class={`flex items-center gap-4 px-6 py-4 ${done ? '' : 'opacity-40'}`}>
+              <div class={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${done ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-300'}`}>
+                4
+              </div>
+              <div class="flex-1">
+                <p class="text-sm font-medium text-slate-800">Set availability on calendar</p>
+                <p class="text-xs text-slate-400">Block dates when your property is unavailable</p>
+              </div>
+              {done && (
+                <a href="/owner/calendar" class="flex-shrink-0 px-4 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
+                  Calendar →
+                </a>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Step 5: 審査申請 */}
+        {(() => {
+          const allReady = !!setupHotel.description && setupPlansCount >= 1;
+          const requested = !!setupHotel.review_requested_at;
+          return (
+            <div class={`flex items-center gap-4 px-6 py-4 ${requested ? 'opacity-60' : ''}`}>
+              <div class={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${requested ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-400'}`}>
+                {requested ? '✓' : '5'}
+              </div>
+              <div class="flex-1">
+                <p class={`text-sm font-medium ${requested ? 'text-slate-400 line-through' : 'text-slate-800'}`}>Request listing review</p>
+                <p class="text-xs text-slate-400">
+                  {requested ? `Requested on ${new Date(setupHotel.review_requested_at).toLocaleDateString('en-US')}. DayDreamHub will review and publish your listing.` : 'Submit your listing to DayDreamHub for final review.'}
+                </p>
+              </div>
+              {!requested && allReady && (
+                <button
+                  id="request-review-btn"
+                  data-hotel-id={setupHotel.id}
+                  class="flex-shrink-0 px-4 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700"
+                >
+                  Request review →
+                </button>
+              )}
+              {!requested && !allReady && (
+                <span class="flex-shrink-0 px-4 py-1.5 bg-slate-100 text-slate-400 text-xs font-semibold rounded-lg cursor-not-allowed">
+                  Complete steps 1–3 first
+                </span>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  )}
 
 
 
@@ -293,3 +440,34 @@ const quickActions = [
     </div>
   </div>
 </OwnerLayout>
+
+<script>
+  const btn = document.getElementById('request-review-btn');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      const hotelId = btn.getAttribute('data-hotel-id');
+      if (!confirm('Submit your listing to DayDreamHub for review? We will contact you once the review is complete.')) return;
+      btn.textContent = 'Submitting...';
+      (btn as HTMLButtonElement).disabled = true;
+      try {
+        const res = await fetch('/api/owner/review-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotel_id: Number(hotelId) }),
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          location.reload();
+        } else {
+          alert(data.error || 'Failed to submit. Please try again.');
+          btn.textContent = 'Request review →';
+          (btn as HTMLButtonElement).disabled = false;
+        }
+      } catch {
+        alert('Network error. Please try again.');
+        btn.textContent = 'Request review →';
+        (btn as HTMLButtonElement).disabled = false;
+      }
+    });
+  }
+</script>

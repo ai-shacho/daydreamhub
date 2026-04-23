@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { sendListingApprovedEmail } from '../../../lib/email';
 
 async function verifyAdminRequest(_request: Request, _jwtSecret: string): Promise<boolean> {
   return true;
@@ -78,7 +79,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
 };
 
 export const PUT: APIRoute = async ({ request, locals }) => {
-  const db = (locals as any).runtime?.env?.DB;
+  const env = (locals as any).runtime?.env;
+  const db = env?.DB;
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
@@ -103,7 +105,29 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if (!updates.length) return new Response(JSON.stringify({ error: 'No valid fields' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
   try {
+    // is_active が 1 に変わる場合、変更前の状態を確認
+    const wasActive = 'is_active' in fields && fields.is_active == 1
+      ? (await db.prepare('SELECT is_active, name, slug, email FROM hotels WHERE id = ?').bind(id).first() as any)
+      : null;
+
     await db.prepare(`UPDATE hotels SET ${updates.join(', ')} WHERE id = ?`).bind(...params, id).run();
+
+    // is_active: 0→1 になったらオーナーに掲載完了メール送信
+    if (wasActive && !wasActive.is_active && wasActive.email) {
+      const resendKey = env?.RESEND_API_KEY;
+      if (resendKey) {
+        const ownerUser = await db.prepare('SELECT name FROM users WHERE email = ?').bind(wasActive.email).first() as any;
+        if (ownerUser) {
+          await sendListingApprovedEmail(resendKey, {
+            ownerName: ownerUser.name,
+            ownerEmail: wasActive.email,
+            hotelName: wasActive.name,
+            hotelSlug: wasActive.slug,
+          });
+        }
+      }
+    }
+
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

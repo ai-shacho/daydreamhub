@@ -172,9 +172,19 @@ const statusColors: Record<string, string> = {
             </div>
           </div>
 
+          <!-- Approve & Send Account -->
+          <div class="border-t border-slate-200 pt-4">
+            <h3 class="text-sm font-semibold text-slate-500 mb-1">Approve & Send Account</h3>
+            <p class="text-xs text-slate-400 mb-3">Creates an owner account using the contact email, updates the hotel link, sets status to Approved, and sends login details by email.</p>
+            <div id="d-approve-result" class="hidden mb-3 p-3 rounded-lg text-sm"></div>
+            <button id="d-approve-btn" class="w-full px-4 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors">
+              ✅ Approve & Send Account Email
+            </button>
+          </div>
+
           <!-- Status Update -->
           <div class="border-t border-slate-200 pt-4">
-            <h3 class="text-sm font-semibold text-slate-500 mb-2">Update Status</h3>
+            <h3 class="text-sm font-semibold text-slate-500 mb-2">Update Status Only</h3>
             <div class="flex items-end gap-3">
               <div class="flex-1">
                 <select id="d-status" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
@@ -235,6 +245,35 @@ const statusColors: Record<string, string> = {
       const app = JSON.parse(btn.getAttribute('data-app') || '{}');
       openModal(app);
     });
+  });
+
+  document.getElementById('d-approve-btn')?.addEventListener('click', async () => {
+    if (!currentId) return;
+    const btn = document.getElementById('d-approve-btn') as HTMLButtonElement;
+    const resultEl = document.getElementById('d-approve-result') as HTMLElement;
+    btn.textContent = 'Processing...'; btn.disabled = true;
+    resultEl.className = 'hidden mb-3 p-3 rounded-lg text-sm';
+    try {
+      const res = await fetch('/api/admin/owner-applications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentId, action: 'approve_and_send' }),
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        resultEl.className = 'block mb-3 p-3 rounded-lg text-sm bg-emerald-50 border border-emerald-200 text-emerald-800';
+        resultEl.innerHTML = `✅ Account created and email sent.<br><strong>Login email:</strong> ${d.email}`;
+        btn.textContent = '✅ Done';
+      } else {
+        resultEl.className = 'block mb-3 p-3 rounded-lg text-sm bg-red-50 border border-red-200 text-red-700';
+        resultEl.textContent = d.error || 'Failed';
+        btn.textContent = '✅ Approve & Send Account Email'; btn.disabled = false;
+      }
+    } catch {
+      resultEl.className = 'block mb-3 p-3 rounded-lg text-sm bg-red-50 border border-red-200 text-red-700';
+      resultEl.textContent = 'Network error';
+      btn.textContent = '✅ Approve & Send Account Email'; btn.disabled = false;
+    }
   });
 
   document.getElementById('d-save')?.addEventListener('click', async () => {
