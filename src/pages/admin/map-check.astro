@@ -42,7 +42,7 @@ if (db) {
     </div>
   </div>
 
-  <div id="summary" class="hidden mb-4 grid grid-cols-4 gap-4 text-center">
+  <div id="summary" class="hidden mb-4 grid grid-cols-5 gap-4 text-center">
     <div class="bg-red-50 border border-red-200 rounded-lg p-3">
       <div id="count-mismatch" class="text-2xl font-bold text-red-600">0</div>
       <div class="text-xs text-red-500 mt-1">Mismatch (&gt;500m off)</div>
@@ -50,6 +50,10 @@ if (db) {
     <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
       <div id="count-issue" class="text-2xl font-bold text-amber-600">0</div>
       <div class="text-xs text-amber-500 mt-1">No coords / Not found</div>
+    </div>
+    <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+      <div id="count-location-mismatch" class="text-2xl font-bold text-purple-600">0</div>
+      <div class="text-xs text-purple-500 mt-1">City/Country mismatch</div>
     </div>
     <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
       <div id="count-manual" class="text-2xl font-bold text-slate-500">0</div>
@@ -78,7 +82,7 @@ if (db) {
     document.getElementById('summary').classList.remove('hidden');
     document.getElementById('results').innerHTML = '';
 
-    let countMismatch = 0, countIssue = 0, countOk = 0, countManual = 0;
+    let countMismatch = 0, countIssue = 0, countOk = 0, countManual = 0, countLocationMismatch = 0;
     problems = [];
 
     for (let i = 0; i < hotels.length; i++) {
@@ -94,7 +98,9 @@ if (db) {
         if (data.status === 'ok') {
           countOk++;
         } else if (data.status === 'location_mismatch') {
-          // skip — unreliable result (country or city mismatch), don't surface as actionable
+          countLocationMismatch++;
+          problems.push(data);
+          renderRow(data);
         } else {
           if (!data.is_property) countManual++;
           else if (data.status === 'mismatch') countMismatch++;
@@ -110,6 +116,7 @@ if (db) {
 
       document.getElementById('count-mismatch').textContent = countMismatch;
       document.getElementById('count-issue').textContent = countIssue;
+      document.getElementById('count-location-mismatch').textContent = countLocationMismatch;
       document.getElementById('count-manual').textContent = countManual;
       document.getElementById('count-ok').textContent = countOk;
 
