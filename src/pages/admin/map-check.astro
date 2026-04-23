@@ -26,6 +26,9 @@ if (db) {
       <button id="run-btn" class="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
         ▶ Run Check
       </button>
+      <button id="export-btn" class="hidden px-5 py-2 bg-slate-600 text-white text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors">
+        ⬇ Export CSV
+      </button>
       <button id="autofix-btn" class="hidden px-5 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors">
         🔧 Auto-fix Hotel Entries
       </button>
@@ -114,6 +117,8 @@ if (db) {
       btn.classList.remove('hidden');
     }
 
+    if (problems.length > 0) document.getElementById('export-btn').classList.remove('hidden');
+
     const ts = new Date(cache.timestamp).toLocaleString();
     const banner = document.createElement('div');
     banner.className = 'mb-3 text-xs text-slate-500 text-right';
@@ -195,6 +200,8 @@ if (db) {
     counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, ok: countOk };
     saveResults();
 
+    if (problems.length > 0) document.getElementById('export-btn').classList.remove('hidden');
+
     // Show auto-fix button if there are fixable property entries
     const fixable = problems.filter(p => p.is_property && (p.status === 'mismatch' || p.status === 'no_coords'));
     if (fixable.length > 0) {
@@ -241,6 +248,47 @@ if (db) {
     btn.textContent = `✅ Updated ${done}${failed ? ` (${failed} failed)` : ''}`;
     localStorage.removeItem(STORAGE_KEY);
     setTimeout(() => location.reload(), 2000);
+  });
+
+  function csvEscape(v) {
+    if (v == null) return '';
+    return `"${String(v).replace(/"/g, '""')}"`;
+  }
+
+  function statusNote(r) {
+    if (r.status === 'mismatch') return `${(r.distance_m ?? 0).toLocaleString()}m off from Google`;
+    if (r.status === 'no_coords') return 'No coordinates in DB';
+    if (r.status === 'not_found') return 'Not found on Google Maps';
+    if (r.status === 'location_mismatch') return r.mismatch_field === 'city'
+      ? `City mismatch: DB="${r.db_city}" Google="${r.google_city}"`
+      : `Country mismatch: DB="${r.db_country}" Google="${r.google_country}"`;
+    if (!r.is_property) return 'Room type name — manual review needed';
+    return '';
+  }
+
+  document.getElementById('export-btn').addEventListener('click', () => {
+    const rows = [
+      ['ID', 'Hotel Name', 'Status', 'DB Lat', 'DB Lng', 'Google Lat', 'Google Lng', 'Google Address', 'Distance (m)', 'Google Maps Link', 'Note'],
+      ...problems.map(r => [
+        r.id,
+        csvEscape(r.name),
+        r.status,
+        r.db_lat ?? '',
+        r.db_lng ?? '',
+        r.google_lat ?? '',
+        r.google_lng ?? '',
+        csvEscape(r.google_address ?? ''),
+        r.distance_m ?? '',
+        r.google_lat && r.google_lng ? `"https://www.google.com/maps?q=${r.google_lat},${r.google_lng}"` : '',
+        csvEscape(statusNote(r)),
+      ]),
+    ];
+    const csv = '﻿' + rows.map(row => row.join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `map-check-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
   });
 
   function renderRow(data) {
