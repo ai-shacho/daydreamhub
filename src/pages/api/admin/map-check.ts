@@ -23,6 +23,19 @@ function looksLikePropertyName(name: string): boolean {
   return PROPERTY_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
+// Extract a component from Google address_components by type
+function getAddressComponent(components: any[], type: string): string {
+  return components?.find((c: any) => c.types.includes(type))?.long_name?.toLowerCase() || '';
+}
+
+// Loose country match: DB value appears in Google's country name or vice versa
+function countriesMatch(dbCountry: string, googleCountry: string): boolean {
+  if (!dbCountry || !googleCountry) return true; // can't verify, give benefit of the doubt
+  const a = dbCountry.toLowerCase();
+  const b = googleCountry.toLowerCase();
+  return a.includes(b) || b.includes(a);
+}
+
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
@@ -41,24 +54,39 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const hotel = await db.prepare('SELECT id, name, city, country, latitude, longitude FROM hotels WHERE id = ?').bind(Number(hotelId)).first() as any;
   if (!hotel) return new Response(JSON.stringify({ error: 'Hotel not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 
+  const isProperty = looksLikePropertyName(hotel.name);
+
   const query = [hotel.name, hotel.city, hotel.country].filter(Boolean).join(', ');
   const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`);
   const geo = await res.json() as any;
 
-  const isProperty = looksLikePropertyName(hotel.name);
+  const base = { id: hotel.id, name: hotel.name, is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude, db_country: hotel.country };
 
   if (geo.status !== 'OK' || !geo.results?.length) {
-    return new Response(JSON.stringify({ id: hotel.id, name: hotel.name, status: 'not_found', is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ ...base, status: 'not_found' }), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  const loc = geo.results[0].geometry.location;
+  const result = geo.results[0];
+  const loc = result.geometry.location;
+  const googleAddress = result.formatted_address;
+  const googleCountry = getAddressComponent(result.address_components, 'country');
+
+  // Verify country matches to avoid false positives from same-named hotels in other countries
+  if (hotel.country && !countriesMatch(hotel.country, googleCountry)) {
+    return new Response(JSON.stringify({
+      ...base, status: 'country_mismatch',
+      google_address: googleAddress,
+      google_country: googleCountry,
+    }), { headers: { 'Content-Type': 'application/json' } });
+  }
+
   const hasDbCoords = hotel.latitude && hotel.longitude;
 
   if (!hasDbCoords) {
     return new Response(JSON.stringify({
-      id: hotel.id, name: hotel.name, status: 'no_coords', is_property: isProperty,
+      ...base, status: 'no_coords',
       google_lat: loc.lat, google_lng: loc.lng,
-      google_address: geo.results[0].formatted_address,
+      google_address: googleAddress,
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -66,11 +94,10 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const status = dist > 500 ? 'mismatch' : 'ok';
 
   return new Response(JSON.stringify({
-    id: hotel.id, name: hotel.name, status, is_property: isProperty,
+    ...base, status,
     distance_m: Math.round(dist),
-    db_lat: hotel.latitude, db_lng: hotel.longitude,
     google_lat: loc.lat, google_lng: loc.lng,
-    google_address: geo.results[0].formatted_address,
+    google_address: googleAddress,
   }), { headers: { 'Content-Type': 'application/json' } });
 };
 

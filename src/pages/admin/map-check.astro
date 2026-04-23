@@ -93,6 +93,8 @@ if (db) {
 
         if (data.status === 'ok') {
           countOk++;
+        } else if (data.status === 'country_mismatch') {
+          // skip — unreliable result, don't surface as actionable
         } else {
           if (!data.is_property) countManual++;
           else if (data.status === 'mismatch') countMismatch++;
@@ -170,18 +172,21 @@ if (db) {
   function renderRow(data) {
     const el = document.createElement('div');
     const isManual = !data.is_property;
-    const colors = isManual ? 'border-slate-200 bg-slate-50' : {
+    const colorMap = {
       mismatch: 'border-red-200 bg-red-50',
       no_coords: 'border-amber-200 bg-amber-50',
       not_found: 'border-amber-200 bg-amber-50',
+      country_mismatch: 'border-purple-200 bg-purple-50',
       error: 'border-slate-200 bg-slate-50',
-    }[data.status] || 'border-slate-200 bg-slate-50';
+    };
+    const colors = isManual ? 'border-slate-200 bg-slate-50' : (colorMap[data.status] || 'border-slate-200 bg-slate-50');
 
     const manualBadge = '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-700">Manual review</span>';
     const statusBadges = {
       mismatch: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">Mismatch</span>',
       no_coords: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">No coords</span>',
       not_found: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Not found</span>',
+      country_mismatch: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">Country mismatch</span>',
       error: '<span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600">Error</span>',
     };
     const badgeHtml = isManual ? manualBadge : (statusBadges[data.status] || '');
@@ -198,6 +203,8 @@ if (db) {
       detail = `<div class="mt-2 text-xs text-slate-600">Google suggests: ${data.google_lat?.toFixed(6)}, ${data.google_lng?.toFixed(6)} — ${data.google_address || ''}</div>`;
     } else if (data.status === 'not_found') {
       detail = `<div class="mt-2 text-xs text-slate-500">Could not find this hotel on Google Maps by name.</div>`;
+    } else if (data.status === 'country_mismatch') {
+      detail = `<div class="mt-2 text-xs text-purple-700">Google returned a result in "${data.google_country}" but DB country is "${data.db_country || '(none)'}". Skipped to avoid false match.</div>`;
     }
 
     el.innerHTML = `
