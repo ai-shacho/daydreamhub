@@ -179,6 +179,10 @@ if (db) {
       document.getElementById('count-manual').textContent = countManual;
       document.getElementById('count-ok').textContent = countOk;
 
+      // Incrementally save so progress is kept even if page is navigated away
+      counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, ok: countOk };
+      saveResults();
+
       // Small delay to avoid rate limiting
       await new Promise(r => setTimeout(r, 200));
     }
@@ -285,9 +289,9 @@ if (db) {
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             ${badgeHtml}
-            <a href="/admin/hotels/${data.id}/edit" class="font-medium text-slate-800 hover:underline">${data.name}</a>
+            <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="font-medium text-slate-800 hover:underline">${data.name}</a>
           </div>
-          <a href="/admin/hotels/${data.id}/edit" class="text-xs text-teal-600 hover:underline">Edit →</a>
+          <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="text-xs text-teal-600 hover:underline">Edit →</a>
         </div>
         ${detail}
       </div>`;
