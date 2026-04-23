@@ -262,7 +262,7 @@ const statusColors: Record<string, string> = {
       const d = await res.json();
       if (res.ok && d.success) {
         resultEl.className = 'block mb-3 p-3 rounded-lg text-sm bg-emerald-50 border border-emerald-200 text-emerald-800';
-        resultEl.innerHTML = `✅ Account created and email sent.<br><strong>Login email:</strong> ${d.email}`;
+        resultEl.innerHTML = `✅ Account created and email sent.<br><strong>Login email:</strong> ${d.email}<br><strong>Password:</strong> <code style="background:#d1fae5;padding:2px 6px;border-radius:4px;font-family:monospace">${d.password}</code><br><span style="font-size:11px;color:#065f46">⚠️ Save this password. It cannot be retrieved again.</span>`;
         btn.textContent = '✅ Done';
       } else {
         resultEl.className = 'block mb-3 p-3 rounded-lg text-sm bg-red-50 border border-red-200 text-red-700';
