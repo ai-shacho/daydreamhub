@@ -85,16 +85,6 @@ export const GET: APIRoute = async ({ request, locals }) => {
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  // City must also match (if DB has one)
-  if (hotel.city && !looseMatch(hotel.city, googleCity)) {
-    return new Response(JSON.stringify({
-      ...base, status: 'location_mismatch',
-      google_address: googleAddress,
-      google_city: googleCity,
-      mismatch_field: 'city',
-    }), { headers: { 'Content-Type': 'application/json' } });
-  }
-
   const hasDbCoords = hotel.latitude && hotel.longitude;
 
   if (!hasDbCoords) {
