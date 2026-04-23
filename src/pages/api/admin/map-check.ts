@@ -69,11 +69,14 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const result = geo.results[0];
   const loc = result.geometry.location;
   const googleAddress = result.formatted_address;
+  const googlePlaceId = result.place_id || '';
   const googleCountry = getAddressComponent(result.address_components, 'country');
   const googleCity =
     getAddressComponent(result.address_components, 'locality') ||
     getAddressComponent(result.address_components, 'administrative_area_level_2') ||
     getAddressComponent(result.address_components, 'administrative_area_level_1');
+
+  const googlePlaceUrl = googlePlaceId ? `https://www.google.com/maps/place/?q=place_id:${googlePlaceId}` : '';
 
   // Country must match (if DB has one)
   if (hotel.country && !looseMatch(hotel.country, googleCountry)) {
@@ -81,6 +84,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
       ...base, status: 'location_mismatch',
       google_address: googleAddress,
       google_country: googleCountry,
+      google_place_url: googlePlaceUrl,
       mismatch_field: 'country',
     }), { headers: { 'Content-Type': 'application/json' } });
   }
@@ -92,6 +96,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
       ...base, status: 'no_coords',
       google_lat: loc.lat, google_lng: loc.lng,
       google_address: googleAddress,
+      google_place_url: googlePlaceUrl,
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -103,6 +108,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     distance_m: Math.round(dist),
     google_lat: loc.lat, google_lng: loc.lng,
     google_address: googleAddress,
+    google_place_url: googlePlaceUrl,
   }), { headers: { 'Content-Type': 'application/json' } });
 };
 

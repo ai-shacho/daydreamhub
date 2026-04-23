@@ -268,7 +268,7 @@ if (db) {
 
   document.getElementById('export-btn').addEventListener('click', () => {
     const rows = [
-      ['ID', 'Hotel Name', 'Status', 'DB Lat', 'DB Lng', 'Google Lat', 'Google Lng', 'Google Address', 'Distance (m)', 'Google Maps Link', 'Note'],
+      ['ID', 'Hotel Name', 'Status', 'DB Lat', 'DB Lng', 'Google Lat', 'Google Lng', 'Google Address', 'Distance (m)', 'Google Maps Link', 'Google Maps Detail Page', 'Note'],
       ...problems.map(r => [
         r.id,
         csvEscape(r.name),
@@ -280,6 +280,7 @@ if (db) {
         csvEscape(r.google_address ?? ''),
         r.distance_m ?? '',
         r.google_lat && r.google_lng ? `"https://www.google.com/maps?q=${r.google_lat},${r.google_lng}"` : '',
+        r.google_place_url ? `"${r.google_place_url}"` : '',
         csvEscape(statusNote(r)),
       ]),
     ];
