@@ -388,7 +388,7 @@ if (db) {
     const verifyButton = el.querySelector('.verify-btn');
     if (verifyButton) {
       verifyButton.addEventListener('click', async (e) => {
-        const btn = e.currentTarget as HTMLButtonElement;
+        const btn = e.currentTarget;
         const id = Number(btn.getAttribute('data-id'));
         if (!confirm('Mark this hotel as verified? It will be excluded from future Map Check results until the coordinates are changed.')) return;
         btn.disabled = true;
