@@ -104,6 +104,11 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   }
   if (!updates.length) return new Response(JSON.stringify({ error: 'No valid fields' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
+  // If coordinates changed manually, clear the verified flag so Map Check re-evaluates.
+  if ('latitude' in fields || 'longitude' in fields) {
+    updates.push('coords_verified_at = NULL');
+  }
+
   try {
     // is_active が 1 に変わる場合、変更前の状態を確認
     const wasActive = 'is_active' in fields && fields.is_active == 1

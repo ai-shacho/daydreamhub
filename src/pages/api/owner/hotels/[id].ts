@@ -98,6 +98,11 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     });
   }
 
+  // If coordinates changed, clear the Map Check verified flag so admin re-evaluates.
+  if ('latitude' in field_changes || 'longitude' in field_changes) {
+    updates.push('coords_verified_at = NULL');
+  }
+
   await db.prepare(`UPDATE hotels SET ${updates.join(', ')} WHERE id = ?`)
     .bind(...params_vals, hotelId).run();
 

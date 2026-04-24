@@ -13,7 +13,7 @@ let hotels: any[] = [];
 if (db) {
   const result = await db.prepare(`
     SELECT h.id, h.name, h.city, h.country, h.latitude, h.longitude,
-           h.email as hotel_email,
+           h.email as hotel_email, h.coords_verified_at,
            u.name as owner_name, u.email as owner_email
     FROM hotels h
     LEFT JOIN users u ON u.email = h.email AND u.role IN ('owner', 'inactive')
@@ -53,7 +53,7 @@ if (db) {
     </div>
   </div>
 
-  <div id="summary" class="hidden mb-4 grid grid-cols-5 gap-4 text-center">
+  <div id="summary" class="hidden mb-4 grid grid-cols-6 gap-3 text-center">
     <div class="bg-red-50 border border-red-200 rounded-lg p-3">
       <div id="count-mismatch" class="text-2xl font-bold text-red-600">0</div>
       <div class="text-xs text-red-500 mt-1">Mismatch (&gt;500m off)</div>
@@ -70,6 +70,10 @@ if (db) {
       <div id="count-manual" class="text-2xl font-bold text-slate-500">0</div>
       <div class="text-xs text-slate-500 mt-1">Manual review (room type)</div>
     </div>
+    <div class="bg-teal-50 border border-teal-200 rounded-lg p-3">
+      <div id="count-verified" class="text-2xl font-bold text-teal-600">0</div>
+      <div class="text-xs text-teal-500 mt-1">Verified (manually confirmed)</div>
+    </div>
     <div class="bg-green-50 border border-green-200 rounded-lg p-3">
       <div id="count-ok" class="text-2xl font-bold text-green-600">0</div>
       <div class="text-xs text-green-500 mt-1">OK</div>
@@ -83,7 +87,7 @@ if (db) {
   const STORAGE_KEY = 'mapCheckResults_v1';
   let running = false;
   let problems = [];
-  let counts = { mismatch: 0, issue: 0, locMismatch: 0, manual: 0, ok: 0 };
+  let counts = { mismatch: 0, issue: 0, locMismatch: 0, manual: 0, verified: 0, ok: 0 };
 
   function saveResults() {
     try {
@@ -105,13 +109,15 @@ if (db) {
 
   function renderFromCache(cache) {
     problems = cache.problems || [];
-    counts = cache.counts || { mismatch: 0, issue: 0, locMismatch: 0, manual: 0, ok: 0 };
+    counts = cache.counts || { mismatch: 0, issue: 0, locMismatch: 0, manual: 0, verified: 0, ok: 0 };
+    if (typeof counts.verified !== 'number') counts.verified = 0;
 
     document.getElementById('summary').classList.remove('hidden');
     document.getElementById('count-mismatch').textContent = counts.mismatch;
     document.getElementById('count-issue').textContent = counts.issue;
     document.getElementById('count-location-mismatch').textContent = counts.locMismatch;
     document.getElementById('count-manual').textContent = counts.manual;
+    document.getElementById('count-verified').textContent = counts.verified;
     document.getElementById('count-ok').textContent = counts.ok;
 
     const resultsEl = document.getElementById('results');
@@ -152,7 +158,7 @@ if (db) {
     document.getElementById('summary').classList.remove('hidden');
     document.getElementById('results').innerHTML = '';
 
-    let countMismatch = 0, countIssue = 0, countOk = 0, countManual = 0, countLocationMismatch = 0;
+    let countMismatch = 0, countIssue = 0, countOk = 0, countManual = 0, countLocationMismatch = 0, countVerified = 0;
     problems = [];
     // Remove any cached-results banner from a previous run
     document.querySelectorAll('#clear-cache').forEach((b) => b.parentElement?.remove());
@@ -167,8 +173,16 @@ if (db) {
         const res = await fetch(`/api/admin/map-check?id=${hotel.id}`);
         const data = await res.json();
 
+        // If admin has manually verified this hotel's coordinates, treat coordinate-related
+        // mismatches as resolved (e.g. Google returns a chain HQ address but DB is correct).
+        // "no_coords" still counts as a problem because missing data is always wrong.
+        const isVerified = !!data.coords_verified_at;
+        const skipDueToVerified = isVerified && (data.status === 'mismatch' || data.status === 'location_mismatch');
+
         if (data.status === 'ok') {
           countOk++;
+        } else if (skipDueToVerified) {
+          countVerified++;
         } else if (data.status === 'location_mismatch') {
           countLocationMismatch++;
           problems.push(data);
@@ -190,10 +204,11 @@ if (db) {
       document.getElementById('count-issue').textContent = countIssue;
       document.getElementById('count-location-mismatch').textContent = countLocationMismatch;
       document.getElementById('count-manual').textContent = countManual;
+      document.getElementById('count-verified').textContent = countVerified;
       document.getElementById('count-ok').textContent = countOk;
 
       // Incrementally save so progress is kept even if page is navigated away
-      counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, ok: countOk };
+      counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, verified: countVerified, ok: countOk };
       saveResults();
 
       // Small delay to avoid rate limiting
@@ -205,7 +220,7 @@ if (db) {
     document.getElementById('run-btn').disabled = false;
     running = false;
 
-    counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, ok: countOk };
+    counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, verified: countVerified, ok: countOk };
     saveResults();
 
     if (problems.length > 0) document.getElementById('export-btn').classList.remove('hidden');
@@ -347,6 +362,13 @@ if (db) {
       ? `<span class="text-xs text-slate-500">Owner: ${data.owner_name} (${data.owner_email})</span>`
       : `<span class="text-xs text-slate-400">No owner assigned</span>`;
 
+    // Show "Mark as verified" only for coordinate-related issues (mismatch / location_mismatch).
+    // Useful when Google returns wrong location (e.g. chain head office) but DB is correct.
+    const canVerify = data.status === 'mismatch' || data.status === 'location_mismatch';
+    const verifyBtn = canVerify
+      ? `<button class="verify-btn text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700 shrink-0" data-id="${data.id}">✅ Mark as verified</button>`
+      : '';
+
     el.innerHTML = `
       <div class="border rounded-lg p-4 ${colors}">
         <div class="flex items-center justify-between">
@@ -355,10 +377,47 @@ if (db) {
             <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="font-medium text-slate-800 hover:underline">${data.name}</a>
             ${ownerHtml}
           </div>
-          <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="text-xs text-teal-600 hover:underline shrink-0">Edit →</a>
+          <div class="flex items-center gap-2 shrink-0">
+            ${verifyBtn}
+            <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="text-xs text-teal-600 hover:underline">Edit →</a>
+          </div>
         </div>
         ${detail}
       </div>`;
+
+    const verifyButton = el.querySelector('.verify-btn');
+    if (verifyButton) {
+      verifyButton.addEventListener('click', async (e) => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        const id = Number(btn.getAttribute('data-id'));
+        if (!confirm('Mark this hotel as verified? It will be excluded from future Map Check results until the coordinates are changed.')) return;
+        btn.disabled = true;
+        btn.textContent = '⏳ Saving...';
+        try {
+          const res = await fetch('/api/admin/map-check', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, verified: true }),
+          });
+          if (!res.ok) throw new Error('Request failed');
+          // Remove from current problems list + recount verified, then re-render summary.
+          problems = problems.filter(p => p.id !== id);
+          counts.verified = (counts.verified || 0) + 1;
+          if (data.status === 'mismatch') counts.mismatch = Math.max(0, counts.mismatch - 1);
+          else if (data.status === 'location_mismatch') counts.locMismatch = Math.max(0, counts.locMismatch - 1);
+          document.getElementById('count-mismatch').textContent = counts.mismatch;
+          document.getElementById('count-location-mismatch').textContent = counts.locMismatch;
+          document.getElementById('count-verified').textContent = counts.verified;
+          saveResults();
+          el.remove();
+        } catch {
+          btn.disabled = false;
+          btn.textContent = '✅ Mark as verified';
+          alert('Failed to mark as verified. Please try again.');
+        }
+      });
+    }
+
     document.getElementById('results').appendChild(el);
   }
 </script>

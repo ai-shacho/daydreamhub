@@ -52,7 +52,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
   if (!hotelId) return new Response(JSON.stringify({ error: 'id required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
   const hotel = await db.prepare(`
-    SELECT h.id, h.name, h.city, h.country, h.latitude, h.longitude,
+    SELECT h.id, h.name, h.city, h.country, h.latitude, h.longitude, h.coords_verified_at,
            u.name as owner_name, u.email as owner_email
     FROM hotels h
     LEFT JOIN users u ON u.email = h.email AND u.role IN ('owner', 'inactive')
@@ -66,7 +66,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`);
   const geo = await res.json() as any;
 
-  const base = { id: hotel.id, name: hotel.name, is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude, db_country: hotel.country, db_city: hotel.city, owner_name: hotel.owner_name || '', owner_email: hotel.owner_email || '' };
+  const base = { id: hotel.id, name: hotel.name, is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude, db_country: hotel.country, db_city: hotel.city, owner_name: hotel.owner_name || '', owner_email: hotel.owner_email || '', coords_verified_at: hotel.coords_verified_at || null };
 
   if (geo.status !== 'OK' || !geo.results?.length) {
     return new Response(JSON.stringify({ ...base, status: 'not_found' }), { headers: { 'Content-Type': 'application/json' } });
@@ -138,11 +138,46 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   try {
     if (address) {
-      await db.prepare('UPDATE hotels SET latitude = ?, longitude = ?, address = ? WHERE id = ?').bind(latitude, longitude, address, Number(id)).run();
+      await db.prepare('UPDATE hotels SET latitude = ?, longitude = ?, address = ?, coords_verified_at = NULL WHERE id = ?').bind(latitude, longitude, address, Number(id)).run();
     } else {
-      await db.prepare('UPDATE hotels SET latitude = ?, longitude = ? WHERE id = ?').bind(latitude, longitude, Number(id)).run();
+      await db.prepare('UPDATE hotels SET latitude = ?, longitude = ?, coords_verified_at = NULL WHERE id = ?').bind(latitude, longitude, Number(id)).run();
     }
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: 'Update failed', details: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+};
+
+// Mark hotel coordinates as verified (or unverify).
+// Use when DB coordinates are correct but Google returns a different location
+// (e.g. chain head office address) — prevents the hotel from reappearing in Map Check results.
+export const PATCH: APIRoute = async ({ request, locals }) => {
+  const env = (locals as any).runtime?.env;
+  const jwtSecret = env?.JWT_SECRET || 'dev-secret';
+  const admin = await verifyAdmin(request, jwtSecret);
+  if (!admin) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+
+  const db = env?.DB;
+  if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+
+  let data: any;
+  try { data = await request.json(); } catch { return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } }); }
+
+  const { id, verified } = data;
+  if (!id || typeof verified !== 'boolean') {
+    return new Response(JSON.stringify({ error: 'id and verified (boolean) required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  try {
+    if (verified) {
+      const now = Math.floor(Date.now() / 1000);
+      await db.prepare('UPDATE hotels SET coords_verified_at = ? WHERE id = ?').bind(now, Number(id)).run();
+      return new Response(JSON.stringify({ success: true, coords_verified_at: now }), { headers: { 'Content-Type': 'application/json' } });
+    } else {
+      await db.prepare('UPDATE hotels SET coords_verified_at = NULL WHERE id = ?').bind(Number(id)).run();
+      return new Response(JSON.stringify({ success: true, coords_verified_at: null }), { headers: { 'Content-Type': 'application/json' } });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return new Response(JSON.stringify({ error: 'Update failed', details: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
