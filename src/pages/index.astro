@@ -52,7 +52,7 @@ try {
                   MIN(p.price_usd) as min_price
            FROM hotels h
            JOIN plans p ON p.hotel_id = h.id AND p.plan_type = ?1
-           WHERE h.is_active = 1
+           WHERE h.status = 'active'
            GROUP BY h.id
            ORDER BY h.rating DESC
            LIMIT 12`
@@ -61,7 +61,7 @@ try {
           `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
                   MIN(p.price_usd) as min_price
            FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-           WHERE h.is_active = 1
+           WHERE h.status = 'active'
            GROUP BY h.id
            ORDER BY h.rating DESC
            LIMIT 12`
@@ -72,8 +72,8 @@ try {
         `SELECT DISTINCT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
                 MIN(p.price_usd) as min_price
          FROM hotels h
-         LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-         WHERE h.is_active = 1
+         LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+         WHERE h.status = 'active'
            AND (h.categories LIKE '%"' || ?1 || '"%' OR EXISTS (SELECT 1 FROM plans p2 WHERE p2.hotel_id = h.id AND p2.plan_type = ?1))
          GROUP BY h.id
          ORDER BY h.rating DESC
@@ -86,11 +86,11 @@ try {
         heroQuery,
         DB.prepare(
           `SELECT city, country, COUNT(*) as hotel_count
-           FROM hotels WHERE city != '' AND is_active = 1
+           FROM hotels WHERE city != '' AND status = 'active'
            GROUP BY city ORDER BY hotel_count DESC LIMIT 60`
         ).all().catch(() => ({ results: [] })),
-        DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE is_active = 1").first().catch(() => ({ c: 0 })),
-        DB.prepare("SELECT COUNT(*) as c FROM plans WHERE is_active = 1").first().catch(() => ({ c: 0 })),
+        DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE status = 'active'").first().catch(() => ({ c: 0 })),
+        DB.prepare("SELECT COUNT(*) as c FROM plans WHERE status = 'active'").first().catch(() => ({ c: 0 })),
         DB.prepare(
           `SELECT id, title, slug, excerpt, thumbnail_url, city, published_at
            FROM blog_posts ORDER BY published_at DESC LIMIT 3`
@@ -99,7 +99,7 @@ try {
           `SELECT id, name, slug, city, country, latitude, longitude, thumbnail_url,
                   MIN(p.price_usd) as min_price
            FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-           WHERE h.is_active = 1 AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
+           WHERE h.status = 'active' AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
            GROUP BY h.id LIMIT 100`
         ).all().catch(() => ({ results: [] })),
         ...categoryQueries,
@@ -149,7 +149,7 @@ try {
               h.id as hotel_id, h.name as hotel_name, h.slug, h.city, h.country, h.thumbnail_url, h.property_type
        FROM plans p
        JOIN hotels h ON h.id = p.hotel_id
-       WHERE h.is_active = 1
+       WHERE h.status = 'active'
        ORDER BY p.price_usd ASC
        LIMIT 9`
     ).all();
@@ -1107,23 +1107,59 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
                        line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
       if (!phoneMatch) continue;
+      // 電話番号の前後5行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
+      var nearPartner = false;
+      for (var k = Math.max(0, i - 5); k <= Math.min(lines.length - 1, i + 5); k++) {
+        if (lines[k].indexOf('/hotel/') !== -1) { nearPartner = true; break; }
+      }
+      if (nearPartner) continue;
       var phone = phoneMatch[1].trim();
-      // 現在行 + 前方3行以内でホテル名を探す
+      // 現在行 + 前方6行以内でホテル名を探す
       var name = '';
-      for (var j = i; j >= Math.max(0, i - 3); j--) {
+      for (var j = i; j >= Math.max(0, i - 6); j--) {
         var checkLine = lines[j];
         if (checkLine.indexOf('/hotel/') !== -1) break; // 自社ホテル行に当たったら中断
-        var np = checkLine.match(/\*\*(.*?)\*\*/) ||
-                 checkLine.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+\d|$)/) ||
-                 checkLine.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+\d|$)/);
-        if (np) {
-          name = np[1].replace(/\*\*/g, '').trim();
-          if (name.length >= 2) break;
+        // 住所行・電話行・記号のみの行はスキップ
+        if (checkLine.indexOf('📍') !== -1) continue;
+        if (checkLine.indexOf('📞') !== -1 && j !== i) continue;
+        var stripped = checkLine.replace(/^\s*[-•]\s*/, '').trim();
+        if (!stripped) continue;
+        // 1. 太字パターン **Name**
+        var m = checkLine.match(/\*\*([^*]{2,80})\*\*/);
+        if (m) {
+          var c1 = m[1].trim();
+          if (c1.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c1) && !/^\d+\s*[,\s]/.test(c1)) {
+            name = c1; break;
+          }
+        }
+        // 2. 番号付きリスト "4. NOBO - Hotel in old Tbilisi"
+        m = checkLine.match(/^\s*\d+\.\s+(.+?)\s*$/);
+        if (m) {
+          var c2 = m[1].replace(/\s*[|｜].*$/, '').replace(/\s*[⭐★].*$/, '').trim();
+          if (c2.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c2) && !/^\d+\s*[,\s]/.test(c2)) {
+            name = c2; break;
+          }
+        }
+        // 3. bullet "- Name" / "• Name"
+        m = checkLine.match(/^\s*[-•]\s+([^📍📞|｜⭐★]{2,80}?)\s*(?:[|｜⭐★]|$)/);
+        if (m) {
+          var c3 = m[1].trim();
+          if (c3.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c3) && !/^\d+\s*[,\s]/.test(c3)) {
+            name = c3; break;
+          }
+        }
+        // 4. 装飾なしの平文行 "Here We Go Bangkok | ⭐4.7"
+        m = checkLine.match(/^\s*([A-Za-z][^|｜⭐★📍📞\n]{1,80}?)\s*(?:[|｜⭐★]|$)/);
+        if (m) {
+          var c4 = m[1].trim();
+          if (c4.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c4) && !/^\d+\s*[,\s]/.test(c4)) {
+            name = c4; break;
+          }
         }
       }
       if (!name || name.length < 2) continue;
-      // 重複チェック
-      if (!hotels.some(function(h){ return h.phone === phone; })) {
+      // 重複チェック（電話番号・ホテル名のどちらかが一致すれば同一扱い）
+      if (!hotels.some(function(h){ return h.phone === phone || h.name === name; })) {
         hotels.push({ name: name, phone: phone });
       }
     }
@@ -1148,18 +1184,17 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
 
       // 外部ホテル: 複数選択チェックボックス + まとめて電話ボタン（最大3件、合計$7）
       var callBtns = '';
-      if (externalHotels.length > 0) {
-        var top3 = externalHotels.slice(0, 3);
+      // ホテル名が取れていない候補は除外
+      var validExternal = externalHotels.filter(function(h){ return h.name && h.name.length >= 2; });
+      if (validExternal.length > 0) {
+        var top3 = validExternal.slice(0, 3);
         window._heroExternalHotels = top3; // 後で _heroCallBook が参照
         var items = top3.map(function(h, i) {
           var safeName = (h.name || '').replace(/"/g, '&quot;').slice(0, 60);
           var safePhone = (h.phone || '').replace(/"/g, '');
-          return '<label class="flex items-start gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition-colors">' +
-            '<input type="checkbox" class="hero-ext-hotel-cb mt-0.5 accent-amber-400" data-name="' + safeName + '" data-phone="' + safePhone + '" checked />' +
-            '<span class="flex-1 text-xs text-white/90">' +
-              '<span class="font-semibold block">' + safeName + '</span>' +
-              '<span class="text-white/50 text-[11px]">' + safePhone + '</span>' +
-            '</span>' +
+          return '<label class="flex items-center gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition-colors">' +
+            '<input type="checkbox" class="hero-ext-hotel-cb accent-amber-400" data-name="' + safeName + '" data-phone="' + safePhone + '" checked />' +
+            '<span class="flex-1 text-xs text-white/90 font-semibold">' + safeName + '</span>' +
           '</label>';
         }).join('');
         callBtns =

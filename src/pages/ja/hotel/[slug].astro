@@ -54,7 +54,7 @@ try {
         `SELECT h.id, h.name, h.slug, h.city, h.thumbnail_url, h.rating, MIN(p.price_usd) as min_price
          FROM hotels h
          LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-         WHERE h.city = ? AND h.id != ? AND h.is_active = 1
+         WHERE h.city = ? AND h.id != ? AND h.status = 'active'
          GROUP BY h.id
          ORDER BY h.rating DESC
          LIMIT 4`

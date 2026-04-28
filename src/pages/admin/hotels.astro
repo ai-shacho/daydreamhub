@@ -98,9 +98,11 @@ if (db) {
       binds.push(cityFilter);
     }
     if (statusFilter === "active") {
-      query += " AND h.is_active = 1";
+      query += " AND h.status = 'active'";
+    } else if (statusFilter === "demo") {
+      query += " AND h.status = 'demo'";
     } else if (statusFilter === "inactive") {
-      query += " AND h.is_active = 0";
+      query += " AND h.status = 'inactive'";
     }
     if (ownerFilter === "assigned") {
       query += " AND h.email IS NOT NULL AND h.email != '' AND h.email IN (SELECT email FROM users WHERE role IN ('owner', 'inactive'))";
@@ -183,6 +185,7 @@ function sortIcon(col: string) {
         <select name="status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
           <option value="" selected={statusFilter === ""}>All Status</option>
           <option value="active" selected={statusFilter === "active"}>Active</option>
+          <option value="demo" selected={statusFilter === "demo"}>Demo</option>
           <option value="inactive" selected={statusFilter === "inactive"}>Inactive</option>
         </select>
       </div>
@@ -348,15 +351,22 @@ function sortIcon(col: string) {
 
                 <!-- Status -->
                 <td class="px-4 py-3 text-center">
-                  <button
-                    class="toggle-active-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors"
-                    data-id={hotel.id}
-                    data-active={hotel.is_active ? "1" : "0"}
-                    class:list={[hotel.is_active ? "bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-700" : "bg-slate-100 text-slate-500 hover:bg-green-50 hover:text-green-700"]}
-                  >
-                    <span class={`w-1.5 h-1.5 rounded-full ${hotel.is_active ? "bg-green-500" : "bg-slate-400"}`}></span>
-                    {hotel.is_active ? "Active" : "Inactive"}
-                  </button>
+                  {hotel.status === 'demo' ? (
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                      Demo
+                    </span>
+                  ) : (
+                    <button
+                      class="toggle-active-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors"
+                      data-id={hotel.id}
+                      data-active={hotel.is_active ? "1" : "0"}
+                      class:list={[hotel.is_active ? "bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-700" : "bg-slate-100 text-slate-500 hover:bg-green-50 hover:text-green-700"]}
+                    >
+                      <span class={`w-1.5 h-1.5 rounded-full ${hotel.is_active ? "bg-green-500" : "bg-slate-400"}`}></span>
+                      {hotel.is_active ? "Active" : "Inactive"}
+                    </button>
+                  )}
                 </td>
 
                 <!-- Actions -->

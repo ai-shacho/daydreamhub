@@ -34,8 +34,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
                 h.thumbnail_url, h.rating, h.categories,
                 MIN(p.price_usd) as min_price
          FROM hotels h
-         LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-         WHERE h.slug IN (${placeholders}) AND h.is_active = 1
+         LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+         WHERE h.slug IN (${placeholders}) AND h.status = 'active'
          GROUP BY h.id`
       )
       .bind(...slugs)

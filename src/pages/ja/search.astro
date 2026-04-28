@@ -18,7 +18,7 @@ const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
 const perPage = 12;
 const offset = (page - 1) * perPage;
 
-let whereClauses: string[] = ['h.is_active = 1'];
+let whereClauses: string[] = ['h.status = 'active''];
 let params: any[] = [];
 
 if (location) {
@@ -121,17 +121,17 @@ if (DB) {
     hotels = isAirportSort ? allResults.slice(offset, offset + perPage) : allResults;
 
     const countriesResult = await DB.prepare(
-      "SELECT DISTINCT country FROM hotels WHERE country != '' AND is_active = 1 ORDER BY country"
+      "SELECT DISTINCT country FROM hotels WHERE country != '' AND status = 'active' ORDER BY country"
     ).all();
     allCountries = (countriesResult?.results || []).map((r: any) => r.country).map(c => c.charAt(0).toUpperCase() + c.slice(1));
 
     const ptResult = await DB.prepare(
-      "SELECT DISTINCT property_type FROM hotels WHERE property_type != '' AND is_active = 1 ORDER BY property_type"
+      "SELECT DISTINCT property_type FROM hotels WHERE property_type != '' AND status = 'active' ORDER BY property_type"
     ).all();
     allPropertyTypes = (ptResult?.results || []).map((r: any) => r.property_type);
 
     const cityResult = await DB.prepare(
-      "SELECT DISTINCT city FROM hotels WHERE city != '' AND is_active = 1 ORDER BY city"
+      "SELECT DISTINCT city FROM hotels WHERE city != '' AND status = 'active' ORDER BY city"
     ).all();
     allCities = (cityResult?.results || []).map((r: any) => r.city);
 

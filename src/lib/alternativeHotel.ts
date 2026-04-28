@@ -101,7 +101,7 @@ async function findAndCallNextHotel(env: AltHotelEnv, bookingId: number): Promis
        FROM plans p
        JOIN hotels h ON h.id = p.hotel_id
        WHERE h.city = ?
-         AND h.is_active = 1
+         AND h.status = 'active'
          AND h.auto_call_enabled = 1
          AND h.phone IS NOT NULL AND h.phone != ''
          AND p.is_active = 1

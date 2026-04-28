@@ -15,14 +15,14 @@ if (db) {
              MIN(p.price_usd) as min_price
       FROM hotels h
       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-      WHERE h.is_active = 1
+      WHERE h.status = 'active'
       GROUP BY h.id
       ORDER BY h.name
     `).all();
     hotels = result?.results || [];
 
     const cityResult = await db.prepare(
-      "SELECT DISTINCT city FROM hotels WHERE city != '' AND is_active = 1 ORDER BY city"
+      "SELECT DISTINCT city FROM hotels WHERE city != '' AND status = 'active' ORDER BY city"
     ).all();
     allCities = (cityResult?.results || []).map((r: any) => r.city);
   } catch(e) {

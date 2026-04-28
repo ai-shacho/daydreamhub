@@ -38,7 +38,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const country = url.searchParams.get('country') || '';
   const offset = (page - 1) * perPage;
 
-  const conditions: string[] = ['is_active = 1'];
+  const conditions: string[] = ['status = 'active''];
   const params: any[] = [];
 
   if (search) {

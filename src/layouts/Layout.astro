@@ -9,9 +9,10 @@ interface Props {
   canonicalUrl?: string;
   ogType?: string;
   ogPublishedTime?: string;
+  noindex?: boolean;
 }
 
-const { title, description = "Day-use hotel booking platform - Find hourly hotels worldwide", ogImage, canonicalUrl, ogType, ogPublishedTime } = Astro.props;
+const { title, description = "Day-use hotel booking platform - Find hourly hotels worldwide", ogImage, canonicalUrl, ogType, ogPublishedTime, noindex } = Astro.props;
 const siteUrl = 'https://www.daydreamhub.com';
 const resolvedOgImage = ogImage || `${siteUrl}/og-default.jpg`;
 const resolvedCanonical = canonicalUrl || `${siteUrl}${Astro.url.pathname}`;
@@ -78,6 +79,7 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content={description} />
+  {noindex && <meta name="robots" content="noindex,nofollow" />}
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />

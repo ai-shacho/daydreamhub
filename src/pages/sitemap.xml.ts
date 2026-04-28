@@ -26,7 +26,7 @@ export const GET: APIRoute = async ({ locals }) => {
   if (db) {
     try {
       const result = await db.prepare(
-        "SELECT slug FROM hotels WHERE is_active=1 AND slug IS NOT NULL AND slug != ''"
+        "SELECT slug FROM hotels WHERE status='active' AND slug IS NOT NULL AND slug != ''"
       ).all();
       hotelPages = result?.results || [];
     } catch(e) { console.error('sitemap hotel query error:', e); }
@@ -48,7 +48,7 @@ export const GET: APIRoute = async ({ locals }) => {
   if (db) {
     try {
       const result = await db.prepare(
-        "SELECT DISTINCT REPLACE(REPLACE(LOWER(city), ' ', '-'), '_', '-') as city_slug FROM hotels WHERE is_active=1 AND city IS NOT NULL AND city != ''"
+        "SELECT DISTINCT REPLACE(REPLACE(LOWER(city), ' ', '-'), '_', '-') as city_slug FROM hotels WHERE status='active' AND city IS NOT NULL AND city != ''"
       ).all();
       cityPages = result?.results || [];
     } catch(e) { console.error('sitemap city query error:', e); }

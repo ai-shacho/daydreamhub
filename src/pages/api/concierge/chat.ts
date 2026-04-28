@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { initiateCall, createCallGroup, initiateNextGroupCall } from '../../../lib/tools';
 import { CONCIERGE_SYSTEM_PROMPT_EN, CONCIERGE_SYSTEM_PROMPT_JA } from '../../../lib/claude';
+import { filterExternalHotels } from '../../../lib/filterExternalHotels';
 
 // Shared text sanitizer — strips raw HTML from AI output, converts <a> to Markdown
 function sanitizeAIText(text: string): string {
@@ -180,7 +181,7 @@ async function telnyxOrchestrate(
       // 1. DB登録都市と照合
       if (!city) {
         const dbCityRows = await db.prepare(
-          `SELECT DISTINCT city FROM hotels WHERE is_active = 1 ORDER BY city`
+          `SELECT DISTINCT city FROM hotels WHERE status = 'active' ORDER BY city`
         ).all();
         for (const row of (dbCityRows?.results || []) as any[]) {
           if (row.city && lowerMsg.includes(row.city.toLowerCase())) {
@@ -218,8 +219,8 @@ async function telnyxOrchestrate(
           `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.rating,
                   p.id as plan_id, p.name as plan_name,
                   p.price_usd, p.check_in_time, p.check_out_time, p.max_guests
-           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-           WHERE h.is_active = 1 AND (
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+           WHERE h.status = 'active' AND (
              LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
              OR LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
            )
@@ -286,18 +287,19 @@ async function telnyxOrchestrate(
             `hourly hotel ${city}`,
             `hotel ${city}`
           ];
-          const seen = new Set<string>();
+          const allCandidates: any[] = [];
           for (const q of queries) {
-            if (extHotels.length >= 5) break;
+            if (allCandidates.length >= 15) break;
             const gResult = await searchHotelsExternal(env, { query: q, location: city, language: locale });
-            for (const h of (gResult?.hotels || [])) {
-              const key = h.name?.toLowerCase().slice(0, 20) || '';
-              if (!seen.has(key)) { seen.add(key); extHotels.push(h); }
-              if (extHotels.length >= 5) break;
-            }
+            allCandidates.push(...(gResult?.hotels || []));
           }
+          extHotels = filterExternalHotels(allCandidates, results, 5);
           if (extHotels.length === 0) {
-            extHotels = (await searchHotelsBrave(env, city, locale)).slice(0, 5);
+            extHotels = filterExternalHotels(
+              await searchHotelsBrave(env, city, locale),
+              results,
+              5
+            );
           }
 
           // Inject test hotel for Bangkok searches (always first, trim to 5)
@@ -1073,7 +1075,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           const hotels = await db.prepare(
             `SELECT h.name, h.slug, h.city, h.country, h.property_type, MIN(p.price_usd) as min_price
              FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-             WHERE h.is_active = 1 AND (LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?)
+             WHERE h.status = 'active' AND (LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?)
              GROUP BY h.id
              ORDER BY
                CASE WHEN LOWER(h.property_type) LIKE '%clinic%' OR LOWER(h.name) LIKE '%clinic%' THEN 1 ELSE 0 END ASC,

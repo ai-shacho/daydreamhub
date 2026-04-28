@@ -19,8 +19,8 @@ try {
       `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
               MIN(p.price_usd) as min_price
        FROM hotels h
-       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-       WHERE h.is_active = 1 AND (LOWER(h.city) = LOWER(?1) OR LOWER(h.city) LIKE LOWER(?1) || ' %')
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+       WHERE h.status = 'active' AND (LOWER(h.city) = LOWER(?1) OR LOWER(h.city) LIKE LOWER(?1) || ' %')
        GROUP BY h.id
        ORDER BY h.rating DESC, min_price ASC`
     ).bind(cityName).all();
@@ -32,8 +32,8 @@ try {
         `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
                 MIN(p.price_usd) as min_price
          FROM hotels h
-         LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-         WHERE h.is_active = 1 AND (REPLACE(REPLACE(LOWER(h.city), ' ', '-'), '_', '-') = LOWER(?1) OR REPLACE(REPLACE(LOWER(h.city), ' ', '-'), '_', '-') LIKE LOWER(?1) || '-%')
+         LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+         WHERE h.status = 'active' AND (REPLACE(REPLACE(LOWER(h.city), ' ', '-'), '_', '-') = LOWER(?1) OR REPLACE(REPLACE(LOWER(h.city), ' ', '-'), '_', '-') LIKE LOWER(?1) || '-%')
          GROUP BY h.id
          ORDER BY h.rating DESC, min_price ASC`
       ).bind(slug).all();

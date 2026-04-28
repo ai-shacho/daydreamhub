@@ -54,7 +54,7 @@ try {
         `SELECT h.id, h.name, h.slug, h.city, h.thumbnail_url, h.rating, MIN(p.price_usd) as min_price
          FROM hotels h
          LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-         WHERE h.city = ? AND h.id != ? AND h.is_active = 1
+         WHERE h.city = ? AND h.id != ? AND h.status = 'active'
          GROUP BY h.id
          ORDER BY h.rating DESC
          LIMIT 4`
@@ -93,7 +93,11 @@ if (!dbAvailable) {
   }
 }
 
+const isDemo = hotel?.status === 'demo';
+
 if (!hotel) {
+  Astro.response.status = 404;
+} else if (hotel.status === 'inactive' || (!hotel.status && !hotel.is_active)) {
   Astro.response.status = 404;
 }
 
@@ -203,6 +207,7 @@ for (const img of images) {
   description={hotel ? displayDescription.slice(0, 160) : t('hotel.not_found_desc', locale)}
   ogImage={hotel?.thumbnail_url || undefined}
   canonicalUrl={hotel ? `${siteUrl}/hotel/${hotel.slug}` : undefined}
+  noindex={isDemo}
 >
   {hotel && (
     <script slot="head" type="application/ld+json" set:html={JSON.stringify({
@@ -224,6 +229,18 @@ for (const img of images) {
         "ratingCount": hotel.review_count || 1
       }} : {})
     })} />
+  )}
+
+  {isDemo && (
+    <div class="bg-amber-50 border-b border-amber-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full border border-amber-300">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          DEMO PAGE
+        </span>
+        <p class="text-sm text-amber-700">This is a preview page for internal use only. It is not listed on the site and will not appear in search engines.</p>
+      </div>
+    </div>
   )}
 
   {hotel ? (

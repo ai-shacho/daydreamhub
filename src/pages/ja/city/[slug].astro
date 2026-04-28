@@ -22,14 +22,14 @@ try {
   if (db) {
     dbAvailable = true;
     const countResult = await db.prepare(
-      `SELECT COUNT(*) as count FROM hotels WHERE city LIKE ? AND is_active = 1`
+      `SELECT COUNT(*) as count FROM hotels WHERE city LIKE ? AND status = 'active'`
     ).bind(`%${cityName}%`).first();
     total = countResult?.count || 0;
 
     const result = await db.prepare(
       `SELECT h.*, MIN(p.price_usd) as min_price FROM hotels h
-       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-       WHERE h.city LIKE ? AND h.is_active = 1
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+       WHERE h.city LIKE ? AND h.status = 'active'
        GROUP BY h.id
        ORDER BY h.created_at DESC
        LIMIT ? OFFSET ?`
@@ -40,7 +40,7 @@ try {
       const hotelIds = hotels.map((h: any) => h.id);
       const placeholders = hotelIds.map(() => '?').join(',');
       const plansResult = await db.prepare(
-        `SELECT * FROM plans WHERE hotel_id IN (${placeholders}) AND is_active = 1`
+        `SELECT * FROM plans WHERE hotel_id IN (${placeholders}) AND status = 'active'`
       ).bind(...hotelIds).all();
       for (const plan of plansResult?.results || []) {
         if (!plansMap.has(plan.hotel_id)) plansMap.set(plan.hotel_id, []);

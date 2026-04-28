@@ -96,13 +96,19 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
   const allowed = ['name','name_ja','slug','description','description_ja','city','country','address',
-    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy','is_active'];
+    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy','is_active','status'];
   const updates: string[] = [];
   const params: any[] = [];
   for (const key of allowed) {
     if (key in fields) { updates.push(`${key} = ?`); params.push(fields[key]); }
   }
   if (!updates.length) return new Response(JSON.stringify({ error: 'No valid fields' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+
+  // Keep is_active in sync with status
+  if ('status' in fields) {
+    updates.push('is_active = ?');
+    params.push(fields.status === 'active' ? 1 : 0);
+  }
 
   // If coordinates changed manually, clear the verified flag so Map Check re-evaluates.
   if ('latitude' in fields || 'longitude' in fields) {
@@ -198,16 +204,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   try {
+    const status = data.status || 'inactive';
+    const isActive = status === 'active' ? 1 : 0;
     const result = await db.prepare(
-      `INSERT INTO hotels (name, name_ja, slug, description, description_ja, city, country, address, thumbnail_url, property_type, email, phone, amenities, is_active, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', 0, datetime('now'))`
+      `INSERT INTO hotels (name, name_ja, slug, description, description_ja, city, country, address, thumbnail_url, property_type, email, phone, amenities, is_active, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, datetime('now'))`
     ).bind(
       name, data.name_ja || null, slug,
       data.description || null, data.description_ja || null,
       city, country,
       data.address || null, data.thumbnail_url || null,
       data.property_type || 'hotel',
-      data.email || null, data.phone || null
+      data.email || null, data.phone || null,
+      isActive, status
     ).run();
     return new Response(JSON.stringify({ success: true, id: (result as any).meta?.last_row_id }), {
       headers: { 'Content-Type': 'application/json' },

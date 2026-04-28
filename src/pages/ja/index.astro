@@ -52,7 +52,7 @@ try {
                   MIN(p.price_usd) as min_price
            FROM hotels h
            JOIN plans p ON p.hotel_id = h.id AND p.plan_type = ?1
-           WHERE h.is_active = 1
+           WHERE h.status = 'active'
            GROUP BY h.id
            ORDER BY h.rating DESC
            LIMIT 12`
@@ -61,7 +61,7 @@ try {
           `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
                   MIN(p.price_usd) as min_price
            FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-           WHERE h.is_active = 1
+           WHERE h.status = 'active'
            GROUP BY h.id
            ORDER BY h.rating DESC
            LIMIT 12`
@@ -73,7 +73,7 @@ try {
                 MIN(p.price_usd) as min_price
          FROM hotels h
          JOIN plans p ON p.hotel_id = h.id AND p.plan_type = ?1
-         WHERE h.is_active = 1
+         WHERE h.status = 'active'
          GROUP BY h.id
          ORDER BY h.rating DESC
          LIMIT 6`
@@ -85,11 +85,11 @@ try {
         heroQuery,
         DB.prepare(
           `SELECT city, country, COUNT(*) as hotel_count
-           FROM hotels WHERE city != '' AND is_active = 1
+           FROM hotels WHERE city != '' AND status = 'active'
            GROUP BY city ORDER BY hotel_count DESC LIMIT 60`
         ).all().catch(() => ({ results: [] })),
-        DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE is_active = 1").first().catch(() => ({ c: 0 })),
-        DB.prepare("SELECT COUNT(*) as c FROM plans WHERE is_active = 1").first().catch(() => ({ c: 0 })),
+        DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE status = 'active'").first().catch(() => ({ c: 0 })),
+        DB.prepare("SELECT COUNT(*) as c FROM plans WHERE status = 'active'").first().catch(() => ({ c: 0 })),
         DB.prepare(
           `SELECT id, title, slug, excerpt, thumbnail_url, city, published_at
            FROM blog_posts ORDER BY published_at DESC LIMIT 3`
@@ -98,7 +98,7 @@ try {
           `SELECT id, name, slug, city, country, latitude, longitude, thumbnail_url,
                   MIN(p.price_usd) as min_price
            FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-           WHERE h.is_active = 1 AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
+           WHERE h.status = 'active' AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
            GROUP BY h.id LIMIT 100`
         ).all().catch(() => ({ results: [] })),
         ...categoryQueries,
@@ -148,7 +148,7 @@ try {
               h.id as hotel_id, h.name as hotel_name, h.slug, h.city, h.country, h.thumbnail_url, h.property_type
        FROM plans p
        JOIN hotels h ON h.id = p.hotel_id
-       WHERE h.is_active = 1
+       WHERE h.status = 'active'
        ORDER BY p.price_usd ASC
        LIMIT 9`
     ).all();
