@@ -18,7 +18,7 @@ const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
 const perPage = 12;
 const offset = (page - 1) * perPage;
 
-let whereClauses: string[] = ['h.status = 'active''];
+let whereClauses: string[] = ["h.status = 'active'"];
 let params: any[] = [];
 
 if (location) {
