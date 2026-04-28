@@ -176,6 +176,8 @@ const translations = {
 
 <Layout title="Hotel Map - DayDreamHub" description="Find day-use hotels near you on an interactive map. Browse hotels by city and category.">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <style>
     #map { width: 100%; height: calc(100vh - 64px); }
     .leaflet-container { font-family: inherit; }
@@ -238,6 +240,7 @@ const translations = {
 </Layout>
 
 <script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script is:inline src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script is:inline define:vars={{ mapData, locale, translations }}>
 (function() {
     document.addEventListener('DOMContentLoaded', function() {
@@ -351,7 +354,12 @@ const translations = {
       // Store all markers and layers
       let hotelMarkers = [];
       let cityMarkers = [];
-      const hotelLayer = L.layerGroup().addTo(map);
+      const hotelLayer = L.markerClusterGroup({
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        maxClusterRadius: 30,
+        spiderfyDistanceMultiplier: 1.5,
+      }).addTo(map);
       const cityLayer = L.layerGroup().addTo(map);
       const airportLayer = L.layerGroup().addTo(map);
 
