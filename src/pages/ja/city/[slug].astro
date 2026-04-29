@@ -28,7 +28,7 @@ try {
 
     const result = await db.prepare(
       `SELECT h.*, MIN(p.price_usd) as min_price FROM hotels h
-       LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
        WHERE h.city LIKE ? AND h.status = 'active'
        GROUP BY h.id
        ORDER BY h.created_at DESC

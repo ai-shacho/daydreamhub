@@ -225,7 +225,7 @@ async function telnyxOrchestrate(
           `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.rating,
                   p.id as plan_id, p.name as plan_name,
                   p.price_usd, p.check_in_time, p.check_out_time, p.max_guests
-           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
            WHERE h.status = 'active'${clinicFilter} AND (
              LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
              OR LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?

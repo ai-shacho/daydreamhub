@@ -72,7 +72,7 @@ try {
         `SELECT DISTINCT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
                 MIN(p.price_usd) as min_price
          FROM hotels h
-         LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+         LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
          WHERE h.status = 'active'
            AND (h.categories LIKE '%"' || ?1 || '"%' OR EXISTS (SELECT 1 FROM plans p2 WHERE p2.hotel_id = h.id AND p2.plan_type = ?1))
          GROUP BY h.id

@@ -157,7 +157,7 @@ export async function searchHotelsInternal(env: any, params: any) {
            p.id as plan_id, p.name as plan_name, p.name_ja as plan_name_ja,
            p.price_usd, p.check_in_time, p.check_out_time, p.max_guests
     FROM hotels h
-    LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
+    LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
     WHERE ${conditions.join(" AND ")}
     ${params.max_price_usd ? "AND (p.price_usd IS NULL OR p.price_usd <= ?)" : ""}
     ORDER BY h.rating DESC, p.price_usd ASC
