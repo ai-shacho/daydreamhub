@@ -82,7 +82,10 @@ if (!admin) return Astro.redirect("/admin/login");
             <div class="p-4 text-sm text-red-600">${escapeHtml(r.error)}</div>`;
         } else if (r.rows && r.rows.length > 0) {
           const cols = Object.keys(r.rows[0]);
-          let html = `<div class="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-500 font-mono">${escapeHtml(r.sql?.slice(0, 100) || '')} — ${r.rows.length} rows</div>`;
+          let html = `<div class="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-500 font-mono flex items-center justify-between gap-3">
+            <span class="truncate">${escapeHtml(r.sql?.slice(0, 100) || '')} — ${r.rows.length} rows</span>
+            <button class="csv-download-btn shrink-0 px-3 py-1 bg-teal-600 text-white text-xs font-semibold rounded hover:bg-teal-700 transition-colors">Download CSV</button>
+          </div>`;
           html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr>';
           for (const c of cols) html += `<th class="px-3 py-2 text-left text-xs font-semibold text-slate-500 bg-slate-50 border-b">${escapeHtml(c)}</th>`;
           html += '</tr></thead><tbody>';
@@ -91,9 +94,11 @@ if (!admin) return Astro.redirect("/admin/login");
             for (const c of cols) html += `<td class="px-3 py-1.5 border-b border-slate-100 text-xs font-mono">${escapeHtml(String(row[c] ?? ''))}</td>`;
             html += '</tr>';
           }
-          if (r.rows.length > 200) html += `<tr><td colspan="${cols.length}" class="px-3 py-2 text-center text-xs text-slate-400">... ${r.rows.length - 200} more rows</td></tr>`;
+          if (r.rows.length > 200) html += `<tr><td colspan="${cols.length}" class="px-3 py-2 text-center text-xs text-slate-400">... ${r.rows.length - 200} more rows (use Download CSV to get all)</td></tr>`;
           html += '</tbody></table></div>';
           card.innerHTML = html;
+          const dlBtn = card.querySelector('.csv-download-btn') as HTMLButtonElement | null;
+          if (dlBtn) dlBtn.addEventListener('click', () => downloadCSV(cols, r.rows));
         } else {
           card.innerHTML = `
             <div class="px-4 py-2 bg-emerald-50 border-b border-emerald-200 text-xs text-emerald-700 font-mono">${escapeHtml(r.sql?.slice(0, 100) || '')}</div>
@@ -112,5 +117,23 @@ if (!admin) return Astro.redirect("/admin/login");
 
   function escapeHtml(s: string) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function downloadCSV(cols: string[], rows: any[]) {
+    const escape = (v: any) => {
+      const s = v === null || v === undefined ? '' : String(v);
+      return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const lines = [cols.map(escape).join(',')];
+    for (const row of rows) lines.push(cols.map(c => escape(row[c])).join(','));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `query-result-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 </script>
