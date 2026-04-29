@@ -303,6 +303,56 @@ export async function sendBookingNotificationToHotel(
   });
 }
 
+export async function sendConciergeCallStartedEmail(
+  apiKey: string,
+  data: {
+    guestName: string;
+    guestEmail: string;
+    hotelNames: string[];
+    date?: string;
+    checkIn?: string;
+    checkOut?: string;
+    guests?: number;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const count = data.hotelNames.length;
+  const subject = `🔔 We're calling ${count} hotel${count === 1 ? '' : 's'} for you - DaydreamHub`;
+  const hotelList = data.hotelNames
+    .map((n, i) => `<li style="margin:4px 0">${i + 1}. ${escapeHtml(n)}</li>`)
+    .join('');
+  const detailsRows = [
+    data.date ? `<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:6px 12px;border:1px solid #ddd">${escapeHtml(formatDate(data.date))}</td></tr>` : '',
+    (data.checkIn || data.checkOut) ? `<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Time</td><td style="padding:6px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn || '?')}–${escapeHtml(data.checkOut || '?')}</td></tr>` : '',
+    data.guests ? `<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:6px 12px;border:1px solid #ddd">${data.guests}</td></tr>` : '',
+  ].filter(Boolean).join('');
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+  <div style="background:#0ea5e9;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:22px">📞 Calling Hotels Now</h1>
+    <p style="margin:8px 0 0;opacity:0.9">DaydreamHub AI Concierge</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+    <p style="font-size:16px">Hello ${escapeHtml(data.guestName || 'there')},</p>
+    <p>Our AI concierge has just started calling the following ${count === 1 ? 'hotel' : `${count} hotels`} on your behalf:</p>
+    <ol style="padding-left:20px;margin:12px 0">${hotelList}</ol>
+    ${detailsRows ? `<table style="border-collapse:collapse;width:100%;margin:16px 0;font-size:14px">${detailsRows}</table>` : ''}
+    <div style="margin:16px 0;padding:14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px">
+      <strong>⏱ Estimated time: 5–10 minutes</strong><br>
+      <span style="font-size:13px;color:#475569">We'll call each hotel one by one and stop as soon as one confirms. You'll receive a follow-up email with the result.</span>
+    </div>
+    <p style="color:#666;font-size:13px">No action is needed from you right now. If you don't hear back within 30 minutes, please contact us.</p>
+    ${emailFooter()}
+  </div>
+</div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.guestEmail,
+    subject,
+    html,
+  });
+}
+
 export async function sendConciergeConfirmation(
   apiKey: string,
   data: {

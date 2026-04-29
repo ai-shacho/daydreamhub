@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { initiateCall, createCallGroup, initiateNextGroupCall } from '../../../lib/tools';
 import { CONCIERGE_SYSTEM_PROMPT_EN, CONCIERGE_SYSTEM_PROMPT_JA } from '../../../lib/claude';
 import { filterExternalHotels } from '../../../lib/filterExternalHotels';
+import { sendConciergeCallStartedEmail } from '../../../lib/email';
 
 // Shared text sanitizer — strips raw HTML from AI output, converts <a> to Markdown
 function sanitizeAIText(text: string): string {
@@ -308,12 +309,15 @@ async function telnyxOrchestrate(
             );
           }
 
-          // Inject test hotel for Bangkok searches (always first, trim to 3)
+          // Inject test hotels for Bangkok searches (always first 3, used for parallel-call testing)
           if (cityLower.includes('bangkok') || cityLower.includes('バンコク')) {
-            const testHotel = { name: 'Test Hotel Bangkok', address: 'Bangkok, Thailand', phone: '+818053689489', rating: null };
-            extHotels = extHotels.filter((h: any) => !(h.hotel_name || h.name || '').toLowerCase().includes('test hotel bangkok'));
-            extHotels.unshift(testHotel);
-            if (extHotels.length > 3) extHotels = extHotels.slice(0, 3);
+            const testHotels = [
+              { name: 'Test Hotel Bangkok',   address: 'Bangkok, Thailand', phone: '+818053689489', rating: null },
+              { name: 'Test Hotel Bangkok 2', address: 'Bangkok, Thailand', phone: '+818053689489', rating: null },
+              { name: 'Test Hotel Bangkok 3', address: 'Bangkok, Thailand', phone: '+818053689489', rating: null },
+            ];
+            extHotels = extHotels.filter((h: any) => !(h.hotel_name || h.name || '').toLowerCase().startsWith('test hotel bangkok'));
+            extHotels = [...testHotels, ...extHotels].slice(0, 3);
           }
 
           if (extHotels.length > 0) {
@@ -336,13 +340,17 @@ async function telnyxOrchestrate(
             hotelContext = `\n\nNo hotels found for "${city}". Tell the user DaydreamHub doesn't have partner hotels in ${city} yet, but our AI concierge can search and call local hotels for $7.`;
           }
         } catch (_e) {
-          // Even on error, inject test hotel for Bangkok
+          // Even on error, inject test hotels for Bangkok
           if (cityLower.includes('bangkok') || cityLower.includes('バンコク')) {
-            const testHotel = `- Test Hotel Bangkok | 📍Bangkok, Thailand | 📞+818053689489 | source:external`;
+            const testHotelsLines = [
+              `- Test Hotel Bangkok | 📍Bangkok, Thailand | 📞+818053689489 | source:external`,
+              `- Test Hotel Bangkok 2 | 📍Bangkok, Thailand | 📞+818053689489 | source:external`,
+              `- Test Hotel Bangkok 3 | 📍Bangkok, Thailand | 📞+818053689489 | source:external`,
+            ].join('\n');
             if (results.length > 0) {
-              hotelContext += `\n\n## EXTERNAL HOTELS (Optional add-on - $7 AI phone booking fee if selected):\n${testHotel}\n\nAfter showing the free DDH hotels above, add a section "Want more options? (+$7 AI call fee)" with these external hotels.`;
+              hotelContext += `\n\n## EXTERNAL HOTELS (Optional add-on - $7 AI phone booking fee if selected):\n${testHotelsLines}\n\nAfter showing the free DDH hotels above, add a section "Want more options? (+$7 AI call fee)" with these external hotels.`;
             } else {
-              hotelContext = `\n\n## EXTERNAL HOTELS (AI phone booking - $7 service fee):\n${testHotel}\n\nDaydreamHub has no registered hotels in ${city}. Show these external options with clear note about the $7 AI phone booking fee.`;
+              hotelContext = `\n\n## EXTERNAL HOTELS (AI phone booking - $7 service fee):\n${testHotelsLines}\n\nDaydreamHub has no registered hotels in ${city}. Show these external options with clear note about the $7 AI phone booking fee.`;
             }
           } else if (results.length === 0) {
             hotelContext = `\n\nNo hotels found for "${city}". Tell the user DaydreamHub doesn't have partner hotels in ${city} yet.`;
@@ -780,6 +788,35 @@ export const POST: APIRoute = async ({ request, locals }) => {
             .run();
         }
       }
+      // Send "calling now" notification email to guest before dialing
+      const resendKey = env?.RESEND_API_KEY;
+      if (resendKey) {
+        try {
+          const groupRow: any = await db.prepare(
+            'SELECT guest_name, guest_email FROM concierge_call_groups WHERE id = ?'
+          ).bind(groupId).first();
+          const callRows = await db.prepare(
+            'SELECT hotel_name, request_details FROM concierge_calls WHERE call_group_id = ? ORDER BY call_order ASC'
+          ).bind(groupId).all();
+          const guestEmail = groupRow?.guest_email;
+          if (guestEmail) {
+            const hotelNames: string[] = ((callRows?.results as any[]) || []).map((r: any) => r.hotel_name || 'Hotel');
+            const firstDetails = (() => { try { return JSON.parse((callRows?.results as any[])?.[0]?.request_details || '{}'); } catch { return {}; } })();
+            await sendConciergeCallStartedEmail(resendKey, {
+              guestName: groupRow?.guest_name || 'Guest',
+              guestEmail,
+              hotelNames,
+              date: firstDetails.check_in_date,
+              checkIn: firstDetails.check_in_time,
+              checkOut: firstDetails.check_out_time,
+              guests: (firstDetails.adults || 1) + (firstDetails.children || 0),
+            });
+          }
+        } catch (e) {
+          console.error('[concierge] call started email failed:', e);
+        }
+      }
+
       const result = await initiateNextGroupCall(env, db, groupId);
       return new Response(
         JSON.stringify({
