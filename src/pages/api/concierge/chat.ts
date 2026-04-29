@@ -103,6 +103,9 @@ async function telnyxOrchestrate(
 
   // Try to search hotels if the message seems to need it
   const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
+  // Detect clinic / wellness intent — only then include clinic entries in results
+  const recentUserText = messages.filter(m => m.role === 'user').slice(-3).map(m => String(m.content)).join(' ').toLowerCase();
+  const wantsClinic = /(clinic|wellness|medical|iv\s*drip|health\s*check|check[- ]?up|クリニック|ウェルネス|医療|健康診断|人間ドック|点滴|検査)/i.test(recentUserText);
   let hotelContext = '';
   if (db && lastUserMsg.length > 3) {
     try {
@@ -215,12 +218,15 @@ async function telnyxOrchestrate(
 
       if (city) {
         const cityLower = city.toLowerCase();
+        const clinicFilter = wantsClinic
+          ? ''
+          : ` AND LOWER(h.property_type) NOT LIKE '%clinic%' AND LOWER(h.name) NOT LIKE '%clinic%'`;
         const hotels = await db.prepare(
           `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.rating,
                   p.id as plan_id, p.name as plan_name,
                   p.price_usd, p.check_in_time, p.check_out_time, p.max_guests
            FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.status = 'active'
-           WHERE h.status = 'active' AND (
+           WHERE h.status = 'active'${clinicFilter} AND (
              LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
              OR LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
            )
@@ -253,14 +259,14 @@ async function telnyxOrchestrate(
           }
         }
 
-        // 同じ親ホテルから1件のみ表示（最大5件）
+        // 同じ親ホテルから1件のみ表示（最大3件）
         const seenBase = new Set<string>();
         const results = Array.from(hotelMap.values()).filter((h: any) => {
           const base = h.name.split('–')[0].split('-')[0].trim().toLowerCase().slice(0, 30);
           if (seenBase.has(base)) return false;
           seenBase.add(base);
           return true;
-        }).slice(0, 5);
+        }).slice(0, 3);
 
         // 自社ホテルを先に表示
         if (results.length > 0) {
@@ -293,21 +299,21 @@ async function telnyxOrchestrate(
             const gResult = await searchHotelsExternal(env, { query: q, location: city, language: locale });
             allCandidates.push(...(gResult?.hotels || []));
           }
-          extHotels = filterExternalHotels(allCandidates, results, 5);
+          extHotels = filterExternalHotels(allCandidates, results, 3);
           if (extHotels.length === 0) {
             extHotels = filterExternalHotels(
               await searchHotelsBrave(env, city, locale),
               results,
-              5
+              3
             );
           }
 
-          // Inject test hotel for Bangkok searches (always first, trim to 5)
+          // Inject test hotel for Bangkok searches (always first, trim to 3)
           if (cityLower.includes('bangkok') || cityLower.includes('バンコク')) {
             const testHotel = { name: 'Test Hotel Bangkok', address: 'Bangkok, Thailand', phone: '+818053689489', rating: null };
             extHotels = extHotels.filter((h: any) => !(h.hotel_name || h.name || '').toLowerCase().includes('test hotel bangkok'));
             extHotels.unshift(testHotel);
-            if (extHotels.length > 5) extHotels = extHotels.slice(0, 5);
+            if (extHotels.length > 3) extHotels = extHotels.slice(0, 3);
           }
 
           if (extHotels.length > 0) {
@@ -358,13 +364,16 @@ async function telnyxOrchestrate(
     `3. NEVER invent hotel names, addresses, phone numbers, prices, or any URLs. Zero exceptions.\n` +
     `4. BOOKING LINKS — STRICT RULE:\n` +
     `   - source:internal hotels ONLY → use MARKDOWN link format: [Book Now](/hotel/slug) using the exact slug from the data\n` +
-    `   - Example: [Book Now](/hotel/wellmed-bangkok)\n` +
+    `   - Example: [Book Now](/hotel/example-hotel-slug)\n` +
     `   - source:external hotels → NO booking links whatsoever. Show only the phone number (📞). Never add any URL or link.\n` +
     `   - NEVER generate daydreamhub.com/hotel/... or daydreamhub.com/book/... or any full URL. Use ONLY the exact /hotel/slug from the data.\n` +
     `5. TIME SLOTS — CRITICAL: ONLY use check_in_time and check_out_time from the plan data provided above. NEVER invent, estimate, or assume time slots. If a plan shows "10:00–20:00", write exactly that. Do not write "10:00–18:00" unless that is in the data.\n` +
     `5b. Do NOT output XML function_calls or tool_use tags.\n` +
     `6. For external hotels: show name + address + phone number only. The "Call to Book (+$7)" button is added automatically by the UI — do not add it yourself.\n` +
     `7. NEVER output raw HTML tags (no <a>, <b>, <div>, etc.). Use ONLY Markdown: **bold**, [link text](url), - list item. HTML tags will be shown as broken text to the user.\n` +
+    (wantsClinic
+      ? `8. The user is asking about clinics / wellness. You MAY include clinic entries from the hotel data above.\n`
+      : `8. CLINIC EXCLUSION: Do NOT present clinics, medical facilities, or wellness centers as hotels — even if one appears in the data above. Skip any entry whose name or property_type contains "clinic", "medical", or "wellness" unless the user explicitly asked about clinics or wellness services.\n`) +
     `=== END RULES ===`;
 
   const res = await fetch('https://api.telnyx.com/v2/ai/chat/completions', {
