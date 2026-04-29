@@ -331,10 +331,10 @@ async function telnyxOrchestrate(
 
             if (results.length > 0) {
               // 自社あり＋外部あり: 外部は「追加オプション」として表示
-              hotelContext += `\n\n## EXTERNAL HOTELS (Optional add-on - $7 AI phone booking fee if selected):\n${extLines}\n\nAFTER showing DDH hotels, you MUST show ALL ${extHotels.length} external hotels above in a "Want more options? (+$7 AI call fee)" section. Show EVERY hotel listed — do not skip any.`;
+              hotelContext += `\n\n## EXTERNAL HOTELS (AI phone booking - $7 fee — show ALL of these after DDH hotels):\n${extLines}\n\n⚠️ MANDATORY: You MUST list ALL ${extHotels.length} external hotels above verbatim in a separate section titled "More options (AI phone booking, $7)". Do NOT skip or omit any of them. Show name + 📍address + 📞phone for each one.`;
             } else {
               // 自社なし＋外部あり: 外部のみ表示
-              hotelContext = `\n\n## EXTERNAL HOTELS (AI phone booking - $7 service fee):\n${extLines}\n\nYou MUST show ALL ${extHotels.length} external hotels listed above. Do not skip any. Include the $7 AI phone booking fee note.`;
+              hotelContext = `\n\n## EXTERNAL HOTELS (AI phone booking - $7 service fee):\n${extLines}\n\n⚠️ MANDATORY: You MUST list ALL ${extHotels.length} external hotels above verbatim. Do NOT skip any. Show name + 📍address + 📞phone for each. Include the $7 AI phone booking fee note.`;
             }
           } else if (results.length === 0) {
             hotelContext = `\n\nNo hotels found for "${city}". Tell the user DaydreamHub doesn't have partner hotels in ${city} yet, but our AI concierge can search and call local hotels for $7.`;
@@ -377,7 +377,8 @@ async function telnyxOrchestrate(
     `   - NEVER generate daydreamhub.com/hotel/... or daydreamhub.com/book/... or any full URL. Use ONLY the exact /hotel/slug from the data.\n` +
     `5. TIME SLOTS — CRITICAL: ONLY use check_in_time and check_out_time from the plan data provided above. NEVER invent, estimate, or assume time slots. If a plan shows "10:00–20:00", write exactly that. Do not write "10:00–18:00" unless that is in the data.\n` +
     `5b. Do NOT output XML function_calls or tool_use tags.\n` +
-    `6. For external hotels: show name + address + phone number only. The "Call to Book (+$7)" button is added automatically by the UI — do not add it yourself.\n` +
+    `6. For external hotels: show name + 📍address + 📞phone number only. Do NOT add booking links. The "Call to Book (+$7)" button is added automatically by the UI.\n` +
+    `6b. EXTERNAL HOTELS MUST ALL APPEAR: If the data includes an "EXTERNAL HOTELS" section, you MUST list every single hotel in it — no exceptions, no summarizing, no skipping. Even if you also show DDH hotels, always add a separate section for external hotels.\n` +
     `7. NEVER output raw HTML tags (no <a>, <b>, <div>, etc.). Use ONLY Markdown: **bold**, [link text](url), - list item. HTML tags will be shown as broken text to the user.\n` +
     (wantsClinic
       ? `8. The user is asking about clinics / wellness. You MAY include clinic entries from the hotel data above.\n`
