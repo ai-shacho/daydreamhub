@@ -1107,9 +1107,9 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
                        line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
       if (!phoneMatch) continue;
-      // 電話番号の前後5行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
+      // 電話番号の前後2行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
       var nearPartner = false;
-      for (var k = Math.max(0, i - 5); k <= Math.min(lines.length - 1, i + 5); k++) {
+      for (var k = Math.max(0, i - 2); k <= Math.min(lines.length - 1, i + 2); k++) {
         if (lines[k].indexOf('/hotel/') !== -1) { nearPartner = true; break; }
       }
       if (nearPartner) continue;
@@ -1158,8 +1158,8 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         }
       }
       if (!name || name.length < 2) continue;
-      // 重複チェック（電話番号・ホテル名のどちらかが一致すれば同一扱い）
-      if (!hotels.some(function(h){ return h.phone === phone || h.name === name; })) {
+      // 重複チェック（ホテル名が一致する場合のみ同一扱い。電話番号が同じでも名前が違えば別件）
+      if (!hotels.some(function(h){ return h.name === name; })) {
         hotels.push({ name: name, phone: phone });
       }
     }
