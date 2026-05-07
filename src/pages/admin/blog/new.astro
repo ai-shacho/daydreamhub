@@ -270,7 +270,7 @@ if (Astro.request.method === 'POST') {
         method: 'POST',
         process: function (resp) {
           if (resp.success && resp.imageUrl) {
-            return { files: [resp.imageUrl], baseurl: '' };
+            return { files: [resp.imageUrl], isImages: [true], baseurl: '' };
           }
           return resp;
         },
