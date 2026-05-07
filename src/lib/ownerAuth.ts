@@ -47,7 +47,7 @@ export async function getOwnerHotelIds(db: any, owner: any) {
     return (res?.results || []).map((h: any) => h.id);
   }
   const res = await db.prepare(
-    "SELECT id FROM hotels WHERE email = ? AND status = 'active'"
+    "SELECT id FROM hotels WHERE email = ?"
   ).bind(owner.email).all();
   return (res?.results || []).map((h: any) => h.id);
 }
