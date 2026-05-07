@@ -41,9 +41,27 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (imgs.length >= MAX_GALLERY) {
       return new Response(JSON.stringify({ error: `Maximum ${MAX_GALLERY} images allowed` }), { status: 400, headers: json });
     }
-    imgs.push(image_data);
+
+    // Upload to R2 instead of storing base64 directly
+    const imagesBucket = (env as any).IMAGES;
+    if (!imagesBucket) {
+      return new Response(JSON.stringify({ error: 'Image storage unavailable' }), { status: 503, headers: json });
+    }
+
+    const key = `hotels/${hotel_id}/gallery/${crypto.randomUUID()}.jpg`;
+    const binaryStr = atob(image_data);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    await imagesBucket.put(key, bytes, {
+      httpMetadata: { contentType: 'image/jpeg' },
+    });
+
+    const imageUrl = `/hotel-images/${key}`;
+    imgs.push(imageUrl);
     await db.prepare('UPDATE hotels SET images = ? WHERE id = ?').bind(JSON.stringify(imgs), Number(hotel_id)).run();
-    return new Response(JSON.stringify({ success: true, index: imgs.length - 1, count: imgs.length }), { headers: json });
+    return new Response(JSON.stringify({ success: true, url: imageUrl, index: imgs.length - 1, count: imgs.length }), { headers: json });
   } else {
     // thumbnail
     await db.prepare('UPDATE hotels SET thumbnail_url = ? WHERE id = ?').bind(image_data, Number(hotel_id)).run();
@@ -75,6 +93,12 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
   let imgs: string[] = [];
   try { imgs = JSON.parse(hotel?.images || '[]'); } catch {}
   if (index >= 0 && index < imgs.length) {
+    const removedUrl = imgs[index];
+    // Also delete from R2 if it's a stored image
+    if (removedUrl?.startsWith('/hotel-images/') && (env as any).IMAGES) {
+      const imgKey = removedUrl.replace('/hotel-images/', '');
+      try { await (env as any).IMAGES.delete(imgKey); } catch { /* ignore */ }
+    }
     imgs.splice(index, 1);
     await db.prepare('UPDATE hotels SET images = ? WHERE id = ?').bind(JSON.stringify(imgs), hotelId).run();
   }

@@ -93,6 +93,15 @@ if (!dbAvailable) {
   }
 }
 
+// Parse owner-uploaded gallery images from hotel.images JSON
+let ownerGalleryImages: string[] = [];
+if (hotel?.images) {
+  try {
+    const parsed = JSON.parse(hotel.images);
+    if (Array.isArray(parsed)) ownerGalleryImages = parsed;
+  } catch {}
+}
+
 const isDemo = hotel?.status === 'demo';
 
 if (!hotel) {
@@ -270,10 +279,12 @@ for (const img of images) {
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
         <!-- Image Gallery -->
         {(() => {
-          // Build gallery list: hotel_images first, fallback to thumbnail
+          // Build gallery list: admin hotel_images first, then owner gallery images, fallback to thumbnail
           const galleryImages = images.length > 0
-            ? images.map((img: any) => img.image_url)
-            : (hotel.thumbnail_url ? [hotel.thumbnail_url] : ['/images/placeholder-hotel.jpg']);
+            ? [...images.map((img: any) => img.image_url), ...ownerGalleryImages]
+            : ownerGalleryImages.length > 0
+              ? ownerGalleryImages
+              : (hotel.thumbnail_url ? [hotel.thumbnail_url] : ['/images/placeholder-hotel.jpg']);
           const hasMultiple = galleryImages.length > 1;
           return (
             <div class="w-full">
