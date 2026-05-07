@@ -49,7 +49,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     const key = `hotels/${hotel_id}/gallery/${crypto.randomUUID()}.jpg`;
-    const binaryStr = atob(image_data);
+    // Strip data:image/...;base64, prefix before decoding
+    const base64Data = image_data.includes('base64,') ? image_data.split('base64,')[1] : image_data;
+    const binaryStr = atob(base64Data);
     const bytes = new Uint8Array(binaryStr.length);
     for (let i = 0; i < binaryStr.length; i++) {
       bytes[i] = binaryStr.charCodeAt(i);

@@ -667,10 +667,16 @@ const propertyTypes = [
           successCount++;
         } catch (err) {
           console.error(err);
+          galleryStatus.className = 'mt-3 text-xs text-red-600';
+          galleryStatus.textContent = 'Error: ' + (err.message || 'Unknown error');
         }
       }
       galleryStatus.className = 'mt-3 text-xs ' + (successCount > 0 ? 'text-green-600' : 'text-red-600');
-      galleryStatus.textContent = successCount > 0 ? '✅ ' + successCount + ' image(s) uploaded!' : 'Upload failed.';
+      if (successCount > 0) {
+        galleryStatus.textContent = '✅ ' + successCount + ' image(s) uploaded!';
+      } else if (galleryStatus.textContent.indexOf('Error:') === -1) {
+        galleryStatus.textContent = 'Upload failed. Check console for details.';
+      }
       this.value = '';
       // Disable button if at max
       if (currentGalleryCount >= 20) {
