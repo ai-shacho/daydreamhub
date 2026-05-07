@@ -18,7 +18,7 @@ try {
     const result = await db.prepare(
       `SELECT id, title, title_ja, slug, excerpt, content, content_ja, city, thumbnail_url, published_at
        FROM blog_posts
-       WHERE slug = ? AND is_published = 1
+       WHERE slug = ?
        LIMIT 1`
     ).bind(slug).first();
     if (result) {
@@ -33,7 +33,7 @@ try {
         const relatedResult = await db.prepare(
           `SELECT id, title, title_ja, slug, excerpt, city, thumbnail_url, published_at
            FROM blog_posts
-           WHERE city = ? AND slug != ? AND is_published = 1
+           WHERE city = ? AND slug != ?
            ORDER BY published_at DESC
            LIMIT 3`
         ).bind(post.city, slug).all();
