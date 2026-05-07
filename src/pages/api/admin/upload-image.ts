@@ -7,11 +7,16 @@ const MAX_SIZE = 5 * 1024 * 1024; // 5MB per image
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
+  const r2 = env?.IMAGES;
 
   // Verify admin
   const admin = await verifyAdmin(request, jwtSecret);
   if (!admin) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
+  }
+
+  if (!r2) {
+    return new Response(JSON.stringify({ error: 'Image storage (R2) not available. Please contact admin.' }), { status: 503, headers: json });
   }
 
   // Parse FormData
@@ -22,7 +27,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Invalid FormData' }), { status: 400, headers: json });
   }
 
-  const file = formData.get('image') as File;
+  // Try multiple field names (Jodit uses 'files[0]', our custom upload uses 'image')
+  let file = formData.get('image') as File | null;
+  if (!file) file = formData.get('files[0]') as File | null;
+  if (!file) file = formData.get('file') as File | null;
   if (!file) {
     return new Response(JSON.stringify({ error: 'No image file provided' }), { status: 400, headers: json });
   }
@@ -38,25 +46,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   try {
-    // Convert file to base64 (compatible with Cloudflare Workers)
+    // Generate unique filename
+    const ext = file.name.split('.').pop() || 'jpg';
+    const key = `blog/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
+    // Upload to R2
     const buffer = await file.arrayBuffer();
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
-    const mimeType = file.type;
-    const imageDataUrl = `data:${mimeType};base64,${base64}`;
+    await r2.put(key, buffer, { httpMetadata: { contentType: file.type } });
+
+    // Build access URL
+    const imageUrl = `/blog-images/${key}`;
 
     return new Response(
-      JSON.stringify({ success: true, imageUrl: imageDataUrl, fileName: file.name }),
+      JSON.stringify({ success: true, imageUrl, fileName: file.name }),
       { status: 200, headers: json }
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: 'Failed to process image', details: message }),
+      JSON.stringify({ error: 'Failed to upload image', details: message }),
       { status: 500, headers: json }
     );
   }

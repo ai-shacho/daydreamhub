@@ -262,7 +262,18 @@ const contentJaEscaped = JSON.stringify(post.content_ja || '');
         'hr', 'table', '|',
         'source'
       ],
-      uploader: { insertImageAsBase64URI: true },
+      uploader: {
+        url: '/api/admin/upload-image',
+        insertImageAsBase64URI: false,
+        format: 'json',
+        method: 'POST',
+        process: function (resp) {
+          if (resp.success && resp.imageUrl) {
+            return { files: [resp.imageUrl] };
+          }
+          return resp;
+        },
+      },
       cleanHTML: {
         denyTags: false,
         allowTags: false,
