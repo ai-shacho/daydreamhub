@@ -269,7 +269,7 @@ const contentJaEscaped = JSON.stringify(post.content_ja || '');
         method: 'POST',
         process: function (resp) {
           if (resp.success && resp.imageUrl) {
-            return { files: [resp.imageUrl] };
+            return { files: [resp.imageUrl], baseurl: '' };
           }
           return resp;
         },
