@@ -24,7 +24,14 @@ if (Astro.request.method === 'POST') {
     const slug = formData.get('slug') as string;
     const excerpt = formData.get('excerpt') as string;
     const city = formData.get('city') as string;
-    const thumbnail_url = formData.get('thumbnail_url') as string;
+    let thumbnail_url = formData.get('thumbnail_url') as string;
+    
+    // Handle thumbnail_file if present (takes priority over thumbnail_url)
+    const thumbnailFile = formData.get('thumbnail_file') as File;
+    if (thumbnailFile && thumbnailFile.size > 0) {
+      thumbnail_url = formData.get('thumbnail_file_url') as string;
+    }
+    
     const content = formData.get('content') as string;
     const content_ja = formData.get('content_ja') as string;
     const published_at_raw = formData.get('published_at') as string;
@@ -143,23 +150,39 @@ const contentJaEscaped = JSON.stringify(post.content_ja || '');
           />
         </div>
         <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-slate-700 mb-1">Thumbnail URL</label>
-          <div class="flex gap-2">
+          <label class="block text-sm font-medium text-slate-700 mb-1">Thumbnail Image</label>
+          <div id="upload-area" class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center cursor-pointer hover:border-teal-500 hover:bg-teal-50 transition-colors" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
             <input
-              type="url"
-              name="thumbnail_url"
-              id="thumbnail_url"
-              value={post.thumbnail_url || ''}
-              class="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
-              placeholder="https://example.com/image.jpg"
+              type="file"
+              name="thumbnail_file"
+              id="thumbnail_file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              class="hidden"
             />
+            <div id="upload-prompt" class="text-slate-500">
+              <p class="text-sm font-medium mb-1">📁 クリックまたはドラッグ&ドロップ</p>
+              <p class="text-xs text-slate-400">PNG, JPG, WebP, GIF (最大5MB)</p>
+            </div>
+            <div id="upload-spinner" class="hidden">
+              <p class="text-sm font-medium text-teal-600">アップロード中...</p>
+            </div>
+          </div>
+          <input type="hidden" name="thumbnail_url" id="thumbnail_url" value={post.thumbnail_url || ''} />
+          <input type="hidden" name="thumbnail_file_url" id="thumbnail_file_url" />
+        </div>
+        <div id="thumb-preview-container" class="md:col-span-2 {post.thumbnail_url ? '' : 'hidden'}">
+          <div class="relative inline-block">
+            <img id="thumb-preview" src={post.thumbnail_url || ''} alt="Thumbnail preview" class="h-48 object-cover rounded-lg border border-slate-200" />
+            <button
+              type="button"
+              id="remove-thumbnail"
+              class="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+              onclick="removeThumbnail()"
+            >
+              ✕
+            </button>
           </div>
         </div>
-        {post.thumbnail_url && (
-          <div class="md:col-span-2">
-            <img id="thumb-preview" src={post.thumbnail_url} alt="Thumbnail preview" class="h-32 object-cover rounded-lg border border-slate-200" />
-          </div>
-        )}
         <div class="md:col-span-2">
           <label class="block text-sm font-medium text-slate-700 mb-1">Excerpt</label>
           <textarea
@@ -313,15 +336,95 @@ const contentJaEscaped = JSON.stringify(post.content_ja || '');
       }, 3000);
     }
 
-    // Thumbnail preview update
-    const thumbInput = document.getElementById('thumbnail_url');
+    // Thumbnail file upload handling
+    const fileInput = document.getElementById('thumbnail_file');
+    const uploadArea = document.getElementById('upload-area');
     const thumbPreview = document.getElementById('thumb-preview');
-    if (thumbInput) {
-      thumbInput.addEventListener('change', () => {
-        if (thumbPreview && thumbInput.value) {
-          thumbPreview.src = thumbInput.value;
+    const thumbContainer = document.getElementById('thumb-preview-container');
+    const uploadPrompt = document.getElementById('upload-prompt');
+    const uploadSpinner = document.getElementById('upload-spinner');
+    const thumbUrlInput = document.getElementById('thumbnail_url');
+    const thumbFileUrlInput = document.getElementById('thumbnail_file_url');
+
+    // Click to upload
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    // File change event
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        await uploadThumbnailFile(file);
+      }
+    });
+
+    // Drag and drop handlers
+    window.handleDragOver = (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('border-teal-500', 'bg-teal-50');
+    };
+
+    window.handleDragLeave = (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('border-teal-500', 'bg-teal-50');
+    };
+
+    window.handleDrop = (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('border-teal-500', 'bg-teal-50');
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        if (file.type.startsWith('image/')) {
+          fileInput.files = files;
+          uploadThumbnailFile(file);
+        } else {
+          alert('画像ファイルをドラッグしてください / Please drag an image file');
         }
-      });
-    }
+      }
+    };
+
+    // Upload function
+    window.uploadThumbnailFile = async (file) => {
+      uploadPrompt.classList.add('hidden');
+      uploadSpinner.classList.remove('hidden');
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      try {
+        const response = await fetch('/api/admin/upload-image', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Upload failed');
+        }
+
+        const result = await response.json();
+        if (result.success) {
+          thumbUrlInput.value = result.imageUrl;
+          thumbFileUrlInput.value = result.imageUrl;
+          thumbPreview.src = result.imageUrl;
+          thumbContainer.classList.remove('hidden');
+          uploadPrompt.classList.add('hidden');
+          uploadSpinner.classList.add('hidden');
+        }
+      } catch (error) {
+        alert('画像アップロードエラー / Image upload error: ' + (error instanceof Error ? error.message : 'Unknown'));
+        uploadPrompt.classList.remove('hidden');
+        uploadSpinner.classList.add('hidden');
+      }
+    };
+
+    window.removeThumbnail = () => {
+      fileInput.value = '';
+      thumbUrlInput.value = '';
+      thumbFileUrlInput.value = '';
+      thumbContainer.classList.add('hidden');
+      uploadPrompt.classList.remove('hidden');
+      uploadSpinner.classList.add('hidden');
+    };
   });
 </script>
