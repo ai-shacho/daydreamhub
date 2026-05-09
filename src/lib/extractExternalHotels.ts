@@ -23,9 +23,9 @@ export function extractExternalHotels(text: string): ExternalHotel[] {
       line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
     if (!phoneMatch) continue;
 
-    // 電話番号の前後5行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
+    // 電話番号の前後1行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
     let nearPartner = false;
-    for (let k = Math.max(0, i - 5); k <= Math.min(lines.length - 1, i + 5); k++) {
+    for (let k = Math.max(0, i - 1); k <= Math.min(lines.length - 1, i + 1); k++) {
       if (lines[k].indexOf('/hotel/') !== -1) { nearPartner = true; break; }
     }
     if (nearPartner) continue;
@@ -48,10 +48,10 @@ export function extractExternalHotels(text: string): ExternalHotel[] {
         if (c.length >= 2 && !isAddressLike(c)) { name = c; break; }
       }
 
-      // 2. 番号付きリスト "4. NOBO - Hotel in old Tbilisi"
-      m = checkLine.match(/^\s*\d+\.\s+(.+?)\s*$/);
+      // 2. 番号付きリスト "4. NOBO - Hotel in old Tbilisi"（値段・評価が続いても可）
+      m = checkLine.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+|$)/);
       if (m) {
-        const c = m[1].replace(/\s*[|｜].*$/, '').replace(/\s*[⭐★].*$/, '').trim();
+        const c = m[1].replace(/\s*-+\s*From\s+\$[\d.,]+.*$/i, '').replace(/\s*[|｜].*$/, '').replace(/\s*[⭐★].*$/, '').trim();
         if (c.length >= 2 && !isAddressLike(c)) { name = c; break; }
       }
 
@@ -71,7 +71,8 @@ export function extractExternalHotels(text: string): ExternalHotel[] {
     }
 
     if (!name || name.length < 2) continue;
-    if (!hotels.some(h => h.phone === phone || h.name === name)) {
+    // 重複チェック（電話番号で重複判定。同一番号は1件のみ）
+    if (!hotels.some(h => h.phone === phone)) {
       hotels.push({ name, phone });
     }
   }

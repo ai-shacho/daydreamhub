@@ -1107,6 +1107,17 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
+    // Clean escaped HTML attributes from Markdown link URLs (defense-in-depth)
+    // e.g. [text](&lt;/hotel/slug" ... &gt;) → [text](/hotel/slug)
+    html = html.replace(/\[([^\]\n]+)\]\(([^)]*?)(&(?:lt|gt|quot|amp);[^)]*)\)/g, function(_, label, cleanPart) {
+      // If the clean part contains a hotel link, use it
+      var hotelMatch = cleanPart.match(/\/hotel\/([\w-]+)/);
+      if (hotelMatch) return '[' + label + '](/hotel/' + hotelMatch[1] + ')';
+      // Otherwise strip trailing garbage from the URL
+      cleanPart = cleanPart.replace(/[&'"].*$/, '').trim();
+      return '[' + label + '](' + cleanPart + ')';
+    });
+
     // Markdown: ### 見出し
     html = html.replace(/^### (.+)$/gm, '<strong class="block text-amber-300 text-sm mt-2">$1</strong>');
     html = html.replace(/^## (.+)$/gm, '<strong class="block text-amber-200 text-sm mt-2 mb-1">$1</strong>');
@@ -1149,12 +1160,18 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
                        line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
       if (!phoneMatch) continue;
+      // 電話番号の前後1行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
+      var nearPartner = false;
+      for (var k = Math.max(0, i - 1); k <= Math.min(lines.length - 1, i + 1); k++) {
+        if (lines[k].indexOf('/hotel/') !== -1) { nearPartner = true; break; }
+      }
+      if (nearPartner) continue;
       var phone = phoneMatch[1].trim();
       var name = '';
       for (var j = i; j >= Math.max(0, i - 3); j--) {
         var checkLine = lines[j];
         if (checkLine.indexOf('/hotel/') !== -1) break;
-        var np = checkLine.match(/\*\*(.*?)\*\*/) ||
+        var np = checkLine.match(/\*\*(.+?)\*\*/) ||
                  checkLine.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+\d|$)/) ||
                  checkLine.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+\d|$)/);
         if (np) {

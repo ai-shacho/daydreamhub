@@ -1063,6 +1063,14 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
 
+    // Clean escaped HTML attributes from Markdown link URLs (defense-in-depth)
+    html = html.replace(/\[([^\]\n]+)\]\(([^)]*?)(&(?:lt|gt|quot|amp);[^)]*)\)/g, function(_, label, cleanPart) {
+      var hotelMatch = cleanPart.match(/\/hotel\/([\w-]+)/);
+      if (hotelMatch) return '[' + label + '](/hotel/' + hotelMatch[1] + ')';
+      cleanPart = cleanPart.replace(/[&'"].*$/, '').trim();
+      return '[' + label + '](' + cleanPart + ')';
+    });
+
     // Markdown: ### 見出し
     html = html.replace(/^### (.+)$/gm, '<strong class="block text-amber-300 text-sm mt-2">$1</strong>');
     html = html.replace(/^## (.+)$/gm, '<strong class="block text-amber-200 text-sm mt-2 mb-1">$1</strong>');
@@ -1107,9 +1115,9 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
                        line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
       if (!phoneMatch) continue;
-      // 電話番号の前後2行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
+      // 電話番号の前後1行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
       var nearPartner = false;
-      for (var k = Math.max(0, i - 2); k <= Math.min(lines.length - 1, i + 2); k++) {
+      for (var k = Math.max(0, i - 1); k <= Math.min(lines.length - 1, i + 1); k++) {
         if (lines[k].indexOf('/hotel/') !== -1) { nearPartner = true; break; }
       }
       if (nearPartner) continue;
@@ -1132,10 +1140,10 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
             name = c1; break;
           }
         }
-        // 2. 番号付きリスト "4. NOBO - Hotel in old Tbilisi"
-        m = checkLine.match(/^\s*\d+\.\s+(.+?)\s*$/);
+        // 2. 番号付きリスト "4. NOBO - Hotel in old Tbilisi"（値段・評価が続いても可）
+        m = checkLine.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+|$)/);
         if (m) {
-          var c2 = m[1].replace(/\s*[|｜].*$/, '').replace(/\s*[⭐★].*$/, '').trim();
+          var c2 = m[1].replace(/\s*-+\s*From\s+\$[\d.,]+.*$/i, '').replace(/\s*[|｜].*$/, '').replace(/\s*[⭐★].*$/, '').trim();
           if (c2.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c2) && !/^\d+\s*[,\s]/.test(c2)) {
             name = c2; break;
           }
@@ -1158,8 +1166,8 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         }
       }
       if (!name || name.length < 2) continue;
-      // 重複チェック（ホテル名が一致する場合のみ同一扱い。電話番号が同じでも名前が違えば別件）
-      if (!hotels.some(function(h){ return h.name === name; })) {
+      // 重複チェック（電話番号で重複判定。同一番号は1件のみ）
+      if (!hotels.some(function(h){ return h.phone === phone; })) {
         hotels.push({ name: name, phone: phone });
       }
     }

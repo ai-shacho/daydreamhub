@@ -8,7 +8,22 @@ import { sendConciergeCallStartedEmail } from '../../../lib/email';
 function sanitizeAIText(text: string): string {
   if (!text) return text;
 
-  // 0. Handle [label](<a href="url" ...>) — AI mixing Markdown links with HTML anchors in URL
+  // 0. Catch ALL Markdown links with HTML-like content in the URL part
+  // Pattern: [label](</hotel/slug" target="_blank" class="...">) or [label](<a href="url">...</a>)
+  // This handles any Markdown link whose URL contains < > " target= class= etc.
+  text = text.replace(/\[([^\]]+)\]\(([^)]*?(?:<|"|'|\starget=|\sclass=)[^)]*)\)/g, (_, label, dirtyUrl) => {
+    // Try to extract clean /hotel/... slug first
+    const hotelMatch = dirtyUrl.match(/\/hotel\/[\w-]+/);
+    if (hotelMatch) return `[${label}](${hotelMatch[0]})`;
+    // Try to extract clean http/https URL
+    const httpMatch = dirtyUrl.match(/https?:\/\/[^"'<>\s]+/);
+    if (httpMatch) return `[${label}](${httpMatch[0]})`;
+    // Fallback: strip everything after the first < " or '
+    const cleanUrl = dirtyUrl.replace(/[<"'].*$/, '').trim();
+    return `[${label}](${cleanUrl})`;
+  });
+
+  // 0b. Handle [label](<a href="url" ...>) — AI mixing Markdown links with HTML anchors in URL
   text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^"]+)"[^>]*>[\s\S]*?<\/a>\)/gi, (_, label, href) => `[${label}](${href})`);
   text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^"]+)"[^>]*>\)/gi, (_, label, href) => `[${label}](${href})`);
 
