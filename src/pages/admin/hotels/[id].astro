@@ -89,9 +89,13 @@ if (!hotel) {
               </p>
             </div>
             <div class="flex items-center gap-2">
-              {hotel.is_active ? (
+              {hotel.status === 'active' ? (
                 <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-green-50 text-green-700">
                   <span class="w-2 h-2 rounded-full bg-green-500"></span>Active
+                </span>
+              ) : hotel.status === 'demo' ? (
+                <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-amber-50 text-amber-700">
+                  <span class="w-2 h-2 rounded-full bg-amber-400"></span>Demo
                 </span>
               ) : (
                 <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-500">
@@ -305,17 +309,20 @@ if (!hotel) {
             </button>
           )}
           <div id="call-result" class="hidden text-xs p-2 rounded-lg"></div>
-          <button
-            id="toggle-active-btn"
-            data-hotel-id={hotel.id}
-            data-is-active={hotel.is_active ? '1' : '0'}
-            class={`flex items-center gap-2 w-full px-3 py-2 text-sm rounded-lg transition-colors ${
-              hotel.is_active
-                ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                : 'bg-green-50 text-green-700 hover:bg-green-100'
-            }`}>
-            {hotel.is_active ? '⏸ Deactivate' : '▶ Activate'}
-          </button>
+          <!-- Status dropdown -->
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium text-slate-500">Status</label>
+            <select
+              id="status-select"
+              data-hotel-id={hotel.id}
+              data-current-status={hotel.status || 'inactive'}
+              class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white cursor-pointer"
+            >
+              <option value="inactive" selected={hotel.status === 'inactive' || !hotel.status}>Inactive</option>
+              <option value="demo" selected={hotel.status === 'demo'}>Demo</option>
+              <option value="active" selected={hotel.status === 'active'}>Active</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -349,36 +356,38 @@ if (!hotel) {
 </AdminLayout>
 
 <script is:inline>
-// Deactivate / Activate toggle
-document.getElementById('toggle-active-btn')?.addEventListener('click', async function() {
-  const btn = this;
-  const hotelId = btn.dataset.hotelId;
-  const currentActive = btn.dataset.isActive === '1';
-  const newActive = currentActive ? 0 : 1;
-  const label = currentActive ? 'Deactivate' : 'Activate';
-  if (!confirm(`${label} this hotel?`)) return;
+// Status dropdown — saves immediately via API
+document.getElementById('status-select')?.addEventListener('change', async function() {
+  const sel = this;
+  const hotelId = sel.dataset.hotelId;
+  const newStatus = sel.value;
+  const oldStatus = sel.dataset.currentStatus;
 
-  btn.disabled = true;
-  btn.textContent = '処理中...';
+  if (!confirm(`Change status from "${oldStatus}" to "${newStatus}"?`)) {
+    sel.value = oldStatus; // revert
+    return;
+  }
+
+  sel.disabled = true;
   try {
     const res = await fetch('/api/admin/hotels', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: parseInt(hotelId), is_active: newActive }),
+      body: JSON.stringify({ id: parseInt(hotelId), status: newStatus }),
     });
     const data = await res.json();
     if (res.ok && data.success) {
-      alert(newActive === 1 ? '✅ Activated!' : '⏸ Deactivated!');
+      sel.dataset.currentStatus = newStatus;
       location.reload();
     } else {
       alert('Error: ' + (data.error || 'Unknown error'));
-      btn.disabled = false;
-      btn.textContent = currentActive ? '⏸ Deactivate' : '▶ Activate';
+      sel.value = oldStatus;
     }
   } catch (e) {
     alert('Network error');
-    btn.disabled = false;
-    btn.textContent = currentActive ? '⏸ Deactivate' : '▶ Activate';
+    sel.value = oldStatus;
+  } finally {
+    sel.disabled = false;
   }
 });
 

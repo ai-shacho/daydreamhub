@@ -351,22 +351,14 @@ function sortIcon(col: string) {
 
                 <!-- Status -->
                 <td class="px-4 py-3 text-center">
-                  {hotel.status === 'demo' ? (
-                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                      <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                      Demo
-                    </span>
-                  ) : (
-                    <button
-                      class="toggle-active-btn inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors"
-                      data-id={hotel.id}
-                      data-active={hotel.is_active ? "1" : "0"}
-                      class:list={[hotel.is_active ? "bg-green-50 text-green-700 hover:bg-red-50 hover:text-red-700" : "bg-slate-100 text-slate-500 hover:bg-green-50 hover:text-green-700"]}
-                    >
-                      <span class={`w-1.5 h-1.5 rounded-full ${hotel.is_active ? "bg-green-500" : "bg-slate-400"}`}></span>
-                      {hotel.is_active ? "Active" : "Inactive"}
-                    </button>
-                  )}
+                  <select
+                    class="status-select text-xs px-2 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white cursor-pointer min-w-[100px]"
+                    data-id={hotel.id}
+                  >
+                    <option value="inactive" selected={hotel.status === 'inactive' || !hotel.status}>Inactive</option>
+                    <option value="demo" selected={hotel.status === 'demo'}>Demo</option>
+                    <option value="active" selected={hotel.status === 'active'}>Active</option>
+                  </select>
                 </td>
 
                 <!-- Actions -->
@@ -429,31 +421,27 @@ function sortIcon(col: string) {
 </AdminLayout>
 
 <script>
-  // Toggle Active/Inactive
-  document.querySelectorAll('.toggle-active-btn').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const id = btn.getAttribute('data-id');
-      const currentActive = btn.getAttribute('data-active') === '1';
-      const newStatus = currentActive ? 0 : 1;
-      const label = currentActive ? 'deactivate' : 'activate';
-
-      if (!confirm(`Are you sure you want to ${label} this hotel?`)) return;
+  // Status dropdown change — saves immediately via API
+  document.querySelectorAll('.status-select').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      const id = sel.getAttribute('data-id');
+      const newStatus = sel.value;
 
       try {
         const res = await fetch('/api/admin/hotels', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: Number(id), is_active: newStatus }),
+          body: JSON.stringify({ id: Number(id), status: newStatus }),
         });
 
-        if (res.ok) {
-          location.reload();
-        } else {
+        if (!res.ok) {
           const data = await res.json();
           alert('Failed: ' + (data.error || 'Unknown error'));
+          location.reload(); // revert on error
         }
       } catch {
         alert('Network error');
+        location.reload(); // revert on error
       }
     });
   });
