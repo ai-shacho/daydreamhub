@@ -45,7 +45,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const db = runtime?.env?.DB;
   const PAYPAL_CLIENT_ID = runtime?.env?.PAYPAL_CLIENT_ID;
   const PAYPAL_SECRET = runtime?.env?.PAYPAL_SECRET;
-  const PAYPAL_MODE = runtime?.env?.PAYPAL_MODE;
+  const PAYPAL_MODE = runtime?.env?.PAYPAL_MODE || 'live';
   const RESEND_API_KEY = runtime?.env?.RESEND_API_KEY;
   if (!db || !PAYPAL_CLIENT_ID || !PAYPAL_SECRET) {
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {

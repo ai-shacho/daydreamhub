@@ -487,7 +487,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     }
 
     const script = document.createElement('script');
-    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=USD&locale=${locale}&intent=capture&commit=true&_l=${locale}`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId.trim())}&currency=USD&locale=${locale}&intent=capture&commit=true&_l=${locale}`;
     script.onload = () => {
       const loadingEl = document.getElementById('paypal-loading');
       if (loadingEl) loadingEl.style.display = 'none';
@@ -497,7 +497,27 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     };
     script.onerror = () => {
       const el = document.getElementById('paypal-loading');
-      if (el) { el.textContent = 'Failed to load payment. Please refresh.'; el.classList.add('text-red-500'); }
+      if (el) {
+        el.innerHTML = '';
+        el.style.padding = '0';
+        // Build a friendly error UI with reload button
+        var wrapper = document.createElement('div');
+        wrapper.className = 'text-center py-6 px-4';
+        wrapper.innerHTML =
+          '<div style="display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;background:#FEF2F2;margin-bottom:12px">' +
+            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+              '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>' +
+            '</svg>' +
+          '</div>' +
+          '<p style="font-size:14px;font-weight:600;color:#111827;margin-bottom:4px">' + (isJapanese ? 'PayPalの読み込みに失敗しました' : 'Payment could not be loaded') + '</p>' +
+          '<p style="font-size:12px;color:#6B7280;margin-bottom:16px;max-width:280px;margin-left:auto;margin-right:auto">' + (isJapanese ? 'インターネット接続をご確認いただき、再読み込みをお試しください。' : 'Please check your internet connection and try reloading.') + '</p>' +
+          '<button onclick="location.reload()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 20px;background:#45A2C1;color:white;font-size:13px;font-weight:600;border:none;border-radius:8px;cursor:pointer;">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+            (isJapanese ? '再読み込み' : 'Reload') +
+          '</button>';
+        el.appendChild(wrapper);
+        el.classList.remove('text-gray-500');
+      }
     };
     document.head.appendChild(script);
   }
