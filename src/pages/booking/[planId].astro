@@ -30,10 +30,7 @@ async function verifyJWT(token: string, secret: string): Promise<Record<string, 
 }
 let currentUser: { name?: string; email?: string; phone?: string } = {};
 {
-  const env = (Astro.locals as any).runtime?.env;
-  const jwtSecret = env?.JWT_SECRET || 'ddh-secret-2025';
-  const cookieHeader = Astro.request.headers.get('cookie') || '';
-  const tokenMatch = cookieHeader.match(/ddh_token=([^;]+)/);
+  ...
   const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
   if (!authPayload) {
     return Astro.redirect(`/login?redirect=/booking/${planId}`);
@@ -83,9 +80,7 @@ if (!dbAvailable) {
 
 if (!plan) {
   Astro.response.status = 404;
-}
-
-
+} 
 
 const displayPlanName = plan ? (locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name) : '';
 const displayHotelName = plan ? (locale === 'ja' && plan.hotel_name_ja ? plan.hotel_name_ja : plan.hotel_name) : '';
@@ -480,9 +475,9 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
       var phoneSel = document.getElementById('phone_code');
       // Try to match country code from stored phone number
       var knownCodes = ['+880','+855','+856','+971','+966','+974','+972','+358','+420','+380','+234','+254','+212','+351','+852','+886','+977','+95','+92','+94','+91','+86','+82','+81','+66','+84','+65','+62','+63','+61','+64','+55','+57','+56','+54','+52','+51','+49','+48','+47','+46','+45','+44','+43','+41','+39','+36','+34','+33','+32','+31','+30','+27','+20','+90','+7','+1'];
-      var matchedCode = '';
-      var localPart = currentUserPhone;
-      for (var i = 0; i < knownCodes.length; i++) {
+      let matchedCode = '';
+      let localPart = currentUserPhone;
+      for (let i = 0; i < knownCodes.length; i++) {
         if (currentUserPhone.startsWith(knownCodes[i])) {
           matchedCode = knownCodes[i];
           localPart = currentUserPhone.slice(knownCodes[i].length);
@@ -492,7 +487,7 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
       if (phoneLocal) phoneLocal.value = localPart;
       if (phoneSel && matchedCode) {
         // Find matching option (handle +1-CA etc)
-        for (var j = 0; j < phoneSel.options.length; j++) {
+        for (let j = 0; j < phoneSel.options.length; j++) {
           var optVal = phoneSel.options[j].value.replace(/-[A-Z]+$/, '');
           if (optVal === matchedCode) { phoneSel.selectedIndex = j; break; }
         }
@@ -502,8 +497,8 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
 
   // Phone: combine country code + local number into hidden #guest_phone
   (function() {
-    var sel = document.getElementById('phone_code') as HTMLSelectElement;
-    var manual = document.getElementById('phone_code_manual') as HTMLInputElement;
+    let sel = document.getElementById('phone_code') as HTMLSelectElement;
+    let manual = document.getElementById('phone_code_manual') as HTMLInputElement;
 
     // "Other" toggle
     if (sel && manual) {
@@ -526,16 +521,16 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
     }
 
     function syncPhone() {
-      var code = '';
+      let code = '';
       if (sel && sel.classList.contains('hidden') && manual) {
         code = manual.value.trim();
       } else {
         code = sel?.value || '';
       }
-      var local = (document.getElementById('phone_local') as HTMLInputElement)?.value.trim() || '';
+      let local = (document.getElementById('phone_local') as HTMLInputElement)?.value.trim() || '';
       // strip "-CA" suffix (Canada shares +1)
-      var dialCode = code.replace(/-[A-Z]+$/, '');
-      var hidden = document.getElementById('guest_phone') as HTMLInputElement;
+      let dialCode = code.replace(/-[A-Z]+$/, '');
+      let hidden = document.getElementById('guest_phone') as HTMLInputElement;
       if (hidden) hidden.value = local ? dialCode + local : '';
     }
     document.getElementById('phone_local')?.addEventListener('input', syncPhone);
@@ -546,15 +541,15 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
 
   // Max guests: show error immediately
   if (maxGuests > 0) {
-    var guestSelIds = ['adults', 'children', 'infants'];
+    let guestSelIds = ['adults', 'children', 'infants'];
 
     function checkGuestTotal() {
-      var total = 0;
+      let total = 0;
       guestSelIds.forEach(function(id) {
         total += parseInt(document.getElementById(id)?.value || '0') || 0;
       });
-      var errEl = document.getElementById('guests-error');
-      var over = total > maxGuests;
+      let errEl = document.getElementById('guests-error');
+      let over = total > maxGuests;
 
       if (errEl) {
         errEl.style.display = over ? 'flex' : 'none';
@@ -562,7 +557,7 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
 
       // Highlight selects in red when over
       guestSelIds.forEach(function(id) {
-        var el = document.getElementById(id);
+        let el = document.getElementById(id);
         if (!el) return;
         if (over) {
           el.style.borderColor = '#ef4444';
@@ -577,7 +572,7 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
     }
 
     guestSelIds.forEach(function(id) {
-      var el = document.getElementById(id);
+      let el = document.getElementById(id);
       el?.addEventListener('change', checkGuestTotal);
       el?.addEventListener('input', checkGuestTotal);  // for mobile
     });
