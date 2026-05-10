@@ -607,7 +607,8 @@ document.getElementById('thumbnail-url-input')?.addEventListener('input', functi
         await fetch('/api/admin/hotel-images', { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ images: images.map(i => ({id:i.id, sort_order:i.sort_order})) }) });
       });
       // Delete
-      div.querySelector('.delete-img-btn').addEventListener('click', async () => {
+      div.querySelector('.delete-img-btn').addEventListener('click', async (e) => {
+  e.preventDefault();
         if (!confirm('Delete this image?')) return;
         await fetch(`/api/admin/hotel-images?id=${img.id}`, { method: 'DELETE' });
         images = images.filter(i => i.id !== img.id);
