@@ -10,64 +10,251 @@ if (!admin) return Astro.redirect("/admin/login");
 ---
 
 <AdminLayout title="Sales Outreach" activeNav="outreach">
-  <div class="max-w-2xl mx-auto mt-8">
-    <!-- Coming Soon Card -->
-    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-      <div class="bg-gradient-to-r from-teal-500 to-teal-600 px-6 py-8 text-center">
-        <div class="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-full mb-4">
-          <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <h2 class="text-2xl font-bold text-white mb-2">Sales Outreach</h2>
-        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white">
-          Coming Soon
-        </span>
+  <div class="max-w-5xl mx-auto mt-6 px-4 space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <h1 class="text-xl font-bold text-slate-800">Sales Outreach — AI Phone Calls</h1>
+      <div class="flex gap-2">
+        <button id="btn-add" class="px-4 py-2 bg-teal-600 text-white text-sm rounded-lg hover:bg-teal-700 font-medium">+ Add Lead</button>
+        <button id="btn-import" class="px-4 py-2 bg-slate-600 text-white text-sm rounded-lg hover:bg-slate-700 font-medium">Import CSV</button>
       </div>
+    </div>
 
-      <div class="px-6 py-8">
-        <p class="text-slate-600 text-center mb-8">
-          Manage hotel outreach campaigns, track contact history, and convert leads into listed properties.
-        </p>
+    <!-- Status filter tabs -->
+    <div class="flex gap-1 border-b border-slate-200 text-sm" id="filter-tabs">
+      {['all','new','calling','interested','not_interested','no_answer'].map(s => (
+        <button
+          class={`filter-tab px-4 py-2 border-b-2 font-medium transition-colors ${s === 'all' ? 'border-teal-500 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+          data-status={s}
+        >{s === 'all' ? 'All' : s.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</button>
+      ))}
+    </div>
 
-        <div class="space-y-4">
-          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
-            <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-sm font-bold">1</div>
-            <div>
-              <h3 class="font-medium text-slate-900 text-sm">Lead Management</h3>
-              <p class="text-xs text-slate-500 mt-0.5">Import and manage hotel leads with contact details, notes, and status tracking.</p>
-            </div>
-          </div>
-
-          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
-            <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-sm font-bold">2</div>
-            <div>
-              <h3 class="font-medium text-slate-900 text-sm">Email Campaigns</h3>
-              <p class="text-xs text-slate-500 mt-0.5">Send personalized outreach emails with templates and track open/reply rates.</p>
-            </div>
-          </div>
-
-          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
-            <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-sm font-bold">3</div>
-            <div>
-              <h3 class="font-medium text-slate-900 text-sm">Follow-up Pipeline</h3>
-              <p class="text-xs text-slate-500 mt-0.5">Automated follow-up scheduling and pipeline visualization from lead to onboarded property.</p>
-            </div>
-          </div>
-
-          <div class="flex items-start gap-3 p-3 bg-slate-50 rounded-lg">
-            <div class="flex-shrink-0 w-8 h-8 bg-teal-100 text-teal-600 rounded-lg flex items-center justify-center text-sm font-bold">4</div>
-            <div>
-              <h3 class="font-medium text-slate-900 text-sm">Analytics & Reports</h3>
-              <p class="text-xs text-slate-500 mt-0.5">Conversion metrics, response rates, and team performance dashboards.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="mt-8 text-center">
-          <p class="text-xs text-slate-400">This feature is under development. Check back soon for updates.</p>
-        </div>
+    <!-- Lead table -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div id="lead-table-wrap">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th class="text-left px-4 py-3 text-slate-600 font-medium">Hotel</th>
+              <th class="text-left px-4 py-3 text-slate-600 font-medium">Phone</th>
+              <th class="text-left px-4 py-3 text-slate-600 font-medium">Country</th>
+              <th class="text-left px-4 py-3 text-slate-600 font-medium">Status</th>
+              <th class="text-left px-4 py-3 text-slate-600 font-medium">Notes</th>
+              <th class="text-left px-4 py-3 text-slate-600 font-medium">Updated</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody id="lead-tbody" class="divide-y divide-slate-100">
+            <tr><td colspan="7" class="text-center py-8 text-slate-400">Loading…</td></tr>
+          </tbody>
+        </table>
       </div>
+    </div>
+
+  </div>
+
+  <!-- Add Lead Modal -->
+  <div id="modal-add" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+      <h2 class="text-lg font-bold text-slate-800 mb-4">Add Lead</h2>
+      <form id="form-add" class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Hotel Name *</label>
+          <input name="hotel_name" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Phone * (E.164 format e.g. +14155552671)</label>
+          <input name="phone" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Country</label>
+          <input name="country" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Email</label>
+          <input name="email" type="email" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+          <input name="notes" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400" />
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="submit" class="flex-1 bg-teal-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-teal-700">Add Lead</button>
+          <button type="button" id="btn-add-cancel" class="flex-1 bg-slate-100 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-200">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Import CSV Modal -->
+  <div id="modal-import" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
+      <h2 class="text-lg font-bold text-slate-800 mb-2">Import CSV</h2>
+      <p class="text-xs text-slate-500 mb-3">Format: <code class="bg-slate-100 px-1 rounded">hotel_name,phone,country,email</code> (one per line, no header)</p>
+      <textarea id="csv-input" rows="10" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-teal-400" placeholder="Grand Hotel Tokyo,+81312345678,Japan,info@grandtokyo.jp&#10;Beachside Resort,+6621234567,Thailand,"></textarea>
+      <div class="flex gap-2 mt-3">
+        <button id="btn-import-confirm" class="flex-1 bg-teal-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-teal-700">Import</button>
+        <button id="btn-import-cancel" class="flex-1 bg-slate-100 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-200">Cancel</button>
+      </div>
+      <p id="import-result" class="text-xs text-slate-500 mt-2 hidden"></p>
     </div>
   </div>
 </AdminLayout>
+
+<script>
+const STATUS_COLORS: Record<string, string> = {
+  new: 'bg-slate-100 text-slate-600',
+  calling: 'bg-blue-100 text-blue-700',
+  interested: 'bg-green-100 text-green-700',
+  not_interested: 'bg-red-100 text-red-600',
+  no_answer: 'bg-yellow-100 text-yellow-700',
+};
+
+let currentFilter = 'all';
+let leads: any[] = [];
+
+async function api(body: any) {
+  const r = await fetch('/api/admin/outreach', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    credentials: 'include',
+  });
+  return r.json();
+}
+
+async function loadLeads() {
+  const url = currentFilter === 'all' ? '/api/admin/outreach' : `/api/admin/outreach?status=${currentFilter}`;
+  const r = await fetch(url, { credentials: 'include' });
+  const data = await r.json();
+  leads = data.leads || [];
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('lead-tbody')!;
+  if (!leads.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-400">No leads found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = leads.map(l => {
+    const color = STATUS_COLORS[l.status] || 'bg-slate-100 text-slate-600';
+    const statusLabel = (l.status || 'new').replace('_', ' ');
+    const updatedAt = l.updated_at ? l.updated_at.replace('T', ' ').slice(0, 16) : '';
+    const canCall = !['calling', 'interested'].includes(l.status);
+    return `<tr class="hover:bg-slate-50" data-id="${l.id}">
+      <td class="px-4 py-3 font-medium text-slate-800">${esc(l.hotel_name)}</td>
+      <td class="px-4 py-3 text-slate-600 font-mono text-xs">${esc(l.phone)}</td>
+      <td class="px-4 py-3 text-slate-500 text-xs">${esc(l.country || '')}</td>
+      <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${color}">${statusLabel}</span></td>
+      <td class="px-4 py-3 text-slate-500 text-xs max-w-xs truncate">${esc(l.notes || '')}</td>
+      <td class="px-4 py-3 text-slate-400 text-xs">${updatedAt}</td>
+      <td class="px-4 py-3">
+        <div class="flex gap-1 justify-end">
+          ${canCall ? `<button class="btn-call px-3 py-1 bg-teal-600 text-white text-xs rounded-lg hover:bg-teal-700 font-medium" data-id="${l.id}">Call</button>` : ''}
+          <button class="btn-note px-3 py-1 bg-slate-100 text-slate-600 text-xs rounded-lg hover:bg-slate-200" data-id="${l.id}" data-notes="${esc(l.notes || '')}">Note</button>
+          <button class="btn-del px-3 py-1 bg-red-50 text-red-500 text-xs rounded-lg hover:bg-red-100" data-id="${l.id}">✕</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Bind call buttons
+  tbody.querySelectorAll('.btn-call').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const id = (e.currentTarget as HTMLElement).dataset.id;
+      (e.currentTarget as HTMLButtonElement).disabled = true;
+      (e.currentTarget as HTMLButtonElement).textContent = 'Calling…';
+      const res = await api({ action: 'call_lead', lead_id: Number(id) });
+      if (res.error) {
+        alert('Error: ' + res.error);
+      }
+      await loadLeads();
+    });
+  });
+
+  // Bind note buttons
+  tbody.querySelectorAll('.btn-note').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const el = e.currentTarget as HTMLElement;
+      const id = el.dataset.id;
+      const current = el.dataset.notes || '';
+      const note = prompt('Notes:', current);
+      if (note === null) return;
+      await api({ action: 'update_lead', lead_id: Number(id), notes: note });
+      await loadLeads();
+    });
+  });
+
+  // Bind delete buttons
+  tbody.querySelectorAll('.btn-del').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const id = (e.currentTarget as HTMLElement).dataset.id;
+      if (!confirm('Delete this lead?')) return;
+      await api({ action: 'delete_lead', lead_id: Number(id) });
+      await loadLeads();
+    });
+  });
+}
+
+function esc(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Filter tabs
+document.querySelectorAll('.filter-tab').forEach(tab => {
+  tab.addEventListener('click', (e) => {
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('border-teal-500', 'text-teal-700'));
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.add('border-transparent', 'text-slate-500'));
+    const el = e.currentTarget as HTMLElement;
+    el.classList.add('border-teal-500', 'text-teal-700');
+    el.classList.remove('border-transparent', 'text-slate-500');
+    currentFilter = el.dataset.status || 'all';
+    loadLeads();
+  });
+});
+
+// Add lead modal
+document.getElementById('btn-add')!.addEventListener('click', () => {
+  document.getElementById('modal-add')!.classList.remove('hidden');
+});
+document.getElementById('btn-add-cancel')!.addEventListener('click', () => {
+  document.getElementById('modal-add')!.classList.add('hidden');
+});
+document.getElementById('form-add')!.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target as HTMLFormElement);
+  const body = { action: 'add_lead', ...Object.fromEntries(fd.entries()) };
+  const res = await api(body);
+  if (res.error) { alert('Error: ' + res.error); return; }
+  (e.target as HTMLFormElement).reset();
+  document.getElementById('modal-add')!.classList.add('hidden');
+  await loadLeads();
+});
+
+// Import CSV modal
+document.getElementById('btn-import')!.addEventListener('click', () => {
+  document.getElementById('modal-import')!.classList.remove('hidden');
+});
+document.getElementById('btn-import-cancel')!.addEventListener('click', () => {
+  document.getElementById('modal-import')!.classList.add('hidden');
+});
+document.getElementById('btn-import-confirm')!.addEventListener('click', async () => {
+  const csv = (document.getElementById('csv-input') as HTMLTextAreaElement).value.trim();
+  if (!csv) return;
+  const res = await api({ action: 'import_csv', csv });
+  const msg = document.getElementById('import-result')!;
+  msg.classList.remove('hidden');
+  if (res.error) {
+    msg.textContent = 'Error: ' + res.error;
+  } else {
+    msg.textContent = `Imported ${res.imported} leads (${res.skipped} skipped).`;
+    (document.getElementById('csv-input') as HTMLTextAreaElement).value = '';
+    await loadLeads();
+  }
+});
+
+loadLeads();
+</script>

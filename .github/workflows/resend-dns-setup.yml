@@ -1,0 +1,151 @@
+name: Add Resend DNS Records for send.daydreamhub.com
+
+on:
+  workflow_dispatch:
+    inputs:
+      mx_value:
+        description: 'MX record target (e.g., feedback-smtp.ap-northeast-1.amazonses.com)'
+        required: true
+        default: 'feedback-smtp.ap-northeast-1.amazonses.com'
+      mx_priority:
+        description: 'MX priority'
+        required: true
+        default: '10'
+      spf_value:
+        description: 'SPF record value (include "include:resend" etc.)'
+        required: true
+        default: 'v=spf1 include:amazonses.com include:_spf.resend.com ~all'
+      dkim_value:
+        description: 'DKIM TXT record value'
+        required: false
+        default: ''
+      dmarc_value:
+        description: 'DMARC TXT record value'
+        required: false
+        default: ''
+
+jobs:
+  add-resend-dns:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Zone ID
+        id: zone
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          RESPONSE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=daydreamhub.com" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}")
+          ZONE_ID=$(echo "$RESPONSE" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          results = r.get('result', [])
+          if not results:
+              print('ERROR: zone not found')
+              exit(1)
+          print(results[0]['id'])
+          ")
+          echo "zone_id=$ZONE_ID" >> $GITHUB_OUTPUT
+          echo "Zone ID: $ZONE_ID"
+
+      - name: Show existing DNS records for send subdomain
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+        run: |
+          echo "=== Current DNS records for send.daydreamhub.com ==="
+          curl -s "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?name=send.daydreamhub.com&per_page=100" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          recs = r.get('result', [])
+          if recs:
+              for rec in recs:
+                  print(f\"  {rec['type']:6} {rec['name']:45} {rec['content']:60} (id={rec['id']})\")
+          else:
+              print('  (no records found)')
+          "
+          echo ""
+          echo "=== All current DNS records in zone ==="
+          curl -s "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?per_page=100" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          for rec in r.get('result', []):
+              print(f\"  {rec['type']:6} {rec['name']:45} {rec['content']:60}\")
+          "
+
+      - name: Add MX record for send subdomain
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+          MX_VALUE: ${{ inputs.mx_value }}
+          MX_PRIORITY: ${{ inputs.mx_priority }}
+        run: |
+          RESP=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\":\"MX\",\"name\":\"send\",\"content\":\"${MX_VALUE}\",\"priority\":${MX_PRIORITY},\"ttl\":1}")
+          if echo "$RESP" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r.get('success') else 1)" 2>/dev/null; then
+            echo "✅ MX record added: send.daydreamhub.com → ${MX_VALUE} (pri ${MX_PRIORITY})"
+          else
+            echo "⚠️ " && echo "$RESP" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('errors',[{}])[0].get('message',''))"
+          fi
+
+      - name: Add SPF TXT record for send subdomain
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+          SPF_VALUE: ${{ inputs.spf_value }}
+        run: |
+          if [ -z "${SPF_VALUE}" ]; then echo "Skipping SPF (no value)"; exit 0; fi
+          RESP=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\":\"TXT\",\"name\":\"send\",\"content\":\"${SPF_VALUE}\",\"ttl\":1}")
+          if echo "$RESP" | python3 -c "import sys,json; r=json.load(sys.stdin); exit(0 if r.get('success') else 1)" 2>/dev/null; then
+            echo "✅ SPF TXT record added: send.daydreamhub.com → ${SPF_VALUE}"
+          else
+            echo "⚠️ " && echo "$RESP" | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('errors',[{}])[0].get('message',''))"
+          fi
+
+      - name: Add DKIM TXT record for send subdomain
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+          DKIM_VALUE: ${{ inputs.dkim_value }}
+        run: |
+          if [ -z "${DKIM_VALUE}" ]; then echo "Skipping DKIM (no value)"; exit 0; fi
+          # Handle DKIM: Resend uses send._domainkey.send.daydreamhub.com
+          # But we don't know the exact selector. Let's add both common patterns
+          for NAME in "send._domainkey" "_resend-domain-verification"; do
+            RESP=$(curl -s -X POST \
+              "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
+              -H "Authorization: Bearer ${CF_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"type\":\"TXT\",\"name\":\"${NAME}.send\",\"content\":\"${DKIM_VALUE}\",\"ttl\":1}")
+            echo "$RESP" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          n='${NAME}'
+          if r.get('success'):
+              print(f'✅ TXT record added: {n}.send → OK')
+          else:
+              print(f'⚠️ {n}: ' + str(r.get('errors',[{}])[0].get('message','')))
+          "
+          done
+
+      - name: Show final DNS records for send subdomain
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE_ID: ${{ steps.zone.outputs.zone_id }}
+        run: |
+          echo "=== Final DNS records for send.daydreamhub.com ==="
+          curl -s "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?name=send.daydreamhub.com&per_page=100" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" | python3 -c "
+          import sys, json
+          r = json.load(sys.stdin)
+          for rec in r.get('result', []):
+              print(f\"  {rec['type']:6} {rec['name']:45} {rec['content']:60}\")
+          "
