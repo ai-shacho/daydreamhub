@@ -12,6 +12,15 @@ const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = '
 const usePayPal = !testMode && clientId && clientId !== 'sandbox' && clientId.length > 10;
 // Evaluated at build/SSR time — becomes `false` in production bundle
 const isDev = import.meta.env.DEV;
+console.log(`PayPal Button Initialized - clientId: ${clientId}`);
+if (!clientId || clientId === 'sandbox' || clientId.length <= 10) {
+  console.warn('Invalid clientId detected:', clientId);
+  const el = document.getElementById('paypal-loading');
+  if (el) {
+    el.innerHTML = `<div style='text-align:center;color:#FF0000;'>Invalid PayPal clientId</div>`;
+    el.style.padding = '0';
+  }
+}
 // simulate_error is only available for the test hotel
 const isTestHotel = hotelSlug.includes('test-hotel');
 ---
@@ -489,6 +498,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     const script = document.createElement('script');
     script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId.trim())}&currency=USD&locale=${locale}&intent=capture&commit=true&_l=${locale}`;
     script.onload = () => {
+      console.log('PayPal SDK loaded successfully.');
       const loadingEl = document.getElementById('paypal-loading');
       if (loadingEl) loadingEl.style.display = 'none';
       renderPayPalButtons();
@@ -496,6 +506,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
       // simulate_error is handled at init() level (shared across all modes)
     };
     script.onerror = () => {
+      console.error('Failed to load the PayPal SDK.');
       const el = document.getElementById('paypal-loading');
       if (el) {
         el.innerHTML = '';
