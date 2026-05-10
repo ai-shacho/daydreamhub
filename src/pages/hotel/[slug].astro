@@ -280,11 +280,10 @@ for (const img of images) {
         <!-- Image Gallery -->
         {(() => {
           // Build gallery list: admin hotel_images first, then owner gallery images, fallback to thumbnail
-          const galleryImages = images.length > 0
-            ? [...images.map((img: any) => img.image_url), ...ownerGalleryImages]
-            : ownerGalleryImages.length > 0
-              ? ownerGalleryImages
-              : (hotel.thumbnail_url ? [hotel.thumbnail_url] : ['/images/placeholder-hotel.jpg']);
+          const galleryImages = (hotel.thumbnail_url ? [hotel.thumbnail_url] : []).concat(
+  images.length > 0 ? images.map((img: any) => img.image_url) : [],
+  ownerGalleryImages
+);
           const hasMultiple = galleryImages.length > 1;
           return (
             <div class="w-full">
