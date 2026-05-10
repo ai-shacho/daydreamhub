@@ -30,7 +30,10 @@ async function verifyJWT(token: string, secret: string): Promise<Record<string, 
 }
 let currentUser: { name?: string; email?: string; phone?: string } = {};
 {
-  ...
+  const env = (Astro.locals as any).runtime?.env;
+  const jwtSecret = env?.JWT_SECRET || 'ddh-secret-2025';
+  const cookieHeader = Astro.request.headers.get('cookie') || '';
+  const tokenMatch = cookieHeader.match(/ddh_token=([^;]+)/);
   const authPayload = tokenMatch ? await verifyJWT(tokenMatch[1], jwtSecret) : null;
   if (!authPayload) {
     return Astro.redirect(`/login?redirect=/booking/${planId}`);
@@ -80,7 +83,7 @@ if (!dbAvailable) {
 
 if (!plan) {
   Astro.response.status = 404;
-} 
+}
 
 const displayPlanName = plan ? (locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name) : '';
 const displayHotelName = plan ? (locale === 'ja' && plan.hotel_name_ja ? plan.hotel_name_ja : plan.hotel_name) : '';
@@ -471,10 +474,10 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
   // Pre-fill phone number from user profile
   (function() {
     if (currentUserPhone) {
-      var phoneLocal = document.getElementById('phone_local');
-      var phoneSel = document.getElementById('phone_code');
+      let phoneLocal = document.getElementById('phone_local');
+      let phoneSel = document.getElementById('phone_code');
       // Try to match country code from stored phone number
-      var knownCodes = ['+880','+855','+856','+971','+966','+974','+972','+358','+420','+380','+234','+254','+212','+351','+852','+886','+977','+95','+92','+94','+91','+86','+82','+81','+66','+84','+65','+62','+63','+61','+64','+55','+57','+56','+54','+52','+51','+49','+48','+47','+46','+45','+44','+43','+41','+39','+36','+34','+33','+32','+31','+30','+27','+20','+90','+7','+1'];
+      let knownCodes = ['+880','+855','+856','+971','+966','+974','+972','+358','+420','+380','+234','+254','+212','+351','+852','+886','+977','+95','+92','+94','+91','+86','+82','+81','+66','+84','+65','+62','+63','+61','+64','+55','+57','+56','+54','+52','+51','+49','+48','+47','+46','+45','+44','+43','+41','+39','+36','+34','+33','+32','+31','+30','+27','+20','+90','+7','+1'];
       let matchedCode = '';
       let localPart = currentUserPhone;
       for (let i = 0; i < knownCodes.length; i++) {
@@ -488,7 +491,7 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
       if (phoneSel && matchedCode) {
         // Find matching option (handle +1-CA etc)
         for (let j = 0; j < phoneSel.options.length; j++) {
-          var optVal = phoneSel.options[j].value.replace(/-[A-Z]+$/, '');
+          let optVal = phoneSel.options[j].value.replace(/-[A-Z]+$/, '');
           if (optVal === matchedCode) { phoneSel.selectedIndex = j; break; }
         }
       }
