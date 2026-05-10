@@ -221,13 +221,13 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     if (globalErr) globalErr.classList.add('hidden');
 
     // ── field values ─────────────────────────────────────────────────────────
-    const guestName  = (form.querySelector('#guest_name')?.value || '').trim();
-    const guestEmail = (form.querySelector('#guest_email')?.value || '').trim();
-    const phoneCode  = (form.querySelector('#phone_code')?.value || '').replace(/-[A-Z]+$/, '');
-    const phoneLocal = (form.querySelector('#phone_local')?.value || '').trim();
+    const guestName  = (form.querySelector('#guest_name') ? form.querySelector('#guest_name').value : '').trim();
+    const guestEmail = (form.querySelector('#guest_email') ? form.querySelector('#guest_email').value : '').trim();
+    const phoneCode  = (form.querySelector('#phone_code') ? form.querySelector('#phone_code').value : '').replace(/-[A-Z]+$/, '');
+    const phoneLocal = (form.querySelector('#phone_local') ? form.querySelector('#phone_local').value : '').trim();
     const guestPhone = phoneLocal ? (phoneCode + phoneLocal) : '';
-    const checkInDate = (form.querySelector('#check_in_date')?.value || '').trim();
-    const adults      = parseInt(form.querySelector('#adults')?.value || '0');
+    const checkInDate = (form.querySelector('#check_in_date') ? form.querySelector('#check_in_date').value : '').trim();
+    const adults      = parseInt(form.querySelector('#adults') ? form.querySelector('#adults').value : '0');
 
     // sync hidden phone field
     const phoneHidden = form.querySelector('#guest_phone');
