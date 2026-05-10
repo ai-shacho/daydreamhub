@@ -25,7 +25,41 @@ jobs:
       - name: Run unit tests
         run: npm test
 
-      - run: npm run build
+      - name: Build
+        run: npm run build
+
+      - name: Ensure Cloudflare Pages secrets exist
+        env:
+          PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID }}
+          PAYPAL_SECRET: ${{ secrets.PAYPAL_SECRET }}
+          PAYPAL_MODE: ${{ secrets.PAYPAL_MODE }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
+          TELNYX_CONNECTION_ID: ${{ secrets.TELNYX_CONNECTION_ID }}
+          TELNYX_FROM_NUMBER: ${{ secrets.TELNYX_FROM_NUMBER }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+        run: |
+          # Sync GitHub secrets → Cloudflare Pages secrets on every deployment
+          secrets=(
+            "PAYPAL_CLIENT_ID"
+            "PAYPAL_SECRET"
+            "PAYPAL_MODE"
+            "RESEND_API_KEY"
+            "ADMIN_EMAIL"
+            "JWT_SECRET"
+            "TELNYX_API_KEY"
+            "TELNYX_CONNECTION_ID"
+            "TELNYX_FROM_NUMBER"
+            "GOOGLE_PLACES_API_KEY"
+          )
+          for secret_name in "${secrets[@]}"; do
+            secret_value="${!secret_name}"
+            if [ -n "$secret_value" ]; then
+              echo "$secret_value" | npx wrangler pages secret put "$secret_name" --project-name=daydreamhub
+            fi
+          done
 
       - name: Apply D1 migrations
         uses: cloudflare/wrangler-action@v3

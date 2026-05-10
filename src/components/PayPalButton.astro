@@ -1,14 +1,5 @@
 ---
-interface Props {
-  planId: number;
-  priceUsd: number;
-  clientId: string;
-  testMode?: boolean;
-  hotelSlug?: string;
-  locale?: string;
-}
-
-const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = 'en_US' } = Astro.props;
+const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = 'en_US' } = Astro.props || { planId: 0, priceUsd: 0, clientId: '', testMode: false, hotelSlug: '', locale: 'en_US' }
 const usePayPal = !testMode && clientId && clientId !== 'sandbox' && clientId.length > 10;
 // Evaluated at build/SSR time — becomes `false` in production bundle
 const isDev = import.meta.env.DEV;
@@ -126,7 +117,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
 </div>
 
-<script define:vars={{ planId, priceUsd, clientId, usePayPal, testMode, isDev, isTestHotel, locale }}>
+<script>
   function init() {
   // ─── i18n messages (shared across all payment modes) ─────────────────────
   const POPUP_MESSAGES = {

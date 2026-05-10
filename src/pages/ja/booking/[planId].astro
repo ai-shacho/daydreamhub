@@ -56,7 +56,7 @@ let paypalClientId = '';
 try {
   const runtime = (Astro.locals as any).runtime;
   const db = runtime?.env?.DB;
-  paypalClientId = (runtime?.env?.PAYPAL_CLIENT_ID || '').trim();
+  paypalClientId = (runtime?.env?.PAYPAL_CLIENT_ID || import.meta.env.PUBLIC_PAYPAL_CLIENT_ID || '').trim();
   if (db) {
     dbAvailable = true;
     plan = await db.prepare(
@@ -90,12 +90,12 @@ const maxGuests = plan?.max_guests || 10;
 const adultOptions = Array.from({ length: maxGuests }, (_, i) => i + 1);
 const guestOptions  = Array.from({ length: maxGuests + 1 }, (_, i) => i);
 
-const planTypeLabels: Record<string, string> = {
+const planTypeLabels = {
   'day-use': 'デイユース',
   'overnight': '宿泊',
   'hourly': '時間制',
 };
-const planTypeColors: Record<string, string> = {
+const planTypeColors = {
   'day-use': 'bg-blue-100 text-blue-700',
   'overnight': 'bg-indigo-100 text-indigo-700',
   'hourly': 'bg-green-100 text-green-700',

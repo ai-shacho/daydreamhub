@@ -106,7 +106,7 @@ const maxGuests = plan?.max_guests || 10;
 const adultOptions = Array.from({ length: maxGuests }, (_, i) => i + 1);       // 1〜maxGuests
 const guestOptions = Array.from({ length: maxGuests + 1 }, (_, i) => i);       // 0〜maxGuests
 
-const planTypeColors: Record<string, string> = {
+const planTypeColors = {
   'day-use': 'bg-blue-100 text-blue-700',
   'overnight': 'bg-indigo-100 text-indigo-700',
   'hourly': 'bg-green-100 text-green-700',
