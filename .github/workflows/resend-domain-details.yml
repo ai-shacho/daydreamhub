@@ -1,0 +1,20 @@
+name: Resend Domain Details
+
+on:
+  workflow_dispatch:
+
+jobs:
+  domain-details:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Resend domain details
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          echo "=== Resend Domain: daydreamhub.com / id: ec2d68d5-1961-47eb-9bb4-7844f3f90a57 ==="
+          curl -s "https://api.resend.com/domains/ec2d68d5-1961-47eb-9bb4-7844f3f90a57" \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" | python3 -m json.tool
+          echo ""
+          echo "=== DNS Records expected by Resend ==="
+          curl -s "https://api.resend.com/domains/ec2d68d5-1961-47eb-9bb4-7844f3f90a57/dns-records" \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" | python3 -m json.tool
