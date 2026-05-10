@@ -83,7 +83,17 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
   <title>{title}</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-  <!-- Canonical -->
+  <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5C6B1R3H1Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-5C6B1R3H1Q');
+</script>
+
+<!-- Canonical -->
   <link rel="canonical" href={resolvedCanonical} />
   <!-- OGP (Facebook/LINE/Slack等) -->
   <meta property="og:type" content={ogType || "website"} />
