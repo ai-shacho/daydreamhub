@@ -500,8 +500,8 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
 
   // Phone: combine country code + local number into hidden #guest_phone
   (function() {
-    let sel = document.getElementById('phone_code') as HTMLSelectElement;
-    let manual = document.getElementById('phone_code_manual') as HTMLInputElement;
+    var sel = document.getElementById('phone_code');
+    var manual = document.getElementById('phone_code_manual');
 
     // "Other" toggle
     if (sel && manual) {
@@ -530,10 +530,10 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
       } else {
         code = sel?.value || '';
       }
-      let local = (document.getElementById('phone_local') as HTMLInputElement)?.value.trim() || '';
+      var local = (document.getElementById('phone_local')?.value || '').trim();
       // strip "-CA" suffix (Canada shares +1)
-      let dialCode = code.replace(/-[A-Z]+$/, '');
-      let hidden = document.getElementById('guest_phone') as HTMLInputElement;
+      var dialCode = code.replace(/-[A-Z]+$/, '');
+      var hidden = document.getElementById('guest_phone');
       if (hidden) hidden.value = local ? dialCode + local : '';
     }
     document.getElementById('phone_local')?.addEventListener('input', syncPhone);

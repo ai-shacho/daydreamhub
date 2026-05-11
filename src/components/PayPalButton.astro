@@ -6,11 +6,6 @@ const isDev = import.meta.env.DEV;
 console.log(`PayPal Button Initialized - clientId: ${clientId}`);
 if (!clientId || clientId === 'sandbox' || clientId.length <= 10) {
   console.warn('Invalid clientId detected:', clientId);
-  const el = document.getElementById('paypal-loading');
-  if (el) {
-    el.innerHTML = `<div style='text-align:center;color:#FF0000;'>Invalid PayPal clientId</div>`;
-    el.style.padding = '0';
-  }
 }
 // simulate_error is only available for the test hotel
 const isTestHotel = hotelSlug.includes('test-hotel');
@@ -117,7 +112,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
 </div>
 
-<script>
+<script define:vars={{ isDev, isTestHotel, testMode, usePayPal, clientId, planId }}>
   function init() {
   // ─── i18n messages (shared across all payment modes) ─────────────────────
   const POPUP_MESSAGES = {
