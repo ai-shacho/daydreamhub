@@ -1,0 +1,39 @@
+---
+const { isAiFeatureEnabled, clientId, userPreferences } = Astro.props || { isAiFeatureEnabled: false, clientId: '', userPreferences: {} };
+const shouldShowAiPhoneCall = isAiFeatureEnabled && clientId && clientId !== 'sandbox' && clientId.length > 10;
+---
+
+<div class={shouldShowAiPhoneCall ? 'block' : 'hidden'}>
+  <div class="ai-phone-call-section">
+    <h2>AI Phone Call Feature</h2>
+    <p class="text-gray-600 mt-2">Automatically make calls post-payment or manually trigger an AI-enhanced call using the button below.</p>
+    <button id="ai-phone-call-btn" type="button" class="btn-ai-phone-call"
+      style="padding:10px 20px; font-size: 14px; color: white; background-color: #3498db; border: none; border-radius: 5px; cursor: pointer;">
+      Initiate AI Call
+    </button>
+  </div>
+</div>
+
+<script>
+  document.getElementById('ai-phone-call-btn')?.addEventListener('click', () => {
+    alert('AI call initiated! This will connect a call using AI-based logic.');
+    // Implementation: Trigger AI call logic here (e.g., via an API call or SDK integration)
+    
+    // Example API Call (pseudo-code)
+    /*
+    fetch('/api/ai-call', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        clientId: clientId,
+        preferences: userPreferences,
+      }),
+    })
+    .then(response => response.json())
+    .then(data => console.log(data))
+    .catch(error => console.error('Error:', error));
+    */
+  });
+</script>
