@@ -63,7 +63,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     const app = await db.prepare('SELECT * FROM owner_applications WHERE id = ?').bind(Number(id)).first() as any;
     if (!app) return new Response(JSON.stringify({ error: 'Application not found' }), { status: 404, headers: json });
 
-    const loginEmail = app.contact_email;
+    const loginEmail = (app.contact_email || '').toLowerCase().trim();
     const ownerName = app.contact_name;
 
     // 既存アカウント確認
@@ -78,8 +78,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     try {
       // 1. users にオーナーアカウント作成
       await db.prepare(
-        'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)'
-      ).bind(ownerName, loginEmail, passwordHash, 'owner').run();
+        "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, 'owner', datetime('now'))"
+      ).bind(ownerName, loginEmail, passwordHash).run();
 
       // 2. 申込時に作られた inactive ホテルの email を contact_email に更新（紐づけのため）
       await db.prepare(
