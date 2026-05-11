@@ -200,7 +200,7 @@
       const res = await fetch('/api/concierge/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, message: text, locale: 'ja' }),
+        body: JSON.stringify({ session_id: sessionId, message: text, locale: 'ja', system_prompt: '注意: HTMLタグ（&lt;a&gt;, target, class, hrefなど）は絶対に出力しないでください。リンクはマークダウンの [表示テキスト](URL) 形式のみ使用してください。' }),
       });
       const data = await res.json();
       removeTyping();
