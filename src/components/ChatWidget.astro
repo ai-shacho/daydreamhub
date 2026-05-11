@@ -117,28 +117,19 @@
     let out = text;
 
     // 1. **bold** → <strong>
-    out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    out = out.replace(/\*\*([^*<>\\n]+)\*\*/g, '<strong>$1</strong>'); // adjusted the pattern to avoid HTML tags and new lines inside bold text
 
-    // 2. [label](url) → <a> — handles /hotel/slug, hotel/slug, and mixed HTML-in-URL cases
-    out = out.replace(/\[([^\]\n]+)\]\(([^)]+)\)/gi, function(_, label, rawHref) {
-      var finalHref = rawHref.trim();
-      // If href contains an embedded <a> tag (AI mixing Markdown + HTML), extract the real URL
-      if (finalHref.indexOf('<a') !== -1 || finalHref.indexOf('href=') !== -1) {
-        var hrefMatch = finalHref.match(/href=["']([^"']+)["']/);
-        finalHref = hrefMatch ? hrefMatch[1] : finalHref.replace(/<[^>]+>/g, '').trim();
-      }
-      // Strip any trailing HTML attribute garbage (e.g. /hotel/slug" target="_blank" class="...")
-      finalHref = finalHref.replace(/"[^"]*$/, '').replace(/'\s*[a-z].*$/, '').trim();
-      // Ensure relative hotel links start with /
-      if (!finalHref.startsWith('/') && !finalHref.startsWith('http')) {
-        finalHref = '/' + finalHref;
-      }
+    // 2. [label](url) → <a>
+    out = out.replace(/\[([^\]\n]+)\]\(([^)]+)\)/gi, (_, label, rawHref) => {
+      const escapedHref = rawHref.replace(/"[^"]*$/, '').replace(/'\s*[a-z].*$/, '').replace(/<[^>]*>/g, '');
+      const finalHref = (escapedHref.startsWith('/') || escapedHref.startsWith('http')) ? escapedHref : '/' + escapedHref;
       return '<a href="' + finalHref + '" class="text-teal-600 underline hover:text-teal-800 font-semibold">' + label + '</a>';
     });
 
     // 3. Bare /hotel/slug paths → link (fallback)
-    out = out.replace(/(^|[\s—–-])(\/hotel\/[a-z0-9-]+)(?=[\s—–\n,.]|$)/gm, function(_, pre, path) {
-      return pre + '<a href="' + path + '" class="text-teal-600 underline hover:text-teal-800 font-semibold">予約する</a>';
+    out = out.replace(/(^|[\s—–-])(\/hotel\/[a-z0-9-]+)(?=[\s—–\n,.]|$)/gm, (_, pre, path) => {
+      const linkText = locale === 'ja' ? '予約する' : 'Book Now';
+      return pre + '<a href="' + path + '" class="text-teal-600 underline hover:text-teal-800 font-semibold">' + linkText + '</a>';
     });
 
     // 4. \n → <br>
@@ -200,7 +191,7 @@
       const res = await fetch('/api/concierge/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, message: text, locale: 'en' }),
+        body: JSON.stringify({ session_id: sessionId, message: text, locale: 'ja' }),
       });
       const data = await res.json();
       removeTyping();
