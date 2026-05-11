@@ -148,10 +148,10 @@
       avatar.className = 'w-7 h-7 bg-teal-100 rounded-full flex-shrink-0 flex items-center justify-center text-teal-600 text-xs font-bold mt-0.5';
       avatar.textContent = 'AI';
 
-      // Message bubble with plain text (no markdown rendering)
+      // Message bubble with markdown rendering
       const bubble = document.createElement('div');
-      bubble.className = 'bg-slate-100 rounded-2xl rounded-tl-none px-3 py-2 text-sm text-slate-700 max-w-[85%] whitespace-pre-wrap';
-      bubble.textContent = text;
+      bubble.className = 'bg-slate-100 rounded-2xl rounded-tl-none px-3 py-2 text-sm text-slate-700 max-w-[85%]';
+      bubble.innerHTML = renderMarkdown(text);
 
       wrap.appendChild(avatar);
       wrap.appendChild(bubble);
