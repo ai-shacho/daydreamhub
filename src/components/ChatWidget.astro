@@ -114,7 +114,8 @@
 
   function renderMarkdown(text) {
     if (!text) return '';
-    let out = text;
+    // Strip ALL HTML tags first to prevent raw HTML leaking into output
+    let out = text.replace(/<[^>]*>/g, '');
 
     // 1. **bold** → <strong>
     out = out.replace(/\*\*([^*<>\\n]+)\*\*/g, '<strong>$1</strong>'); // adjusted the pattern to avoid HTML tags and new lines inside bold text
