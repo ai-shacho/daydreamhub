@@ -482,7 +482,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     }
 
     const script = document.createElement('script');
-    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId.trim())}&currency=USD&locale=${locale}&intent=capture&commit=true&_l=${locale}`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${clientId.trim()}&currency=USD&locale=${locale}&intent=capture&commit=true`;
     script.onload = () => {
       console.log('PayPal SDK loaded successfully.');
       const loadingEl = document.getElementById('paypal-loading');
