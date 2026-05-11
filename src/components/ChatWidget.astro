@@ -78,6 +78,7 @@
 <script is:inline>
 (function() {
   const sessionId = 'chat_' + Math.random().toString(36).slice(2, 11);
+  const pageLocale = window.location.pathname.startsWith('/ja') ? 'ja' : 'en';
   let isOpen = false;
   let isTyping = false;
 
@@ -114,26 +115,41 @@
 
   function renderMarkdown(text) {
     if (!text) return '';
-    // Strip ALL HTML tags first to prevent raw HTML leaking into output
-    let out = text.replace(/<[^>]*>/g, '');
 
-    // 1. **bold** → <strong>
-    out = out.replace(/\*\*([^*<>\\n]+)\*\*/g, '<strong>$1</strong>'); // adjusted the pattern to avoid HTML tags and new lines inside bold text
+    // 0. Clean orphaned HTML attribute fragments before any other processing
+    // Handles: /hotel/slug" target="_blank" class="...">Label
+    let out = text.replace(/(\/hotel\/[\w-]+)"[^>]*>(.*?)(?=\s|$)/g, function(_, slug, afterText) {
+      var label = afterText.replace(/<[^>]+>/g, '').trim() || 'Book Now';
+      return '[' + label + '](' + slug + ')';
+    });
 
-    // 2. [label](url) → <a>
-    out = out.replace(/\[([^\]\n]+)\]\(([^)]+)\)/gi, (_, label, rawHref) => {
-      const escapedHref = rawHref.replace(/"[^"]*$/, '').replace(/'\s*[a-z].*$/, '').replace(/<[^>]*>/g, '');
-      const finalHref = (escapedHref.startsWith('/') || escapedHref.startsWith('http')) ? escapedHref : '/' + escapedHref;
+    // 1. Strip remaining HTML tags
+    out = out.replace(/<[^>]*>/g, '');
+
+    // 2. **bold** → <strong>
+    out = out.replace(/\*\*([^*<>\n]+)\*\*/g, '<strong>$1</strong>');
+
+    // 3. [label](url) → <a>
+    out = out.replace(/\[([^\]\n]+)\]\(([^)]+)\)/gi, function(_, label, rawHref) {
+      // Strip any HTML attribute fragments that crept into the URL
+      var cleanHref = rawHref
+        .replace(/"[^"]*$/, '')
+        .replace(/'\s*[a-z].*$/, '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/\s+target\s*=.*$/, '')
+        .replace(/\s+class\s*=.*$/, '')
+        .trim();
+      var finalHref = (cleanHref.startsWith('/') || cleanHref.startsWith('http')) ? cleanHref : '/' + cleanHref;
       return '<a href="' + finalHref + '" class="text-teal-600 underline hover:text-teal-800 font-semibold">' + label + '</a>';
     });
 
-    // 3. Bare /hotel/slug paths → link (fallback)
-    out = out.replace(/(^|[\s—–-])(\/hotel\/[a-z0-9-]+)(?=[\s—–\n,.]|$)/gm, (_, pre, path) => {
-      const linkText = locale === 'ja' ? '予約する' : 'Book Now';
+    // 4. Bare /hotel/slug paths → link (fallback, after Markdown links already handled)
+    out = out.replace(/(^|[\s—–-])(\/hotel\/[a-z0-9-]+)(?=[\s—–\n,.]|$)/gm, function(_, pre, path) {
+      var linkText = pageLocale === 'ja' ? '予約する' : 'Book Now';
       return pre + '<a href="' + path + '" class="text-teal-600 underline hover:text-teal-800 font-semibold">' + linkText + '</a>';
     });
 
-    // 4. \n → <br>
+    // 5. \n → <br>
     out = out.replace(/\n/g, '<br>');
     return out;
   }
@@ -200,7 +216,7 @@
       const res = await fetch('/api/concierge/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, message: text, locale: 'ja', system_prompt: '注意: HTMLタグ（&lt;a&gt;, target, class, hrefなど）は絶対に出力しないでください。リンクはマークダウンの [表示テキスト](URL) 形式のみ使用してください。' }),
+        body: JSON.stringify({ session_id: sessionId, message: text, locale: pageLocale }),
       });
       const data = await res.json();
       removeTyping();

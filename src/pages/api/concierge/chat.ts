@@ -27,6 +27,13 @@ function sanitizeAIText(text: string): string {
   text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^"]+)"[^>]*>[\s\S]*?<\/a>\)/gi, (_, label, href) => `[${label}](${href})`);
   text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^"]+)"[^>]*>\)/gi, (_, label, href) => `[${label}](${href})`);
 
+  // 0c. Handle bare /hotel/slug" target="_blank" class="...">Label pattern
+  // This fires when <a href=" was already stripped but the rest of the attribute string remains
+  text = text.replace(/(\/hotel\/[\w-]+)"[^>]*>(.*?)(?=\s*\n|$)/gi, (_, slug, afterText) => {
+    const label = afterText.replace(/<[^>]+>/g, '').trim() || 'Book Now';
+    return `[${label}](${slug})`;
+  });
+
   // 1. Convert complete <a href="...">label</a> → Markdown [label](href)
   text = text.replace(/<a\s[^>]*?href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
     const cleanLabel = label.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() || href;
@@ -395,6 +402,12 @@ async function telnyxOrchestrate(
     `6. For external hotels: show name + 📍address + 📞phone number only. Do NOT add booking links. The "Call to Book (+$7)" button is added automatically by the UI.\n` +
     `6b. EXTERNAL HOTELS MUST ALL APPEAR: If the data includes an "EXTERNAL HOTELS" section, you MUST list every single hotel in it — no exceptions, no summarizing, no skipping. Even if you also show DDH hotels, always add a separate section for external hotels.\n` +
     `7. NEVER output raw HTML tags (no <a>, <b>, <div>, etc.). Use ONLY Markdown: **bold**, [link text](url), - list item. HTML tags will be shown as broken text to the user.\n` +
+    `   FORBIDDEN examples (never do this):\n` +
+    `     ❌ /hotel/slug" target="_blank" class="underline">Book Now\n` +
+    `     ❌ <a href="/hotel/slug" target="_blank">Book Now</a>\n` +
+    `     ❌ [Book Now](/hotel/slug" target="_blank" class="underline")\n` +
+    `   CORRECT format (always use this):\n` +
+    `     ✅ [Book Now](/hotel/slug)\n` +
     (wantsClinic
       ? `8. The user is asking about clinics / wellness. You MAY include clinic entries from the hotel data above.\n`
       : `8. CLINIC EXCLUSION: Do NOT present clinics, medical facilities, or wellness centers as hotels — even if one appears in the data above. Skip any entry whose name or property_type contains "clinic", "medical", or "wellness" unless the user explicitly asked about clinics or wellness services.\n`) +
