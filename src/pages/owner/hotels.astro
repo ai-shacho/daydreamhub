@@ -56,24 +56,27 @@ const propertyTypes = ["Hotel","Villa","Resort","Apartment","Clinic","Spa","Well
           </div>
         </div>
         <a href={`/owner/hotels/${hotel.id}`} class="text-teal-600 hover:underline">Edit</a>
-<button onClick={() => handleDelete(hotel.id)} class="ml-4 text-red-600 hover:underline">Delete</button>
+<button data-hotel-id={hotel.id} class="delete-hotel-btn ml-4 text-red-600 hover:underline">Delete</button>
+      </li>
+    ))}
+  </ul>
+</OwnerLayout>
 
 <script>
-  async function handleDelete(hotelId) {
+  document.addEventListener('click', async function(e) {
+    const btn = e.target.closest('.delete-hotel-btn');
+    if (!btn) return;
+    const hotelId = btn.getAttribute('data-hotel-id');
+    if (!hotelId) return;
+    if (!confirm('本当に削除しますか？')) return;
     const response = await fetch(`/api/owner/hotels/${hotelId}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      method: 'DELETE'
     });
     if (response.ok) {
       window.location.reload();
     } else {
       console.error('Failed to delete hotel');
+      alert('削除に失敗しました');
     }
-  }
+  });
 </script>
-      </li>
-    ))}
-  </ul>
-</OwnerLayout>
