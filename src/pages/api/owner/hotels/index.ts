@@ -65,3 +65,37 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Failed to create hotel', details: message }), { status: 500, headers: json });
   }
 };
+
+export const DELETE: APIRoute = async ({ request, locals }) => {
+  const json = { 'Content-Type': 'application/json' };
+  const env = (locals as any).runtime?.env;
+  const db = env?.DB;
+  const jwtSecret = env?.JWT_SECRET || 'ddh-secret-2025';
+
+  if (!db) {
+    return new Response(JSON.stringify({ error: 'Database not available' }), { status: 503, headers: json });
+  }
+
+  const owner = await verifyOwner(request, jwtSecret);
+  if (!owner) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
+  }
+
+  let data: Record<string, any>;
+  try { data = await request.json(); } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: json });
+  }
+
+  const { id } = data;
+  if (!id) {
+    return new Response(JSON.stringify({ error: 'Hotel ID is required' }), { status: 400, headers: json });
+  }
+
+  try {
+    await db.prepare('DELETE FROM hotels WHERE id = ? AND email = ?').bind(id, owner.email).run();
+    return new Response(JSON.stringify({ success: true, message: 'Hotel deleted successfully' }), { status: 200, headers: json });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: 'Failed to delete hotel', details: message }), { status: 500, headers: json });
+  }
+};

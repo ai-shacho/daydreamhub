@@ -1,4 +1,4 @@
-const sanitizeAIText = require('./sanitizeAIText');
+import { sanitizeAIText } from './sanitizeAIText';
 
 describe('sanitizeAIText', () => {
   it('should remove all HTML tags from text', () => {

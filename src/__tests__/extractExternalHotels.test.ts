@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from '@jest/globals';
 import { extractExternalHotels } from '../lib/extractExternalHotels';
 
 // 実際の AI 応答フォーマット（Tbilisi ケース）

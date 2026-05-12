@@ -1,20 +1,21 @@
 {
   "name": "daydreamhub",
-  "type": "module",
+  
   "version": "1.0.0",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
     "deploy": "astro build && wrangler pages deploy dist",
-    "test": "vitest run",
+    "test": "jest",
     "test:e2e": "playwright test",
-    "test:e2e:report": "playwright test --reporter=html",
-    "test": "jest"
+    "test:e2e:report": "playwright test --reporter=html"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^12.5.0",
-    "astro": "^5.4.0"
+    "astro": "^5.4.0",
+    "jest-environment-jsdom": "^30.4.1",
+    "jsdom": "^29.1.1"
   },
   "devDependencies": {
     "@astrojs/tailwind": "^6.0.2",

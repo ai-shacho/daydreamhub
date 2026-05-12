@@ -10,4 +10,4 @@ function sanitizeAIText(text) {
   return text.replace(/<[^>]*>?/gm, '');
 }
 
-module.exports = sanitizeAIText;
+export const sanitizeAIText = sanitizeAIText;

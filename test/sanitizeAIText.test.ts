@@ -1,4 +1,4 @@
-import { describe, test, expect } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 
 function sanitizeAIText(text: string): string {
   if (!text) return text;
