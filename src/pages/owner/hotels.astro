@@ -57,6 +57,22 @@ const propertyTypes = ["Hotel","Villa","Resort","Apartment","Clinic","Spa","Well
         </div>
         <a href={`/owner/hotels/${hotel.id}`} class="text-teal-600 hover:underline">Edit</a>
 <button onClick={() => handleDelete(hotel.id)} class="ml-4 text-red-600 hover:underline">Delete</button>
+
+<script>
+  async function handleDelete(hotelId) {
+    const response = await fetch(`/api/owner/hotels/${hotelId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    if (response.ok) {
+      window.location.reload();
+    } else {
+      console.error('Failed to delete hotel');
+    }
+  }
+</script>
       </li>
     ))}
   </ul>
