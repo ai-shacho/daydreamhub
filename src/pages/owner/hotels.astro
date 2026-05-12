@@ -48,7 +48,7 @@ const propertyTypes = ["Hotel","Villa","Resort","Apartment","Clinic","Spa","Well
     {hotels.map(hotel => (
       <li key={hotel.id} class="flex items-center justify-between py-4">
         <div class="flex items-center gap-4">
-          <img src={`/assets/${hotel.image}`} alt="{hotel.name} image" class="w-14 h-14 object-cover rounded-lg" />
+          <img src={(hotel.image.startsWith('http') ? hotel.image : `/assets/${hotel.image}`)} alt={`${hotel.name} image`} class="w-14 h-14 object-cover rounded-lg" />
           <div>
             <h2 class="text-lg font-semibold text-slate-700">{hotel.name}</h2>
             <p class="text-sm text-teal-600">{hotel.type}</p>
