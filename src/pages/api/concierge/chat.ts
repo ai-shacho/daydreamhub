@@ -5,20 +5,15 @@ import { filterExternalHotels } from '../../../lib/filterExternalHotels';
 import { sendConciergeCallStartedEmail } from '../../../lib/email';
 
 // Shared text sanitizer — strips raw HTML from AI output, converts <a> to Markdown
-function sanitizeAIText(text: string): string {
+export function sanitizeAIText(text: string): string {
   if (!text) return text;
 
   // 0. Catch ALL Markdown links with HTML-like content in the URL part
-  // Pattern: [label](</hotel/slug" target="_blank" class="...">) or [label](<a href="url">...</a>)
-  // This handles any Markdown link whose URL contains < > " target= class= etc.
   text = text.replace(/\[([^\]]+)\]\(([^)]*?(?:<|"|'|\starget=|\sclass=)[^)]*)\)/g, (_, label, dirtyUrl) => {
-    // Try to extract clean /hotel/... slug first
     const hotelMatch = dirtyUrl.match(/\/hotel\/[\w-]+/);
     if (hotelMatch) return `[${label}](${hotelMatch[0]})`;
-    // Try to extract clean http/https URL
     const httpMatch = dirtyUrl.match(/https?:\/\/[^"'<>\s]+/);
     if (httpMatch) return `[${label}](${httpMatch[0]})`;
-    // Fallback: strip everything after the first < " or '
     const cleanUrl = dirtyUrl.replace(/[<"'].*$/, '').trim();
     return `[${label}](${cleanUrl})`;
   });
@@ -43,11 +38,10 @@ function sanitizeAIText(text: string): string {
   // 1b. Handle unclosed <a href="..."> tags (no </a>)
   text = text.replace(/<a\s[^>]*?href="([^"]*)"[^>]*>/gi, (_, href) => `[リンク](${href})`);
 
-  // 2. Strip orphaned HTML attribute fragments (e.g. /hotel/slug" target="_blank" class="...">Book Now)
+  // 2. Strip orphaned HTML attribute fragments
   text = text.replace(/[^\s"(]*"?\s*target="_blank"[^>]*>(.*?)(?=\n|$)/gi, (_, after) => after.trim());
   text = text.replace(/"?\s*target="_blank"/gi, '');
   text = text.replace(/\s*class="(?:underline|text-amber|hover:|text-teal|font-)[^"]*"/gi, '');
-  // orphaned closing > after attribute cleanup
   text = text.replace(/"\s*>/g, ' ');
 
   // 3. Convert <strong>/<b> → **text**
@@ -249,10 +243,9 @@ async function telnyxOrchestrate(
                   p.id as plan_id, p.name as plan_name,
                   p.price_usd, p.check_in_time, p.check_out_time, p.max_guests
            FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-           WHERE h.status = 'active'${clinicFilter} AND (
-             LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
-             OR LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
-           )
+           WHERE h.status = 'active'
+           AND (LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?
+             OR LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?)
            ORDER BY
              CASE WHEN LOWER(h.property_type) LIKE '%clinic%' OR LOWER(h.name) LIKE '%clinic%' THEN 1 ELSE 0 END ASC,
              h.rating DESC, p.price_usd ASC
@@ -442,7 +435,7 @@ async function telnyxOrchestrate(
   text = text.replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '').trim();
   text = text.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, '').trim();
   text = text.replace(/\[?\{[\s\S]*?"tool_name"[\s\S]*?\}\]?/g, '').trim();
-  // Sanitize all remaining HTML
+  // Sanitize all remaining HTML using the updated logic
   text = sanitizeAIText(text);
   if (!text) text = 'Let me help you find a day-use hotel. Could you tell me your destination city and preferred date?';
 
@@ -1104,6 +1097,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       .run();
 
     const msgType = image_key ? 'image' : 'text';
+
     await db
       .prepare(
         `INSERT INTO concierge_messages (session_id, role, content, message_type, image_key, created_at)
