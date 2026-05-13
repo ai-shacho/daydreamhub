@@ -861,7 +861,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       <div class="flex flex-wrap justify-center gap-4">
         {roomTypes.map(rt => (
           <a href={`/ja/search?propertyType=${encodeURIComponent(rt.value)}`} class="group relative rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow w-[calc(50%-0.5rem)] sm:w-[calc(33.333%-0.75rem)] lg:w-[calc(20%-0.8rem)]" style="aspect-ratio:1">
-            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80`}&fm=webp alt={rt.label} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80&fm=webp`} alt={rt.label} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
             <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
             <div class="absolute bottom-0 left-0 right-0 p-3 text-center">
               <h3 class="text-white font-semibold text-sm">{rt.label}</h3>
@@ -1010,9 +1010,9 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
               fillOpacity: 0.9
             }).addTo(map);
             marker.bindPopup(
-              '<a href="/ja/hotel/' + h.slug + '" style="font-weight:600;color:#0d9488">' + h.name + '</a>' +
-              '<br><span style="font-size:12px;color:#6b7280">' + h.city + ', ' + h.country + '</span>' +
-              (h.min_price ? '<br><span style="font-size:12px;font-weight:700">$' + h.min_price + '〜</span>' : '')
+              '<a href="/ja/hotel/' + escHtml(h.slug) + '" style="font-weight:600;color:#0d9488">' + escHtml(h.name) + '</a>' +
+              '<br><span style="font-size:12px;color:#6b7280">' + escHtml(h.city) + ', ' + escHtml(h.country) + '</span>' +
+              (h.min_price ? '<br><span style="font-size:12px;font-weight:700">$' + escHtml(h.min_price) + '〜</span>' : '')
             );
           });
         };
@@ -1055,6 +1055,10 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
 
 <!-- Hero AI Chatbot -->
 <script is:inline>
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 (function() {
   var sessionId = 'ja_hero_' + Math.random().toString(36).slice(2, 11);
   var pendingImageKey = null;
@@ -1239,7 +1243,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         '</div>';
     } else {
       wrap.innerHTML =
-        '<div class="bg-amber-500 text-gray-900 rounded-xl rounded-tr-none px-3 py-2 text-sm max-w-[85%] font-medium">' + text + '</div>';
+        '<div class="bg-amber-500 text-gray-900 rounded-xl rounded-tr-none px-3 py-2 text-sm max-w-[85%] font-medium">' + escHtml(text) + '</div>';
     }
     messagesEl.appendChild(wrap);
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1314,7 +1318,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     var formDiv = document.createElement('div');
     formDiv.className = 'flex gap-2';
     var hotelListHtml = selected.map(function(h, i) {
-      return '<li class="text-white/80"><span class="text-amber-300 font-bold">' + (i+1) + '.</span> ' + h.name + '</li>';
+      return '<li class="text-white/80"><span class="text-amber-300 font-bold">' + (i+1) + '.</span> ' + escHtml(h.name) + '</li>';
     }).join('');
     formDiv.innerHTML =
       '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
@@ -1454,7 +1458,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       '<div class="w-6 h-6 flex-shrink-0"></div>' +
       '<div class="bg-white rounded-xl p-4 text-gray-800 text-sm max-w-[90%] w-full shadow-lg">' +
         '<div class="flex items-center justify-between mb-3">' +
-          '<p class="font-bold text-gray-900 text-sm">📋 ' + hotel.name + '</p>' +
+          '<p class="font-bold text-gray-900 text-sm">📋 ' + escHtml(hotel.name) + '</p>' +
           '<button onclick="document.getElementById(\'hero-booking-form\').remove()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>' +
         '</div>' +
         '<div class="space-y-2">' +
@@ -1802,9 +1806,10 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
   }
 
   function highlight(text, q) {
-    if (!q) return text;
-    var re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
-    return text.replace(re, '<strong class="text-teal-600">$1</strong>');
+    var safe = escHtml(text);
+    if (!q) return safe;
+    var re = new RegExp('(' + escHtml(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    return safe.replace(re, '<strong class="text-teal-600">$1</strong>');
   }
 
   function render(items, q) {
@@ -1818,9 +1823,9 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       var badge = c.inDB
         ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">DDH</span>'
         : '';
-      return '<li class="px-4 py-2.5 cursor-pointer hover:bg-teal-50 text-gray-800 flex justify-between items-center suggestion-item" data-city="' + c.city + '" data-idx="' + i + '">' +
+      return '<li class="px-4 py-2.5 cursor-pointer hover:bg-teal-50 text-gray-800 flex justify-between items-center suggestion-item" data-city="' + escHtml(c.city) + '" data-idx="' + i + '">' +
              '<span class="font-medium flex items-center">' + highlight(c.city, q) + badge + '</span>' +
-             '<span class="text-gray-400 text-xs ml-2 flex-shrink-0">' + c.country + '</span>' +
+             '<span class="text-gray-400 text-xs ml-2 flex-shrink-0">' + escHtml(c.country) + '</span>' +
              '</li>';
     }).join('');
     list.classList.remove('hidden');
