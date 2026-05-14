@@ -17,7 +17,7 @@ import Layout from '../layouts/Layout.astro';
       </div>
 
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-        <form id="register-form" class="space-y-5">
+        <form id="register-form" novalidate class="space-y-5">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label for="first-name" class="block text-sm font-medium text-slate-700 mb-1.5">First Name<span class="text-red-500 ml-0.5">*</span></label>
@@ -162,11 +162,22 @@ import Layout from '../layouts/Layout.astro';
     }
   }
 
-  // Attach input listeners for clearing errors
+  // Attach input + blur listeners for each required field
+  var blurMessages = {
+    'first-name': '⚠ Please enter your first name.',
+    'last-name':  '⚠ Please enter your last name.',
+    'email':      '⚠ Please enter your email address.',
+    'password':   '⚠ Please enter your password.',
+    'password2':  '⚠ Please enter your password confirmation.',
+  };
   ['first-name', 'last-name', 'email', 'phone', 'password', 'password2'].forEach(function(id) {
     var el = document.getElementById(id);
-    if (el) {
-      el.addEventListener('input', function() { clearError(id); });
+    if (!el) return;
+    el.addEventListener('input', function() { clearError(id); });
+    if (blurMessages[id]) {
+      el.addEventListener('blur', function() {
+        if (!this.value.trim()) showError(id, blurMessages[id]);
+      });
     }
   });
   var agreeEl = document.getElementById('agree');
@@ -194,37 +205,49 @@ import Layout from '../layouts/Layout.astro';
 
     // Validate fields in order, stop at first error
     if (!firstName) {
-      showError('first-name', 'First name is required');
+      showError('first-name', '⚠ Please enter your first name.');
       return;
     }
     if (!lastName) {
-      showError('last-name', 'Last name is required');
+      showError('last-name', '⚠ Please enter your last name.');
       return;
     }
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showError('email', 'Please enter a valid email address');
+    if (!email) {
+      showError('email', '⚠ Please enter your email address.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('email', '⚠ Please enter a valid email address.');
       return;
     }
     if (phoneVal) {
       if (!/^[\d\s\-\(\)]+$/.test(phoneVal)) {
-        showError('phone', 'Phone number must contain digits only');
+        showError('phone', '⚠ Phone number must contain digits only.');
         return;
       }
       if (phoneVal.replace(/\D/g, '').length < 6) {
-        showError('phone', 'Please enter a valid phone number');
+        showError('phone', '⚠ Please enter a valid phone number.');
         return;
       }
     }
+    if (!password) {
+      showError('password', '⚠ Please enter your password.');
+      return;
+    }
     if (password.length < 8) {
-      showError('password', 'Password must be at least 8 characters');
+      showError('password', '⚠ Password must be at least 8 characters.');
+      return;
+    }
+    if (!password2) {
+      showError('password2', '⚠ Please enter your password confirmation.');
       return;
     }
     if (password !== password2) {
-      showError('password2', 'Passwords do not match');
+      showError('password2', '⚠ Passwords do not match.');
       return;
     }
     if (!agree) {
-      showError('agree', 'Please agree to the Terms of Service');
+      showError('agree', '⚠ Please agree to the Terms of Service.');
       return;
     }
 
