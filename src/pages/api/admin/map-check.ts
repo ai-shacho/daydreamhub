@@ -36,6 +36,16 @@ function looseMatch(dbVal: string, googleVal: string): boolean {
   return a.includes(b) || b.includes(a);
 }
 
+// Normalise a Google geocode/place result into a common shape
+function normaliseResult(result: any): { loc: { lat: number; lng: number }; formatted_address: string; place_id: string; address_components: any[] } {
+  return {
+    loc: result.geometry.location,
+    formatted_address: result.formatted_address || '',
+    place_id: result.place_id || '',
+    address_components: result.address_components || [],
+  };
+}
+
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
@@ -52,7 +62,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
   if (!hotelId) return new Response(JSON.stringify({ error: 'id required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
   const hotel = await db.prepare(`
-    SELECT h.id, h.name, h.city, h.country, h.latitude, h.longitude, h.coords_verified_at,
+    SELECT h.id, h.name, h.city, h.country, h.latitude, h.longitude,
+           h.coords_verified_at, h.google_place_id,
            u.name as owner_name, u.email as owner_email
     FROM hotels h
     LEFT JOIN users u ON u.email = h.email AND u.role IN ('owner', 'inactive')
@@ -61,48 +72,82 @@ export const GET: APIRoute = async ({ request, locals }) => {
   if (!hotel) return new Response(JSON.stringify({ error: 'Hotel not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
 
   const isProperty = looksLikePropertyName(hotel.name);
+  const base = {
+    id: hotel.id, name: hotel.name, is_property: isProperty,
+    db_lat: hotel.latitude, db_lng: hotel.longitude,
+    db_country: hotel.country, db_city: hotel.city,
+    owner_name: hotel.owner_name || '', owner_email: hotel.owner_email || '',
+    coords_verified_at: hotel.coords_verified_at || null,
+  };
 
-  const query = [hotel.name, hotel.city, hotel.country].filter(Boolean).join(', ');
-  const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`);
-  const geo = await res.json() as any;
+  // ── Stage 1: Place Details (if place_id already stored) ──────────────────
+  // Bypasses name-matching entirely — most precise.
+  let resolved: ReturnType<typeof normaliseResult> | null = null;
 
-  const base = { id: hotel.id, name: hotel.name, is_property: isProperty, db_lat: hotel.latitude, db_lng: hotel.longitude, db_country: hotel.country, db_city: hotel.city, owner_name: hotel.owner_name || '', owner_email: hotel.owner_email || '', coords_verified_at: hotel.coords_verified_at || null };
+  if (hotel.google_place_id) {
+    const detailsRes = await fetch(
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(hotel.google_place_id)}&fields=geometry,formatted_address,address_components,place_id&key=${apiKey}`
+    );
+    const details = await detailsRes.json() as any;
+    if (details.status === 'OK' && details.result?.geometry) {
+      resolved = normaliseResult(details.result);
+    }
+  }
 
-  if (geo.status !== 'OK' || !geo.results?.length) {
+  // ── Stage 2: Structured geocoding — name as address, city as component ───
+  // Separating address segments reduces city/country ambiguity from concatenation.
+  if (!resolved && hotel.city) {
+    const structuredRes = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(hotel.name)}&components=${encodeURIComponent(`locality:${hotel.city}`)}&key=${apiKey}`
+    );
+    const geo = await structuredRes.json() as any;
+    if (geo.status === 'OK' && geo.results?.length) {
+      resolved = normaliseResult(geo.results[0]);
+    }
+  }
+
+  // ── Stage 3: Fallback — concatenated query (original behaviour) ───────────
+  if (!resolved) {
+    const q = [hotel.name, hotel.city, hotel.country].filter(Boolean).join(', ');
+    const fallbackRes = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${apiKey}`
+    );
+    const geo = await fallbackRes.json() as any;
+    if (geo.status === 'OK' && geo.results?.length) {
+      resolved = normaliseResult(geo.results[0]);
+    }
+  }
+
+  if (!resolved) {
     return new Response(JSON.stringify({ ...base, status: 'not_found' }), { headers: { 'Content-Type': 'application/json' } });
   }
 
-  const result = geo.results[0];
-  const loc = result.geometry.location;
-  const googleAddress = result.formatted_address;
-  const googlePlaceId = result.place_id || '';
-  const googleCountry = getAddressComponent(result.address_components, 'country');
-  const googleCity =
-    getAddressComponent(result.address_components, 'locality') ||
-    getAddressComponent(result.address_components, 'administrative_area_level_2') ||
-    getAddressComponent(result.address_components, 'administrative_area_level_1');
-
+  const { loc, formatted_address: googleAddress, place_id: googlePlaceId, address_components } = resolved;
   const googlePlaceUrl = googlePlaceId ? `https://www.google.com/maps/place/?q=place_id:${googlePlaceId}` : '';
+  const googleCountry = getAddressComponent(address_components, 'country');
+  const googleCity =
+    getAddressComponent(address_components, 'locality') ||
+    getAddressComponent(address_components, 'administrative_area_level_2') ||
+    getAddressComponent(address_components, 'administrative_area_level_1');
 
   // Country must match (if DB has one)
   if (hotel.country && !looseMatch(hotel.country, googleCountry)) {
     return new Response(JSON.stringify({
       ...base, status: 'location_mismatch',
-      google_address: googleAddress,
-      google_country: googleCountry,
-      google_place_url: googlePlaceUrl,
+      google_lat: loc.lat, google_lng: loc.lng,
+      google_address: googleAddress, google_country: googleCountry,
+      google_place_url: googlePlaceUrl, google_place_id: googlePlaceId,
       mismatch_field: 'country',
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   const hasDbCoords = hotel.latitude && hotel.longitude;
-
   if (!hasDbCoords) {
     return new Response(JSON.stringify({
       ...base, status: 'no_coords',
       google_lat: loc.lat, google_lng: loc.lng,
-      google_address: googleAddress,
-      google_place_url: googlePlaceUrl,
+      google_address: googleAddress, google_place_url: googlePlaceUrl,
+      google_place_id: googlePlaceId,
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -113,12 +158,12 @@ export const GET: APIRoute = async ({ request, locals }) => {
     ...base, status,
     distance_m: Math.round(dist),
     google_lat: loc.lat, google_lng: loc.lng,
-    google_address: googleAddress,
-    google_place_url: googlePlaceUrl,
+    google_address: googleAddress, google_place_url: googlePlaceUrl,
+    google_place_id: googlePlaceId,
   }), { headers: { 'Content-Type': 'application/json' } });
 };
 
-// Update hotel coordinates (and optionally address) from Google's result
+// Update hotel coordinates (and optionally address / place_id) from Google's result
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
@@ -131,17 +176,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
   let data: any;
   try { data = await request.json(); } catch { return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } }); }
 
-  const { id, latitude, longitude, address } = data;
+  const { id, latitude, longitude, address, google_place_id } = data;
   if (!id || typeof latitude !== 'number' || typeof longitude !== 'number') {
     return new Response(JSON.stringify({ error: 'id, latitude, longitude required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {
-    if (address) {
-      await db.prepare('UPDATE hotels SET latitude = ?, longitude = ?, address = ?, coords_verified_at = NULL WHERE id = ?').bind(latitude, longitude, address, Number(id)).run();
-    } else {
-      await db.prepare('UPDATE hotels SET latitude = ?, longitude = ?, coords_verified_at = NULL WHERE id = ?').bind(latitude, longitude, Number(id)).run();
-    }
+    const updates = ['latitude = ?', 'longitude = ?', 'coords_verified_at = NULL'];
+    const binds: any[] = [latitude, longitude];
+    if (address) { updates.push('address = ?'); binds.push(address); }
+    if (google_place_id) { updates.push('google_place_id = ?'); binds.push(google_place_id); }
+    binds.push(Number(id));
+
+    await db.prepare(`UPDATE hotels SET ${updates.join(', ')} WHERE id = ?`).bind(...binds).run();
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
