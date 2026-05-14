@@ -36,7 +36,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const slug = `${baseSlug}-${uniqueSuffix}`;
 
   const allowed = ['name', 'name_ja', 'description', 'description_ja', 'city', 'country',
-    'address', 'property_type', 'phone', 'latitude', 'longitude'];
+    'address', 'property_type', 'phone', 'latitude', 'longitude', 'thumbnail_url'];
   const cols: string[] = ['slug', 'email', 'is_active'];
   const vals: any[] = [slug, owner.email, 1];
 
