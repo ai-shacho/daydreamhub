@@ -587,4 +587,91 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
       }
     }, true);
   }
+
+  // ── Per-field blur/input: clear or re-validate error after user correction ──
+  (function() {
+    var isJa = window.location.pathname.startsWith('/ja/') || window.location.pathname === '/ja';
+
+    function clearFieldError(fieldId) {
+      var errEl = document.getElementById('err-' + fieldId);
+      var inp    = document.getElementById(fieldId);
+      if (errEl) {
+        var sp = errEl.querySelector('span:last-child');
+        if (sp) sp.textContent = '';
+        errEl.classList.add('hidden');
+      }
+      if (inp) { inp.style.borderColor = ''; inp.style.boxShadow = ''; }
+    }
+
+    function showFieldError(fieldId, msg) {
+      var errEl = document.getElementById('err-' + fieldId);
+      var inp    = document.getElementById(fieldId);
+      if (errEl) {
+        var sp = errEl.querySelector('span:last-child');
+        if (sp) sp.textContent = msg;
+        errEl.classList.remove('hidden');
+      }
+      if (inp) {
+        inp.style.borderColor = '#ef4444';
+        inp.style.boxShadow   = '0 0 0 2px rgba(239,68,68,0.2)';
+      }
+    }
+
+    // guest_name
+    var nameEl = document.getElementById('guest_name');
+    if (nameEl) {
+      nameEl.addEventListener('input', function() {
+        if (this.value.trim()) clearFieldError('guest_name');
+      });
+      nameEl.addEventListener('blur', function() {
+        if (!this.value.trim()) {
+          showFieldError('guest_name', isJa ? 'お名前を入力してください。' : 'Please enter your name.');
+        } else {
+          clearFieldError('guest_name');
+        }
+      });
+    }
+
+    // guest_email
+    var emailEl = document.getElementById('guest_email');
+    if (emailEl) {
+      emailEl.addEventListener('input', function() {
+        var v = this.value.trim();
+        if (v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) clearFieldError('guest_email');
+      });
+      emailEl.addEventListener('blur', function() {
+        var v = this.value.trim();
+        if (!v) {
+          showFieldError('guest_email', isJa ? 'メールアドレスを入力してください。' : 'Please enter your email address.');
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) {
+          showFieldError('guest_email', isJa ? '有効なメールアドレスを入力してください。' : 'Please enter a valid email address.');
+        } else {
+          clearFieldError('guest_email');
+        }
+      });
+    }
+
+    // phone_local
+    var phoneLocalEl = document.getElementById('phone_local');
+    if (phoneLocalEl) {
+      phoneLocalEl.addEventListener('input', function() {
+        if (this.value.trim()) clearFieldError('phone_local');
+      });
+      phoneLocalEl.addEventListener('blur', function() {
+        if (!this.value.trim()) {
+          showFieldError('phone_local', isJa ? '電話番号を入力してください。' : 'Please enter your phone number.');
+        } else {
+          clearFieldError('phone_local');
+        }
+      });
+    }
+
+    // check_in_date: flatpickr sets the value and fires a 'change' event
+    var dateEl = document.getElementById('check_in_date');
+    if (dateEl) {
+      dateEl.addEventListener('change', function() {
+        if (this.value) clearFieldError('check_in_date');
+      });
+    }
+  })();
 </script>
