@@ -1061,13 +1061,11 @@ function escHtml(s) {
 
   // Render text with hotel links converted to clickable cards
   function renderMsgContent(text) {
-    // XSS対策: HTMLエスケープ（リンク変換前に実施）
-    var html = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    // Full XSS escape including " — any <a> tags we INSERT below won't be re-escaped.
+    var html = escHtml(text);
 
-    // Clean escaped HTML attributes from Markdown link URLs (defense-in-depth)
+    // After escHtml(), dirty Markdown URLs contain entities like &quot; &lt; &gt;
+    // Strip these so the clean hotel slug can be extracted for linking.
     html = html.replace(/\[([^\]\n]+)\]\(([^)]*?)(&(?:lt|gt|quot|amp);[^)]*)\)/g, function(_, label, cleanPart) {
       var hotelMatch = cleanPart.match(/\/hotel\/([\w-]+)/);
       if (hotelMatch) return '[' + label + '](/hotel/' + hotelMatch[1] + ')';
@@ -1091,17 +1089,29 @@ function escHtml(s) {
     // Markdown: - リスト項目
     html = html.replace(/^[-•]\s+(.+)$/gm, '<span class="flex gap-1.5"><span class="text-amber-400 flex-shrink-0">•</span><span>$1</span></span>');
 
-    // Hotel links: [text](http.../hotel/slug...) or [text](/hotel/slug) or [text](hotel/slug)
+    // Hotel links — callback whitelist: only /hotel/[\w-]+ slugs are accepted.
+    // label is already escHtml()'d; we build a raw <a> tag (not re-escaped).
+    // [text](https://.../hotel/slug...)
     html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)]*?\/hotel\/([\w-]+)[^)]*)\)/g,
-      '<a href="/hotel/$3" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
+      function(_, label, _url, slug) {
+        return '<a href="/hotel/' + slug + '" target="_blank" class="underline text-amber-300 hover:text-amber-200">' + label + '</a>';
+      });
+    // [text](/hotel/slug) or [text](hotel/slug)
     html = html.replace(/\[([^\]\n]+)\]\((\/?hotel\/([\w-]+))\)/g,
-      '<a href="/hotel/$3" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
-    // 通常リンク [text](url)
-    html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)]+)\)/g,
-      '<a href="$2" target="_blank" class="underline text-amber-300 hover:text-amber-200">$1</a>');
-    // Bare /hotel/slug — only if NOT already inside href="" (prevents double-conversion)
+      function(_, label, _path, slug) {
+        return '<a href="/hotel/' + slug + '" target="_blank" class="underline text-amber-300 hover:text-amber-200">' + label + '</a>';
+      });
+    // 通常リンク [text](url) — [^)&\s]+ ensures no entity chars (& → &amp; after escHtml),
+    // which means any " in the original URL would have become &quot; and been excluded.
+    html = html.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)&\s]+)\)/g,
+      function(_, label, url) {
+        return '<a href="' + url + '" target="_blank" class="underline text-amber-300 hover:text-amber-200">' + label + '</a>';
+      });
+    // Bare /hotel/slug — skip if already inside href="..." (prevents double-conversion)
     html = html.replace(/(?<!href=")(\/hotel\/([\w-]+))(?!")/g,
-      '<a href="/hotel/$2" target="_blank" class="underline text-amber-300 hover:text-amber-200">/hotel/$2</a>');
+      function(_, path, slug) {
+        return '<a href="/hotel/' + slug + '" target="_blank" class="underline text-amber-300 hover:text-amber-200">' + path + '</a>';
+      });
 
     return html;
   }
