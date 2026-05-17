@@ -5,7 +5,7 @@ export const POST: APIRoute = async () => {
     status: 200,
     headers: {
       'Content-Type': 'application/json',
-      'Set-Cookie': 'ddh_token=; Path=/; Max-Age=0; SameSite=Strict; HttpOnly',
+      'Set-Cookie': 'ddh_token=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly',
     },
   });
 };

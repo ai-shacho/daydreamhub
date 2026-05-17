@@ -76,7 +76,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       secret
     );
 
-    const cookieValue = `ddh_token=${token}; Path=/; Max-Age=${60 * 60 * 24 * 365 * 10}; SameSite=Strict; HttpOnly; Secure`;
+    const cookieValue = `ddh_token=${token}; Path=/; Max-Age=${60 * 60 * 24 * 365 * 10}; SameSite=Lax; HttpOnly; Secure`;
 
     return new Response(
       JSON.stringify({
