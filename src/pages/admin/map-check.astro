@@ -151,8 +151,9 @@ if (db) {
   document.getElementById('run-btn').addEventListener('click', async () => {
     if (running) return;
     running = true;
-    document.getElementById('run-btn').disabled = true;
-    document.getElementById('run-btn').textContent = '⏳ Running...';
+    const runBtn = document.getElementById('run-btn');
+    runBtn.disabled = true;
+    runBtn.textContent = '⏳ Running...';
     document.getElementById('autofix-btn').classList.add('hidden');
     document.getElementById('progress-bar-wrap').classList.remove('hidden');
     document.getElementById('summary').classList.remove('hidden');
@@ -163,78 +164,82 @@ if (db) {
     // Remove any cached-results banner from a previous run
     document.querySelectorAll('#clear-cache').forEach((b) => b.parentElement?.remove());
 
-    for (let i = 0; i < hotels.length; i++) {
-      const hotel = hotels[i];
-      document.getElementById('progress-label').textContent = `Checking: ${hotel.name}`;
-      document.getElementById('progress-count').textContent = `${i + 1} / ${hotels.length}`;
-      document.getElementById('progress-bar').style.width = `${Math.round((i + 1) / hotels.length * 100)}%`;
+    try {
+      for (let i = 0; i < hotels.length; i++) {
+        const hotel = hotels[i];
+        document.getElementById('progress-label').textContent = `Checking: ${hotel.name}`;
+        document.getElementById('progress-count').textContent = `${i + 1} / ${hotels.length}`;
+        document.getElementById('progress-bar').style.width = `${Math.round((i + 1) / hotels.length * 100)}%`;
 
-      try {
-        const res = await fetch(`/api/admin/map-check?id=${hotel.id}`);
-        const data = await res.json();
+        try {
+          const res = await fetch(`/api/admin/map-check?id=${hotel.id}`);
+          const data = await res.json();
 
-        // If admin has manually verified this hotel's coordinates, treat coordinate-related
-        // mismatches as resolved (e.g. Google returns a chain HQ address but DB is correct).
-        // "no_coords" still counts as a problem because missing data is always wrong.
-        const isVerified = !!data.coords_verified_at;
-        const skipDueToVerified = isVerified && (data.status === 'mismatch' || data.status === 'location_mismatch');
+          // If admin has manually verified this hotel's coordinates, treat coordinate-related
+          // mismatches as resolved (e.g. Google returns a chain HQ address but DB is correct).
+          // "no_coords" still counts as a problem because missing data is always wrong.
+          const isVerified = !!data.coords_verified_at;
+          const skipDueToVerified = isVerified && (data.status === 'mismatch' || data.status === 'location_mismatch');
 
-        if (data.status === 'ok') {
-          countOk++;
-        } else if (skipDueToVerified) {
-          countVerified++;
-        } else if (data.status === 'location_mismatch') {
-          countLocationMismatch++;
-          problems.push(data);
-          renderRow(data);
-        } else {
-          if (!data.is_property) countManual++;
-          else if (data.status === 'mismatch') countMismatch++;
-          else countIssue++;
-          problems.push(data);
-          renderRow(data);
+          if (data.status === 'ok') {
+            countOk++;
+          } else if (skipDueToVerified) {
+            countVerified++;
+          } else if (data.status === 'location_mismatch') {
+            countLocationMismatch++;
+            problems.push(data);
+            renderRow(data);
+          } else {
+            if (!data.is_property) countManual++;
+            else if (data.status === 'mismatch') countMismatch++;
+            else countIssue++;
+            problems.push(data);
+            renderRow(data);
+          }
+        } catch {
+          countIssue++;
+          problems.push({ id: hotel.id, name: hotel.name, status: 'error', is_property: false });
+          renderRow({ id: hotel.id, name: hotel.name, status: 'error', is_property: false });
         }
-      } catch {
-        countIssue++;
-        problems.push({ id: hotel.id, name: hotel.name, status: 'error', is_property: false });
-        renderRow({ id: hotel.id, name: hotel.name, status: 'error', is_property: false });
+
+        document.getElementById('count-mismatch').textContent = countMismatch;
+        document.getElementById('count-issue').textContent = countIssue;
+        document.getElementById('count-location-mismatch').textContent = countLocationMismatch;
+        document.getElementById('count-manual').textContent = countManual;
+        document.getElementById('count-verified').textContent = countVerified;
+        document.getElementById('count-ok').textContent = countOk;
+
+        // Incrementally save so progress is kept even if page is navigated away
+        counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, verified: countVerified, ok: countOk };
+        saveResults();
+
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 200));
       }
 
-      document.getElementById('count-mismatch').textContent = countMismatch;
-      document.getElementById('count-issue').textContent = countIssue;
-      document.getElementById('count-location-mismatch').textContent = countLocationMismatch;
-      document.getElementById('count-manual').textContent = countManual;
-      document.getElementById('count-verified').textContent = countVerified;
-      document.getElementById('count-ok').textContent = countOk;
-
-      // Incrementally save so progress is kept even if page is navigated away
+      document.getElementById('progress-label').textContent = 'Done';
       counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, verified: countVerified, ok: countOk };
       saveResults();
 
-      // Small delay to avoid rate limiting
-      await new Promise(r => setTimeout(r, 200));
-    }
+      if (problems.length > 0) document.getElementById('export-btn').classList.remove('hidden');
 
-    document.getElementById('progress-label').textContent = 'Done';
-    document.getElementById('run-btn').textContent = '▶ Run Again';
-    document.getElementById('run-btn').disabled = false;
-    running = false;
+      // Show auto-fix button if there are fixable property entries
+      const fixable = problems.filter(p => p.is_property && (p.status === 'mismatch' || p.status === 'no_coords'));
+      if (fixable.length > 0) {
+        const autofixBtn = document.getElementById('autofix-btn');
+        autofixBtn.textContent = `🔧 Auto-fix ${fixable.length} Hotel Entr${fixable.length === 1 ? 'y' : 'ies'}`;
+        autofixBtn.classList.remove('hidden');
+      }
 
-    counts = { mismatch: countMismatch, issue: countIssue, locMismatch: countLocationMismatch, manual: countManual, verified: countVerified, ok: countOk };
-    saveResults();
-
-    if (problems.length > 0) document.getElementById('export-btn').classList.remove('hidden');
-
-    // Show auto-fix button if there are fixable property entries
-    const fixable = problems.filter(p => p.is_property && (p.status === 'mismatch' || p.status === 'no_coords'));
-    if (fixable.length > 0) {
-      const btn = document.getElementById('autofix-btn');
-      btn.textContent = `🔧 Auto-fix ${fixable.length} Hotel Entr${fixable.length === 1 ? 'y' : 'ies'}`;
-      btn.classList.remove('hidden');
-    }
-
-    if (problems.length === 0) {
-      document.getElementById('results').innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center text-green-700 font-medium">✅ All coordinates look correct!</div>';
+      if (problems.length === 0) {
+        document.getElementById('results').innerHTML = '<div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center text-green-700 font-medium">✅ All coordinates look correct!</div>';
+      }
+    } catch (outerErr) {
+      document.getElementById('progress-label').textContent = 'Error — ' + (outerErr && outerErr.message ? outerErr.message : 'Unknown error');
+    } finally {
+      runBtn.textContent = '▶ Run Again';
+      runBtn.disabled = false;
+      running = false;
     }
   });
 
@@ -502,7 +507,7 @@ if (db) {
       overrideToggle.addEventListener('click', () => {
         overridePanelEl.classList.toggle('hidden');
         if (!overridePanelEl.classList.contains('hidden')) {
-          (overridePanelEl.querySelector('.manual-input') as HTMLInputElement)?.focus();
+          overridePanelEl.querySelector('.manual-input')?.focus();
         }
       });
     }
@@ -510,9 +515,9 @@ if (db) {
     const manualSubmit = el.querySelector('.manual-submit');
     if (manualSubmit) {
       manualSubmit.addEventListener('click', async () => {
-        const btn = manualSubmit as HTMLButtonElement;
-        const inp = el.querySelector('.manual-input') as HTMLInputElement;
-        const msg = el.querySelector('.manual-msg') as HTMLElement;
+        const btn = manualSubmit;
+        const inp = el.querySelector('.manual-input');
+        const msg = el.querySelector('.manual-msg');
         const input = inp.value.trim();
         if (!input) {
           msg.textContent = '⚠ Place IDまたはURLを入力してください。';
@@ -540,8 +545,8 @@ if (db) {
           document.getElementById('count-location-mismatch').textContent = counts.locMismatch;
           saveResults();
           el.remove();
-        } catch (err: any) {
-          msg.textContent = `⚠ ${err.message}`;
+        } catch (err) {
+          msg.textContent = `⚠ ${err && err.message ? err.message : 'Unknown error'}`;
           msg.className = 'manual-msg mt-1 text-xs text-red-600';
           msg.classList.remove('hidden');
           btn.disabled = false;
