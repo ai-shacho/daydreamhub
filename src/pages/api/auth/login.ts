@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { t } from '../../../lib/i18n';
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -28,15 +29,18 @@ async function createJWT(payload: Record<string, any>, secret: string): Promise<
 export const POST: APIRoute = async ({ request, locals }) => {
   const json = { 'Content-Type': 'application/json' };
   try {
-    const { email, password } = await request.json();
+    const body = await request.json();
+    const { email, password } = body;
+    const locale: string = ['en', 'ja'].includes(body.locale) ? body.locale : 'en';
+
     if (!email || !password) {
-      return new Response(JSON.stringify({ error: 'Email and password required' }), { status: 400, headers: json });
+      return new Response(JSON.stringify({ error: t('auth.error.email_password_required', locale) }), { status: 400, headers: json });
     }
 
     const env = (locals as any).runtime?.env;
     const db = env?.DB;
     if (!db) {
-      return new Response(JSON.stringify({ error: 'Service unavailable' }), { status: 503, headers: json });
+      return new Response(JSON.stringify({ error: t('auth.error.service_unavailable', locale) }), { status: 503, headers: json });
     }
 
     const user = await db
@@ -45,12 +49,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
       .first();
 
     if (!user) {
-      return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: json });
+      return new Response(JSON.stringify({ error: t('auth.error.invalid_credentials', locale) }), { status: 401, headers: json });
     }
 
     const inputHash = await hashPassword(password);
     if (inputHash !== (user as any).password_hash) {
-      return new Response(JSON.stringify({ error: 'Invalid email or password' }), { status: 401, headers: json });
+      return new Response(JSON.stringify({ error: t('auth.error.invalid_credentials', locale) }), { status: 401, headers: json });
     }
 
     // inactive users are treated as owner on login
@@ -83,6 +87,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   } catch (e: any) {
     console.error('Login error:', e);
-    return new Response(JSON.stringify({ error: e?.message || 'Server error' }), { status: 500, headers: json });
+    return new Response(JSON.stringify({ error: e?.message || t('auth.error.service_unavailable', 'en') }), { status: 500, headers: json });
   }
 };

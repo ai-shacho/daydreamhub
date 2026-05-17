@@ -177,6 +177,19 @@ const en: Record<string, string> = {
   "auth.reset_description": "Enter your email address and we will send you a link to reset your password.",
   "auth.send_reset_link": "Send Reset Link",
   "auth.back_to_login": "Back to Login",
+  "auth.error.email_password_required": "Email and password are required.",
+  "auth.error.email_required": "Please enter your email address.",
+  "auth.error.name_required": "Please enter your name.",
+  "auth.error.invalid_credentials": "Invalid email or password.",
+  "auth.error.password_too_short": "Password must be at least 8 characters.",
+  "auth.error.invalid_email": "Please enter a valid email address.",
+  "auth.error.email_exists": "An account with this email already exists.",
+  "auth.error.service_unavailable": "Service temporarily unavailable.",
+  "auth.error.token_password_required": "Token and password are required.",
+  "auth.error.invalid_reset_link": "Invalid or expired reset link. Please request a new one.",
+  "auth.error.reset_link_sent": "If an account with that email exists, a reset link has been sent.",
+  "auth.error.password_mismatch": "Passwords do not match.",
+  "auth.error.agree_required": "Please agree to the Terms of Service.",
 };
 
 const ja: Record<string, string> = {
@@ -358,6 +371,19 @@ const ja: Record<string, string> = {
   "auth.reset_description": "メールアドレスを入力してください。パスワードリセット用のリンクをお送りします。",
   "auth.send_reset_link": "リセットリンクを送信",
   "auth.back_to_login": "ログインに戻る",
+  "auth.error.email_password_required": "メールアドレスとパスワードを入力してください。",
+  "auth.error.email_required": "メールアドレスを入力してください。",
+  "auth.error.name_required": "お名前を入力してください。",
+  "auth.error.invalid_credentials": "メールアドレスまたはパスワードが正しくありません。",
+  "auth.error.password_too_short": "パスワードは8文字以上にしてください。",
+  "auth.error.invalid_email": "有効なメールアドレスを入力してください。",
+  "auth.error.email_exists": "このメールアドレスはすでに登録されています。",
+  "auth.error.service_unavailable": "サービスに一時的な問題が発生しています。",
+  "auth.error.token_password_required": "トークンとパスワードが必要です。",
+  "auth.error.invalid_reset_link": "無効または期限切れのリセットリンクです。新しいリンクをリクエストしてください。",
+  "auth.error.reset_link_sent": "ご入力のメールアドレスが登録されている場合、リセットリンクを送信しました。",
+  "auth.error.password_mismatch": "パスワードが一致しません。",
+  "auth.error.agree_required": "利用規約に同意してください。",
 };
 
 const translations: Record<string, Record<string, string>> = { en, ja };
