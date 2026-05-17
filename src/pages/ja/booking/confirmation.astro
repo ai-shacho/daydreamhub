@@ -106,7 +106,7 @@ const orderId = Astro.url.searchParams.get('order') || '';
       showState('pending');
       async function pollStatus() {
         try {
-          const res = await fetch(`/api/booking/status?order=${orderId}`);
+          const res = await fetch(`/api/booking-status?order=${orderId}`);
           if (res.ok) {
             const data = await res.json();
             if (data.status === 'confirmed') { showState('confirmed'); return; }

@@ -149,19 +149,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
 
       if (RESEND_API_KEY) {
-        try {
-          const hotel = await db
-            .prepare(`SELECT h.name, h.email, h.city, h.country, u.email as owner_login_email
-                      FROM hotels h LEFT JOIN users u ON u.email = h.email
-                      WHERE h.id = ?`)
-            .bind((booking as any).hotel_id)
-            .first();
-          const plan = await db
-            .prepare('SELECT name, check_in_time, check_out_time, cancellation_hours FROM plans WHERE id = ?')
-            .bind((booking as any).plan_id)
-            .first();
-          if (plan) {
-            // ① ホテルへ通知メール（予約用メアド＋オーナーログインメアドの両方に送信）
+        const hotel = await db
+          .prepare(`SELECT h.name, h.email, h.city, h.country, u.email as owner_login_email
+                    FROM hotels h LEFT JOIN users u ON u.email = h.email
+                    WHERE h.id = ?`)
+          .bind((booking as any).hotel_id)
+          .first()
+          .catch(() => null);
+        const plan = await db
+          .prepare('SELECT name, check_in_time, check_out_time, cancellation_hours FROM plans WHERE id = ?')
+          .bind((booking as any).plan_id)
+          .first()
+          .catch(() => null);
+
+        // ① ホテルへ通知メール
+        if (plan) {
+          try {
             const bookingEmail: string = (hotel as any)?.email || '';
             const ownerLoginEmail: string = (hotel as any)?.owner_login_email || '';
             const notifyEmails = [...new Set([bookingEmail, ownerLoginEmail].filter(Boolean))];
@@ -179,7 +182,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 infants: (booking as any).infants,
                 totalPriceUsd: (booking as any).total_price_usd,
                 notes: (booking as any).notes,
-                hotelName: (hotel as any).name,
+                hotelName: (hotel as any)?.name || '',
                 hotelEmail: notifyEmails,
               });
               await logMessage({
@@ -196,57 +199,65 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 messageType: 'booking_notification',
               });
             }
-
-            // ② DDH管理者へ通知メール
-            const ADMIN_EMAIL = runtime?.env?.ADMIN_EMAIL || 'info@daydreamhub.com';
-            try {
-              await fetch('https://api.resend.com/emails', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  from: 'DaydreamHub <noreply@daydreamhub.com>',
-                  to: [ADMIN_EMAIL],
-                  subject: `[New Booking] #${(booking as any).id} — ${(booking as any).guest_name} / ${(hotel as any)?.name || ''}`,
-                  html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${(booking as any).id}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${(booking as any).guest_name} (${(booking as any).guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(plan as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${(booking as any).check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${(booking as any).total_price_usd}</td></tr></table></div>`,
-                }),
-              });
-            } catch {}
-
-            // ③ ゲストへ予約確認メール
-            if ((booking as any).guest_email) {
-              const guestEmailResult = await sendGuestBookingConfirmation(RESEND_API_KEY, {
-                bookingId: (booking as any).id,
-                guestName: (booking as any).guest_name,
-                guestEmail: (booking as any).guest_email,
-                hotelName: (hotel as any)?.name || '',
-                hotelCity: (hotel as any)?.city || '',
-                hotelCountry: (hotel as any)?.country || '',
-                planName: (plan as any).name,
-                checkInDate: (booking as any).check_in_date,
-                checkInTime: (plan as any).check_in_time || '',
-                checkOutTime: (plan as any).check_out_time || '',
-                adults: (booking as any).adults,
-                children: (booking as any).children,
-                totalPriceUsd: (booking as any).total_price_usd,
-                notes: (booking as any).notes,
-                cancellationHours: (plan as any).cancellation_hours ?? 24,
-              });
-              await logMessage({
-                db,
-                bookingId: (booking as any).id,
-                hotelId: (booking as any).hotel_id,
-                direction: 'outbound',
-                recipientEmail: (booking as any).guest_email,
-                senderEmail: 'noreply@daydreamhub.com',
-                subject: `Booking Request Received #${(booking as any).id} — DaydreamHub`,
-                body: `Guest booking confirmation for #${(booking as any).id}`,
-                status: guestEmailResult.success ? 'sent' : 'failed',
-                errorDetail: guestEmailResult.error,
-                messageType: 'guest_confirmation',
-              });
-            }
+          } catch (e) {
+            console.error('Hotel notification email failed:', e);
           }
-        } catch {}
+        }
+
+        // ② DDH管理者へ通知メール
+        try {
+          const ADMIN_EMAIL = runtime?.env?.ADMIN_EMAIL || 'info@daydreamhub.com';
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: 'DaydreamHub <noreply@daydreamhub.com>',
+              to: [ADMIN_EMAIL],
+              subject: `[New Booking] #${(booking as any).id} — ${(booking as any).guest_name} / ${(hotel as any)?.name || ''}`,
+              html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${(booking as any).id}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${(booking as any).guest_name} (${(booking as any).guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(plan as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${(booking as any).check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${(booking as any).total_price_usd}</td></tr></table></div>`,
+            }),
+          });
+        } catch (e) {
+          console.error('Admin notification email failed:', e);
+        }
+
+        // ③ ゲストへ予約確認メール（plan有無に関わらず独立して送信）
+        if ((booking as any).guest_email) {
+          try {
+            const guestEmailResult = await sendGuestBookingConfirmation(RESEND_API_KEY, {
+              bookingId: (booking as any).id,
+              guestName: (booking as any).guest_name || '',
+              guestEmail: (booking as any).guest_email,
+              hotelName: (hotel as any)?.name || '',
+              hotelCity: (hotel as any)?.city || '',
+              hotelCountry: (hotel as any)?.country || '',
+              planName: (plan as any)?.name || '',
+              checkInDate: (booking as any).check_in_date || '',
+              checkInTime: (plan as any)?.check_in_time || '',
+              checkOutTime: (plan as any)?.check_out_time || '',
+              adults: (booking as any).adults || 1,
+              children: (booking as any).children || 0,
+              totalPriceUsd: Number((booking as any).total_price_usd) || 0,
+              notes: (booking as any).notes,
+              cancellationHours: (plan as any)?.cancellation_hours ?? 24,
+            });
+            await logMessage({
+              db,
+              bookingId: (booking as any).id,
+              hotelId: (booking as any).hotel_id,
+              direction: 'outbound',
+              recipientEmail: (booking as any).guest_email,
+              senderEmail: 'noreply@daydreamhub.com',
+              subject: `Booking Request Received #${(booking as any).id} — DaydreamHub`,
+              body: `Guest booking confirmation for #${(booking as any).id}`,
+              status: guestEmailResult.success ? 'sent' : 'failed',
+              errorDetail: guestEmailResult.error,
+              messageType: 'guest_confirmation',
+            });
+          } catch (e) {
+            console.error('Guest confirmation email failed:', e);
+          }
+        }
       }
       return new Response(
         JSON.stringify({

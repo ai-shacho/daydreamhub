@@ -42,8 +42,6 @@ const orderId = Astro.url.searchParams.get('order') || '';
         <p>❓ Questions? Contact us at <a href="mailto:contact@daydreamhub.com" class="text-teal-600 hover:underline">contact@daydreamhub.com</a></p>
       </div>
 
-      <AIPhoneCallFeature clientId={orderId} isAiFeatureEnabled={true} userPreferences={{ language: 'en-US', region: 'NA' }} />
-
 <!-- Booking Details Card -->
       <div id="booking-details-card" class="hidden mt-4 bg-white border border-gray-200 rounded-2xl p-6 text-left max-w-md mx-auto">
         <h3 class="font-semibold text-slate-800 mb-4 text-sm uppercase tracking-wide text-center">Booking Details</h3>
