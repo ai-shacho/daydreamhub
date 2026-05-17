@@ -264,6 +264,7 @@ import Layout from '../layouts/Layout.astro';
           email: email,
           phone: document.getElementById('phone-country').value + phoneVal,
           password: password,
+          locale: 'en',
         }),
       });
       if (res.ok) {

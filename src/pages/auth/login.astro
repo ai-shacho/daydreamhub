@@ -84,8 +84,23 @@ const locale = getLocale(Astro.url);
     e.preventDefault();
     errorEl.classList.add('hidden');
 
-    const email = (document.getElementById('email') as HTMLInputElement).value;
-    const password = (document.getElementById('password') as HTMLInputElement).value;
+    const emailInput = document.getElementById('email') as HTMLInputElement;
+    const passwordInput = document.getElementById('password') as HTMLInputElement;
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!email) {
+      errorEl.textContent = '⚠ Please enter your email address.';
+      errorEl.classList.remove('hidden');
+      emailInput.focus();
+      return;
+    }
+    if (!password) {
+      errorEl.textContent = '⚠ Please enter your password.';
+      errorEl.classList.remove('hidden');
+      passwordInput.focus();
+      return;
+    }
 
     const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     const origText = submitBtn.textContent;
@@ -93,17 +108,17 @@ const locale = getLocale(Astro.url);
     submitBtn.textContent = '...';
 
     try {
-      const res = await fetch('/api/admin/auth', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, locale: 'en' }),
       });
 
       const data = await res.json();
 
-      if (res.ok && data.token) {
-        document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
-        window.location.href = '/';
+      if (res.ok) {
+        const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
+        window.location.href = redirectTo;
       } else {
         errorEl.textContent = data.error || 'Login failed. Please check your credentials.';
         errorEl.classList.remove('hidden');

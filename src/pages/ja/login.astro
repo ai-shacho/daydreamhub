@@ -72,7 +72,7 @@ document.getElementById('login-form')?.addEventListener('submit', async function
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, locale: 'ja' }),
     });
     if (res.ok) {
       window.location.href = redirectTo || '/ja/';

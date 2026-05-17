@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { t } from '../../../lib/i18n';
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -20,12 +21,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const resendApiKey = (locals as any).runtime?.env?.RESEND_API_KEY;
 
   if (!db) {
-    return new Response(JSON.stringify({ error: 'Database unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: t('auth.error.service_unavailable', 'en') }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const { email } = await request.json();
+  const body = await request.json();
+  const { email } = body;
+  const locale: string = ['en', 'ja'].includes(body.locale) ? body.locale : 'en';
   if (!email) {
-    return new Response(JSON.stringify({ error: 'Email is required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: t('auth.error.email_required', locale) }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   // Check user exists (don't reveal if not found — always return ok)
@@ -91,15 +94,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
 export const PUT: APIRoute = async ({ request, locals }) => {
   const db = (locals as any).runtime?.env?.DB;
   if (!db) {
-    return new Response(JSON.stringify({ error: 'Database unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: t('auth.error.service_unavailable', 'en') }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 
-  const { token, password } = await request.json();
+  const body = await request.json();
+  const { token, password } = body;
+  const locale: string = ['en', 'ja'].includes(body.locale) ? body.locale : 'en';
   if (!token || !password) {
-    return new Response(JSON.stringify({ error: 'Token and password are required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: t('auth.error.token_password_required', locale) }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
   if (password.length < 8) {
-    return new Response(JSON.stringify({ error: 'Password must be at least 8 characters' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: t('auth.error.password_too_short', locale) }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -108,7 +113,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   ).bind(token, now).first();
 
   if (!reset) {
-    return new Response(JSON.stringify({ error: 'Invalid or expired reset link. Please request a new one.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: t('auth.error.invalid_reset_link', locale) }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
 
   const hash = await hashPassword(password);

@@ -104,20 +104,32 @@ const locale = getLocale(Astro.url);
   const form = document.getElementById('register-form') as HTMLFormElement;
   const errorEl = document.getElementById('register-error') as HTMLDivElement;
 
+  function showErr(msg: string) {
+    errorEl.textContent = msg;
+    errorEl.classList.remove('hidden');
+  }
+
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     errorEl.classList.add('hidden');
 
-    const name = (document.getElementById('name') as HTMLInputElement).value;
-    const email = (document.getElementById('email') as HTMLInputElement).value;
-    const password = (document.getElementById('password') as HTMLInputElement).value;
-    const confirmPassword = (document.getElementById('confirm-password') as HTMLInputElement).value;
+    const nameInput = document.getElementById('name') as HTMLInputElement;
+    const emailInput = document.getElementById('email') as HTMLInputElement;
+    const passwordInput = document.getElementById('password') as HTMLInputElement;
+    const confirmInput = document.getElementById('confirm-password') as HTMLInputElement;
 
-    if (password !== confirmPassword) {
-      errorEl.textContent = 'Passwords do not match.';
-      errorEl.classList.remove('hidden');
-      return;
-    }
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    const confirmPassword = confirmInput.value;
+
+    if (!name) { showErr('⚠ Please enter your name.'); nameInput.focus(); return; }
+    if (!email) { showErr('⚠ Please enter your email address.'); emailInput.focus(); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showErr('⚠ Please enter a valid email address.'); emailInput.focus(); return; }
+    if (!password) { showErr('⚠ Please enter your password.'); passwordInput.focus(); return; }
+    if (password.length < 8) { showErr('⚠ Password must be at least 8 characters.'); passwordInput.focus(); return; }
+    if (!confirmPassword) { showErr('⚠ Please confirm your password.'); confirmInput.focus(); return; }
+    if (password !== confirmPassword) { showErr('⚠ Passwords do not match.'); confirmInput.focus(); return; }
 
     const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     const origText = submitBtn.textContent;
@@ -128,7 +140,7 @@ const locale = getLocale(Astro.url);
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, locale: 'en' }),
       });
 
       const data = await res.json();
@@ -136,12 +148,10 @@ const locale = getLocale(Astro.url);
       if (res.ok) {
         window.location.href = '/auth/login?registered=1';
       } else {
-        errorEl.textContent = data.error || 'Registration failed. Please try again.';
-        errorEl.classList.remove('hidden');
+        showErr(data.error || 'Registration failed. Please try again.');
       }
     } catch {
-      errorEl.textContent = 'Network error. Please try again.';
-      errorEl.classList.remove('hidden');
+      showErr('Network error. Please try again.');
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = origText;
