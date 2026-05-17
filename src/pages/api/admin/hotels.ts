@@ -1,19 +1,18 @@
 import type { APIRoute } from 'astro';
 import { sendListingApprovedEmail } from '../../../lib/email';
-
-async function verifyAdminRequest(_request: Request, _jwtSecret: string): Promise<boolean> {
-  return true;
-}
+import { verifyAdmin } from '../../../lib/adminAuth';
 
 export const GET: APIRoute = async ({ request, locals }) => {
-  const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
-  if (!(await verifyAdminRequest(request, jwtSecret))) {
+  const env = (locals as any).runtime?.env;
+  const jwtSecret = env?.JWT_SECRET || 'dev-secret';
+  const admin = await verifyAdmin(request, jwtSecret);
+  if (!admin) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  const db = (locals as any).runtime?.env?.DB;
+  const db = env?.DB;
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
       status: 500,
@@ -147,7 +146,16 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ request, locals }) => {
-  const db = (locals as any).runtime?.env?.DB;
+  const env = (locals as any).runtime?.env;
+  const jwtSecret = env?.JWT_SECRET || 'dev-secret';
+  const admin = await verifyAdmin(request, jwtSecret);
+  if (!admin) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const db = env?.DB;
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
@@ -157,27 +165,41 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
   const url = new URL(request.url);
   const id = url.searchParams.get('id');
   if (!id) {
-    return new Response(JSON.stringify({ error: 'Missing required query param: id' }), {
+    return new Response(JSON.stringify({ error: 'id パラメータが必要です' }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const hotelId = parseInt(id);
+  if (isNaN(hotelId)) {
+    return new Response(JSON.stringify({ error: '無効な id です' }), {
       status: 400, headers: { 'Content-Type': 'application/json' },
     });
   }
 
   try {
-    const hotelId = parseInt(id);
-    await db.prepare('DELETE FROM plans WHERE hotel_id = ?').bind(hotelId).run();
-    await db.prepare('DELETE FROM hotel_amenities WHERE hotel_id = ?').bind(hotelId).run();
-    const result = await db.prepare('DELETE FROM hotels WHERE id = ?').bind(hotelId).run();
-    if (result.meta.changes === 0) {
-      return new Response(JSON.stringify({ error: 'Hotel not found' }), {
+    const hotel = await db.prepare('SELECT id, name FROM hotels WHERE id = ?').bind(hotelId).first() as any;
+    if (!hotel) {
+      return new Response(JSON.stringify({ error: 'ホテルが見つかりません' }), {
         status: 404, headers: { 'Content-Type': 'application/json' },
       });
     }
+
+    // Delete child records before the hotel. Order matters if FK enforcement is ON:
+    // booking_hotel_attempts references both bookings(id) and hotels(id),
+    // so delete it before bookings and before hotels.
+    await db.prepare('DELETE FROM booking_hotel_attempts WHERE hotel_id = ?').bind(hotelId).run();
+    await db.prepare('DELETE FROM bookings WHERE hotel_id = ?').bind(hotelId).run();
+    await db.prepare('DELETE FROM plans WHERE hotel_id = ?').bind(hotelId).run();
+    await db.prepare('DELETE FROM reviews WHERE hotel_id = ?').bind(hotelId).run();
+    await db.prepare('DELETE FROM hotels WHERE id = ?').bind(hotelId).run();
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: 'Delete failed', details: message }), {
+    return new Response(JSON.stringify({ error: '削除に失敗しました', details: message }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
     });
   }
