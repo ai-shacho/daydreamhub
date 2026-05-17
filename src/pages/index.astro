@@ -806,12 +806,6 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     });
   </script>
 
-
-
-
-
-  
-
   <!-- Search by Room Type -->
   <section class="py-12 bg-white">
     <div class="max-w-7xl mx-auto px-4">
@@ -1214,9 +1208,12 @@ function escHtml(s) {
         var items = top3.map(function(h, i) {
           var safeName = (h.name || '').replace(/"/g, '&quot;').slice(0, 60);
           var safePhone = (h.phone || '').replace(/"/g, '');
-          return '<label class="flex items-center gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition-colors">' +
-            '<input type="checkbox" class="hero-ext-hotel-cb accent-amber-400" data-name="' + safeName + '" data-phone="' + safePhone + '" checked />' +
-            '<span class="flex-1 text-xs text-white/90 font-semibold">' + safeName + '</span>' +
+          return '<label class="flex items-start gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition-colors">' +
+            '<input type="checkbox" class="hero-ext-hotel-cb mt-0.5 accent-amber-400" data-name="' + safeName + '" data-phone="' + safePhone + '" checked />' +
+            '<span class="flex-1 text-xs text-white/90">' +
+              '<span class="font-semibold block">' + safeName + '</span>' +
+              '<span class="text-white/50 text-[11px]">' + safePhone + '</span>' +
+            '</span>' +
           '</label>';
         }).join('');
         callBtns =
