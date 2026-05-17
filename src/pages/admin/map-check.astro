@@ -392,6 +392,22 @@ if (db) {
       ? `<button class="verify-btn text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700 shrink-0" data-id="${data.id}">✅ DB is correct</button>`
       : '';
 
+    // Manual override panel — shown for all property rows with an error
+    const showOverride = data.is_property && data.status !== 'error';
+    const overrideToggleBtn = showOverride
+      ? `<button class="manual-override-toggle text-xs px-2 py-1 rounded border border-orange-400 text-orange-600 hover:bg-orange-50 shrink-0">📌 Override</button>`
+      : '';
+    const overridePanel = showOverride ? `
+      <div class="manual-override-panel hidden mt-3 border-t border-dashed border-orange-200 pt-3">
+        <div class="text-xs text-orange-700 font-medium mb-1.5">📌 正しいGoogle Place IDまたはMaps URLを直接指定して上書き</div>
+        <div class="flex items-center gap-2">
+          <input type="text" class="manual-input flex-1 text-xs border border-slate-300 rounded px-2.5 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-orange-400 focus:border-orange-400"
+                 placeholder="ChIJxxxxxxxx… または https://www.google.com/maps/place/…" />
+          <button class="manual-submit text-xs px-3 py-1.5 rounded bg-orange-600 text-white hover:bg-orange-700 shrink-0 font-medium">Update</button>
+        </div>
+        <div class="manual-msg hidden mt-1 text-xs"></div>
+      </div>` : '';
+
     el.innerHTML = `
       <div class="border rounded-lg p-4 ${colors}">
         <div class="flex items-center justify-between">
@@ -403,10 +419,12 @@ if (db) {
           <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             ${useGoogleBtn}
             ${verifyBtn}
+            ${overrideToggleBtn}
             <a href="/admin/hotels/${data.id}/edit" target="_blank" rel="noopener" class="text-xs text-teal-600 hover:underline">Edit →</a>
           </div>
         </div>
         ${detail}
+        ${overridePanel}
       </div>`;
 
     const verifyButton = el.querySelector('.verify-btn');
@@ -474,6 +492,60 @@ if (db) {
           btn.disabled = false;
           btn.textContent = '📍 Use Google coords';
           alert('更新に失敗しました。再試行してください。');
+        }
+      });
+    }
+
+    const overrideToggle = el.querySelector('.manual-override-toggle');
+    const overridePanelEl = el.querySelector('.manual-override-panel');
+    if (overrideToggle && overridePanelEl) {
+      overrideToggle.addEventListener('click', () => {
+        overridePanelEl.classList.toggle('hidden');
+        if (!overridePanelEl.classList.contains('hidden')) {
+          (overridePanelEl.querySelector('.manual-input') as HTMLInputElement)?.focus();
+        }
+      });
+    }
+
+    const manualSubmit = el.querySelector('.manual-submit');
+    if (manualSubmit) {
+      manualSubmit.addEventListener('click', async () => {
+        const btn = manualSubmit as HTMLButtonElement;
+        const inp = el.querySelector('.manual-input') as HTMLInputElement;
+        const msg = el.querySelector('.manual-msg') as HTMLElement;
+        const input = inp.value.trim();
+        if (!input) {
+          msg.textContent = '⚠ Place IDまたはURLを入力してください。';
+          msg.className = 'manual-msg mt-1 text-xs text-red-600';
+          msg.classList.remove('hidden');
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = '⏳ 処理中...';
+        msg.classList.add('hidden');
+        try {
+          const res = await fetch('/api/admin/map-check', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: data.id, input }),
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || 'Update failed');
+          problems = problems.filter(p => p.id !== data.id);
+          if (data.status === 'mismatch') counts.mismatch = Math.max(0, counts.mismatch - 1);
+          else if (data.status === 'location_mismatch') counts.locMismatch = Math.max(0, counts.locMismatch - 1);
+          else counts.issue = Math.max(0, counts.issue - 1);
+          document.getElementById('count-mismatch').textContent = counts.mismatch;
+          document.getElementById('count-issue').textContent = counts.issue;
+          document.getElementById('count-location-mismatch').textContent = counts.locMismatch;
+          saveResults();
+          el.remove();
+        } catch (err: any) {
+          msg.textContent = `⚠ ${err.message}`;
+          msg.className = 'manual-msg mt-1 text-xs text-red-600';
+          msg.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = 'Update';
         }
       });
     }

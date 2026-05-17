@@ -163,6 +163,23 @@ export const GET: APIRoute = async ({ request, locals }) => {
   }), { headers: { 'Content-Type': 'application/json' } });
 };
 
+// Extract a Google Place ID from raw input (direct ID or Maps URL)
+function extractPlaceId(input: string): string | null {
+  const s = input.trim();
+  // Direct place ID: no slashes or spaces, 20+ chars
+  if (/^[A-Za-z0-9_-]{20,}$/.test(s)) return s;
+  // URL: place_id:XXXX (covers ?q=place_id:... and plain prefix)
+  const colonMatch = s.match(/place_id:([A-Za-z0-9_-]{20,})/);
+  if (colonMatch) return colonMatch[1];
+  // URL query param: place_id=XXXX
+  const eqMatch = s.match(/[?&]place_id=([A-Za-z0-9_-]{20,})/);
+  if (eqMatch) return eqMatch[1];
+  // Google Maps standard URL: data param encodes place ID after !1s
+  const dataMatch = s.match(/!1s([A-Za-z0-9_-]{20,})/);
+  if (dataMatch) return dataMatch[1];
+  return null;
+}
+
 // Update hotel coordinates (and optionally address / place_id) from Google's result
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
@@ -190,6 +207,53 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     await db.prepare(`UPDATE hotels SET ${updates.join(', ')} WHERE id = ?`).bind(...binds).run();
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: 'Update failed', details: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+};
+
+// Manual override: accept a Place ID or Maps URL, look up exact coords, save to DB
+export const PUT: APIRoute = async ({ request, locals }) => {
+  const env = (locals as any).runtime?.env;
+  const jwtSecret = env?.JWT_SECRET || 'dev-secret';
+  const admin = await verifyAdmin(request, jwtSecret);
+  if (!admin) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+
+  const db = env?.DB;
+  const apiKey = env?.GOOGLE_PLACES_API_KEY;
+  if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  if (!apiKey) return new Response(JSON.stringify({ error: 'Google API key not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+
+  let data: any;
+  try { data = await request.json(); } catch { return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json' } }); }
+
+  const { id, input } = data;
+  if (!id || !input) {
+    return new Response(JSON.stringify({ error: 'id and input required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  const placeId = extractPlaceId(String(input));
+  if (!placeId) {
+    return new Response(JSON.stringify({ error: 'Place IDが見つかりません。Place IDまたはGoogle Maps URLを確認してください。' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  const detailsRes = await fetch(
+    `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&fields=geometry,formatted_address&key=${apiKey}`
+  );
+  const details = await detailsRes.json() as any;
+  if (details.status !== 'OK' || !details.result?.geometry) {
+    return new Response(JSON.stringify({ error: `Google Places API エラー: ${details.status || 'Unknown'}` }), { status: 422, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  const loc = details.result.geometry.location;
+  const address = details.result.formatted_address || '';
+
+  try {
+    await db.prepare(
+      'UPDATE hotels SET latitude = ?, longitude = ?, google_place_id = ?, address = ?, coords_verified_at = NULL WHERE id = ?'
+    ).bind(loc.lat, loc.lng, placeId, address, Number(id)).run();
+    return new Response(JSON.stringify({ success: true, latitude: loc.lat, longitude: loc.lng, address, place_id: placeId }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return new Response(JSON.stringify({ error: 'Update failed', details: message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
