@@ -151,7 +151,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (RESEND_API_KEY) {
         try {
           const hotel = await db
-            .prepare('SELECT name, email, city, country FROM hotels WHERE id = ?')
+            .prepare(`SELECT h.name, h.email, h.city, h.country, u.email as owner_login_email
+                      FROM hotels h LEFT JOIN users u ON u.email = h.email
+                      WHERE h.id = ?`)
             .bind((booking as any).hotel_id)
             .first();
           const plan = await db
@@ -159,8 +161,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
             .bind((booking as any).plan_id)
             .first();
           if (plan) {
-            // ① ホテルへ通知メール
-            if ((hotel as any)?.email) {
+            // ① ホテルへ通知メール（予約用メアド＋オーナーログインメアドの両方に送信）
+            const bookingEmail: string = (hotel as any)?.email || '';
+            const ownerLoginEmail: string = (hotel as any)?.owner_login_email || '';
+            const notifyEmails = [...new Set([bookingEmail, ownerLoginEmail].filter(Boolean))];
+            if (notifyEmails.length > 0) {
               const subject = `New Booking #${(booking as any).id} - ${(booking as any).guest_name} on ${(booking as any).check_in_date}`;
               const emailResult = await sendBookingNotificationToHotel(RESEND_API_KEY, {
                 bookingId: (booking as any).id,
@@ -175,14 +180,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 totalPriceUsd: (booking as any).total_price_usd,
                 notes: (booking as any).notes,
                 hotelName: (hotel as any).name,
-                hotelEmail: (hotel as any).email,
+                hotelEmail: notifyEmails,
               });
               await logMessage({
                 db,
                 bookingId: (booking as any).id,
                 hotelId: (booking as any).hotel_id,
                 direction: 'outbound',
-                recipientEmail: (hotel as any).email,
+                recipientEmail: notifyEmails.join(', '),
                 senderEmail: 'noreply@daydreamhub.com',
                 subject,
                 body: `Booking notification for #${(booking as any).id}`,

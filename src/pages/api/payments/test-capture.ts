@@ -38,8 +38,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const plan: any = await db.prepare(`
       SELECT p.*, h.id as hotel_id, h.name as hotel_name, h.email as hotel_email,
-             h.phone as hotel_phone, h.city, h.country
+             h.phone as hotel_phone, h.city, h.country,
+             u.email as hotel_owner_login_email
       FROM plans p JOIN hotels h ON h.id = p.hotel_id
+      LEFT JOIN users u ON u.email = h.email
       WHERE p.id = ?1
     `).bind(plan_id).first();
 
@@ -100,7 +102,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // メール送信（実PayPalと同じ）
     if (RESEND_API_KEY) {
       try {
-        if (plan.hotel_email) {
+        const notifyEmails = [...new Set([plan.hotel_email, plan.hotel_owner_login_email].filter(Boolean))];
+        if (notifyEmails.length > 0) {
           await sendBookingNotificationToHotel(RESEND_API_KEY, {
             bookingId,
             guestName: guest_name,
@@ -114,7 +117,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             totalPriceUsd: plan.price_usd,
             notes: notes || '',
             hotelName: plan.hotel_name,
-            hotelEmail: plan.hotel_email,
+            hotelEmail: notifyEmails,
           });
         }
         if (guest_email) {

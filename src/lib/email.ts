@@ -47,11 +47,12 @@ function emailFooter(): string {
 async function sendEmail(params: {
   apiKey: string;
   from: string;
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   replyTo?: string;
 }): Promise<{ success: boolean; error?: string }> {
+  const toArray = Array.isArray(params.to) ? params.to : [params.to];
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -60,7 +61,7 @@ async function sendEmail(params: {
     },
     body: JSON.stringify({
       from: params.from,
-      to: [params.to],
+      to: toArray,
       subject: params.subject,
       html: params.html,
       reply_to: params.replyTo,
@@ -253,7 +254,7 @@ export async function sendBookingNotificationToHotel(
     totalPriceUsd: number;
     notes?: string;
     hotelName: string;
-    hotelEmail: string;
+    hotelEmail: string | string[];
   }
 ): Promise<{ success: boolean; error?: string }> {
   const subject = `New Booking #${data.bookingId} - ${data.guestName} on ${data.checkInDate}`;
