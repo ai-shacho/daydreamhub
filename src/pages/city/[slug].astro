@@ -135,7 +135,7 @@ function getHotelImage(hotel: any): string {
                   {(() => {
                     const ai = (hotel.latitude && hotel.longitude) ? nearestAirport(hotel.latitude, hotel.longitude) : null;
                     return ai ? (
-                      <p class="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                      <p class="text-xs text-teal-700 mt-0.5 flex items-center gap-1">
                         ✈ ~{Math.round(ai.km)}km from {ai.code}
                       </p>
                     ) : null;
