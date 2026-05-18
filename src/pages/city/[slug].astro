@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import { nearestAirport } from '../../lib/airports';
 
 const { slug } = Astro.params;
 // Convert slug to city name (e.g. "kuala-lumpur" → "Kuala Lumpur")
@@ -16,7 +17,7 @@ try {
   if (DB) {
     dbAvailable = true;
     const result = await DB.prepare(
-      `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+      `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating, h.latitude, h.longitude,
               MIN(p.price_usd) as min_price
        FROM hotels h
        LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
@@ -29,7 +30,7 @@ try {
     // Try slug-based match if city name didn't work
     if (hotels.length === 0) {
       const result2 = await DB.prepare(
-        `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+        `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating, h.latitude, h.longitude,
                 MIN(p.price_usd) as min_price
          FROM hotels h
          LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
@@ -131,6 +132,14 @@ function getHotelImage(hotel: any): string {
                   )}
                   <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{hotel.name}</h3>
                   <p class="text-xs text-gray-500 mt-1">{hotel.city}, {hotel.country}</p>
+                  {(() => {
+                    const ai = (hotel.latitude && hotel.longitude) ? nearestAirport(hotel.latitude, hotel.longitude) : null;
+                    return ai ? (
+                      <p class="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                        ✈ ~{Math.round(ai.km)}km from {ai.code}
+                      </p>
+                    ) : null;
+                  })()}
                   <div class="flex items-center justify-between mt-3 pt-2 border-t border-gray-100">
                     {hotel.min_price != null ? (
                       <div>
