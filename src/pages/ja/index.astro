@@ -1106,7 +1106,56 @@ function escHtml(s) {
 
   // Render text with hotel links converted to clickable cards
   function renderMsgContent(text) {
-    var html = escHtml(text);
+    if (!text) return '';
+
+    // 1. BEFORE escHtml: extract Markdown links [label](url) → safe tokens
+    //    Tolerant regex handles LLM variations (query params, symbols in URLs)
+    var linkStore = [];
+    var processed = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, label, url) {
+      var idx = linkStore.length;
+      var token = '__LINK_' + idx + '__';
+      var cleanUrl = url.trim();
+      var finalHref = (cleanUrl.startsWith('/') || cleanUrl.startsWith('http')) ? cleanUrl : '/' + cleanUrl;
+      linkStore.push({ label: label.trim(), href: finalHref });
+      return token;
+    });
+
+    // 2. Escape entire text (links protected as tokens)
+    var html = escHtml(processed);
+
+    // 3. Restore tokens to raw <a> tags from original link info
+    html = html.replace(/__LINK_(\d+)__/g, function(_, idxStr) {
+      var link = linkStore[parseInt(idxStr, 10)];
+      if (!link) return '';
+      var safeLabel = escHtml(link.label);
+      var safeHref = escHtml(link.href);
+      return '<a href="' + safeHref + '" target="_blank" class="underline text-amber-300 hover:text-amber-200">' + safeLabel + '</a>';
+    });
+
+    // Markdown: ### 見出し
+    html = html.replace(/^### (.+)$/gm, '<strong class="block text-amber-300 text-sm mt-2">$1</strong>');
+    html = html.replace(/^## (.+)$/gm, '<strong class="block text-amber-200 text-sm mt-2 mb-1">$1</strong>');
+    html = html.replace(/^# (.+)$/gm, '<strong class="block text-white text-base mt-2 mb-1">$1</strong>');
+
+    // Markdown: **太字**
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    // Markdown: *斜体*
+    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+
+    // Markdown: --- 区切り線
+    html = html.replace(/^---+$/gm, '<hr class="border-white/20 my-2"/>');
+
+    // Markdown: - リスト項目
+    html = html.replace(/^[-•]\s+(.+)$/gm, '<span class="flex gap-1.5"><span class="text-amber-400 flex-shrink-0">•</span><span>$1</span></span>');
+
+    // Bare /hotel/slug (fallback) — JA version: force label to "予約", link to /ja/hotel/
+    html = html.replace(/(?<!href=")(\/hotel\/([\w-]+))(?!")/g,
+      function(_, path, slug) {
+        return '<a href="/ja/hotel/' + slug + '" target="_blank" class="underline text-amber-300 hover:text-amber-200">予約</a>';
+      });
+
+    return html;
+  }
 
     // Clean entity-escaped garbage in Markdown URLs (e.g. [text](/hotel/slug&quot;extra))
     html = html.replace(/\[([^\]\n]+)\]\(([^)]*?)(&(?:lt|gt|quot|amp);[^)]*)\)/g, function(_, label, cleanPart) {

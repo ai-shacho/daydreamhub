@@ -78,7 +78,7 @@ const imageUrl = hotel.thumbnail_url || '/images/placeholder-hotel.jpg';
     <!-- Price -->
     {minPrice !== null && (
       <p class="text-[#45A2C1] font-bold text-lg mb-2">
-        {t('hotel.from', locale)} {minPrice} {t('hotel.usd', locale)}
+        {t('hotel.from', locale)} <span data-usd={minPrice}>{minPrice}</span> {t('hotel.usd', locale)}
       </p>
     )}
     <!-- Location tags -->
