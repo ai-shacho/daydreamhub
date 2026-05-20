@@ -52,34 +52,9 @@ try {
   dbAvailable = false;
 }
 
-// ホテルが0件の都市は404を返す
-if (dbAvailable && hotels.length === 0) {
+// DB未接続、またはホテルが0件の都市は404を返す
+if (!dbAvailable || hotels.length === 0) {
   return Astro.redirect('/404', 404);
-}
-
-if (!dbAvailable) {
-  const sampleHotels = [
-    { id: 1, name: 'The Work Loft Bangkok', slug: 'work-loft-bangkok', city: 'Bangkok', country: 'Thailand', thumbnail_url: '', categories: '["workspace"]', property_type: 'hotel' },
-    { id: 2, name: 'CoWork Stay Silom', slug: 'cowork-stay-silom', city: 'Bangkok', country: 'Thailand', thumbnail_url: '', categories: '["workspace"]', property_type: 'hotel' },
-    { id: 5, name: 'Airport Transit Hotel', slug: 'airport-transit-hotel', city: 'Singapore', country: 'Singapore', thumbnail_url: '', categories: '["transit"]', property_type: 'hotel' },
-    { id: 6, name: 'Changi Layover Rest', slug: 'changi-layover-rest', city: 'Singapore', country: 'Singapore', thumbnail_url: '', categories: '["transit"]', property_type: 'hotel' },
-    { id: 9, name: 'Romance Suite Bali', slug: 'romance-suite-bali', city: 'Bali', country: 'Indonesia', thumbnail_url: '', categories: '["couple"]', property_type: 'villa' },
-    { id: 13, name: 'The Ritz-Carlton KL', slug: 'ritz-carlton-kl', city: 'Kuala Lumpur', country: 'Malaysia', thumbnail_url: '', categories: '["luxury"]', property_type: 'hotel' },
-  ];
-  const samplePlans = [
-    { id: 1, hotel_id: 1, name: '4-Hour Workspace', price_usd: 25, plan_type: 'day-use' },
-    { id: 6, hotel_id: 5, name: '6-Hour Layover', price_usd: 40, plan_type: 'day-use' },
-    { id: 10, hotel_id: 9, name: 'Romantic Half Day', price_usd: 80, plan_type: 'day-use' },
-    { id: 14, hotel_id: 13, name: 'Luxury Day Pass', price_usd: 150, plan_type: 'day-use' },
-  ];
-  const cn = cityName.toLowerCase();
-  const filtered = sampleHotels.filter(h => h.city.toLowerCase() === cn);
-  total = filtered.length;
-  hotels = filtered.slice(offset, offset + perPage);
-  for (const hotel of hotels) {
-    const hotelPlans = samplePlans.filter(p => p.hotel_id === hotel.id);
-    plansMap.set(hotel.id, hotelPlans);
-  }
 }
 
 const totalPages = Math.ceil(total / perPage);
