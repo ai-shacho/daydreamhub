@@ -1126,9 +1126,9 @@ function escHtml(s) {
       }
       if (nearPartner) continue;
       var phone = phoneMatch[1].trim();
-      // 現在行 + 前方6行以内でホテル名を探す
+      // 現在行 + 前方8行以内でホテル名を探す
       var name = '';
-      for (var j = i; j >= Math.max(0, i - 6); j--) {
+      for (var j = i; j >= Math.max(0, i - 8); j--) {
         var checkLine = lines[j];
         if (checkLine.indexOf('/hotel/') !== -1) break; // 自社ホテル行に当たったら中断
         // 住所行・電話行・記号のみの行はスキップ
@@ -1140,7 +1140,7 @@ function escHtml(s) {
         var m = checkLine.match(/\*\*([^*]{2,80})\*\*/);
         if (m) {
           var c1 = m[1].trim();
-          if (c1.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c1) && !/^\d+\s*[,\s]/.test(c1)) {
+          if (c1.length >= 2 && !/^\d+\s*[,\s]/.test(c1)) {
             name = c1; break;
           }
         }
@@ -1148,7 +1148,7 @@ function escHtml(s) {
         m = checkLine.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+|$)/);
         if (m) {
           var c2 = m[1].replace(/\s*-+\s*From\s+\$[\d.,]+.*$/i, '').replace(/\s*[|｜].*$/, '').replace(/\s*[⭐★].*$/, '').trim();
-          if (c2.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c2) && !/^\d+\s*[,\s]/.test(c2)) {
+          if (c2.length >= 2 && !/^\d+\s*[,\s]/.test(c2)) {
             name = c2; break;
           }
         }
@@ -1156,7 +1156,7 @@ function escHtml(s) {
         m = checkLine.match(/^\s*[-•]\s+([^📍📞|｜⭐★]{2,80}?)\s*(?:[|｜⭐★]|$)/);
         if (m) {
           var c3 = m[1].trim();
-          if (c3.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c3) && !/^\d+\s*[,\s]/.test(c3)) {
+          if (c3.length >= 2 && !/^\d+\s*[,\s]/.test(c3)) {
             name = c3; break;
           }
         }
@@ -1164,7 +1164,7 @@ function escHtml(s) {
         m = checkLine.match(/^\s*([A-Za-z][^|｜⭐★📍📞\n]{1,80}?)\s*(?:[|｜⭐★]|$)/);
         if (m) {
           var c4 = m[1].trim();
-          if (c4.length >= 2 && !/\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i.test(c4) && !/^\d+\s*[,\s]/.test(c4)) {
+          if (c4.length >= 2 && !/^\d+\s*[,\s]/.test(c4)) {
             name = c4; break;
           }
         }

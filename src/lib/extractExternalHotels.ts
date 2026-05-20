@@ -1,7 +1,5 @@
-const ADDRESS_KEYWORDS = /\b(Road|Rd|Street|St|Ave|Avenue|Khwaeng|Khet|Soi|Thanon|Trok|Square)\b/i;
-
 function isAddressLike(s: string): boolean {
-  return ADDRESS_KEYWORDS.test(s) || /^\d+\s*[,\s]/.test(s);
+  return /^\d+\s*[,\s]/.test(s);
 }
 
 export interface ExternalHotel {
@@ -33,7 +31,7 @@ export function extractExternalHotels(text: string): ExternalHotel[] {
     const phone = phoneMatch[1].trim();
     let name = '';
 
-    for (let j = i; j >= Math.max(0, i - 6); j--) {
+    for (let j = i; j >= Math.max(0, i - 8); j--) {
       const checkLine = lines[j];
       if (checkLine.indexOf('/hotel/') !== -1) break;
       if (checkLine.indexOf('📍') !== -1) continue;
