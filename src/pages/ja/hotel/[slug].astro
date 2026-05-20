@@ -483,17 +483,16 @@ for (const img of images) {
                         <p class="text-xl font-bold text-[#45A2C1] mb-3">${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span></p>
                         {/* キャンセルポリシー */}
                         {(() => {
-                          const policy = plan.cancellation_policy || hotel.cancellation_policy || '';
-                          const hours = plan.cancellation_hours;
+                          const hours = plan.cancellation_hours ?? hotel.cancellation_hours ?? null;
                           return (
                             <div class="mb-3 text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                              <div class="font-medium text-amber-800 mb-1">キャンセルポリシー</div>
-                              {policy ? (
-                                <p class="leading-relaxed line-clamp-3">{policy}</p>
-                              ) : hours === 0 ? (
-                                <p class="text-red-600 font-medium">❌ キャンセル不可</p>
+                              <div class="font-medium text-amber-800 mb-1">{t('hotel.cancel_policy', locale)}</div>
+                              {hours === 0 ? (
+                                <p class="text-red-600 font-medium">❌ {t('hotel.cancel_policy_none', locale)}</p>
+                              ) : hours !== null ? (
+                                <p>✅ {t('hotel.cancel_policy_free', locale).replace('{hours}', String(hours))}</p>
                               ) : (
-                                <p>✅ チェックイン {hours ?? 24}時間前まで無料キャンセル可能</p>
+                                <p>{t('hotel.cancel_policy_contact', locale)}</p>
                               )}
                             </div>
                           );
