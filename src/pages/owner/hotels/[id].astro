@@ -489,6 +489,21 @@ const propertyTypes = [
     </div>
   </div>
 
+  <!-- Bottom Save Bar -->
+  <div class="mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 px-6 py-4 flex items-center gap-4">
+      <button type="button" id="btn-save-bottom" class="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M17 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2z" /><path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6M9 11h6M9 15h4" />
+        </svg>
+        Save Changes
+      </button>
+      <a href="/owner/hotels" class="px-4 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors">
+        Cancel
+      </a>
+    </div>
+  </div>
+
   <!-- Add/Edit Plan Modal -->
   <div id="plan-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-black/50" id="plan-modal-backdrop"></div>
@@ -827,13 +842,21 @@ const propertyTypes = [
       if (!isError) setTimeout(function() { el.classList.add('hidden'); }, 4000);
     }
 
+    // -- Bottom save button wires into the form's submit event --
+    document.getElementById('btn-save-bottom').addEventListener('click', function() {
+      document.getElementById('edit-form').requestSubmit();
+    });
+
     // -- Form submission: compare and submit only changed fields --
     document.getElementById('edit-form').addEventListener('submit', async function(e) {
       e.preventDefault();
 
       var btn = document.getElementById('btn-request-changes');
+      var btnBottom = document.getElementById('btn-save-bottom');
       btn.disabled = true;
       btn.textContent = 'Submitting...';
+      btnBottom.disabled = true;
+      btnBottom.textContent = 'Submitting...';
 
       try {
         var form = e.target;
@@ -891,6 +914,8 @@ const propertyTypes = [
           showStatus('No changes to submit.', true);
           btn.disabled = false;
           btn.innerHTML = 'Save Changes';
+          btnBottom.disabled = false;
+          btnBottom.innerHTML = 'Save Changes';
           return;
         }
 
@@ -917,6 +942,8 @@ const propertyTypes = [
       } finally {
         btn.disabled = false;
         btn.innerHTML = 'Save Changes';
+        btnBottom.disabled = false;
+        btnBottom.innerHTML = 'Save Changes';
       }
     });
 
