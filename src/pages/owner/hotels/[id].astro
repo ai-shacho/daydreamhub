@@ -900,6 +900,10 @@ const propertyTypes = [
           body: JSON.stringify({ field_changes: fieldChanges }),
         });
 
+        var contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new Error('システムエラーが発生しました。しばらく経ってから再度お試しください。');
+        }
         var result = await res.json();
 
         if (!res.ok) {
