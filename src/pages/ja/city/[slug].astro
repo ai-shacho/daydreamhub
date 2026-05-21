@@ -36,6 +36,26 @@ try {
     ).bind(`%${cityName}%`, perPage, offset).all();
     hotels = result?.results || [];
 
+    // slug ベースのフォールバック（例: "kuala-lumpur" → "Kuala Lumpur" が一致しない場合）
+    if (hotels.length === 0) {
+      const countResult2 = await db.prepare(
+        `SELECT COUNT(*) as count FROM hotels
+         WHERE REPLACE(REPLACE(LOWER(city), ' ', '-'), '_', '-') = LOWER(?) AND status = 'active'`
+      ).bind(slug).first();
+      total = countResult2?.count || 0;
+
+      const result2 = await db.prepare(
+        `SELECT h.*, MIN(p.price_usd) as min_price FROM hotels h
+         LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+         WHERE REPLACE(REPLACE(LOWER(h.city), ' ', '-'), '_', '-') = LOWER(?)
+           AND h.status = 'active'
+         GROUP BY h.id
+         ORDER BY h.created_at DESC
+         LIMIT ? OFFSET ?`
+      ).bind(slug, perPage, offset).all();
+      hotels = result2?.results || [];
+    }
+
     if (hotels.length > 0) {
       const hotelIds = hotels.map((h: any) => h.id);
       const placeholders = hotelIds.map(() => '?').join(',');
@@ -54,7 +74,7 @@ try {
 
 // DB未接続、またはホテルが0件の都市は404を返す
 if (!dbAvailable || hotels.length === 0) {
-  return Astro.redirect('/404', 404);
+  return Astro.redirect(localePath('/404', locale), 404);
 }
 
 const totalPages = Math.ceil(total / perPage);
