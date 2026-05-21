@@ -210,7 +210,7 @@ const formattedDate = post
   )}
 
   {post ? (
-    <article>
+    <article class="overflow-x-hidden">
       <!-- Hero image -->
       <div class="w-full aspect-[21/9] max-h-[400px] overflow-hidden bg-gray-100">
         <img src={imageUrl} alt={displayTitle} class="w-full h-full object-cover" />
@@ -249,7 +249,7 @@ const formattedDate = post
 
         <!-- Content -->
         {displayContent && (
-          <div class="prose prose-lg max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-[#45A2C1] prose-a:no-underline hover:prose-a:underline prose-li:text-gray-600 prose-img:rounded-lg wp-blog-content" set:html={displayContent} />
+          <div class="prose prose-lg max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-[#45A2C1] prose-a:no-underline hover:prose-a:underline prose-li:text-gray-600 prose-img:rounded-lg wp-blog-content overflow-x-hidden break-words" set:html={displayContent} />
         )}
         <script is:inline>
           // Apply lazy loading, async decoding, and max-width to all article images
@@ -304,3 +304,26 @@ const formattedDate = post
   )}
 
 </Layout>
+
+<style is:global>
+  /* ブログ本文内のメディア・テーブル要素をビューポート幅に収める */
+  .wp-blog-content img,
+  .wp-blog-content video,
+  .wp-blog-content iframe,
+  .wp-blog-content embed,
+  .wp-blog-content object {
+    max-width: 100%;
+    height: auto;
+  }
+  .wp-blog-content table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wp-blog-content pre {
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+</style>

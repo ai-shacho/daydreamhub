@@ -118,7 +118,7 @@ const formattedDate = post ? new Date(post.published_at).toLocaleDateString(
 
 <Layout title={post ? displayTitle : t('blog.not_found', locale)} description={post?.excerpt || ''}>
   {post ? (
-    <article>
+    <article class="overflow-x-hidden">
       <div class="w-full aspect-[21/9] max-h-[400px] overflow-hidden bg-gray-100">
         <img src={imageUrl} alt={displayTitle} class="w-full h-full object-cover" />
       </div>
@@ -140,7 +140,7 @@ const formattedDate = post ? new Date(post.published_at).toLocaleDateString(
           )}
         </div>
         {displayContent && (
-          <div class="prose prose-lg max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-[#45A2C1] prose-a:no-underline hover:prose-a:underline prose-li:text-gray-600 prose-img:rounded-lg wp-blog-content" set:html={displayContent} />
+          <div class="prose prose-lg max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-[#45A2C1] prose-a:no-underline hover:prose-a:underline prose-li:text-gray-600 prose-img:rounded-lg wp-blog-content overflow-x-hidden break-words" set:html={displayContent} />
         )}
         <div class="mt-10 pt-6 border-t border-gray-200">
           <a href={localePath('/blog', locale)} class="inline-flex items-center text-sm text-[#45A2C1] hover:text-[#3891af] font-medium transition-colors">
@@ -166,3 +166,25 @@ const formattedDate = post ? new Date(post.published_at).toLocaleDateString(
     </div>
   )}
 </Layout>
+
+<style is:global>
+  .wp-blog-content img,
+  .wp-blog-content video,
+  .wp-blog-content iframe,
+  .wp-blog-content embed,
+  .wp-blog-content object {
+    max-width: 100%;
+    height: auto;
+  }
+  .wp-blog-content table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wp-blog-content pre {
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+</style>
