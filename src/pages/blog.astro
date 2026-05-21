@@ -34,7 +34,10 @@ try {
     const countriesResult = await db.prepare(
       `SELECT DISTINCT country FROM hotels WHERE country IS NOT NULL AND country != '' ORDER BY country`
     ).all();
-    blogCountries = (countriesResult?.results || []).map((r: any) => r.country);
+    const toTitleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase());
+    blogCountries = [...new Set(
+      (countriesResult?.results || []).map((r: any) => (r.country as string).toLowerCase())
+    )].map(toTitleCase).sort();
 
     const whereClauses: string[] = [];
     const params: any[] = [];
