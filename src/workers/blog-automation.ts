@@ -215,17 +215,9 @@ async function generateArticleWithAI(ai: Ai, prompt: string, city: string, theme
 }
 
 async function acquireImage(env: Env, city: string, theme: string): Promise<string> {
-  // Try R2 first, fallback to placeholder or external URL
-  const key = `blog/${city}/${theme}.jpg`;
-  const obj = await env.IMAGES.get(key);
-  
-  if (obj) {
-    // Return public URL or signed if needed. For demo use placeholder path.
-    return `/images/blog/${city}-${theme}.jpg`;
-  }
-  
-  // Fallback
-  return `https://picsum.photos/id/${city.length * 10}/800/600`; // placeholder
+  // R2 images not publicly routable without custom domain; use deterministic public placeholder
+  // Root cause of #11: returned internal path `/images/blog/...` which 404s on /ja/blog
+  return `https://picsum.photos/seed/${encodeURIComponent(city)}-${encodeURIComponent(theme)}/800/600`;
 }
 
 async function saveBlogPost(db: D1Database, post: BlogPost): Promise<void> {
