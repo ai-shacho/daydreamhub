@@ -321,7 +321,7 @@ async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string;
         title = parsed.title || `${city} Hidden Gems: A Traveler's Guide`;
         title_ja = parsed.title_ja || null;
         excerpt = parsed.excerpt || `Discover the hidden gems of ${city}.`;
-        content = parsed.content || raw;
+        content = typeof parsed.content === 'string' ? parsed.content : (Array.isArray(parsed.content) ? parsed.content.join('\n') : (raw || ''));
       } else {
         title = `${city} Hidden Gems: A Traveler's Guide`;
         excerpt = `Discover the hidden gems of ${city}.`;
@@ -361,8 +361,15 @@ async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string;
       content, content_ja, published_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
-    title, title_ja, slug, excerpt, city, thumbnail_url,
-    content, null, now
+    String(title),
+    title_ja ? String(title_ja) : null,
+    String(slug),
+    excerpt ? String(excerpt) : null,
+    String(city),
+    String(thumbnail_url),
+    String(content),
+    null,
+    String(now)
   ).run();
   
   const newId = result.meta.last_row_id;

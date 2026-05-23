@@ -271,6 +271,43 @@ const formattedDate = post
           });
         </script>
 
+        <!-- GA4 internal_link_click tracking for blog content links -->
+        <script is:inline>
+          function getLinkType(url) {
+            if (url.includes('/search')) return 'search';
+            if (url.includes('/city/')) return 'city';
+            if (url.includes('/hotel/')) return 'hotel';
+            if (url.includes('/booking/')) return 'booking';
+            if (url.includes('/blog/')) return 'blog';
+            return 'other_internal';
+          }
+
+          document.querySelectorAll('article .wp-blog-content a[href]').forEach(function(link) {
+            const href = link.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+            // Skip external links (keep only internal)
+            if (href.startsWith('http') && !href.includes(window.location.hostname)) return;
+
+            link.addEventListener('click', function() {
+              const linkUrl = link.href;
+              const linkText = (link.textContent || '').trim();
+              const sourcePage = window.location.pathname;
+              const sourceTitle = document.title;
+              const linkType = getLinkType(linkUrl);
+
+              if (typeof gtag === 'function') {
+                gtag('event', 'internal_link_click', {
+                  link_url: linkUrl,
+                  link_text: linkText,
+                  source_page: sourcePage,
+                  source_title: sourceTitle,
+                  link_type: linkType
+                });
+              }
+            });
+          });
+        </script>
+
         <!-- Back to blog -->
         <div class="mt-10 pt-6 border-t border-gray-200">
           <a href={localePath('/blog', locale)} class="inline-flex items-center text-sm text-[#45A2C1] hover:text-[#3891af] font-medium transition-colors">
