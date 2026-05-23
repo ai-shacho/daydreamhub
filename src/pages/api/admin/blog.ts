@@ -318,32 +318,49 @@ async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string;
         await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
         continue;
       }
+      // Extract JSON from AI response (handle potential double-wrapping or markdown)
+      let parsed: any = null;
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {
+          // If outer parse fails, try inner content which might be the real JSON string
+          const innerMatch = jsonMatch[0].match(/"content"\s*:\s*"(\{[\s\S]*?"[^"]*"[\s\S]*?)"/);
+          if (innerMatch) {
+            try {
+              parsed = JSON.parse(innerMatch[1].replace(/\\"/g, '"'));
+            } catch { /* give up */ }
+          }
+        }
+      }
+      
+      if (parsed) {
         title = String(parsed.title || `${city} Hidden Gems: A Traveler's Guide`);
         title_ja = parsed.title_ja ? String(parsed.title_ja) : null;
         excerpt = String(parsed.excerpt || `Discover the hidden gems of ${city}.`);
-        // Content could be string or array of objects; handle both
-        if (typeof parsed.content === 'string') {
-          content = parsed.content;
-        } else if (Array.isArray(parsed.content)) {
-          // Parse content as an array of message-like objects (common AI output format)
-          content = parsed.content.map((c: any) => {
+        // Handle content which could be a string, array, object, or embedded JSON
+        const rawContent = parsed.content;
+        if (typeof rawContent === 'string') {
+          // The content string might itself be a JSON string or HTML
+          try {
+            const inner = JSON.parse(rawContent);
+            content = typeof inner.content === 'string' ? inner.content : 
+                      typeof inner === 'string' ? inner : JSON.stringify(inner);
+          } catch {
+            content = rawContent; // It's just a plain string (HTML)
+          }
+        } else if (Array.isArray(rawContent)) {
+          content = rawContent.map((c: any) => {
             if (typeof c === 'string') return c;
-            // Try common text container fields
             for (const key of ['text', 'value', 'content', 'message', 'body', 'description', 'paragraph']) {
               if (c[key] && typeof c[key] === 'string') return c[key];
             }
-            // Recursively handle nested arrays
-            if (Array.isArray(c)) {
-              return c.map((x: any) => typeof x === 'object' ? JSON.stringify(x) : String(x)).join('\n');
-            }
-            // Last resort - stringify the object
+            if (Array.isArray(c)) return c.map((x: any) => typeof x === 'object' ? JSON.stringify(x) : String(x)).join('\n');
             return JSON.stringify(c);
           }).join('\n');
-        } else if (typeof parsed.content === 'object' && parsed.content !== null) {
-          content = JSON.stringify(parsed.content);
+        } else if (typeof rawContent === 'object' && rawContent !== null) {
+          content = rawContent.content || rawContent.text || rawContent.value || JSON.stringify(rawContent);
         } else {
           content = raw;
         }
