@@ -6,8 +6,8 @@
 
 export interface Env {
   DB: D1Database;
-  AI: Ai;
   IMAGES: R2Bucket;
+  OPENAI_API_KEY?: string;
   // Add other bindings as needed: RESEND etc.
 }
 
@@ -82,9 +82,9 @@ async function runBlogAutomation(env: Env): Promise<void> {
   }
 
   try {
-    // 3. Generate article content using AI
+    // 3. Generate article content using AI (GPT-4o)
     const prompt = buildGenerationPrompt(city, theme, angle);
-    const generated = await generateArticleWithAI(env.AI, prompt, city, theme);
+    const generated = await generateArticleWithAI(env, prompt, city, theme);
     
     // Ensure unique slug
     generated.slug = await generateUniqueSlug(db, generated.slug);
@@ -178,21 +178,51 @@ async function generateUniqueSlug(db: D1Database, baseSlug: string): Promise<str
 function buildGenerationPrompt(city: string, theme: string, angle: string): string {
   return `Write a compelling travel blog post about ${city} focusing on the theme "${theme}" from a ${angle} angle. 
 Include practical tips, unique insights, and engaging storytelling. 800-1200 words.
-Strictly output ONLY valid JSON (no markdown): { "title": "...", "title_ja": "...", "excerpt": "...", "content": "..." }`;
+CRITICAL: Do NOT include any image URLs, placeholder domains (example.com, picsum, etc.), or dummy image references in the content.
+Strictly output ONLY valid JSON (no markdown, no code fences): { "title": "...", "title_ja": "...", "excerpt": "...", "content": "..." }`;
 }
 
-async function generateArticleWithAI(ai: Ai, prompt: string, city: string, theme: string) {
-  // Use @cf/meta/llama-3-8b-instruct or similar available model via CF AI binding
-  const response = await ai.run('@cf/meta/llama-3-8b-instruct', {
-    prompt,
-    max_tokens: 2500,
+async function generateArticleWithAI(env: Env, prompt: string, city: string, theme: string) {
+  if (!env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+
+  const systemPrompt = `You are an expert travel writer specializing in Southeast Asia destinations. 
+Write high-quality, engaging Japanese travel content. 
+CRITICAL RULES:
+- Output ONLY valid JSON, no markdown code blocks, no extra text before/after.
+- Never include placeholder image URLs (example.com, picsum.photos, unsplash.it, or any dummy domains).
+- Do not suggest or embed any image URLs in the content unless they are real, verified public image links.
+- Keep content original and informative.`;
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 2000,
+      temperature: 0.7,
+    }),
   });
-  
-  // Parse or fallback
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} ${errText}`);
+  }
+
+  const data: any = await response.json();
+  const raw = data.choices?.[0]?.message?.content || '';
+
+  // Parse JSON response
   let parsed: any = {};
-  const raw = (response as any).response || '';
   try {
-    // Attempt to extract JSON if wrapped in markdown or extra text
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(raw);
   } catch {
@@ -203,7 +233,7 @@ async function generateArticleWithAI(ai: Ai, prompt: string, city: string, theme
       content: raw || 'Content generation failed. Please check logs.'
     };
   }
-  
+
   return {
     title: parsed.title || `${theme} in ${city}`,
     title_ja: parsed.title_ja || null,
