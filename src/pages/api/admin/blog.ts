@@ -280,7 +280,9 @@ const AUTOMATION_ANGLES = ['local-insight', 'traveler-perspective', 'food-focuse
 function buildGeneratePrompt(city: string, theme: string, angle: string): string {
   return `Write a compelling travel blog post about ${city} focusing on the theme "${theme}" from a ${angle} angle.
 Include practical tips, unique insights, and engaging storytelling. 800-1200 words.
-Strictly output ONLY valid JSON (no markdown): { "title": "...", "title_ja": "...", "excerpt": "...", "content": "..." }`;
+Output ONLY valid JSON. The 'content' field must be a single string with HTML formatting (use <p>, <h2>, <h3> tags).
+IMPORTANT: The 'content' value must be a plain string, NOT an array or object.
+Example: { "title": "Example Title", "title_ja": "例のタイトル", "excerpt": "Short description", "content": "<p>Article text here</p><h2>Section title</h2><p>More text</p>" }`;
 }
 
 async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string; theme: string; title: string; title_ja: string | null; id: number; thumbnail_url: string}> {
@@ -326,7 +328,22 @@ async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string;
         if (typeof parsed.content === 'string') {
           content = parsed.content;
         } else if (Array.isArray(parsed.content)) {
-          content = parsed.content.map((c: any) => typeof c === 'object' ? (c.text || c.content || JSON.stringify(c)) : String(c)).join('\n');
+          // Parse content as an array of message-like objects (common AI output format)
+          content = parsed.content.map((c: any) => {
+            if (typeof c === 'string') return c;
+            // Try common text container fields
+            for (const key of ['text', 'value', 'content', 'message', 'body', 'description', 'paragraph']) {
+              if (c[key] && typeof c[key] === 'string') return c[key];
+            }
+            // Recursively handle nested arrays
+            if (Array.isArray(c)) {
+              return c.map((x: any) => typeof x === 'object' ? JSON.stringify(x) : String(x)).join('\n');
+            }
+            // Last resort - stringify the object
+            return JSON.stringify(c);
+          }).join('\n');
+        } else if (typeof parsed.content === 'object' && parsed.content !== null) {
+          content = JSON.stringify(parsed.content);
         } else {
           content = raw;
         }
