@@ -217,7 +217,7 @@ async function generateArticleWithAI(ai: Ai, prompt: string, city: string, theme
 async function acquireImage(env: Env, city: string, theme: string): Promise<string> {
   // R2 images not publicly routable without custom domain; use deterministic public placeholder
   // Root cause of #11: returned internal path `/images/blog/...` which 404s on /ja/blog
-  return `https://picsum.photos/seed/${encodeURIComponent(city)}-${encodeURIComponent(theme)}/800/600`;
+  return `https://picsum.photos/seed/${encodeURIComponent(city)}-${encodeURIComponent(theme)}/1200/800`;
 }
 
 async function saveBlogPost(db: D1Database, post: BlogPost): Promise<void> {
