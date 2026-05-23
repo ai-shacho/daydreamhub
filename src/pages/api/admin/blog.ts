@@ -270,18 +270,128 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
   }
 };
 
+// ---- AI Auto-Generation Logic ----
+
+// Supported automation cities (overseas only)
+const AUTOMATION_CITIES = ['bangkok', 'singapore', 'kuala-lumpur', 'bali', 'jakarta', 'ho-chi-minh', 'hanoi', 'phnom-penh', 'chiang-mai', 'penang'];
+
+const AUTOMATION_ANGLES = ['local-insight', 'traveler-perspective', 'food-focused', 'budget-tips'];
+
+function buildGeneratePrompt(city: string, theme: string, angle: string): string {
+  return `Write a compelling travel blog post about ${city} focusing on the theme "${theme}" from a ${angle} angle.
+Include practical tips, unique insights, and engaging storytelling. 800-1200 words.
+Strictly output ONLY valid JSON (no markdown): { "title": "...", "title_ja": "...", "excerpt": "...", "content": "..." }`;
+}
+
+async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string; theme: string; title: string; title_ja: string | null; id: number; thumbnail_url: string}> {
+  // 1. Pick target city
+  const idx = Math.floor(Date.now() / (1000 * 60 * 60)) % AUTOMATION_CITIES.length;
+  const city = AUTOMATION_CITIES[idx];
+  const theme = 'hidden-gems';
+  const angle = 'traveler-perspective';
+  
+  // 2. Generate article with CF AI
+  const prompt = buildGeneratePrompt(city, theme, angle);
+  let title = '';
+  let title_ja: string | null = null;
+  let excerpt = '';
+  let content = '';
+  
+  try {
+    const response = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2500,
+    });
+    const raw = (response as any).response || '';
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      title = parsed.title || `${theme} in ${city}`;
+      title_ja = parsed.title_ja || null;
+      excerpt = parsed.excerpt || `Explore ${city} through ${theme}.`;
+      content = parsed.content || raw;
+    } else {
+      title = `${city} Hidden Gems: A Traveler's Guide`;
+      excerpt = `Discover the hidden gems of ${city}.`;
+      content = raw;
+    }
+  } catch (e) {
+    // AI fetch failed; fall back to basic title
+    title = `Discover Hidden Gems in ${city}`;
+    excerpt = `Explore the best-kept secrets of ${city}.`;
+    content = `<p>${city} is full of hidden gems waiting to be discovered. From local favorites to off-the-beaten-path attractions, this guide covers everything you need to know for an authentic experience.</p>`;
+  }
+  
+  // 3. Generate slug
+  const baseSlug = `${city}-hidden-gems-guide`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+  let slug = baseSlug;
+  let suffix = 1;
+  while (true) {
+    const exists = await db.prepare('SELECT 1 FROM blog_posts WHERE slug = ?').bind(slug).first();
+    if (!exists) break;
+    slug = `${baseSlug}-${suffix++}`;
+  }
+  
+  // 4. Image URL (1200px wide)
+  const thumbnail_url = `https://picsum.photos/seed/${encodeURIComponent(city)}-${encodeURIComponent(theme)}/1200/800`;
+  
+  // 5. Save to D1
+  const now = new Date().toISOString();
+  const result = await db.prepare(`
+    INSERT INTO blog_posts (
+      title, title_ja, slug, excerpt, city, thumbnail_url, 
+      content, content_ja, published_at, auto_generated, 
+      favorite_theme, selected_angle, generation_status, 
+      last_generated_at, theme_source, generation_prompt, angle_rotation_index
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    title, title_ja, slug, excerpt, city, thumbnail_url,
+    content, null, now, 1,
+    theme, angle, 'completed',
+    now, 'ai', prompt, 0
+  ).run();
+  
+  const newId = result.meta.last_row_id;
+  
+  return { city, theme, title, title_ja, id: newId, thumbnail_url };
+}
+
 // Manual trigger endpoint for blog-automation testing (Phase 3)
 export const triggerBlogAutomation = async (db: any, env: any): Promise<Response> => {
-  // In real impl this would invoke the worker's runBlogAutomation or schedule
-  // For now, log trigger and return success (worker can be separately invoked via /trigger on worker)
-  console.log('[Admin] Manual blog automation trigger requested at', new Date().toISOString());
-  return new Response(JSON.stringify({ 
-    success: true, 
-    message: 'Blog automation manual trigger accepted. Check worker logs for execution.',
-    timestamp: new Date().toISOString()
-  }), {
-    headers: { 'Content-Type': 'application/json' }
-  });
+  const ai = env?.AI;
+  if (!ai) {
+    return new Response(JSON.stringify({ error: 'AI binding not available', success: false }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  
+  try {
+    const result = await runBlogAutomationInline(db, ai);
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Blog post auto-generated successfully',
+      timestamp: new Date().toISOString(),
+      city: result.city,
+      theme: result.theme,
+      title: result.title,
+      title_ja: result.title_ja,
+      post_id: result.id,
+      thumbnail_url: result.thumbnail_url
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error: any) {
+    return new Response(JSON.stringify({
+      success: false,
+      message: 'Blog automation generation failed',
+      error: error.message || String(error),
+      timestamp: new Date().toISOString()
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
@@ -308,6 +418,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
+  }
+
+  // Auto-generation trigger via action
+  if (body.action === 'generate') {
+    return triggerBlogAutomation(db, (locals as any).runtime?.env);
   }
 
   const { title, title_ja, slug, excerpt, city, thumbnail_url, content, content_ja, published_at } = body;
