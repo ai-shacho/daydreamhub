@@ -309,7 +309,8 @@ async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string;
         ],
         max_tokens: 2500,
       });
-      const raw = (response as any).response || '';
+      // Extract the AI response text
+      const raw = ((response as any).response || (response as any).result?.response || '');
       if (!raw.trim()) {
         if (attempt === 2) throw new Error('Empty AI response after 3 attempts');
         await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
@@ -318,10 +319,17 @@ async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string;
       const jsonMatch = raw.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        title = parsed.title || `${city} Hidden Gems: A Traveler's Guide`;
-        title_ja = parsed.title_ja || null;
-        excerpt = parsed.excerpt || `Discover the hidden gems of ${city}.`;
-        content = typeof parsed.content === 'string' ? parsed.content : (Array.isArray(parsed.content) ? parsed.content.join('\n') : (raw || ''));
+        title = String(parsed.title || `${city} Hidden Gems: A Traveler's Guide`);
+        title_ja = parsed.title_ja ? String(parsed.title_ja) : null;
+        excerpt = String(parsed.excerpt || `Discover the hidden gems of ${city}.`);
+        // Content could be string or array of objects; handle both
+        if (typeof parsed.content === 'string') {
+          content = parsed.content;
+        } else if (Array.isArray(parsed.content)) {
+          content = parsed.content.map((c: any) => typeof c === 'object' ? (c.text || c.content || JSON.stringify(c)) : String(c)).join('\n');
+        } else {
+          content = raw;
+        }
       } else {
         title = `${city} Hidden Gems: A Traveler's Guide`;
         excerpt = `Discover the hidden gems of ${city}.`;
