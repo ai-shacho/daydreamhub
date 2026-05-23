@@ -297,29 +297,47 @@ async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string;
   let excerpt = '';
   let content = '';
   
-  try {
-    const response = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2500,
-    });
-    const raw = (response as any).response || '';
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      title = parsed.title || `${theme} in ${city}`;
-      title_ja = parsed.title_ja || null;
-      excerpt = parsed.excerpt || `Explore ${city} through ${theme}.`;
-      content = parsed.content || raw;
-    } else {
-      title = `${city} Hidden Gems: A Traveler's Guide`;
-      excerpt = `Discover the hidden gems of ${city}.`;
-      content = raw;
+  // Try multiple AI models with retry
+  const models = ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1'];
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const model = models[attempt % models.length];
+      const response = await ai.run(model, {
+        messages: [
+          { role: 'system', content: 'You are a professional travel blogger. Output ONLY valid JSON without markdown formatting.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2500,
+      });
+      const raw = (response as any).response || '';
+      if (!raw.trim()) {
+        if (attempt === 2) throw new Error('Empty AI response after 3 attempts');
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        continue;
+      }
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        title = parsed.title || `${city} Hidden Gems: A Traveler's Guide`;
+        title_ja = parsed.title_ja || null;
+        excerpt = parsed.excerpt || `Discover the hidden gems of ${city}.`;
+        content = parsed.content || raw;
+      } else {
+        title = `${city} Hidden Gems: A Traveler's Guide`;
+        excerpt = `Discover the hidden gems of ${city}.`;
+        content = raw;
+      }
+      break; // success
+    } catch (e) {
+      if (attempt === 2) {
+        // Last attempt failed; fall back to basic title
+        title = `Discover Hidden Gems in ${city}`;
+        excerpt = `Explore the best-kept secrets of ${city}.`;
+        content = `<p>${city} is full of hidden gems waiting to be discovered. From local favorites to off-the-beaten-path attractions, this guide covers everything you need to know for an authentic experience.</p>`;
+      } else {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      }
     }
-  } catch (e) {
-    // AI fetch failed; fall back to basic title
-    title = `Discover Hidden Gems in ${city}`;
-    excerpt = `Explore the best-kept secrets of ${city}.`;
-    content = `<p>${city} is full of hidden gems waiting to be discovered. From local favorites to off-the-beaten-path attractions, this guide covers everything you need to know for an authentic experience.</p>`;
   }
   
   // 3. Generate slug
