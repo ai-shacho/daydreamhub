@@ -335,20 +335,16 @@ async function runBlogAutomationInline(db: any, ai: any): Promise<{city: string;
   // 4. Image URL (1200px wide)
   const thumbnail_url = `https://picsum.photos/seed/${encodeURIComponent(city)}-${encodeURIComponent(theme)}/1200/800`;
   
-  // 5. Save to D1
+  // 5. Save to D1 (using only existing columns; extra metadata columns require migration 029)
   const now = new Date().toISOString();
   const result = await db.prepare(`
     INSERT INTO blog_posts (
       title, title_ja, slug, excerpt, city, thumbnail_url, 
-      content, content_ja, published_at, auto_generated, 
-      favorite_theme, selected_angle, generation_status, 
-      last_generated_at, theme_source, generation_prompt, angle_rotation_index
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      content, content_ja, published_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     title, title_ja, slug, excerpt, city, thumbnail_url,
-    content, null, now, 1,
-    theme, angle, 'completed',
-    now, 'ai', prompt, 0
+    content, null, now
   ).run();
   
   const newId = result.meta.last_row_id;
