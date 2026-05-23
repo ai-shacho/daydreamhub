@@ -86,6 +86,9 @@ async function runBlogAutomation(env: Env): Promise<void> {
     const prompt = buildGenerationPrompt(city, theme, angle);
     const generated = await generateArticleWithAI(env.AI, prompt, city, theme);
     
+    // Ensure unique slug
+    generated.slug = await generateUniqueSlug(db, generated.slug);
+    
     // 4. Acquire image (R2 lookup or placeholder generation)
     const imageUrl = await acquireImage(env, city, theme);
     
@@ -117,33 +120,37 @@ async function runBlogAutomation(env: Env): Promise<void> {
 }
 
 async function selectNextTarget(db: D1Database) {
-  // Simple rotation: pick city with least recent auto post or based on favorite themes
+  // Predefined supported cities for automation (overseas only; Japanese cities excluded per updated rule)
+  const supportedCities = ['bangkok', 'singapore', 'kuala-lumpur', 'bali', 'jakarta', 'ho-chi-minh', 'hanoi', 'phnom-penh', 'chiang-mai', 'penang'];
+  
+  // Try to find a city with recent activity or pending status
   const result = await db.prepare(`
     SELECT city, favorite_theme as theme, angle_rotation_index
     FROM blog_posts 
-    WHERE auto_generated = 1 OR generation_status IN ('pending', 'manual')
+    WHERE (auto_generated = 1 OR generation_status IN ('pending', 'manual'))
+      AND city IN ('bangkok','singapore','kuala-lumpur','bali','jakarta','ho-chi-minh','hanoi','phnom-penh','chiang-mai','penang')
     ORDER BY last_generated_at ASC NULLS FIRST
     LIMIT 1
   `).first<{ city: string; theme: string; angle_rotation_index: number }>();
   
-  if (!result) {
-    // Fallback: use predefined cities/themes
+  if (result) {
+    const angles = ['local-insight', 'traveler-perspective', 'food-focused', 'budget-tips'];
+    const angle = angles[(result.angle_rotation_index || 0) % angles.length];
     return {
-      city: 'kyoto',
-      theme: 'hidden-gems',
-      angle: 'traveler-perspective',
-      rotationIndex: 0
+      city: result.city,
+      theme: result.theme || 'hidden-gems',
+      angle,
+      rotationIndex: (result.angle_rotation_index || 0) + 1
     };
   }
   
-  const angles = ['local-insight', 'traveler-perspective', 'food-focused', 'budget-tips'];
-  const angle = angles[result.angle_rotation_index % angles.length];
-  
+  // Fallback: rotate through supported cities (simple round-robin via timestamp hash)
+  const idx = Math.floor(Date.now() / (1000 * 60 * 60 * 24)) % supportedCities.length;
   return {
-    city: result.city,
-    theme: result.theme || 'hidden-gems',
-    angle,
-    rotationIndex: (result.angle_rotation_index || 0) + 1
+    city: supportedCities[idx],
+    theme: 'hidden-gems',
+    angle: 'traveler-perspective',
+    rotationIndex: 0
   };
 }
 
@@ -158,36 +165,51 @@ async function checkDuplicate(db: D1Database, city: string, theme: string): Prom
   return (recent?.count || 0) > 0;
 }
 
+async function generateUniqueSlug(db: D1Database, baseSlug: string): Promise<string> {
+  let slug = baseSlug;
+  let suffix = 1;
+  while (true) {
+    const exists = await db.prepare('SELECT 1 FROM blog_posts WHERE slug = ?').bind(slug).first();
+    if (!exists) return slug;
+    slug = `${baseSlug}-${suffix++}`;
+  }
+}
+
 function buildGenerationPrompt(city: string, theme: string, angle: string): string {
   return `Write a compelling travel blog post about ${city} focusing on the theme "${theme}" from a ${angle} angle. 
-Include practical tips, unique insights, and engaging storytelling. Output in JSON: { "title": "...", "excerpt": "...", "content": "..." }`;
+Include practical tips, unique insights, and engaging storytelling. 800-1200 words.
+Strictly output ONLY valid JSON (no markdown): { "title": "...", "title_ja": "...", "excerpt": "...", "content": "..." }`;
 }
 
 async function generateArticleWithAI(ai: Ai, prompt: string, city: string, theme: string) {
-  // Use @cf/meta/llama-3-8b-instruct or similar available model
+  // Use @cf/meta/llama-3-8b-instruct or similar available model via CF AI binding
   const response = await ai.run('@cf/meta/llama-3-8b-instruct', {
     prompt,
-    max_tokens: 2000,
+    max_tokens: 2500,
   });
   
   // Parse or fallback
-  let parsed;
+  let parsed: any = {};
+  const raw = (response as any).response || '';
   try {
-    parsed = JSON.parse(response.response || '{}');
+    // Attempt to extract JSON if wrapped in markdown or extra text
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(raw);
   } catch {
     parsed = {
-      title: `${theme} in ${city}`,
+      title: `${theme.replace('-', ' ')} in ${city}`,
+      title_ja: null,
       excerpt: `Discover the best of ${city} with focus on ${theme}.`,
-      content: response.response || 'Content generation failed. Please check logs.'
+      content: raw || 'Content generation failed. Please check logs.'
     };
   }
   
   return {
-    title: parsed.title,
+    title: parsed.title || `${theme} in ${city}`,
     title_ja: parsed.title_ja || null,
     slug: `${city}-${theme}-${Date.now()}`.toLowerCase().replace(/\s+/g, '-'),
-    excerpt: parsed.excerpt,
-    content: parsed.content,
+    excerpt: parsed.excerpt || `Explore ${city} through ${theme}.`,
+    content: parsed.content || raw,
     content_ja: parsed.content_ja || null,
   };
 }
