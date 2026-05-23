@@ -1,0 +1,104 @@
+name: Delete Test Posts from D1
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (show matching posts without deleting)'
+        type: boolean
+        default: true
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete test posts from D1
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          python3 <<'PYEOF'
+          import os, json, urllib.request
+
+          account = os.environ['CF_ACCOUNT_ID']
+          token = os.environ['CF_API_TOKEN']
+          dry_run = os.environ.get('DRY_RUN', 'true') == 'true'
+
+          # Get DB ID
+          req = urllib.request.Request(
+              f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database",
+              headers={"Authorization": f"Bearer {token}"}
+          )
+          dbs = json.loads(urllib.request.urlopen(req).read())
+          db_id = next(db['uuid'] for db in dbs['result'] if db['name'] == 'daydreamhub-db')
+          print(f"DB ID: {db_id}")
+
+          def query(sql, params=None):
+              payload = {"sql": sql}
+              if params:
+                  payload["params"] = params
+              data = json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db_id}/query",
+                  data=data,
+                  headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+              )
+              r = json.loads(urllib.request.urlopen(req).read())
+              if not r.get('success'):
+                  raise Exception(f"API error: {r.get('errors', r)}")
+              return r['result'][0]
+
+          # Step 1: Find matching posts
+          slugs_pattern = [
+              'singapore-hidden-gems-guide',
+              'singapore-hidden-gems-guide-1',
+              'singapore-hidden-gems-guide-2',
+              'singapore-hidden-gems-guide-3',
+              'singapore-hidden-gems-guide-4',
+              'singapore-hidden-gems-guide-5',
+          ]
+
+          # Also check for any posts with slug LIKE 'singapore-hidden-gems-guide%'
+          slug_like = 'singapore-hidden-gems-guide%'
+
+          # Find specific slugs
+          for slug in slugs_pattern:
+              r = query(f"SELECT id, slug, title, published_at FROM blog_posts WHERE slug = ?", [slug])
+              rows = r['results']
+              if rows:
+                  for row in rows:
+                      print(f"  FOUND: id={row['id']}, slug={row['slug']}, title={row.get('title','')}")
+              else:
+                  print(f"  NOT FOUND: slug='{slug}'")
+
+          # Also find all matching the LIKE pattern
+          print(f"\nSearching for ALL posts with slug LIKE '{slug_like}':")
+          r = query(f"SELECT id, slug, title, published_at FROM blog_posts WHERE slug LIKE ?", [slug_like])
+          all_matching = r['results']
+          if all_matching:
+              for row in all_matching:
+                  print(f"  MATCH: id={row['id']}, slug={row['slug']}, title={row.get('title','')[:60]}")
+          else:
+              print("  No matching posts found.")
+
+          print(f"\nTotal matching posts: {len(all_matching)}")
+
+          if dry_run:
+              print(f"\n=== DRY RUN - no changes made ===")
+              print("Re-run with dry_run=false to actually delete.")
+          else:
+              if all_matching:
+                  ids = [row['id'] for row in all_matching]
+                  placeholders = ','.join(['?'] * len(ids))
+                  r = query(f"DELETE FROM blog_posts WHERE id IN ({placeholders})", ids)
+                  changes = r.get('meta', {}).get('changes', '?')
+                  print(f"\n=== DELETE executed: {changes} rows affected ===")
+
+                  # Verify: check remaining
+                  r = query(f"SELECT COUNT(*) as cnt FROM blog_posts WHERE slug LIKE ?", [slug_like])
+                  remaining = r['results'][0]['cnt']
+                  print(f"Remaining posts matching pattern: {remaining}")
+              else:
+                  print(f"\n=== No posts to delete ===")
+          PYEOF
