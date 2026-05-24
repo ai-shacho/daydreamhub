@@ -145,41 +145,50 @@ const formattedDate = post ? new Date(post.published_at).toLocaleDateString(
 
         <!-- GA4 internal_link_click tracking for blog content links -->
         <script is:inline>
-          function getLinkType(url) {
-            if (url.includes('/search')) return 'search';
-            if (url.includes('/city/')) return 'city';
-            if (url.includes('/hotel/')) return 'hotel';
-            if (url.includes('/booking/')) return 'booking';
-            if (url.includes('/blog/')) return 'blog';
-            return 'other_internal';
-          }
+          document.addEventListener('DOMContentLoaded', function() {
+            console.log('[GA4 Debug] DOMContentLoaded fired for internal link tracking (ja)');
 
-          document.querySelectorAll('article .wp-blog-content a[href]').forEach(function(link) {
-            const href = link.getAttribute('href');
-            if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
-            if (href.startsWith('http') && !href.includes(window.location.hostname)) return;
+            function getLinkType(url) {
+              if (url.includes('/search')) return 'search';
+              if (url.includes('/city/')) return 'city';
+              if (url.includes('/hotel/')) return 'hotel';
+              if (url.includes('/booking/')) return 'booking';
+              if (url.includes('/blog/')) return 'blog';
+              return 'other_internal';
+            }
 
-            link.addEventListener('click', function(e) {
-              const linkUrl = link.href;
-              const linkText = (link.textContent || '').trim();
-              const sourcePage = window.location.pathname;
-              const sourceTitle = document.title;
-              const linkType = getLinkType(linkUrl);
+            const links = document.querySelectorAll('article .wp-blog-content a[href]');
+            console.log('[GA4 Debug] Found ' + links.length + ' links in article content');
 
-              if (typeof gtag === 'function') {
-                e.preventDefault();
-                gtag('event', 'internal_link_click', {
-                  link_url: linkUrl,
-                  link_text: linkText,
-                  source_page: sourcePage,
-                  source_title: sourceTitle,
-                  link_type: linkType,
-                  transport_type: 'beacon',
-                  event_callback: function() {
-                    window.location.href = linkUrl;
-                  }
-                });
-              }
+            links.forEach(function(link) {
+              const href = link.getAttribute('href');
+              if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+              if (href.startsWith('http') && !href.includes(window.location.hostname)) return;
+
+              link.addEventListener('click', function(e) {
+                const linkUrl = link.href;
+                const linkText = (link.textContent || '').trim();
+                const sourcePage = window.location.pathname;
+                const sourceTitle = document.title;
+                const linkType = getLinkType(linkUrl);
+
+                console.log('[GA4 Debug] Click captured: ' + linkUrl);
+
+                if (typeof gtag === 'function') {
+                  e.preventDefault();
+                  gtag('event', 'internal_link_click', {
+                    link_url: linkUrl,
+                    link_text: linkText,
+                    source_page: sourcePage,
+                    source_title: sourceTitle,
+                    link_type: linkType,
+                    transport_type: 'beacon',
+                    event_callback: function() {
+                      window.location.href = linkUrl;
+                    }
+                  });
+                }
+              });
             });
           });
         </script>
