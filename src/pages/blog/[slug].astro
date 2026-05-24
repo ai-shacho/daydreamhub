@@ -288,7 +288,7 @@ const formattedDate = post
             // Skip external links (keep only internal)
             if (href.startsWith('http') && !href.includes(window.location.hostname)) return;
 
-            link.addEventListener('click', function() {
+            link.addEventListener('click', function(e) {
               const linkUrl = link.href;
               const linkText = (link.textContent || '').trim();
               const sourcePage = window.location.pathname;
@@ -296,12 +296,17 @@ const formattedDate = post
               const linkType = getLinkType(linkUrl);
 
               if (typeof gtag === 'function') {
+                e.preventDefault();
                 gtag('event', 'internal_link_click', {
                   link_url: linkUrl,
                   link_text: linkText,
                   source_page: sourcePage,
                   source_title: sourceTitle,
-                  link_type: linkType
+                  link_type: linkType,
+                  transport_type: 'beacon',
+                  event_callback: function() {
+                    window.location.href = linkUrl;
+                  }
                 });
               }
             });
