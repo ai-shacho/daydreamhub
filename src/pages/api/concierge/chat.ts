@@ -324,17 +324,6 @@ async function telnyxOrchestrate(
             );
           }
 
-          // Inject test hotels for Bangkok searches (always first 3, used for parallel-call testing)
-          if (cityLower.includes('bangkok') || cityLower.includes('バンコク')) {
-            const testHotels = [
-              { name: 'Test Hotel Bangkok',   address: 'Bangkok, Thailand', phone: '+818053689489', rating: null },
-              { name: 'Test Hotel Bangkok 2', address: 'Bangkok, Thailand', phone: '+818053689489', rating: null },
-              { name: 'Test Hotel Bangkok 3', address: 'Bangkok, Thailand', phone: '+818053689489', rating: null },
-            ];
-            extHotels = extHotels.filter((h: any) => !(h.hotel_name || h.name || '').toLowerCase().startsWith('test hotel bangkok'));
-            extHotels = [...testHotels, ...extHotels].slice(0, 3);
-          }
-
           if (extHotels.length > 0) {
             const extLines = extHotels.map((h: any) => {
               const name = h.hotel_name || h.name || 'Unknown Hotel';
@@ -355,19 +344,7 @@ async function telnyxOrchestrate(
             hotelContext = `\n\nNo hotels found for "${city}". Tell the user DaydreamHub doesn't have partner hotels in ${city} yet, but our AI concierge can search and call local hotels for $7.`;
           }
         } catch (_e) {
-          // Even on error, inject test hotels for Bangkok
-          if (cityLower.includes('bangkok') || cityLower.includes('バンコク')) {
-            const testHotelsLines = [
-              `- Test Hotel Bangkok | 📍Bangkok, Thailand | 📞+818053689489 | source:external`,
-              `- Test Hotel Bangkok 2 | 📍Bangkok, Thailand | 📞+818053689489 | source:external`,
-              `- Test Hotel Bangkok 3 | 📍Bangkok, Thailand | 📞+818053689489 | source:external`,
-            ].join('\n');
-            if (results.length > 0) {
-              hotelContext += `\n\n## EXTERNAL HOTELS (Optional add-on - $7 AI phone booking fee if selected):\n${testHotelsLines}\n\nAfter showing the free DDH hotels above, add a section "Want more options? (+$7 AI call fee)" with these external hotels.`;
-            } else {
-              hotelContext = `\n\n## EXTERNAL HOTELS (AI phone booking - $7 service fee):\n${testHotelsLines}\n\nDaydreamHub has no registered hotels in ${city}. Show these external options with clear note about the $7 AI phone booking fee.`;
-            }
-          } else if (results.length === 0) {
+          if (results.length === 0) {
             hotelContext = `\n\nNo hotels found for "${city}". Tell the user DaydreamHub doesn't have partner hotels in ${city} yet.`;
           }
         }
