@@ -146,8 +146,6 @@ const formattedDate = post ? new Date(post.published_at).toLocaleDateString(
         <!-- GA4 internal_link_click tracking for blog content links -->
         <script is:inline>
           document.addEventListener('DOMContentLoaded', function() {
-            console.log('[GA4 Debug] DOMContentLoaded fired for internal link tracking (ja)');
-
             function getLinkType(url) {
               if (url.includes('/search')) return 'search';
               if (url.includes('/city/')) return 'city';
@@ -158,7 +156,6 @@ const formattedDate = post ? new Date(post.published_at).toLocaleDateString(
             }
 
             const links = document.querySelectorAll('article .wp-blog-content a[href]');
-            console.log('[GA4 Debug] Found ' + links.length + ' links in article content');
 
             links.forEach(function(link) {
               const href = link.getAttribute('href');
@@ -172,20 +169,14 @@ const formattedDate = post ? new Date(post.published_at).toLocaleDateString(
                 const sourceTitle = document.title;
                 const linkType = getLinkType(linkUrl);
 
-                console.log('[GA4 Debug] Click captured: ' + linkUrl);
-
                 if (typeof gtag === 'function') {
-                  e.preventDefault();
                   gtag('event', 'internal_link_click', {
                     link_url: linkUrl,
                     link_text: linkText,
                     source_page: sourcePage,
                     source_title: sourceTitle,
                     link_type: linkType,
-                    transport_type: 'beacon',
-                    event_callback: function() {
-                      window.location.href = linkUrl;
-                    }
+                    transport_type: 'beacon'
                   });
                 }
               });
