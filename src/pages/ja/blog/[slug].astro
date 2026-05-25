@@ -116,7 +116,7 @@ const formattedDate = post ? new Date(post.published_at).toLocaleDateString(
 ) : '';
 ---
 
-<Layout title={post ? displayTitle : t('blog.not_found', locale)} description={post?.excerpt || ''}>
+<Layout title={post ? displayTitle : t('blog.not_found', locale)} description={post ? (post.excerpt_ja || post.excerpt || '') : ''}>
   {post ? (
     <article class="overflow-x-hidden">
       <div class="w-full aspect-[21/9] max-h-[400px] overflow-hidden bg-gray-100">

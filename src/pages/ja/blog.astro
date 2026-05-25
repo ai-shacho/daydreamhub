@@ -40,7 +40,7 @@ try {
       (countriesResult?.results || []).map((r: any) => (r.country as string).toLowerCase())
     )].map(toTitleCase).sort();
 
-    const whereClauses: string[] = ["title_ja IS NOT NULL AND title_ja != ''"];
+    const whereClauses: string[] = [];
     const params: any[] = [];
     if (cityFilter) {
       whereClauses.push('city LIKE ?');
@@ -57,7 +57,7 @@ try {
         whereClauses.push('1=0');
       }
     }
-    const whereStr = 'WHERE ' + whereClauses.join(' AND ');
+    const whereStr = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
     const countResult = params.length
       ? await db.prepare(`SELECT COUNT(*) as count FROM blog_posts ${whereStr}`).bind(...params).first()
