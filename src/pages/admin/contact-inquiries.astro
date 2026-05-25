@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -91,7 +92,7 @@ const categoryLabels: Record<string, string> = {
                   {q.status}
                 </span>
               </td>
-              <td class="px-4 py-3 text-slate-500 text-xs">{q.created_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(q.created_at)}</td>
               <td class="px-4 py-3 text-center">
                 <button
                   class="detail-btn px-2 py-1 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded hover:bg-slate-100 transition-colors"
@@ -159,6 +160,14 @@ const categoryLabels: Record<string, string> = {
 </AdminLayout>
 
 <script>
+  const MONTHS_CI = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function formatDisplayDate(s: string | null | undefined): string {
+    if (!s) return '-';
+    const n = s.includes('T') ? s : s.replace(' ', 'T') + 'Z';
+    const d = new Date(n);
+    if (isNaN(d.getTime())) return '-';
+    return d.getUTCFullYear() + '-' + MONTHS_CI[d.getUTCMonth()] + '-' + String(d.getUTCDate()).padStart(2, '0');
+  }
   const modal = document.getElementById('detail-modal')!;
   let currentId: number | null = null;
 
@@ -169,7 +178,7 @@ const categoryLabels: Record<string, string> = {
       (document.getElementById('d-name') as HTMLElement).textContent = item.name || '-';
       (document.getElementById('d-email') as HTMLElement).textContent = item.email || '-';
       (document.getElementById('d-category') as HTMLElement).textContent = item.category || '-';
-      (document.getElementById('d-date') as HTMLElement).textContent = item.created_at?.slice(0, 16) || '-';
+      (document.getElementById('d-date') as HTMLElement).textContent = formatDisplayDate(item.created_at);
       (document.getElementById('d-subject') as HTMLElement).textContent = item.subject || '-';
       (document.getElementById('d-message') as HTMLElement).textContent = item.message || '-';
       (document.getElementById('d-status') as HTMLSelectElement).value = item.status || 'new';

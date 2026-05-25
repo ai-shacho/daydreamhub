@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;

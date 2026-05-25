@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -129,7 +130,7 @@ function truncate(text: string, len: number): string {
                   {r.is_approved ? "Approved" : "Pending"}
                 </span>
               </td>
-              <td class="px-4 py-3 text-slate-500 text-xs">{r.created_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(r.created_at)}</td>
               <td class="px-4 py-3 text-center">
                 <div class="flex items-center justify-center gap-1">
                   {!r.is_approved && (

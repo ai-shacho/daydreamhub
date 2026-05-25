@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -226,7 +227,7 @@ const statusColors: Record<string, string> = {
                   {b.status}
                 </span>
               </td>
-              <td class="px-4 py-3 text-slate-500 text-xs">{b.created_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(b.created_at)}</td>
             </tr>
           ))}
         </tbody>

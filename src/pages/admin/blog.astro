@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -139,7 +140,7 @@ if (db) {
                   {p.published_at ? "Published" : "Draft"}
                 </span>
               </td>
-              <td class="px-4 py-3 text-slate-500 text-xs">{p.published_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(p.published_at)}</td>
               <td class="px-4 py-3 text-slate-500 text-xs font-mono">/{p.slug}</td>
               <td class="px-4 py-3 text-center">
                 <div class="flex items-center justify-center gap-2">

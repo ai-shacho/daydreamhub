@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -121,7 +122,7 @@ function getChangeSummary(fieldChanges: string) {
                     {er.status === "approved" ? "Approved" : er.status === "rejected" ? "Rejected" : "Pending"}
                   </span>
                 </td>
-                <td class="px-4 py-3 text-slate-500 text-xs">{er.created_at?.slice(0, 16)}</td>
+                <td class="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(er.created_at)}</td>
                 <td class="px-4 py-3 text-center">
                   {er.status === "pending" ? (
                     <div class="flex items-center justify-center gap-1">
