@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -255,15 +256,7 @@ const refundColors: Record<string, string> = {
                     )}
                   </td>
                   <td class="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
-                    {g.created_at
-                      ? new Date(g.created_at + "Z").toLocaleString("ja-JP", {
-                          timeZone: "Asia/Tokyo",
-                          month: "2-digit",
-                          day: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "-"}
+                    {formatDisplayDate(g.created_at)}
                   </td>
                   <td class="px-4 py-3">
                     <button class="detail-toggle text-teal-600 hover:text-teal-800 text-xs font-medium" data-group-id={g.id}>
