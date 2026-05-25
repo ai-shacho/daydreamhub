@@ -64,9 +64,25 @@ const title = 'CRM - Daydreamhub';
           <input type="text" name="company" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例: 東京グランドホテル" required />
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full mb-4">
+            <label class="label"><span class="label-text font-semibold text-gray-700">国</span></label>
+            <input type="text" name="country" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="日本" />
+          </div>
+          <div class="form-control w-full mb-4">
+            <label class="label"><span class="label-text font-semibold text-gray-700">都市</span></label>
+            <input type="text" name="city" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="東京" />
+          </div>
+        </div>
+
         <div class="form-control w-full mb-4">
           <label class="label"><span class="label-text font-semibold text-gray-700">担当者名</span></label>
           <input type="text" name="contact_person" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例: 山田太郎" required />
+        </div>
+
+        <div class="form-control w-full mb-4">
+          <label class="label"><span class="label-text font-semibold text-gray-700">役職</span></label>
+          <input type="text" name="position" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="営業部長" />
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -83,6 +99,17 @@ const title = 'CRM - Daydreamhub';
         <div class="form-control w-full mb-4">
           <label class="label"><span class="label-text font-semibold text-gray-700">WhatsApp</span></label>
           <input type="text" name="whatsapp" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="+819012345678" />
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full mb-4">
+            <label class="label"><span class="label-text font-semibold text-gray-700">タイムゾーン</span></label>
+            <input type="text" name="timezone" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="Asia/Tokyo" />
+          </div>
+          <div class="form-control w-full mb-4">
+            <label class="label"><span class="label-text font-semibold text-gray-700">アポイント日時 (JST)</span></label>
+            <input type="datetime-local" name="appointment_jst" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+          </div>
         </div>
 
         <div class="form-control w-full mb-6">
@@ -142,9 +169,27 @@ const title = 'CRM - Daydreamhub';
         const row = document.createElement('tr');
         row.className = 'border-b border-gray-100 hover:bg-gray-50 transition-colors';
         
+        // Contact icons with one-click links (tel / mailto / wa.me)
         const contactHtml = [];
-        if (lead.phone) contactHtml.push(`<a href="tel:${lead.phone}" class="btn btn-xs btn-ghost">☎</a>`);
-        if (lead.email) contactHtml.push(`<a href="mailto:${lead.email}" class="btn btn-xs btn-ghost">✉</a>`);
+        if (lead.phone) contactHtml.push(`<a href="tel:${lead.phone}" class="btn btn-xs btn-ghost p-1" title="電話">📞</a>`);
+        if (lead.email) contactHtml.push(`<a href="mailto:${lead.email}" class="btn btn-xs btn-ghost p-1" title="メール">✉️</a>`);
+        if (lead.whatsapp) contactHtml.push(`<a href="https://wa.me/${lead.whatsapp.replace(/[^0-9]/g,'')}" target="_blank" class="btn btn-xs btn-ghost p-1" title="WhatsApp">💬</a>`);
+        
+        // Deadline alert (based on appointment_jst or due_date)
+        let alertHtml = '';
+        const dueDateStr = lead.appointment_jst || lead.due_date;
+        if (dueDateStr) {
+          const due = new Date(dueDateStr);
+          const now = new Date();
+          const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+          if (diffDays < 0) {
+            alertHtml = '<span class="ml-2 text-red-500" title="期日超過">🔴</span>';
+          } else if (diffDays === 0) {
+            alertHtml = '<span class="ml-2 text-yellow-500" title="今日が期日">🟡</span>';
+          } else {
+            alertHtml = '<span class="ml-2 text-green-500" title="余裕あり">🟢</span>';
+          }
+        }
         
         row.innerHTML = `
           <td class="px-6 py-4 font-mono text-sm text-gray-500">${lead.id || '-'}</td>
@@ -152,7 +197,7 @@ const title = 'CRM - Daydreamhub';
             <div class="font-medium text-gray-900">${lead.contact_person || lead.company || '未設定'}</div>
             <div class="text-xs text-gray-500">${lead.company || lead.hotel_name || ''}</div>
           </td>
-          <td class="px-6 py-4">${getStatusBadge(lead.progress)}</td>
+          <td class="px-6 py-4">${getStatusBadge(lead.progress)}${alertHtml}</td>
           <td class="px-6 py-4"><div class="flex gap-1">${contactHtml.join('')}</div></td>
           <td class="px-6 py-4 text-sm text-gray-500">${lead.last_updated ? new Date(lead.last_updated).toLocaleDateString('ja-JP') : '-'}</td>
           <td class="px-6 py-4 text-right">
@@ -185,9 +230,14 @@ const title = 'CRM - Daydreamhub';
       const data = {
         company: form.company.value,
         contact_person: form.contact_person.value,
+        country: form.country.value,
+        city: form.city.value,
+        position: form.position.value,
         phone: form.phone.value,
         email: form.email.value,
         whatsapp: form.whatsapp.value,
+        timezone: form.timezone.value,
+        appointment_jst: form.appointment_jst.value,
         notes: form.notes.value,
         progress: 'new'
       };

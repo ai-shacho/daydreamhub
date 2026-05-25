@@ -67,8 +67,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply daydreamhub-db --remote
-        continue-on-error: true
+          command: d1 migrations apply daydreamhub-db --remote --yes
+        # Removed continue-on-error to ensure migration failures are visible in CI logs
+        # DB name and migrations_dir confirmed correct in wrangler.toml (daydreamhub-db, d1/migrations)
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
