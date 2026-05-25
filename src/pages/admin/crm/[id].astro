@@ -1,0 +1,232 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+const { id } = Astro.params;
+const title = `CRM 詳細 #${id}`;
+---
+
+<AdminLayout title={title}>
+  <div class="p-6 max-w-5xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <a href="/admin/crm" class="btn btn-ghost btn-sm">← 一覧に戻る</a>
+        <h1 class="text-2xl font-bold mt-2">CRM リード詳細 #{id}</h1>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="markLost()" class="btn btn-error btn-sm">提携不可・追客中止</button>
+      </div>
+    </div>
+
+    <!-- Basic Info -->
+    <div id="lead-info" class="card bg-base-100 shadow mb-6">
+      <div class="card-body">
+        <h2 class="card-title">基本情報</h2>
+        <div id="lead-details" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm"></div>
+      </div>
+    </div>
+
+    <!-- Reports Timeline -->
+    <div class="card bg-base-100 shadow mb-6">
+      <div class="card-body">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="card-title">報告履歴（チャット風タイムライン）</h2>
+          <button onclick="showAddReportModal()" class="btn btn-primary btn-sm">報告を追加</button>
+        </div>
+        <div id="reports-timeline" class="space-y-4"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Report Modal -->
+  <dialog id="report-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-2xl">
+      <h3 class="font-bold text-lg mb-4">報告を追加</h3>
+
+      <div class="tabs tabs-bordered mb-4">
+        <a class="tab tab-active" data-report-tab="アポ">アポ</a>
+        <a class="tab" data-report-tab="セットアップ">セットアップ</a>
+      </div>
+
+      <form id="report-form" onsubmit="submitReport(event)">
+        <input type="hidden" id="report_type" value="アポ">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label">結果</label>
+            <select id="result" class="select select-bordered">
+              <option value="">選択...</option>
+              <option value="in_progress">進行中</option>
+              <option value="won">成約</option>
+              <option value="lost">失注</option>
+              <option value="completed">完了</option>
+            </select>
+          </div>
+          <div class="form-control">
+            <label class="label">アポイント日</label>
+            <input type="date" id="appointment_date" class="input input-bordered">
+          </div>
+        </div>
+
+        <div class="form-control mt-2">
+          <label class="label">内容・メモ</label>
+          <textarea id="content" class="textarea textarea-bordered h-24" placeholder="会話内容や次回アクション"></textarea>
+        </div>
+
+        <div id="apo-fields" class="mt-2">
+          <div class="grid grid-cols-2 gap-4">
+            <div class="form-control"><label class="label text-xs">決定権者同席</label><input type="checkbox" id="decision_maker_present" class="checkbox"></div>
+            <div class="form-control"><label class="label text-xs">直接電話</label><input type="text" id="direct_phone" class="input input-bordered input-sm"></div>
+          </div>
+        </div>
+
+        <div class="modal-action mt-6">
+          <button type="button" onclick="closeReportModal()" class="btn">キャンセル</button>
+          <button type="submit" class="btn btn-primary">登録</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Lost Reason Modal -->
+  <dialog id="lost-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">失注理由を選択</h3>
+      <select id="lost_reason" class="select select-bordered w-full mt-4">
+        <option value="">理由を選択...</option>
+        <option value="価格交渉決裂">価格交渉決裂</option>
+        <option value="競合他社">競合他社</option>
+        <option value="連絡なし">連絡なし</option>
+        <option value="条件不一致">条件不一致</option>
+        <option value="その他">その他</option>
+      </select>
+      <div class="modal-action">
+        <button onclick="closeLostModal()" class="btn">キャンセル</button>
+        <button onclick="confirmLost()" class="btn btn-error">失注確定</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script>
+    const leadId = window.location.pathname.split('/').pop();
+
+    async function loadLead() {
+      const res = await fetch(`/api/crm/${leadId}`);
+      const data = await res.json();
+      if (!data.lead) return;
+
+      const lead = data.lead;
+      const container = document.getElementById('lead-details');
+      container.innerHTML = `
+        <div><span class="font-semibold">ホテルID:</span> ${lead.hotel_id || '-'}</div>
+        <div><span class="font-semibold">進捗:</span> <span class="badge">${lead.progress}</span></div>
+        <div><span class="font-semibold">担当者:</span> ${lead.contact_person || '-'}</div>
+        <div><span class="font-semibold">役職:</span> ${lead.position || '-'}</div>
+        <div><span class="font-semibold">Email:</span> ${lead.email ? `<a href="mailto:${lead.email}" class="link">${lead.email}</a>` : '-'}</div>
+        <div><span class="font-semibold">電話:</span> ${lead.phone ? `<a href="tel:${lead.phone}" class="link">${lead.phone}</a>` : '-'}</div>
+        <div><span class="font-semibold">WhatsApp:</span> ${lead.whatsapp ? `<a href="https://wa.me/${lead.whatsapp.replace(/\D/g,'')}" target="_blank" class="link">開く</a>` : '-'}</div>
+        <div><span class="font-semibold">最終連絡:</span> ${lead.last_contact_date ? new Date(lead.last_contact_date).toLocaleString('ja-JP') : '-'}</div>
+      `;
+
+      renderReports(data.reports || []);
+    }
+
+    function renderReports(reports) {
+      const container = document.getElementById('reports-timeline');
+      container.innerHTML = '';
+
+      if (!reports.length) {
+        container.innerHTML = '<div class="text-sm opacity-60">報告履歴はありません。</div>';
+        return;
+      }
+
+      reports.forEach(report => {
+        const div = document.createElement('div');
+        div.className = 'chat chat-start bg-base-200 p-4 rounded-xl';
+        div.innerHTML = `
+          <div class="chat-header text-xs opacity-70">
+            ${report.report_type} • ${report.timestamp ? new Date(report.timestamp).toLocaleString('ja-JP') : ''}
+            <button onclick="copyToClipboard('${report.content?.replace(/'/g, "\\'") || ''}')" class="btn btn-xs btn-ghost ml-2">📋 Chatテキストコピー</button>
+          </div>
+          <div class="chat-bubble">
+            <div class="text-sm"><strong>結果:</strong> ${report.result || '-'}</div>
+            <div class="text-sm mt-1 whitespace-pre-line">${report.content || ''}</div>
+            ${report.next_action_ddh ? `<div class="text-xs mt-1 opacity-70">次回DDHアクション: ${report.next_action_ddh}</div>` : ''}
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('クリップボードにコピーしました');
+      });
+    }
+
+    // Modal tabs
+    function initReportTabs() {
+      document.querySelectorAll('[data-report-tab]').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('[data-report-tab]').forEach(t => t.classList.remove('tab-active'));
+          tab.classList.add('tab-active');
+          document.getElementById('report_type').value = tab.dataset.reportTab;
+          document.getElementById('apo-fields').style.display = (tab.dataset.reportTab === 'アポ') ? 'block' : 'none';
+        });
+      });
+    }
+
+    function showAddReportModal() {
+      document.getElementById('report-modal').showModal();
+    }
+    function closeReportModal() {
+      document.getElementById('report-modal').close();
+    }
+
+    async function submitReport(e) {
+      e.preventDefault();
+      const formData = {
+        report_type: document.getElementById('report_type').value,
+        appointment_date: document.getElementById('appointment_date').value,
+        result: document.getElementById('result').value,
+        content: document.getElementById('content').value,
+        decision_maker_present: document.getElementById('decision_maker_present').checked ? 1 : 0,
+        direct_phone: document.getElementById('direct_phone').value || null,
+      };
+
+      const res = await fetch(`/api/crm/${leadId}/reports`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (res.ok) {
+        closeReportModal();
+        await loadLead();
+      } else {
+        alert('登録に失敗しました');
+      }
+    }
+
+    function markLost() {
+      document.getElementById('lost-modal').showModal();
+    }
+    function closeLostModal() {
+      document.getElementById('lost-modal').close();
+    }
+    async function confirmLost() {
+      const reason = document.getElementById('lost_reason').value;
+      await fetch(`/api/crm/${leadId}/reports`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report_type: 'アポ', result: 'lost', content: `失注: ${reason}`, progress: 'lost', lost_reason: reason })
+      });
+      closeLostModal();
+      await loadLead();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadLead();
+      initReportTabs();
+    });
+  </script>
+</AdminLayout>

@@ -1,0 +1,137 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+
+const title = 'CRM - Daydreamhub';
+---
+
+<AdminLayout title={title}>
+  <div class="p-6">
+    <div class="flex justify-between items-center mb-6">
+      <h1 class="text-3xl font-bold">CRM 案件管理</h1>
+      <div class="flex gap-2">
+        <a href="/admin/crm?format=csv" class="btn btn-outline btn-sm">CSVエクスポート</a>
+        <button onclick="refreshLeads()" class="btn btn-primary btn-sm">更新</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs tabs-boxed mb-4">
+      <a class="tab tab-active" data-tab="all">すべての案件</a>
+      <a class="tab" data-tab="today">今日の追客</a>
+      <a class="tab" data-tab="followup">追客必要</a>
+      <a class="tab" data-tab="new">新規</a>
+    </div>
+
+    <!-- Status Alerts -->
+    <div id="status-alerts" class="mb-4"></div>
+
+    <!-- Leads Table -->
+    <div class="overflow-x-auto">
+      <table class="table table-zebra w-full">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>ホテル</th>
+            <th>進捗</th>
+            <th>連絡先</th>
+            <th>最終更新</th>
+            <th>アクション</th>
+          </tr>
+        </thead>
+        <tbody id="leads-tbody">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let currentTab = 'all';
+    let leadsData = [];
+
+    async function fetchLeads(progressFilter = null) {
+      const params = new URLSearchParams();
+      if (progressFilter) params.set('progress', progressFilter);
+      const res = await fetch(`/api/crm?${params}`);
+      const data = await res.json();
+      return data.leads || [];
+    }
+
+    function renderStatusAlerts(leads) {
+      const container = document.getElementById('status-alerts');
+      const counts = { new: 0, in_progress: 0, won: 0, lost: 0, '掲載': 0 };
+      leads.forEach(l => { if (counts[l.progress] !== undefined) counts[l.progress]++; });
+
+      container.innerHTML = `
+        <div class="flex gap-2 flex-wrap">
+          <div class="alert alert-info py-2 px-3 text-sm">🔵 新規: ${counts.new}</div>
+          <div class="alert alert-warning py-2 px-3 text-sm">🟡 進行中: ${counts.in_progress}</div>
+          <div class="alert alert-success py-2 px-3 text-sm">🟢 成約/掲載: ${counts.won + counts['掲載']}</div>
+          <div class="alert alert-error py-2 px-3 text-sm">🔴 失注: ${counts.lost}</div>
+        </div>
+      `;
+    }
+
+    function renderLeads(leads) {
+      const tbody = document.getElementById('leads-tbody');
+      tbody.innerHTML = '';
+
+      leads.forEach(lead => {
+        const statusIcon = {
+          'new': '🔵',
+          'in_progress': '🟡',
+          'won': '🟢',
+          'lost': '🔴',
+          '掲載': '🟢'
+        }[lead.progress] || '⚪';
+
+        const contactLinks = [];
+        if (lead.phone) contactLinks.push(`<a href="tel:${lead.phone}" class="btn btn-xs btn-ghost">📞</a>`);
+        if (lead.email) contactLinks.push(`<a href="mailto:${lead.email}" class="btn btn-xs btn-ghost">✉️</a>`);
+        if (lead.whatsapp) contactLinks.push(`<a href="https://wa.me/${lead.whatsapp.replace(/\D/g,'')}" target="_blank" class="btn btn-xs btn-ghost">💬</a>`);
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${lead.id}</td>
+          <td><a href="/admin/crm/${lead.id}" class="link">${lead.contact_person || '未設定'} (ID:${lead.hotel_id || '-'})</a></td>
+          <td><span class="badge">${statusIcon} ${lead.progress}</span></td>
+          <td>${contactLinks.join(' ')}</td>
+          <td>${lead.last_updated ? new Date(lead.last_updated).toLocaleDateString('ja-JP') : '-'}</td>
+          <td>
+            <a href="/admin/crm/${lead.id}" class="btn btn-xs btn-primary">詳細</a>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    async function refreshLeads(filter = null) {
+      leadsData = await fetchLeads(filter);
+      renderStatusAlerts(leadsData);
+      renderLeads(leadsData);
+    }
+
+    // Tab handling
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', async () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('tab-active'));
+        tab.classList.add('tab-active');
+        currentTab = tab.dataset.tab;
+
+        let filter = null;
+        if (currentTab === 'new') filter = 'new';
+        else if (currentTab === 'followup') filter = null; // could add custom
+        else if (currentTab === 'today') filter = null;
+
+        await refreshLeads(filter);
+      });
+    });
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      refreshLeads();
+    });
+
+    window.refreshLeads = refreshLeads;
+  </script>
+</AdminLayout>
