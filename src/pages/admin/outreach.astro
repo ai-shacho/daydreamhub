@@ -104,6 +104,15 @@ if (!admin) return Astro.redirect("/admin/login");
 </AdminLayout>
 
 <script>
+const MONTHS_OA = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function formatDisplayDate(s: string | null | undefined): string {
+  if (!s) return '-';
+  const n = s.includes('T') ? s : s.replace(' ', 'T') + 'Z';
+  const d = new Date(n);
+  if (isNaN(d.getTime())) return '-';
+  return d.getUTCFullYear() + '-' + MONTHS_OA[d.getUTCMonth()] + '-' + String(d.getUTCDate()).padStart(2, '0');
+}
+
 const STATUS_COLORS: Record<string, string> = {
   new: 'bg-slate-100 text-slate-600',
   calling: 'bg-blue-100 text-blue-700',
@@ -142,7 +151,7 @@ function renderTable() {
   tbody.innerHTML = leads.map(l => {
     const color = STATUS_COLORS[l.status] || 'bg-slate-100 text-slate-600';
     const statusLabel = (l.status || 'new').replace('_', ' ');
-    const updatedAt = l.updated_at ? l.updated_at.replace('T', ' ').slice(0, 16) : '';
+    const updatedAt = formatDisplayDate(l.updated_at);
     const canCall = !['calling', 'interested'].includes(l.status);
     return `<tr class="hover:bg-slate-50" data-id="${l.id}">
       <td class="px-4 py-3 font-medium text-slate-800">${esc(l.hotel_name)}</td>

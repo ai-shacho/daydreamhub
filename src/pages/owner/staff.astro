@@ -1,6 +1,7 @@
 ---
 import OwnerLayout from '../../layouts/OwnerLayout.astro';
 import { verifyOwner, getOwnerHotelIds, getStaffRole, canManageStaff } from '../../lib/ownerAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -150,7 +151,7 @@ if (db) {
                   <span class="bg-slate-100 text-slate-700 text-xs font-bold px-2 py-1 rounded-full">Booking Manager</span>
                 )}
               </td>
-              <td class="px-4 py-3 text-slate-500 text-xs">{s.created_at?.slice(0, 10)}</td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(s.created_at)}</td>
               <td class="px-4 py-3 text-center">
                 <button class="remove-staff-btn px-3 py-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors" data-staff-id={s.id} data-staff-name={s.name}>
                   Remove
