@@ -7,6 +7,7 @@ const db = runtime?.env?.DB;
 const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
 const admin = await verifyAdmin(Astro.request, jwtSecret);
 if (!admin) return Astro.redirect('/admin/login');
+return Astro.redirect('/admin'); // temporarily disabled
 
 let coupons: any[] = [];
 let error = '';
