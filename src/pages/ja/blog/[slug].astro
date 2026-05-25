@@ -104,7 +104,7 @@ if (!dbAvailable) {
 }
 
 if (!post) {
-  Astro.response.status = 404;
+  return Astro.redirect(localePath('/blog', locale), 302);
 }
 
 const displayTitle = post ? (locale === 'ja' && post.title_ja ? post.title_ja : post.title) : '';
