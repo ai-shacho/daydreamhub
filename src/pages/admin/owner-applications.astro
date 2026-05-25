@@ -200,6 +200,13 @@ const statusColors: Record<string, string> = {
               <button id="d-save" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">Save</button>
             </div>
           </div>
+
+          <!-- Bottom Close -->
+          <div class="border-t border-slate-200 pt-4 flex justify-end">
+            <button id="detail-close-bottom" class="px-5 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -238,6 +245,7 @@ const statusColors: Record<string, string> = {
   function closeModal() { modal.classList.add('hidden'); }
 
   document.getElementById('detail-close')?.addEventListener('click', closeModal);
+  document.getElementById('detail-close-bottom')?.addEventListener('click', closeModal);
   document.getElementById('detail-backdrop')?.addEventListener('click', closeModal);
 
   document.querySelectorAll('.detail-btn').forEach(btn => {
