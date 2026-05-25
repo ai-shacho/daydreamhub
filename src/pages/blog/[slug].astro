@@ -249,7 +249,7 @@ const formattedDate = post
 
         <!-- Content -->
         {displayContent && (
-          <div class="prose prose-lg max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-[#45A2C1] prose-a:no-underline hover:prose-a:underline prose-li:text-gray-600 prose-img:rounded-lg wp-blog-content overflow-x-hidden break-words" set:html={displayContent} />
+          <div class="prose prose-base sm:prose-lg max-w-none prose-headings:text-gray-800 prose-p:text-gray-600 prose-a:text-[#45A2C1] prose-a:no-underline hover:prose-a:underline prose-li:text-gray-600 prose-img:rounded-lg wp-blog-content overflow-x-hidden" set:html={displayContent} />
         )}
         <script is:inline>
           // Apply lazy loading, async decoding, and max-width to all article images
@@ -366,5 +366,18 @@ const formattedDate = post
     overflow-x: auto;
     white-space: pre-wrap;
     word-break: break-all;
+  }
+  /* モバイル向け: 自然な位置で折り返し、英単語はハイフン分割 */
+  @media (max-width: 639px) {
+    .wp-blog-content p,
+    .wp-blog-content li,
+    .wp-blog-content h1,
+    .wp-blog-content h2,
+    .wp-blog-content h3,
+    .wp-blog-content h4 {
+      overflow-wrap: break-word;
+      word-break: normal;
+      hyphens: auto;
+    }
   }
 </style>
