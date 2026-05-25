@@ -104,7 +104,7 @@ const statusColors: Record<string, string> = {
                   {a.status}
                 </span>
               </td>
-              <td class="px-4 py-3 text-slate-500 text-xs">{a.created_at?.slice(0, 16) || "-"}</td>
+              <td class="px-4 py-3 text-slate-500 text-xs">{formatDisplayDate(a.created_at)}</td>
               <td class="px-4 py-3 text-center">
                 <button
                   class="detail-btn px-2 py-1 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded hover:bg-slate-100 transition-colors"
