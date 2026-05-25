@@ -135,7 +135,7 @@ function getMinPrice(hotelId: number) {
                     <div class="p-4">
                       <h3 class="font-semibold text-gray-900 text-sm mb-1 line-clamp-1">{displayName}</h3>
                       <p class="text-xs text-gray-500 mb-2">{hotel.city}, {hotel.country}</p>
-                      {minPrice && <p class="text-sm font-bold text-[#45A2C1]">{t('hotel.from', locale)} <span data-usd={minPrice}>${minPrice}</span></p>}
+                      {minPrice && <p class="text-sm font-bold text-[#45A2C1]"><span data-usd={minPrice}>${minPrice}</span>〜</p>}
                     </div>
                   </a>
                   <button

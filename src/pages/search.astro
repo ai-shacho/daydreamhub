@@ -645,8 +645,7 @@ function buildUrl(overrides: Record<string, string>) {
                     <div>
                       {hotel.min_price != null ? (
                         <div>
-                          <span class="text-xs text-gray-400">from</span>
-                          <span class="text-lg font-bold text-teal-700 ml-1" data-usd={hotel.min_price}>${hotel.min_price}</span>
+                          <span class="text-lg font-bold text-teal-700" data-usd={hotel.min_price}>${hotel.min_price}</span><span class="text-lg font-bold text-teal-700">〜</span>
                         </div>
                       ) : (
                         <span class="text-xs text-gray-400">Price on request</span>

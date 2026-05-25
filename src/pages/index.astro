@@ -959,7 +959,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
             marker.bindPopup(
               '<a href="/hotel/' + escHtml(h.slug) + '" style="font-weight:600;color:#0d9488">' + escHtml(h.name) + '</a>' +
               '<br><span style="font-size:12px;color:#6b7280">' + escHtml(h.city) + ', ' + escHtml(h.country) + '</span>' +
-              (h.min_price ? '<br><span style="font-size:12px;font-weight:700">from $' + escHtml(h.min_price) + '</span>' : '')
+              (h.min_price ? '<br><span style="font-size:12px;font-weight:700">$' + escHtml(h.min_price) + '〜</span>' : '')
             );
           });
         };
