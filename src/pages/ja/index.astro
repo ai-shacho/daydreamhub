@@ -1214,14 +1214,17 @@ function escHtml(s) {
     var wrap = document.createElement('div');
     wrap.className = 'flex gap-2' + (role === 'user' ? ' flex-row-reverse' : '');
     if (role === 'assistant') {
-      var slugs = extractHotelSlugs(text);
+      var hotelEntries = extractHotelSlugs(text);
       var externalHotels = extractExternalHotels(text);
 
-      // 自社ホテル: 予約ボタン
-      var bookBtns = slugs.map(function(slug) {
-        return '<button onclick="window._heroBookNow(\'' + slug + '\', this)" ' +
+      // 自社ホテル: 予約ボタン（マークダウンリンクから取得した実名を使用）
+      var bookBtns = hotelEntries.map(function(h) {
+        var label = h.name
+          ? h.name.slice(0, 30)
+          : h.slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0, 30);
+        return '<button onclick="window._heroBookNow(\'' + h.slug + '\', this)" ' +
           'class="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-gray-900 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">' +
-          '🏨 予約する — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30) +
+          '🏨 予約する — ' + label +
           '</button>';
       }).join('');
 
