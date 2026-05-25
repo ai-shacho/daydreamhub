@@ -43,3 +43,40 @@ export const GET: APIRoute = async ({ request, locals, url }) => {
     headers: { 'Content-Type': 'application/json' },
   });
 };
+
+export const POST: APIRoute = async ({ request, locals }) => {
+  const runtime = (locals as any).runtime;
+  const env = runtime?.env;
+  const db = env?.DB;
+  if (!db) return new Response(JSON.stringify({ error: 'DB not available' }), { status: 500 });
+
+  try {
+    const body = await request.json();
+    const { hotel_name, contact_person, phone, email, whatsapp, notes } = body;
+
+    if (!contact_person && !hotel_name) {
+      return new Response(JSON.stringify({ error: 'contact_person or hotel_name required' }), { status: 400 });
+    }
+
+    const now = new Date().toISOString();
+    const result = await db.prepare(`
+      INSERT INTO crm_leads (hotel_name, contact_person, phone, email, whatsapp, progress, notes, created_at, last_updated)
+      VALUES (?, ?, ?, ?, ?, 'new', ?, ?, ?)
+    `).bind(
+      hotel_name || null,
+      contact_person || null,
+      phone || null,
+      email || null,
+      whatsapp || null,
+      notes || null,
+      now,
+      now
+    ).run();
+
+    return new Response(JSON.stringify({ success: true, id: result.meta?.last_row_id }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+  }
+};

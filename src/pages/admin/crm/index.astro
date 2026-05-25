@@ -9,6 +9,7 @@ const title = 'CRM - Daydreamhub';
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-3xl font-bold">CRM 案件管理</h1>
       <div class="flex gap-2">
+        <button onclick="showAddLeadModal()" class="btn btn-primary btn-sm">+ 新規追加</button>
         <a href="/admin/crm?format=csv" class="btn btn-outline btn-sm">CSVエクスポート</a>
         <button onclick="refreshLeads()" class="btn btn-primary btn-sm">更新</button>
       </div>
@@ -133,5 +134,89 @@ const title = 'CRM - Daydreamhub';
     });
 
     window.refreshLeads = refreshLeads;
+
+    // New Lead Modal functions
+    function showAddLeadModal() {
+      const modal = document.getElementById('add-lead-modal');
+      if (modal) modal.showModal();
+    }
+
+    function closeAddLeadModal() {
+      const modal = document.getElementById('add-lead-modal');
+      if (modal) modal.close();
+    }
+
+    async function submitNewLead(event) {
+      event.preventDefault();
+      const form = event.target;
+      const data = {
+        hotel_name: form.hotel_name.value,
+        contact_person: form.contact_person.value,
+        phone: form.phone.value,
+        email: form.email.value,
+        whatsapp: form.whatsapp.value,
+        notes: form.notes.value,
+      };
+
+      try {
+        const res = await fetch('/api/crm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+        if (result.success) {
+          closeAddLeadModal();
+          form.reset();
+          await refreshLeads();
+          alert('新規案件を登録しました');
+        } else {
+          alert('登録失敗: ' + (result.error || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('エラーが発生しました: ' + e.message);
+      }
+    }
   </script>
+
+  <!-- New Lead Modal -->
+  <dialog id="add-lead-modal" class="modal">
+    <div class="modal-box w-11/12 max-w-lg">
+      <h3 class="font-bold text-lg mb-4">新規案件追加</h3>
+      <form id="add-lead-form" onsubmit="submitNewLead(event)">
+        <div class="grid grid-cols-1 gap-3">
+          <div class="form-control">
+            <label class="label"><span class="label-text">ホテル名 / 企業名</span></label>
+            <input type="text" name="hotel_name" class="input input-bordered" placeholder="例: 東京ホテル" />
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">担当者名</span></label>
+            <input type="text" name="contact_person" class="input input-bordered" placeholder="例: 山田太郎" required />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="form-control">
+              <label class="label"><span class="label-text">電話番号</span></label>
+              <input type="tel" name="phone" class="input input-bordered" placeholder="03-1234-5678" />
+            </div>
+            <div class="form-control">
+              <label class="label"><span class="label-text">メール</span></label>
+              <input type="email" name="email" class="input input-bordered" placeholder="info@example.com" />
+            </div>
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">WhatsApp</span></label>
+            <input type="text" name="whatsapp" class="input input-bordered" placeholder="+819012345678" />
+          </div>
+          <div class="form-control">
+            <label class="label"><span class="label-text">メモ</span></label>
+            <textarea name="notes" class="textarea textarea-bordered" placeholder="初回連絡メモなど"></textarea>
+          </div>
+        </div>
+        <div class="modal-action mt-6">
+          <button type="button" onclick="closeAddLeadModal()" class="btn">キャンセル</button>
+          <button type="submit" class="btn btn-primary">登録する</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
 </AdminLayout>
