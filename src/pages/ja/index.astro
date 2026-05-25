@@ -1093,15 +1093,29 @@ function escHtml(s) {
     messagesEl.classList.remove('hidden');
   }
 
-  // Parse hotel slugs from text (e.g. /hotel/some-slug)
+  // Parse hotel slugs from text — returns [{slug, name}]
+  // Extracts name from markdown links [Hotel Name](/hotel/slug) when available
   function extractHotelSlugs(text) {
-    var slugs = [];
-    var re = /\/hotel\/([\w-]+)/g;
+    var hotels = [];
+    var seen = {};
+    // Markdown links: [Hotel Name](/hotel/slug) or [Hotel Name](/ja/hotel/slug)
+    var linkRe = /\[([^\]]+)\]\(\/(?:ja\/)?hotel\/([\w-]+)\)/g;
     var m;
-    while ((m = re.exec(text)) !== null) {
-      if (!slugs.includes(m[1])) slugs.push(m[1]);
+    while ((m = linkRe.exec(text)) !== null) {
+      if (!seen[m[2]]) {
+        seen[m[2]] = true;
+        hotels.push({ slug: m[2], name: m[1].trim() });
+      }
     }
-    return slugs;
+    // Fallback: bare /hotel/slug without label
+    var bareRe = /\/(?:ja\/)?hotel\/([\w-]+)/g;
+    while ((m = bareRe.exec(text)) !== null) {
+      if (!seen[m[1]]) {
+        seen[m[1]] = true;
+        hotels.push({ slug: m[1], name: null });
+      }
+    }
+    return hotels;
   }
 
   // Render text with hotel links converted to clickable cards
