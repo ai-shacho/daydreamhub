@@ -9,9 +9,9 @@ const title = 'CRM - Daydreamhub';
     <div class="flex justify-between items-center mb-6">
       <h1 class="text-3xl font-bold">CRM 案件管理</h1>
       <div class="flex gap-2">
-        <button onclick="showAddLeadModal()" class="btn btn-primary btn-sm">+ 新規追加</button>
+        <button id="btn-add-lead" class="btn btn-primary btn-sm">+ 新規追加</button>
         <a href="/admin/crm?format=csv" class="btn btn-outline btn-sm">CSVエクスポート</a>
-        <button onclick="refreshLeads()" class="btn btn-primary btn-sm">更新</button>
+        <button id="btn-refresh" class="btn btn-primary btn-sm">更新</button>
       </div>
     </div>
 
@@ -46,7 +46,7 @@ const title = 'CRM - Daydreamhub';
     </div>
   </div>
 
-  <script>
+  <script is:inline>
     let currentTab = 'all';
     let leadsData = [];
 
@@ -130,6 +130,17 @@ const title = 'CRM - Daydreamhub';
 
     // Initial load
     document.addEventListener('DOMContentLoaded', () => {
+      // Attach button listeners (Astro script scope fix)
+      const btnAdd = document.getElementById('btn-add-lead');
+      if (btnAdd) btnAdd.addEventListener('click', showAddLeadModal);
+
+      const btnRefresh = document.getElementById('btn-refresh');
+      if (btnRefresh) btnRefresh.addEventListener('click', () => refreshLeads());
+
+      const form = document.getElementById('add-lead-form');
+      if (form) form.addEventListener('submit', submitNewLead);
+
+      // Modal close button already has onclick but with is:inline it works; keep for now
       refreshLeads();
     });
 
@@ -183,7 +194,7 @@ const title = 'CRM - Daydreamhub';
   <dialog id="add-lead-modal" class="modal">
     <div class="modal-box w-11/12 max-w-lg">
       <h3 class="font-bold text-lg mb-4">新規案件追加</h3>
-      <form id="add-lead-form" onsubmit="submitNewLead(event)">
+      <form id="add-lead-form">
         <div class="grid grid-cols-1 gap-3">
           <div class="form-control">
             <label class="label"><span class="label-text">ホテル名 / 企業名</span></label>
