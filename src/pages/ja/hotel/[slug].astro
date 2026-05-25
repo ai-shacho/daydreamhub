@@ -670,8 +670,11 @@ for (const img of images) {
     pointer-events: none;
   }
 </style>
-<script is:inline>
+<script is:inline define:vars={{ _ga4HotelName: hotel?.name ?? '', _ga4HotelCity: hotel?.city ?? '' }}>
 (function() {
+  function _ga4Send(eventName, params) {
+    if (typeof gtag === 'function') gtag('event', eventName, params);
+  }
   // Gallery thumbnails
   var mainImg = document.getElementById('gallery-main');
   if (mainImg) {
@@ -746,6 +749,11 @@ for (const img of images) {
         }
         return;
       }
+      _ga4Send('begin_checkout', {
+        hotel_name: _ga4HotelName,
+        hotel_city: _ga4HotelCity,
+        plan_id: planId
+      });
       window.location.href = btn.dataset.href + '?date=' + dateInput.value;
     });
   });

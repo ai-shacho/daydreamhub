@@ -1,5 +1,5 @@
 ---
-const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = 'en_US' } = Astro.props || { planId: 0, priceUsd: 0, clientId: '', testMode: false, hotelSlug: '', locale: 'en_US' }
+const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = 'en_US', hotelName = '', hotelCity = '' } = Astro.props || { planId: 0, priceUsd: 0, clientId: '', testMode: false, hotelSlug: '', locale: 'en_US', hotelName: '', hotelCity: '' }
 const usePayPal = !testMode && clientId && clientId !== 'sandbox' && clientId.length > 10;
 // Evaluated at build/SSR time — becomes `false` in production bundle
 const isDev = import.meta.env.DEV;
@@ -112,7 +112,10 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
 </div>
 
-<script define:vars={{ isDev, isTestHotel, testMode, usePayPal, clientId, planId }}>
+<script define:vars={{ isDev, isTestHotel, testMode, usePayPal, clientId, planId, hotelName, hotelCity }}>
+  function _ga4Send(eventName, params) {
+    if (typeof gtag === 'function') gtag('event', eventName, params);
+  }
   function init() {
   // ─── i18n messages (shared across all payment modes) ─────────────────────
   const POPUP_MESSAGES = {
@@ -273,6 +276,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     // Test mode: simulate PayPal payment via /api/payments/test-capture
     document.getElementById('test-pay-btn')?.addEventListener('click', async () => {
       if (!validateForm()) return;
+      _ga4Send('add_payment_info', { hotel_name: hotelName, hotel_city: hotelCity, payment_type: 'paypal_test', plan_id: planId });
 
       const btn = document.getElementById('test-pay-btn');
       const btnText = document.getElementById('test-btn-text');
@@ -331,6 +335,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     // Direct booking (PayPal bypass)
     document.getElementById('direct-book-btn')?.addEventListener('click', async () => {
       if (!validateForm()) return;
+      _ga4Send('add_payment_info', { hotel_name: hotelName, hotel_city: hotelCity, payment_type: 'direct', plan_id: planId });
 
       const btn = document.getElementById('direct-book-btn');
       const btnText = document.getElementById('btn-text');
@@ -437,6 +442,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
         createOrder: async () => {
           hidePopup();
           if (!validateForm()) throw new Error('Form validation failed');
+          _ga4Send('add_payment_info', { hotel_name: hotelName, hotel_city: hotelCity, payment_type: 'paypal', plan_id: planId });
           const form = document.getElementById('booking-form');
           const fd = new FormData(form);
           const res = await fetch('/api/payments/create', {
