@@ -60,10 +60,14 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
       )
     );
 
-    // Update lead: last_updated, progress logic
+    // Update lead: last_updated, progress logic (including '掲載' case)
     let newProgress = result === 'lost' ? 'lost' : (result === 'won' ? 'won' : 'in_progress');
     if (report_type === 'セットアップ' && result === 'completed') {
       newProgress = 'completed';
+    }
+    // Allow explicit progress override from body for '掲載' etc.
+    if (body.progress) {
+      newProgress = body.progress;
     }
 
     statements.push(
@@ -76,6 +80,23 @@ export const POST: APIRoute = async ({ params, request, locals }) => {
         WHERE id = ?
       `).bind(newProgress, report_type, leadId)
     );
+
+    // If progress becomes '掲載', also update the hotels table to published
+    if (newProgress === '掲載') {
+      // Get hotel_id first
+      const leadRow = await db.prepare('SELECT hotel_id FROM crm_leads WHERE id = ?').bind(leadId).first();
+      if (leadRow && (leadRow as any).hotel_id) {
+        statements.push(
+          db.prepare(`
+            UPDATE hotels SET
+              status = 'published',
+              is_active = 1,
+              published_at = datetime('now')
+            WHERE id = ?
+          `).bind((leadRow as any).hotel_id)
+        );
+      }
+    }
 
     await db.batch(statements);
 

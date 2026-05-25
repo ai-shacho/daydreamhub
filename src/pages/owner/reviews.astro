@@ -1,6 +1,7 @@
 ---
 import OwnerLayout from '../../layouts/OwnerLayout.astro';
 import { verifyOwner } from '../../lib/ownerAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -201,7 +202,7 @@ function renderStars(rating: number) {
                 <td colspan="9" class="px-6 py-4">
                   {r.reply_content && (
                     <div class="mb-3">
-                      <p class="text-xs font-medium text-indigo-600 mb-1">Your Reply ({r.reply_date?.slice(0, 10)}):</p>
+                      <p class="text-xs font-medium text-indigo-600 mb-1">Your Reply ({formatDisplayDate(r.reply_date)}):</p>
                       <p class="text-sm text-slate-700 bg-white rounded p-3 border border-slate-200">{r.reply_content}</p>
                     </div>
                   )}
