@@ -22,14 +22,14 @@ try {
   if (db) {
     dbAvailable = true;
     const countResult = await db.prepare(
-      `SELECT COUNT(*) as count FROM hotels WHERE city LIKE ? AND status = 'active'`
+      `SELECT COUNT(*) as count FROM hotels WHERE city LIKE ? AND status = 'active' AND name NOT LIKE 'Test%'`
     ).bind(`%${cityName}%`).first();
     total = countResult?.count || 0;
 
     const result = await db.prepare(
       `SELECT h.*, MIN(p.price_usd) as min_price FROM hotels h
        LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
-       WHERE h.city LIKE ? AND h.status = 'active'
+       WHERE h.city LIKE ? AND h.status = 'active' AND h.name NOT LIKE 'Test%'
        GROUP BY h.id
        ORDER BY h.created_at DESC
        LIMIT ? OFFSET ?`
@@ -40,7 +40,7 @@ try {
     if (hotels.length === 0) {
       const countResult2 = await db.prepare(
         `SELECT COUNT(*) as count FROM hotels
-         WHERE REPLACE(REPLACE(LOWER(city), ' ', '-'), '_', '-') = LOWER(?) AND status = 'active'`
+         WHERE REPLACE(REPLACE(LOWER(city), ' ', '-'), '_', '-') = LOWER(?) AND status = 'active' AND name NOT LIKE 'Test%'`
       ).bind(slug).first();
       total = countResult2?.count || 0;
 
@@ -48,7 +48,7 @@ try {
         `SELECT h.*, MIN(p.price_usd) as min_price FROM hotels h
          LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
          WHERE REPLACE(REPLACE(LOWER(h.city), ' ', '-'), '_', '-') = LOWER(?)
-           AND h.status = 'active'
+           AND h.status = 'active' AND h.name NOT LIKE 'Test%'
          GROUP BY h.id
          ORDER BY h.created_at DESC
          LIMIT ? OFFSET ?`
