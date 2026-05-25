@@ -84,9 +84,9 @@ try {
       await Promise.all([
         heroQuery,
         DB.prepare(
-          `SELECT city, country, COUNT(*) as hotel_count
+          `SELECT TRIM(city) as city, TRIM(country) as country, COUNT(*) as hotel_count
            FROM hotels WHERE city != '' AND status = 'active'
-           GROUP BY city ORDER BY hotel_count DESC LIMIT 60`
+           GROUP BY TRIM(LOWER(city)), TRIM(LOWER(country)) ORDER BY hotel_count DESC LIMIT 60`
         ).all().catch(() => ({ results: [] })),
         DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE status = 'active'").first().catch(() => ({ c: 0 })),
         DB.prepare("SELECT COUNT(*) as c FROM plans WHERE status = 'active'").first().catch(() => ({ c: 0 })),
@@ -1803,9 +1803,15 @@ function escHtml(s) {
     {city:"Buenos Aires",country:"Argentina"},{city:"Lima",country:"Peru"},{city:"Bogotá",country:"Colombia"},
   ];
 
-  // DBの自社登録都市（優先表示）
-  var dbCities = (allCities || []).map(function(c) {
-    return { city: c.city, country: c.country, inDB: true };
+  // DBの自社登録都市（優先表示）— city+country キーで重複除去
+  var dbCities = [];
+  var dbCitySet = {};
+  (allCities || []).forEach(function(c) {
+    var key = (c.city || '').toLowerCase().trim() + '__' + (c.country || '').toLowerCase().trim();
+    if (!dbCitySet[key]) {
+      dbCitySet[key] = true;
+      dbCities.push({ city: (c.city || '').trim(), country: (c.country || '').trim(), inDB: true });
+    }
   });
   var dbCityKeys = new Set(dbCities.map(function(c){ return c.city.toLowerCase(); }));
 
@@ -1869,12 +1875,28 @@ function escHtml(s) {
     }
     var nq = normalize(q);
     var prefixDB = [], prefixWorld = [], containsDB = [], containsWorld = [];
+    // 国名のみマッチの場合、同一国は1件のみ表示（重複防止）
+    var seenCountryPrefix = {}, seenCountryContains = {};
     cities.forEach(function(c) {
       var nc = normalize(c.city), nco = normalize(c.country);
-      var isPrefix = nc.startsWith(nq) || nco.startsWith(nq);
-      var isContains = !isPrefix && (nc.includes(nq) || nco.includes(nq));
-      if (isPrefix) { c.inDB ? prefixDB.push(c) : prefixWorld.push(c); }
-      else if (isContains) { c.inDB ? containsDB.push(c) : containsWorld.push(c); }
+      var cityPrefix = nc.startsWith(nq);
+      var countryPrefix = nco.startsWith(nq);
+      var cityContains = nc.includes(nq);
+      var countryContains = nco.includes(nq);
+      if (cityPrefix || cityContains) {
+        if (cityPrefix) { c.inDB ? prefixDB.push(c) : prefixWorld.push(c); }
+        else { c.inDB ? containsDB.push(c) : containsWorld.push(c); }
+      } else if (countryPrefix) {
+        if (!seenCountryPrefix[nco]) {
+          seenCountryPrefix[nco] = true;
+          c.inDB ? prefixDB.push(c) : prefixWorld.push(c);
+        }
+      } else if (countryContains) {
+        if (!seenCountryContains[nco]) {
+          seenCountryContains[nco] = true;
+          c.inDB ? containsDB.push(c) : containsWorld.push(c);
+        }
+      }
     });
     return prefixDB.concat(prefixWorld).concat(containsDB).concat(containsWorld).slice(0, 10);
   }
