@@ -16,7 +16,7 @@ try {
   if (db) {
     dbAvailable = true;
     const result = await db.prepare(
-      `SELECT id, title, title_ja, slug, excerpt, content, content_ja, city, thumbnail_url, published_at
+      `SELECT id, title, title_ja, slug, excerpt, excerpt_ja, content, content_ja, city, thumbnail_url, published_at
        FROM blog_posts
        WHERE slug = ?
        LIMIT 1`

@@ -66,12 +66,12 @@ try {
 
     const result = params.length
       ? await db.prepare(
-          `SELECT id, title, title_ja, slug, excerpt, city, thumbnail_url, published_at
+          `SELECT id, title, title_ja, slug, excerpt, excerpt_ja, city, thumbnail_url, published_at
            FROM blog_posts ${whereStr}
            ORDER BY published_at DESC LIMIT ? OFFSET ?`
         ).bind(...params, perPage, offset).all()
       : await db.prepare(
-          `SELECT id, title, title_ja, slug, excerpt, city, thumbnail_url, published_at
+          `SELECT id, title, title_ja, slug, excerpt, excerpt_ja, city, thumbnail_url, published_at
            FROM blog_posts ${whereStr}
            ORDER BY published_at DESC LIMIT ? OFFSET ?`
         ).bind(perPage, offset).all();
