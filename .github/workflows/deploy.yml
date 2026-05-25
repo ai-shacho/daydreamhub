@@ -68,6 +68,9 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply daydreamhub-db --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         # Removed continue-on-error to ensure migration failures are visible in CI logs
         # DB name and migrations_dir confirmed correct in wrangler.toml (daydreamhub-db, d1/migrations)
 
