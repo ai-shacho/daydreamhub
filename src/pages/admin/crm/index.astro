@@ -5,91 +5,133 @@ const title = 'CRM - Daydreamhub';
 ---
 
 <AdminLayout title={title} activeNav="crm">
-  <!-- Screen wrapper: exactly as required -->
-  <div class="bg-base-200 min-h-screen p-6">
-    <!-- Content card wrapper: exactly as required -->
-    <div class="card bg-base-100 shadow-xl max-w-[1280px] mx-auto">
-      <div class="card-body p-6">
-        <!-- Header -->
-        <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
-          <div>
-            <h1 class="text-3xl font-bold text-base-content">CRM 案件管理</h1>
-            <p class="text-sm text-base-content/60 mt-1">Salesforce基準の商用CRM UI</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button id="btn-add-lead" class="btn btn-primary gap-2">
-              <span>+</span>
-              <span>新規追加</span>
-            </button>
-            <a href="/admin/crm?format=csv" class="btn btn-outline gap-2">CSVエクスポート</a>
-            <button id="btn-refresh" class="btn btn-outline gap-2">更新</button>
-          </div>
-        </div>
+  <div class="min-h-screen bg-gray-50 text-gray-900 p-8">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+      <h1 class="text-3xl font-bold text-gray-800">CRM 案件管理</h1>
+      <div class="flex gap-3">
+        <button id="btn-add-lead" class="btn btn-primary bg-blue-600 hover:bg-blue-700 text-white border-none shadow-sm">
+          + 新規リード
+        </button>
+        <button id="btn-export" class="btn btn-outline border-gray-300 text-gray-700 hover:bg-gray-100">
+          CSVエクスポート
+        </button>
+        <button id="btn-refresh" class="btn btn-outline border-gray-300 text-gray-700 hover:bg-gray-100">
+          更新
+        </button>
+      </div>
+    </div>
 
-        <!-- Tabs -->
-        <div class="mb-6">
-          <div class="tabs tabs-bordered">
-            <a class="tab tab-active font-semibold text-primary border-b-2 border-primary" data-tab="all">すべての案件</a>
-            <a class="tab" data-tab="today">今日の追客</a>
-            <a class="tab" data-tab="followup">追客必要</a>
-            <a class="tab" data-tab="new">新規</a>
-          </div>
-        </div>
+    <!-- Main Card -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <!-- Tabs -->
+      <div class="tabs tabs-bordered px-6 pt-4 border-b border-gray-200">
+        <a class="tab tab-active !border-blue-600 !text-blue-600 font-semibold" data-tab="all">すべてのリード</a>
+        <a class="tab" data-tab="new">新規</a>
+        <a class="tab" data-tab="followup">追客必要</a>
+        <a class="tab" data-tab="closed">成約/失注</a>
+      </div>
 
-        <!-- Status Alerts -->
-        <div id="status-alerts" class="mb-6"></div>
-
-        <!-- Table Card -->
-        <div class="card bg-base-100 shadow-sm border border-base-300">
-          <div class="card-body p-0">
-            <div class="overflow-x-auto">
-              <table class="table w-full">
-                <thead>
-                  <tr class="border-b border-base-300 bg-base-200/50">
-                    <th class="font-semibold text-base-content/80 px-6 py-4">ID</th>
-                    <th class="font-semibold text-base-content/80 px-6 py-4">ホテル / 担当者</th>
-                    <th class="font-semibold text-base-content/80 px-6 py-4">進捗</th>
-                    <th class="font-semibold text-base-content/80 px-6 py-4">連絡先</th>
-                    <th class="font-semibold text-base-content/80 px-6 py-4">最終更新</th>
-                    <th class="font-semibold text-base-content/80 px-6 py-4 text-right">アクション</th>
-                  </tr>
-                </thead>
-                <tbody id="leads-tbody" class="divide-y divide-base-200">
-                  <!-- Populated by JS -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+      <!-- Table -->
+      <div class="overflow-x-auto">
+        <table class="table w-full">
+          <thead class="bg-gray-50 text-gray-500 font-medium text-sm">
+            <tr>
+              <th class="px-6 py-4">ID</th>
+              <th class="px-6 py-4">企業 / 担当者</th>
+              <th class="px-6 py-4">ステータス</th>
+              <th class="px-6 py-4">連絡先</th>
+              <th class="px-6 py-4">最終更新</th>
+              <th class="px-6 py-4 text-right">アクション</th>
+            </tr>
+          </thead>
+          <tbody id="leads-tbody" class="divide-y divide-gray-100">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
+
+  <!-- Add Lead Modal - Strict structure -->
+  <dialog id="add-lead-modal" class="modal">
+    <div class="modal-box bg-white max-w-2xl rounded-xl shadow-2xl">
+      <h3 class="font-bold text-xl mb-6 text-gray-800">新規リード登録</h3>
+      
+      <form id="add-lead-form">
+        <div class="form-control w-full mb-4">
+          <label class="label"><span class="label-text font-semibold text-gray-700">企業名 / ホテル名</span></label>
+          <input type="text" name="company" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例: 東京グランドホテル" required />
+        </div>
+
+        <div class="form-control w-full mb-4">
+          <label class="label"><span class="label-text font-semibold text-gray-700">担当者名</span></label>
+          <input type="text" name="contact_person" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="例: 山田太郎" required />
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full mb-4">
+            <label class="label"><span class="label-text font-semibold text-gray-700">電話番号</span></label>
+            <input type="tel" name="phone" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="03-1234-5678" />
+          </div>
+          <div class="form-control w-full mb-4">
+            <label class="label"><span class="label-text font-semibold text-gray-700">メールアドレス</span></label>
+            <input type="email" name="email" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="info@example.com" />
+          </div>
+        </div>
+
+        <div class="form-control w-full mb-4">
+          <label class="label"><span class="label-text font-semibold text-gray-700">WhatsApp</span></label>
+          <input type="text" name="whatsapp" class="input input-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" placeholder="+819012345678" />
+        </div>
+
+        <div class="form-control w-full mb-6">
+          <label class="label"><span class="label-text font-semibold text-gray-700">メモ・備考</span></label>
+          <textarea name="notes" class="textarea textarea-bordered w-full bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" rows="3" placeholder="初回連絡内容など"></textarea>
+        </div>
+
+        <div class="flex justify-end gap-3">
+          <button type="button" onclick="closeAddLeadModal()" class="btn btn-outline border-gray-300 text-gray-700 hover:bg-gray-100">キャンセル</button>
+          <button type="submit" class="btn btn-primary bg-blue-600 hover:bg-blue-700 text-white border-none">登録する</button>
+        </div>
+      </form>
+    </div>
+    
+    <!-- Modal backdrop for background click close -->
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
 
   <script is:inline>
     let currentTab = 'all';
     let leadsData = [];
 
-    async function fetchLeads(progressFilter = null) {
-      const params = new URLSearchParams();
-      if (progressFilter) params.set('progress', progressFilter);
-      const res = await fetch(`/api/crm?${params}`);
-      const data = await res.json();
-      return data.leads || [];
+    async function fetchLeads(filter = null) {
+      try {
+        const params = new URLSearchParams();
+        if (filter) params.set('filter', filter);
+        const res = await fetch(`/api/crm?${params}`);
+        if (!res.ok) throw new Error('API error');
+        const data = await res.json();
+        return data.leads || [];
+      } catch (e) {
+        console.error(e);
+        return [];
+      }
     }
 
-    function renderStatusAlerts(leads) {
-      const container = document.getElementById('status-alerts');
-      const counts = { new: 0, in_progress: 0, won: 0, lost: 0, '掲載': 0 };
-      leads.forEach(l => { if (counts[l.progress] !== undefined) counts[l.progress]++; });
-
-      container.innerHTML = `
-        <div class="flex gap-2 flex-wrap">
-          <div class="badge badge-info gap-2 px-3 py-3 text-sm font-medium">新規: ${counts.new}</div>
-          <div class="badge badge-warning gap-2 px-3 py-3 text-sm font-medium">進行中: ${counts.in_progress}</div>
-          <div class="badge badge-success gap-2 px-3 py-3 text-sm font-medium">成約/掲載: ${counts.won + counts['掲載']}</div>
-          <div class="badge badge-error gap-2 px-3 py-3 text-sm font-medium">失注: ${counts.lost}</div>
-        </div>
-      `;
+    function getStatusBadge(progress) {
+      if (progress === 'new' || progress === '新規') {
+        return '<span class="badge badge-info badge-sm font-medium px-2 py-3">新規</span>';
+      } else if (progress === 'in_progress' || progress === '進行中') {
+        return '<span class="badge badge-warning badge-sm font-medium px-2 py-3">進行中</span>';
+      } else if (progress === 'won' || progress === '成約' || progress === '掲載') {
+        return '<span class="badge badge-success badge-sm font-medium px-2 py-3">成約</span>';
+      } else if (progress === 'lost' || progress === '失注') {
+        return '<span class="badge badge-error badge-sm font-medium px-2 py-3">失注</span>';
+      }
+      return '<span class="badge badge-ghost badge-sm font-medium px-2 py-3">' + (progress || '-') + '</span>';
     }
 
     function renderLeads(leads) {
@@ -97,37 +139,24 @@ const title = 'CRM - Daydreamhub';
       tbody.innerHTML = '';
 
       leads.forEach(lead => {
-        let statusBadge = '';
-        if (lead.progress === 'new') {
-          statusBadge = '<span class="badge badge-info badge-sm font-medium">新規</span>';
-        } else if (lead.progress === 'in_progress') {
-          statusBadge = '<span class="badge badge-warning badge-sm font-medium">進行中</span>';
-        } else if (lead.progress === 'won' || lead.progress === '掲載') {
-          statusBadge = '<span class="badge badge-success badge-sm font-medium">成約</span>';
-        } else if (lead.progress === 'lost') {
-          statusBadge = '<span class="badge badge-error badge-sm font-medium">失注</span>';
-        } else {
-          statusBadge = '<span class="badge badge-ghost badge-sm font-medium">' + lead.progress + '</span>';
-        }
-
-        const contactLinks = [];
-        if (lead.phone) contactLinks.push(`<a href="tel:${lead.phone}" class="btn btn-xs btn-ghost">☎</a>`);
-        if (lead.email) contactLinks.push(`<a href="mailto:${lead.email}" class="btn btn-xs btn-ghost">✉</a>`);
-        if (lead.whatsapp) contactLinks.push(`<a href="https://wa.me/${lead.whatsapp.replace(/\D/g,'')}" target="_blank" class="btn btn-xs btn-ghost">WA</a>`);
-
         const row = document.createElement('tr');
-        row.className = 'hover:bg-base-200/60 border-b border-base-200 transition-colors';
+        row.className = 'border-b border-gray-100 hover:bg-gray-50 transition-colors';
+        
+        const contactHtml = [];
+        if (lead.phone) contactHtml.push(`<a href="tel:${lead.phone}" class="btn btn-xs btn-ghost">☎</a>`);
+        if (lead.email) contactHtml.push(`<a href="mailto:${lead.email}" class="btn btn-xs btn-ghost">✉</a>`);
+        
         row.innerHTML = `
-          <td class="px-6 py-4 font-mono text-sm text-base-content/70">${lead.id}</td>
+          <td class="px-6 py-4 font-mono text-sm text-gray-500">${lead.id || '-'}</td>
           <td class="px-6 py-4">
-            <a href="/admin/crm/${lead.id}" class="link link-primary font-medium">${lead.contact_person || '未設定'}</a>
-            <div class="text-xs text-base-content/50">ID: ${lead.hotel_id || '-'}</div>
+            <div class="font-medium text-gray-900">${lead.contact_person || lead.company || '未設定'}</div>
+            <div class="text-xs text-gray-500">${lead.company || lead.hotel_name || ''}</div>
           </td>
-          <td class="px-6 py-4">${statusBadge}</td>
-          <td class="px-6 py-4"><div class="flex gap-1">${contactLinks.join('')}</div></td>
-          <td class="px-6 py-4 text-sm text-base-content/70">${lead.last_updated ? new Date(lead.last_updated).toLocaleDateString('ja-JP') : '-'}</td>
+          <td class="px-6 py-4">${getStatusBadge(lead.progress)}</td>
+          <td class="px-6 py-4"><div class="flex gap-1">${contactHtml.join('')}</div></td>
+          <td class="px-6 py-4 text-sm text-gray-500">${lead.last_updated ? new Date(lead.last_updated).toLocaleDateString('ja-JP') : '-'}</td>
           <td class="px-6 py-4 text-right">
-            <a href="/admin/crm/${lead.id}" class="btn btn-xs btn-primary">詳細</a>
+            <a href="/admin/crm/${lead.id || ''}" class="btn btn-xs btn-primary bg-blue-600 hover:bg-blue-700 border-none">詳細</a>
           </td>
         `;
         tbody.appendChild(row);
@@ -136,41 +165,8 @@ const title = 'CRM - Daydreamhub';
 
     async function refreshLeads(filter = null) {
       leadsData = await fetchLeads(filter);
-      renderStatusAlerts(leadsData);
       renderLeads(leadsData);
     }
-
-    document.querySelectorAll('.tab').forEach(tab => {
-      tab.addEventListener('click', async () => {
-        document.querySelectorAll('.tab').forEach(t => {
-          t.classList.remove('tab-active', 'font-semibold', 'text-primary', 'border-b-2', 'border-primary');
-        });
-        tab.classList.add('tab-active', 'font-semibold', 'text-primary', 'border-b-2', 'border-primary');
-        currentTab = tab.dataset.tab;
-
-        let filter = null;
-        if (currentTab === 'new') filter = 'new';
-        else if (currentTab === 'followup') filter = null;
-        else if (currentTab === 'today') filter = null;
-
-        await refreshLeads(filter);
-      });
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-      const btnAdd = document.getElementById('btn-add-lead');
-      if (btnAdd) btnAdd.addEventListener('click', showAddLeadModal);
-
-      const btnRefresh = document.getElementById('btn-refresh');
-      if (btnRefresh) btnRefresh.addEventListener('click', () => refreshLeads());
-
-      const form = document.getElementById('add-lead-form');
-      if (form) form.addEventListener('submit', submitNewLead);
-
-      refreshLeads();
-    });
-
-    window.refreshLeads = refreshLeads;
 
     function showAddLeadModal() {
       const modal = document.getElementById('add-lead-modal');
@@ -185,13 +181,15 @@ const title = 'CRM - Daydreamhub';
     async function submitNewLead(event) {
       event.preventDefault();
       const form = event.target;
+      
       const data = {
-        hotel_name: form.hotel_name.value,
+        company: form.company.value,
         contact_person: form.contact_person.value,
         phone: form.phone.value,
         email: form.email.value,
         whatsapp: form.whatsapp.value,
         notes: form.notes.value,
+        progress: 'new'
       };
 
       try {
@@ -201,11 +199,12 @@ const title = 'CRM - Daydreamhub';
           body: JSON.stringify(data),
         });
         const result = await res.json();
+        
         if (result.success) {
           closeAddLeadModal();
           form.reset();
           await refreshLeads();
-          alert('新規案件を登録しました');
+          alert('新規リードを登録しました');
         } else {
           alert('登録失敗: ' + (result.error || 'Unknown error'));
         }
@@ -213,44 +212,51 @@ const title = 'CRM - Daydreamhub';
         alert('エラーが発生しました: ' + e.message);
       }
     }
-  </script>
 
-  <!-- Modal with strict DaisyUI form classes -->
-  <dialog id="add-lead-modal" class="modal">
-    <div class="modal-box w-11/12 max-w-lg">
-      <h3 class="font-bold text-lg mb-6">新規案件追加</h3>
-      <form id="add-lead-form" class="space-y-4">
-        <div class="form-control">
-          <label class="label"><span class="label-text font-medium">ホテル名 / 企業名</span></label>
-          <input type="text" name="hotel_name" class="input input-bordered w-full" placeholder="例: 東京ホテル" />
-        </div>
-        <div class="form-control">
-          <label class="label"><span class="label-text font-medium">担当者名</span></label>
-          <input type="text" name="contact_person" class="input input-bordered w-full" placeholder="例: 山田太郎" required />
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="form-control">
-            <label class="label"><span class="label-text font-medium">電話番号</span></label>
-            <input type="tel" name="phone" class="input input-bordered w-full" placeholder="03-1234-5678" />
-          </div>
-          <div class="form-control">
-            <label class="label"><span class="label-text font-medium">メール</span></label>
-            <input type="email" name="email" class="input input-bordered w-full" placeholder="info@example.com" />
-          </div>
-        </div>
-        <div class="form-control">
-          <label class="label"><span class="label-text font-medium">WhatsApp</span></label>
-          <input type="text" name="whatsapp" class="input input-bordered w-full" placeholder="+819012345678" />
-        </div>
-        <div class="form-control">
-          <label class="label"><span class="label-text font-medium">メモ</span></label>
-          <textarea name="notes" class="textarea textarea-bordered w-full" placeholder="初回連絡メモなど" rows="3"></textarea>
-        </div>
-        <div class="modal-action mt-6 flex justify-end gap-2">
-          <button type="button" onclick="closeAddLeadModal()" class="btn btn-ghost">キャンセル</button>
-          <button type="submit" class="btn btn-primary">登録する</button>
-        </div>
-      </form>
-    </div>
-  </dialog>
+    // Tab switching
+    function setupTabs() {
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', async () => {
+          document.querySelectorAll('.tab').forEach(t => {
+            t.classList.remove('tab-active', '!border-blue-600', '!text-blue-600', 'font-semibold');
+          });
+          tab.classList.add('tab-active', '!border-blue-600', '!text-blue-600', 'font-semibold');
+          
+          currentTab = tab.dataset.tab;
+          let filter = null;
+          if (currentTab === 'new') filter = 'new';
+          else if (currentTab === 'followup') filter = 'followup';
+          else if (currentTab === 'closed') filter = 'closed';
+          
+          await refreshLeads(filter);
+        });
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Buttons
+      const btnAdd = document.getElementById('btn-add-lead');
+      if (btnAdd) btnAdd.addEventListener('click', showAddLeadModal);
+
+      const btnRefresh = document.getElementById('btn-refresh');
+      if (btnRefresh) btnRefresh.addEventListener('click', () => refreshLeads());
+
+      const btnExport = document.getElementById('btn-export');
+      if (btnExport) btnExport.addEventListener('click', () => {
+        window.location.href = '/admin/crm?format=csv';
+      });
+
+      // Form
+      const form = document.getElementById('add-lead-form');
+      if (form) form.addEventListener('submit', submitNewLead);
+
+      // Tabs
+      setupTabs();
+
+      // Initial load
+      refreshLeads();
+    });
+
+    window.refreshLeads = refreshLeads;
+  </script>
 </AdminLayout>
