@@ -5,65 +5,60 @@ const title = 'CRM - Daydreamhub';
 ---
 
 <AdminLayout title={title} activeNav="crm">
-  <!-- Main container with bg-base-200, max-width and padding per design rules -->
-  <div class="bg-base-200 min-h-[calc(100vh-4rem)] p-6">
-    <div class="max-w-[1280px] mx-auto">
-      <!-- Header section wrapped in card -->
-      <div class="card bg-base-100 shadow-sm border border-base-300 mb-6">
-        <div class="card-body p-6">
-          <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4">
-            <div>
-              <h1 class="text-3xl font-bold text-base-content">CRM 案件管理</h1>
-              <p class="text-sm text-base-content/60 mt-1">Salesforce基準の商用CRM UI</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button id="btn-add-lead" class="btn btn-primary shadow-sm gap-2">
-                <span>+</span>
-                <span>新規追加</span>
-              </button>
-              <a href="/admin/crm?format=csv" class="btn btn-outline gap-2">
-                CSVエクスポート
-              </a>
-              <button id="btn-refresh" class="btn btn-outline gap-2">
-                更新
-              </button>
-            </div>
+  <!-- Screen wrapper: exactly as required -->
+  <div class="bg-base-200 min-h-screen p-6">
+    <!-- Content card wrapper: exactly as required -->
+    <div class="card bg-base-100 shadow-xl max-w-[1280px] mx-auto">
+      <div class="card-body p-6">
+        <!-- Header -->
+        <div class="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-6">
+          <div>
+            <h1 class="text-3xl font-bold text-base-content">CRM 案件管理</h1>
+            <p class="text-sm text-base-content/60 mt-1">Salesforce基準の商用CRM UI</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="btn-add-lead" class="btn btn-primary gap-2">
+              <span>+</span>
+              <span>新規追加</span>
+            </button>
+            <a href="/admin/crm?format=csv" class="btn btn-outline gap-2">CSVエクスポート</a>
+            <button id="btn-refresh" class="btn btn-outline gap-2">更新</button>
           </div>
         </div>
-      </div>
 
-      <!-- Tabs section - tabs-bordered, visually separated from table -->
-      <div class="mb-6">
-        <div class="tabs tabs-bordered">
-          <a class="tab tab-active font-semibold text-primary border-b-2 border-primary" data-tab="all">すべての案件</a>
-          <a class="tab" data-tab="today">今日の追客</a>
-          <a class="tab" data-tab="followup">追客必要</a>
-          <a class="tab" data-tab="new">新規</a>
+        <!-- Tabs -->
+        <div class="mb-6">
+          <div class="tabs tabs-bordered">
+            <a class="tab tab-active font-semibold text-primary border-b-2 border-primary" data-tab="all">すべての案件</a>
+            <a class="tab" data-tab="today">今日の追客</a>
+            <a class="tab" data-tab="followup">追客必要</a>
+            <a class="tab" data-tab="new">新規</a>
+          </div>
         </div>
-      </div>
 
-      <!-- Status Alerts -->
-      <div id="status-alerts" class="mb-6"></div>
+        <!-- Status Alerts -->
+        <div id="status-alerts" class="mb-6"></div>
 
-      <!-- Table section wrapped in card -->
-      <div class="card bg-base-100 shadow-sm border border-base-300">
-        <div class="card-body p-0">
-          <div class="overflow-x-auto">
-            <table class="table w-full">
-              <thead>
-                <tr class="border-b border-base-300 bg-base-200/50">
-                  <th class="font-semibold text-base-content/80 px-6 py-4">ID</th>
-                  <th class="font-semibold text-base-content/80 px-6 py-4">ホテル / 担当者</th>
-                  <th class="font-semibold text-base-content/80 px-6 py-4">進捗</th>
-                  <th class="font-semibold text-base-content/80 px-6 py-4">連絡先</th>
-                  <th class="font-semibold text-base-content/80 px-6 py-4">最終更新</th>
-                  <th class="font-semibold text-base-content/80 px-6 py-4 text-right">アクション</th>
-                </tr>
-              </thead>
-              <tbody id="leads-tbody" class="divide-y divide-base-200">
-                <!-- Populated by JS -->
-              </tbody>
-            </table>
+        <!-- Table Card -->
+        <div class="card bg-base-100 shadow-sm border border-base-300">
+          <div class="card-body p-0">
+            <div class="overflow-x-auto">
+              <table class="table w-full">
+                <thead>
+                  <tr class="border-b border-base-300 bg-base-200/50">
+                    <th class="font-semibold text-base-content/80 px-6 py-4">ID</th>
+                    <th class="font-semibold text-base-content/80 px-6 py-4">ホテル / 担当者</th>
+                    <th class="font-semibold text-base-content/80 px-6 py-4">進捗</th>
+                    <th class="font-semibold text-base-content/80 px-6 py-4">連絡先</th>
+                    <th class="font-semibold text-base-content/80 px-6 py-4">最終更新</th>
+                    <th class="font-semibold text-base-content/80 px-6 py-4 text-right">アクション</th>
+                  </tr>
+                </thead>
+                <tbody id="leads-tbody" class="divide-y divide-base-200">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
@@ -102,7 +97,6 @@ const title = 'CRM - Daydreamhub';
       tbody.innerHTML = '';
 
       leads.forEach(lead => {
-        // Color badges instead of emojis
         let statusBadge = '';
         if (lead.progress === 'new') {
           statusBadge = '<span class="badge badge-info badge-sm font-medium">新規</span>';
@@ -146,7 +140,6 @@ const title = 'CRM - Daydreamhub';
       renderLeads(leadsData);
     }
 
-    // Tab handling - tabs-bordered style
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', async () => {
         document.querySelectorAll('.tab').forEach(t => {
@@ -164,7 +157,6 @@ const title = 'CRM - Daydreamhub';
       });
     });
 
-    // Initial load
     document.addEventListener('DOMContentLoaded', () => {
       const btnAdd = document.getElementById('btn-add-lead');
       if (btnAdd) btnAdd.addEventListener('click', showAddLeadModal);
@@ -180,7 +172,6 @@ const title = 'CRM - Daydreamhub';
 
     window.refreshLeads = refreshLeads;
 
-    // New Lead Modal functions
     function showAddLeadModal() {
       const modal = document.getElementById('add-lead-modal');
       if (modal) modal.showModal();
@@ -224,36 +215,36 @@ const title = 'CRM - Daydreamhub';
     }
   </script>
 
-  <!-- New Lead Modal - form-control + input input-bordered focus:input-primary -->
+  <!-- Modal with strict DaisyUI form classes -->
   <dialog id="add-lead-modal" class="modal">
     <div class="modal-box w-11/12 max-w-lg">
       <h3 class="font-bold text-lg mb-6">新規案件追加</h3>
       <form id="add-lead-form" class="space-y-4">
         <div class="form-control">
           <label class="label"><span class="label-text font-medium">ホテル名 / 企業名</span></label>
-          <input type="text" name="hotel_name" class="input input-bordered focus:input-primary w-full" placeholder="例: 東京ホテル" />
+          <input type="text" name="hotel_name" class="input input-bordered w-full" placeholder="例: 東京ホテル" />
         </div>
         <div class="form-control">
           <label class="label"><span class="label-text font-medium">担当者名</span></label>
-          <input type="text" name="contact_person" class="input input-bordered focus:input-primary w-full" placeholder="例: 山田太郎" required />
+          <input type="text" name="contact_person" class="input input-bordered w-full" placeholder="例: 山田太郎" required />
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control">
             <label class="label"><span class="label-text font-medium">電話番号</span></label>
-            <input type="tel" name="phone" class="input input-bordered focus:input-primary w-full" placeholder="03-1234-5678" />
+            <input type="tel" name="phone" class="input input-bordered w-full" placeholder="03-1234-5678" />
           </div>
           <div class="form-control">
             <label class="label"><span class="label-text font-medium">メール</span></label>
-            <input type="email" name="email" class="input input-bordered focus:input-primary w-full" placeholder="info@example.com" />
+            <input type="email" name="email" class="input input-bordered w-full" placeholder="info@example.com" />
           </div>
         </div>
         <div class="form-control">
           <label class="label"><span class="label-text font-medium">WhatsApp</span></label>
-          <input type="text" name="whatsapp" class="input input-bordered focus:input-primary w-full" placeholder="+819012345678" />
+          <input type="text" name="whatsapp" class="input input-bordered w-full" placeholder="+819012345678" />
         </div>
         <div class="form-control">
           <label class="label"><span class="label-text font-medium">メモ</span></label>
-          <textarea name="notes" class="textarea textarea-bordered focus:input-primary w-full" placeholder="初回連絡メモなど" rows="3"></textarea>
+          <textarea name="notes" class="textarea textarea-bordered w-full" placeholder="初回連絡メモなど" rows="3"></textarea>
         </div>
         <div class="modal-action mt-6 flex justify-end gap-2">
           <button type="button" onclick="closeAddLeadModal()" class="btn btn-ghost">キャンセル</button>
