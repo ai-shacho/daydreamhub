@@ -432,6 +432,8 @@ const isTestHotel = hotelSlug.includes('test-hotel');
     // showPopup / hidePopup are defined at the top of init() (shared)
 
     // ─── PayPal buttons ───────────────────────────────────────────────────────
+    let _pendingBookingData = null;
+
     function renderPayPalButtons() {
       const container = document.getElementById('paypal-button-container');
       if (container) container.innerHTML = '';
@@ -445,19 +447,22 @@ const isTestHotel = hotelSlug.includes('test-hotel');
           _ga4Send('add_payment_info', { hotel_name: hotelName, hotel_city: hotelCity, payment_type: 'paypal', plan_id: planId });
           const form = document.getElementById('booking-form');
           const fd = new FormData(form);
+          // Store guest data in closure — sent to capture after PayPal approval
+          _pendingBookingData = {
+            plan_id: planId,
+            guest_name: fd.get('guest_name'),
+            guest_email: fd.get('guest_email'),
+            guest_phone: fd.get('guest_phone') || '',
+            check_in_date: fd.get('check_in_date'),
+            adults: parseInt(fd.get('adults') || '1'),
+            children: parseInt(fd.get('children') || '0'),
+            infants: parseInt(fd.get('infants') || '0'),
+            notes: fd.get('notes') || '',
+          };
           const res = await fetch('/api/payments/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              plan_id: planId,
-              guest_name: fd.get('guest_name'),
-              guest_email: fd.get('guest_email'),
-              guest_phone: fd.get('guest_phone'),
-              check_in_date: fd.get('check_in_date'),
-              adults: parseInt(fd.get('adults') || '1'),
-              children: parseInt(fd.get('children') || '0'),
-              notes: fd.get('notes'),
-            }),
+            body: JSON.stringify({ plan_id: planId }),
           });
           if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'Failed to create order');
           return (await res.json()).order_id;
@@ -467,7 +472,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
             const res = await fetch('/api/payments/capture', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ order_id: data.orderID }),
+              body: JSON.stringify({ order_id: data.orderID, ..._pendingBookingData }),
             });
             if (res.ok) {
               window.location.href = '/booking/confirmation?order=' + data.orderID;

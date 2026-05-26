@@ -47,12 +47,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const PAYPAL_SECRET = runtime?.env?.PAYPAL_SECRET;
   const PAYPAL_MODE = runtime?.env?.PAYPAL_MODE || 'live';
   const RESEND_API_KEY = runtime?.env?.RESEND_API_KEY;
+
   if (!db || !PAYPAL_CLIENT_ID || !PAYPAL_SECRET) {
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
   let body: any;
   try {
     body = await request.json();
@@ -62,76 +64,101 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  const { order_id } = body;
-  if (!order_id) {
-    return new Response(JSON.stringify({ error: 'Missing required field: order_id' }), {
+
+  const { order_id, plan_id, guest_name, guest_email, guest_phone, check_in_date, adults, children, infants, notes } = body;
+
+  if (!order_id || !plan_id || !guest_name || !guest_email || !check_in_date) {
+    return new Response(JSON.stringify({ error: 'Missing required fields' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  // Step 1: Find the booking by paypal_order_id (existence check only)
-  const booking = await db
-    .prepare('SELECT * FROM bookings WHERE paypal_order_id = ?')
-    .bind(order_id)
+  // Fetch plan to get hotel_id and price
+  const plan = await db
+    .prepare('SELECT id, hotel_id, name, price_usd FROM plans WHERE id = ?')
+    .bind(plan_id)
     .first();
-  if (!booking) {
-    return new Response(JSON.stringify({ error: 'Booking not found for this order' }), {
+
+  if (!plan) {
+    return new Response(JSON.stringify({ error: 'Plan not found' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  // Step 2: Atomic optimistic lock — only advance if status is 'pending'
-  // This prevents race conditions: only one request can set status to 'processing'
-  const lockResult = await db
-    .prepare(
-      "UPDATE bookings SET status = 'processing', updated_at = datetime('now') WHERE id = ? AND status = 'pending'"
-    )
-    .bind((booking as any).id)
-    .run();
+  const price_usd: number = (plan as any).price_usd;
+  const hotelId: number = (plan as any).hotel_id;
 
-  if (lockResult.meta.changes === 0) {
-    // Another request already grabbed the lock (processing) or payment already done
-    return new Response(
-      JSON.stringify({ error: 'Payment already captured or is currently being processed' }),
-      {
-        status: 409,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-  }
+  // Fee calculation (must match create.ts exactly)
+  const processingFee = Math.round(price_usd * 0.06 * 100) / 100;
+  const serviceFeeBase = Math.round(price_usd * 0.10 * 100) / 100;
+  const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
+  const totalAmount = Math.round((price_usd + processingFee + serviceFee) * 100) / 100;
 
-  // Step 3: Execute PayPal capture (we now hold the 'processing' lock)
   try {
-    const accessToken = await getAccessToken(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE || 'live');
-    const captureResult = await captureOrder(accessToken, order_id, PAYPAL_MODE || 'live');
+    const accessToken = await getAccessToken(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE);
+    const captureResult = await captureOrder(accessToken, order_id, PAYPAL_MODE);
     const captureStatus = captureResult.status;
 
     if (captureStatus === 'COMPLETED') {
-      // Step 4 (success): Update to pending_confirmation with capture ID
-      let captureId = null;
+      let captureId: string | null = null;
       try {
         const pu = captureResult.purchase_units;
         if (pu?.[0]?.payments?.captures?.[0]?.id) {
           captureId = pu[0].payments.captures[0].id;
         }
       } catch {}
-      await db
-        .prepare(
-          "UPDATE bookings SET status = 'pending_confirmation', paypal_capture_id = COALESCE(?, paypal_capture_id), updated_at = datetime('now') WHERE id = ?"
-        )
-        .bind(captureId, (booking as any).id)
-        .run();
 
-      // Auto-call: only for non-partner hotels (no email = no owner account)
-      // Partner hotels receive email notifications instead.
-      // To re-enable for all hotels, remove the email check below.
+      // Insert booking now that PayPal payment is confirmed
+      let bookingId: number | null = null;
       try {
-        const hotelForCall = await db.prepare('SELECT email FROM hotels WHERE id = ?').bind((booking as any).hotel_id).first() as any;
+        await db
+          .prepare(
+            `INSERT INTO bookings (
+              plan_id, hotel_id, guest_name, guest_email, guest_phone,
+              check_in_date, adults, children, infants, total_price_usd,
+              status, paypal_order_id, paypal_capture_id, notes, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?, ?, datetime('now'), datetime('now'))`
+          )
+          .bind(
+            plan_id,
+            hotelId,
+            guest_name,
+            guest_email,
+            guest_phone || '',
+            check_in_date,
+            adults || 1,
+            children || 0,
+            infants || 0,
+            totalAmount,
+            order_id,
+            captureId,
+            notes || ''
+          )
+          .run();
+        const row: any = await db.prepare('SELECT last_insert_rowid() as id').first();
+        bookingId = row?.id;
+      } catch (dbError) {
+        // Payment succeeded at PayPal but DB write failed — log for manual recovery
+        console.error(
+          `CRITICAL: PayPal capture succeeded (order=${order_id}, capture=${captureId}) but DB INSERT failed. Guest: ${guest_email}`,
+          dbError
+        );
+        return new Response(
+          JSON.stringify({
+            error: 'Booking record could not be saved. Please contact support with your PayPal order reference: ' + order_id,
+          }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Auto-call for non-partner hotels
+      try {
+        const hotelForCall = await db.prepare('SELECT email FROM hotels WHERE id = ?').bind(hotelId).first() as any;
         const isPartnerHotel = hotelForCall?.email && hotelForCall.email.trim() !== '';
         if (!isPartnerHotel) {
-          const bookingInfo = await getBookingInfoForCall(db, (booking as any).id);
+          const bookingInfo = await getBookingInfoForCall(db, bookingId!);
           if (bookingInfo) {
             await triggerAutoCall(
               {
@@ -153,47 +180,47 @@ export const POST: APIRoute = async ({ request, locals }) => {
           .prepare(`SELECT h.name, h.email, h.city, h.country, u.email as owner_login_email
                     FROM hotels h LEFT JOIN users u ON u.email = h.email
                     WHERE h.id = ?`)
-          .bind((booking as any).hotel_id)
+          .bind(hotelId)
           .first()
           .catch(() => null);
-        const plan = await db
+        const planFull = await db
           .prepare('SELECT name, check_in_time, check_out_time, cancellation_hours FROM plans WHERE id = ?')
-          .bind((booking as any).plan_id)
+          .bind(plan_id)
           .first()
           .catch(() => null);
 
-        // ① ホテルへ通知メール
-        if (plan) {
+        // ① Hotel notification email
+        if (planFull) {
           try {
             const bookingEmail: string = (hotel as any)?.email || '';
             const ownerLoginEmail: string = (hotel as any)?.owner_login_email || '';
             const notifyEmails = [...new Set([bookingEmail, ownerLoginEmail].filter(Boolean))];
             if (notifyEmails.length > 0) {
-              const subject = `New Booking #${(booking as any).id} - ${(booking as any).guest_name} on ${(booking as any).check_in_date}`;
+              const subject = `New Booking #${bookingId} - ${guest_name} on ${check_in_date}`;
               const emailResult = await sendBookingNotificationToHotel(RESEND_API_KEY, {
-                bookingId: (booking as any).id,
-                guestName: (booking as any).guest_name,
-                guestEmail: (booking as any).guest_email,
-                guestPhone: (booking as any).guest_phone,
-                checkInDate: (booking as any).check_in_date,
-                planName: (plan as any).name,
-                adults: (booking as any).adults,
-                children: (booking as any).children,
-                infants: (booking as any).infants,
-                totalPriceUsd: (booking as any).total_price_usd,
-                notes: (booking as any).notes,
+                bookingId: bookingId!,
+                guestName: guest_name,
+                guestEmail: guest_email,
+                guestPhone: guest_phone || '',
+                checkInDate: check_in_date,
+                planName: (planFull as any).name,
+                adults: adults || 1,
+                children: children || 0,
+                infants: infants || 0,
+                totalPriceUsd: totalAmount,
+                notes: notes || '',
                 hotelName: (hotel as any)?.name || '',
                 hotelEmail: notifyEmails,
               });
               await logMessage({
                 db,
-                bookingId: (booking as any).id,
-                hotelId: (booking as any).hotel_id,
+                bookingId: bookingId!,
+                hotelId,
                 direction: 'outbound',
                 recipientEmail: notifyEmails.join(', '),
                 senderEmail: 'noreply@daydreamhub.com',
                 subject,
-                body: `Booking notification for #${(booking as any).id}`,
+                body: `Booking notification for #${bookingId}`,
                 status: emailResult.success ? 'sent' : 'failed',
                 errorDetail: emailResult.error,
                 messageType: 'booking_notification',
@@ -204,7 +231,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           }
         }
 
-        // ② DDH管理者へ通知メール
+        // ② Admin notification email
         try {
           const ADMIN_EMAIL = runtime?.env?.ADMIN_EMAIL || 'info@daydreamhub.com';
           await fetch('https://api.resend.com/emails', {
@@ -213,43 +240,43 @@ export const POST: APIRoute = async ({ request, locals }) => {
             body: JSON.stringify({
               from: 'DaydreamHub <noreply@daydreamhub.com>',
               to: [ADMIN_EMAIL],
-              subject: `[New Booking] #${(booking as any).id} — ${(booking as any).guest_name} / ${(hotel as any)?.name || ''}`,
-              html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${(booking as any).id}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${(booking as any).guest_name} (${(booking as any).guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(plan as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${(booking as any).check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${(booking as any).total_price_usd}</td></tr></table></div>`,
+              subject: `[New Booking] #${bookingId} — ${guest_name} / ${(hotel as any)?.name || ''}`,
+              html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${bookingId}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${guest_name} (${guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(planFull as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${totalAmount}</td></tr></table></div>`,
             }),
           });
         } catch (e) {
           console.error('Admin notification email failed:', e);
         }
 
-        // ③ ゲストへ予約確認メール（plan有無に関わらず独立して送信）
-        if ((booking as any).guest_email) {
+        // ③ Guest confirmation email
+        if (guest_email) {
           try {
             const guestEmailResult = await sendGuestBookingConfirmation(RESEND_API_KEY, {
-              bookingId: (booking as any).id,
-              guestName: (booking as any).guest_name || '',
-              guestEmail: (booking as any).guest_email,
+              bookingId: bookingId!,
+              guestName: guest_name || '',
+              guestEmail: guest_email,
               hotelName: (hotel as any)?.name || '',
               hotelCity: (hotel as any)?.city || '',
               hotelCountry: (hotel as any)?.country || '',
-              planName: (plan as any)?.name || '',
-              checkInDate: (booking as any).check_in_date || '',
-              checkInTime: (plan as any)?.check_in_time || '',
-              checkOutTime: (plan as any)?.check_out_time || '',
-              adults: (booking as any).adults || 1,
-              children: (booking as any).children || 0,
-              totalPriceUsd: Number((booking as any).total_price_usd) || 0,
-              notes: (booking as any).notes,
-              cancellationHours: (plan as any)?.cancellation_hours ?? 24,
+              planName: (planFull as any)?.name || '',
+              checkInDate: check_in_date || '',
+              checkInTime: (planFull as any)?.check_in_time || '',
+              checkOutTime: (planFull as any)?.check_out_time || '',
+              adults: adults || 1,
+              children: children || 0,
+              totalPriceUsd: totalAmount,
+              notes: notes,
+              cancellationHours: (planFull as any)?.cancellation_hours ?? 24,
             });
             await logMessage({
               db,
-              bookingId: (booking as any).id,
-              hotelId: (booking as any).hotel_id,
+              bookingId: bookingId!,
+              hotelId,
               direction: 'outbound',
-              recipientEmail: (booking as any).guest_email,
+              recipientEmail: guest_email,
               senderEmail: 'noreply@daydreamhub.com',
-              subject: `Booking Request Received #${(booking as any).id} — DaydreamHub`,
-              body: `Guest booking confirmation for #${(booking as any).id}`,
+              subject: `Booking Request Received #${bookingId} — DaydreamHub`,
+              body: `Guest booking confirmation for #${bookingId}`,
               status: guestEmailResult.success ? 'sent' : 'failed',
               errorDetail: guestEmailResult.error,
               messageType: 'guest_confirmation',
@@ -259,37 +286,32 @@ export const POST: APIRoute = async ({ request, locals }) => {
           }
         }
       }
+
       return new Response(
         JSON.stringify({
           success: true,
-          booking_id: (booking as any).id,
+          booking_id: bookingId,
           status: 'pending_confirmation',
           paypal_status: captureStatus,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     } else {
-      // Step 5 (failure): PayPal returned a non-COMPLETED status — revert to 'failed'
-      await db
-        .prepare("UPDATE bookings SET status = 'failed', updated_at = datetime('now') WHERE id = ?")
-        .bind((booking as any).id)
-        .run();
-
-      // Fire-and-forget: send payment failure email to guest
-      if (RESEND_API_KEY && (booking as any).guest_email) {
-        const plan = await db
+      // PayPal returned non-COMPLETED status
+      if (RESEND_API_KEY && guest_email) {
+        const planForEmail = await db
           .prepare('SELECT name FROM plans WHERE id = ?')
-          .bind((booking as any).plan_id)
+          .bind(plan_id)
           .first().catch(() => null);
-        const hotel = await db
+        const hotelForEmail = await db
           .prepare('SELECT name FROM hotels WHERE id = ?')
-          .bind((booking as any).hotel_id)
+          .bind(hotelId)
           .first().catch(() => null);
         sendPaymentFailureEmail(RESEND_API_KEY, {
-          guestName: (booking as any).guest_name,
-          guestEmail: (booking as any).guest_email,
-          hotelName: (hotel as any)?.name || '',
-          planName: (plan as any)?.name || '',
+          guestName: guest_name,
+          guestEmail: guest_email,
+          hotelName: (hotelForEmail as any)?.name || '',
+          planName: (planForEmail as any)?.name || '',
           errorMessage: `Payment not completed. PayPal status: ${captureStatus}`,
         }).catch(() => {});
       }
@@ -304,13 +326,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
   } catch (error) {
-    // Step 6 (unexpected error): Revert status to 'pending' so the guest can retry
-    await db
-      .prepare("UPDATE bookings SET status = 'pending', updated_at = datetime('now') WHERE id = ?")
-      .bind((booking as any).id)
-      .run()
-      .catch(() => {});
-
     const message = error instanceof Error ? error.message : 'Payment capture failed';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
