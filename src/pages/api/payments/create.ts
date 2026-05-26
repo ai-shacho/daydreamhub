@@ -25,26 +25,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  const {
-    plan_id,
-    guest_name,
-    guest_email,
-    guest_phone,
-    check_in_date,
-    adults = 1,
-    children = 0,
-    infants = 0,
-    notes,
-  } = body;
+  const { plan_id } = body;
 
-  if (!plan_id || !guest_name || !guest_email || !check_in_date) {
+  if (!plan_id) {
     return new Response(
-      JSON.stringify({ error: 'Missing required fields: plan_id, guest_name, guest_email, check_in_date' }),
+      JSON.stringify({ error: 'Missing required field: plan_id' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
   }
 
-  // Step 1: Get plan info (price + hotel_id)
+  // Fetch plan info (price only — no guest data needed here)
   const plan = await db
     .prepare('SELECT id, hotel_id, name, price_usd FROM plans WHERE id = ?')
     .bind(plan_id)
@@ -58,52 +48,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const price_usd: number = (plan as any).price_usd;
-  const hotel_id: number = (plan as any).hotel_id;
   const planName: string = (plan as any).name;
 
-  // Fee calculation
-  const processingFee = Math.round(price_usd * 0.06 * 100) / 100; // 6% processing fee
-  const serviceFeeBase = Math.round(price_usd * 0.10 * 100) / 100; // 10% of plan price
-  const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0; // top-up to $10 if under
+  // Fee calculation (must match capture.ts exactly)
+  const processingFee = Math.round(price_usd * 0.06 * 100) / 100;
+  const serviceFeeBase = Math.round(price_usd * 0.10 * 100) / 100;
+  const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
   const totalAmount = Math.round((price_usd + processingFee + serviceFee) * 100) / 100;
 
   try {
     const idempotencyKey = crypto.randomUUID();
-
-    // Step 2: Create PayPal order with total amount (plan + fees)
     const accessToken = await getAccessToken(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE);
     const orderId = await createOrder(accessToken, totalAmount, PAYPAL_MODE, planName, idempotencyKey);
 
-    // Step 3: Insert booking record with status='pending'
-    // [変更前] idempotency_key カラムなし
-    // [変更後] idempotency_key を追加（UNIQUE制約により同一キーの二重INSERTはエラーになる）
-    const result = await db
-      .prepare(
-        `INSERT INTO bookings
-          (hotel_id, plan_id, guest_name, guest_email, guest_phone, check_in_date,
-           adults, children, infants, total_price_usd, notes, status, paypal_order_id,
-           idempotency_key, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))`
-      )
-      .bind(
-        hotel_id,
-        plan_id,
-        guest_name,
-        guest_email,
-        guest_phone || null,
-        check_in_date,
-        adults,
-        children,
-        infants,
-        totalAmount,
-        notes || null,
-        orderId,
-        idempotencyKey  // [追加] 二重決済防止キー
-      )
-      .run();
-
+    // NOTE: No DB write here. Booking is created only after PayPal capture succeeds.
     return new Response(
-      JSON.stringify({ order_id: orderId, booking_id: result.meta.last_row_id }),
+      JSON.stringify({ order_id: orderId }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
