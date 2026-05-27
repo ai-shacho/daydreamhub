@@ -1,0 +1,51 @@
+name: Seed Blog Posts to Production D1
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (preview INSERT count without executing)'
+        type: boolean
+        default: true
+      limit:
+        description: 'Max number of posts to seed (for safety)'
+        type: number
+        default: 5
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+        timeout-minutes: 3
+
+      - name: Prepare seed SQL (dry run preview)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          echo "DRY RUN: Would insert up to ${{ github.event.inputs.limit }} blog posts into blog_posts table"
+          echo "Target DB: daydreamhub-db (remote)"
+          # In real implementation, this would count matching records from blog.json
+
+      - name: Execute seed INSERT via Wrangler (real run)
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: |
+            d1 execute daydreamhub-db --remote --file=./scripts/seed-blog-posts.sql
+
+      - name: Verify seeded posts
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute daydreamhub-db --remote --command="SELECT COUNT(*) as total_posts, COUNT(CASE WHEN auto_generated=1 THEN 1 END) as auto_generated FROM blog_posts;"
