@@ -25,7 +25,7 @@ try {
     // Fetch cities with blog post counts
     const citiesResult = await db.prepare(
       `SELECT city, COUNT(*) as cnt FROM blog_posts
-       WHERE city != '' AND city IS NOT NULL
+       WHERE city != '' AND city IS NOT NULL AND published_at IS NOT NULL
        GROUP BY city ORDER BY city ASC LIMIT 30`
     ).all();
     blogCities = citiesResult?.results || [];
@@ -39,7 +39,7 @@ try {
       (countriesResult?.results || []).map((r: any) => (r.country as string).toLowerCase())
     )].map(toTitleCase).sort();
 
-    const whereClauses: string[] = [];
+    const whereClauses: string[] = ['published_at IS NOT NULL'];
     const params: any[] = [];
     if (cityFilter) {
       whereClauses.push('city LIKE ?');
@@ -57,24 +57,16 @@ try {
         whereClauses.push('1=0'); // no results if country has no cities
       }
     }
-    const whereStr = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+    const whereStr = 'WHERE ' + whereClauses.join(' AND ');
 
-    const countResult = params.length
-      ? await db.prepare(`SELECT COUNT(*) as count FROM blog_posts ${whereStr}`).bind(...params).first()
-      : await db.prepare(`SELECT COUNT(*) as count FROM blog_posts ${whereStr}`).first();
+    const countResult = await db.prepare(`SELECT COUNT(*) as count FROM blog_posts ${whereStr}`).bind(...params).first();
     total = countResult?.count || 0;
 
-    const result = params.length
-      ? await db.prepare(
-          `SELECT id, title, title_ja, slug, excerpt, excerpt_ja, city, thumbnail_url, published_at
-           FROM blog_posts ${whereStr}
-           ORDER BY published_at DESC LIMIT ? OFFSET ?`
-        ).bind(...params, perPage, offset).all()
-      : await db.prepare(
-          `SELECT id, title, title_ja, slug, excerpt, excerpt_ja, city, thumbnail_url, published_at
-           FROM blog_posts ${whereStr}
-           ORDER BY published_at DESC LIMIT ? OFFSET ?`
-        ).bind(perPage, offset).all();
+    const result = await db.prepare(
+        `SELECT id, title, title_ja, slug, excerpt, excerpt_ja, city, thumbnail_url, published_at
+         FROM blog_posts ${whereStr}
+         ORDER BY published_at DESC LIMIT ? OFFSET ?`
+      ).bind(...params, perPage, offset).all();
     posts = result?.results || [];
   }
 } catch (e) {
