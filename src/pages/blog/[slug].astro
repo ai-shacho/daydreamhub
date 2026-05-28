@@ -271,9 +271,9 @@ const formattedDate = post
           });
         </script>
 
-        <!-- GA4 internal_link_click tracking for blog content links -->
+        <!-- GA4 internal_link_click tracking + locale-aware link fix for hotel links -->
         <script is:inline>
-          document.addEventListener('DOMContentLoaded', function() {
+          (function() {
             function getLinkType(url) {
               if (url.includes('/search')) return 'search';
               if (url.includes('/city/')) return 'city';
@@ -283,14 +283,29 @@ const formattedDate = post
               return 'other_internal';
             }
 
-            const links = document.querySelectorAll('article .wp-blog-content a[href]');
+            function fixInternalLinks() {
+              const isJa = window.location.pathname.startsWith('/ja/');
+              const links = document.querySelectorAll('article .wp-blog-content a[href^="/hotel/"]');
+              links.forEach(function(link) {
+                const href = link.getAttribute('href');
+                if (href && isJa && !href.startsWith('/ja/')) {
+                  link.setAttribute('href', '/ja' + href);
+                }
+              });
+            }
 
-            links.forEach(function(link) {
-              const href = link.getAttribute('href');
-              if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
-              if (href.startsWith('http') && !href.includes(window.location.hostname)) return;
+            function attachTracking() {
+              // Use event delegation for reliability with View Transitions / SPA nav
+              const container = document.querySelector('article .wp-blog-content');
+              if (!container) return;
 
-              link.addEventListener('click', function(e) {
+              container.addEventListener('click', function(e) {
+                const link = e.target.closest('a[href]');
+                if (!link) return;
+                const href = link.getAttribute('href');
+                if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+                if (href.startsWith('http') && !href.includes(window.location.hostname)) return;
+
                 const linkUrl = link.href;
                 const linkText = (link.textContent || '').trim();
                 const sourcePage = window.location.pathname;
@@ -307,9 +322,23 @@ const formattedDate = post
                     transport_type: 'beacon'
                   });
                 }
-              });
-            });
-          });
+              }, true);
+            }
+
+            function init() {
+              fixInternalLinks();
+              attachTracking();
+            }
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', init);
+            } else {
+              init();
+            }
+
+            // Support Astro View Transitions
+            document.addEventListener('astro:page-load', init);
+          })();
         </script>
 
         <!-- Back to blog -->
