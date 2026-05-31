@@ -101,6 +101,26 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const captureResult = await captureOrder(accessToken, order_id, PAYPAL_MODE);
     const captureStatus = captureResult.status;
 
+    // Check nested capture status (top-level COMPLETED but nested PENDING is a real PayPal pattern)
+    let captureItemStatus: string | null = null;
+    try {
+      const captures = captureResult.purchase_units?.[0]?.payments?.captures;
+      if (captures?.length > 0) captureItemStatus = captures[0].status;
+    } catch {}
+
+    // PENDING: payment held for review — do NOT create booking or send any notification
+    if (captureStatus === 'PENDING' || captureItemStatus === 'PENDING') {
+      return new Response(
+        JSON.stringify({
+          pending: true,
+          order_id,
+          paypal_status: captureStatus,
+          capture_status: captureItemStatus,
+        }),
+        { status: 202, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (captureStatus === 'COMPLETED') {
       let captureId: string | null = null;
       try {
