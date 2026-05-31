@@ -474,12 +474,16 @@ const isTestHotel = hotelSlug.includes('test-hotel');
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ order_id: data.orderID, ..._pendingBookingData }),
             });
-            if (res.ok) {
+            let resData = {};
+            try { resData = await res.json(); } catch (_) {}
+
+            if (res.status === 202 && resData.pending) {
+              // PayPal payment is PENDING (under review) — redirect without booking
+              window.location.href = '/booking/confirmation?order=' + data.orderID + '&payment_status=pending';
+            } else if (res.ok) {
               window.location.href = '/booking/confirmation?order=' + data.orderID;
             } else {
-              let errObj = {};
-              try { errObj = await res.json(); } catch(_) {}
-              showPopup(classifyError(errObj));
+              showPopup(classifyError(resData));
             }
           } catch (e) {
             showPopup('network_error');
