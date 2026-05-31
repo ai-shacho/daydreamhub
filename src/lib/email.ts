@@ -845,3 +845,66 @@ export async function sendListingApprovedEmail(
     html,
   });
 }
+
+export async function sendAdminBookingStatusUpdate(
+  apiKey: string,
+  data: {
+    adminEmail: string;
+    bookingId: number;
+    guestName: string;
+    guestEmail: string;
+    hotelName: string;
+    checkInDate: string;
+    status: 'confirmed' | 'cancelled' | 'rejected';
+    actor: 'guest' | 'owner';
+    cancelReason?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  // Subject reflects both action and actor unambiguously
+  let subjectTag: string;
+  let actionLabel: string;
+  let headerColor: string;
+
+  if (data.status === 'confirmed') {
+    subjectTag = '[Hotel Confirmed]';
+    actionLabel = 'Confirmed by Hotel Owner';
+    headerColor = '#065f46';
+  } else if (data.actor === 'guest') {
+    subjectTag = '[Guest Cancelled]';
+    actionLabel = 'Cancelled by Guest';
+    headerColor = '#7c3aed';
+  } else {
+    subjectTag = '[Hotel Rejected]';
+    actionLabel = 'Rejected by Hotel Owner';
+    headerColor = '#b91c1c';
+  }
+
+  const subject = `${subjectTag} #${data.bookingId} — ${escapeHtml(data.hotelName)}`;
+
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+  <div style="background:${headerColor};color:white;padding:20px 24px;border-radius:8px 8px 0 0">
+    <h2 style="margin:0;font-size:18px">${subjectTag} Booking #${data.bookingId}</h2>
+    <p style="margin:6px 0 0;opacity:0.85;font-size:14px">${actionLabel}</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+    <table style="border-collapse:collapse;width:100%;font-size:14px">
+      <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb;width:140px">Booking ID</td><td style="padding:8px 12px;border:1px solid #e5e7eb">#${data.bookingId}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb">Guest</td><td style="padding:8px 12px;border:1px solid #e5e7eb">${escapeHtml(data.guestName)} &lt;${escapeHtml(data.guestEmail)}&gt;</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb">Hotel</td><td style="padding:8px 12px;border:1px solid #e5e7eb">${escapeHtml(data.hotelName)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb">Check-in</td><td style="padding:8px 12px;border:1px solid #e5e7eb">${escapeHtml(data.checkInDate)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb">Action By</td><td style="padding:8px 12px;border:1px solid #e5e7eb"><strong>${actionLabel}</strong></td></tr>
+      ${data.cancelReason ? `<tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb">Reason</td><td style="padding:8px 12px;border:1px solid #e5e7eb">${escapeHtml(data.cancelReason)}</td></tr>` : ''}
+    </table>
+    <p style="margin-top:24px;color:#6b7280;font-size:12px">DaydreamHub Admin Notification</p>
+  </div>
+</div>`;
+
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.adminEmail,
+    subject,
+    html,
+  });
+}

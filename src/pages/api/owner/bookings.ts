@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
-import { sendGuestBookingStatusUpdate } from '../../../lib/email';
+import { sendGuestBookingStatusUpdate, sendAdminBookingStatusUpdate } from '../../../lib/email';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
@@ -154,18 +154,17 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         });
       }
 
-      // DDH管理者へ通知
+      // DDH管理者へ通知（共通関数）
       const ADMIN_EMAIL = runtime?.env?.ADMIN_EMAIL || 'info@daydreamhub.com';
-      const statusLabel = status === 'confirmed' ? 'Confirmed' : 'Rejected';
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: 'DaydreamHub <noreply@daydreamhub.com>',
-          to: [ADMIN_EMAIL],
-          subject: `[Booking ${statusLabel}] #${id} — ${fullBooking?.hotel_name || ''}`,
-          html: `<div style="font-family:Arial,sans-serif"><h3>Booking ${statusLabel} by Owner</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${id}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${fullBooking?.guest_name || ''} (${fullBooking?.guest_email || ''})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${fullBooking?.hotel_name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Date:</td><td>${fullBooking?.check_in_date || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Status:</td><td><strong>${statusLabel}</strong></td></tr></table></div>`,
-        }),
+      await sendAdminBookingStatusUpdate(RESEND_API_KEY, {
+        adminEmail: ADMIN_EMAIL,
+        bookingId: id,
+        guestName: fullBooking?.guest_name || '',
+        guestEmail: fullBooking?.guest_email || '',
+        hotelName: fullBooking?.hotel_name || '',
+        checkInDate: fullBooking?.check_in_date || '',
+        status: status === 'confirmed' ? 'confirmed' : 'rejected',
+        actor: 'owner',
       });
     } catch (e) {
       console.error('Failed to send booking status emails:', e);

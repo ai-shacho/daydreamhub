@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { sendGuestBookingStatusUpdate } from '../../../lib/email';
+import { sendGuestBookingStatusUpdate, sendAdminBookingStatusUpdate } from '../../../lib/email';
 
 async function verifyJWT(token: string, secret: string): Promise<Record<string, any> | null> {
   try {
@@ -123,18 +123,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
     } catch {}
   }
 
-  // Notify admin
+  // Notify admin（共通関数）
   if (RESEND_API_KEY && ADMIN_EMAIL) {
     try {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: 'DaydreamHub <noreply@daydreamhub.com>',
-          to: [ADMIN_EMAIL],
-          subject: `[Cancel Request] Booking #${booking.id} — ${booking.guest_name}`,
-          html: `<p>Booking #${booking.id} cancelled by guest (${booking.guest_email}).<br>Reason: ${reason || 'Not specified'}<br>Hotel: ${booking.hotel_name}<br>Date: ${booking.check_in_date}</p>`,
-        }),
+      await sendAdminBookingStatusUpdate(RESEND_API_KEY, {
+        adminEmail: ADMIN_EMAIL,
+        bookingId: booking.id,
+        guestName: booking.guest_name || '',
+        guestEmail: booking.guest_email || '',
+        hotelName: booking.hotel_name || '',
+        checkInDate: booking.check_in_date || '',
+        status: 'cancelled',
+        actor: 'guest',
+        cancelReason: reason || undefined,
       });
     } catch {}
   }
