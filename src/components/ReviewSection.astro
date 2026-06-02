@@ -1,5 +1,6 @@
 ---
 import { t } from '../lib/i18n';
+import { formatDisplayDate, formatDisplayDateJS } from '../lib/dateFormat';
 
 interface Props {
   hotelId: number;
@@ -20,16 +21,7 @@ const ratingBreakdown = [5, 4, 3, 2, 1].map((star) => {
 });
 
 function formatDate(dateStr: string, loc: string) {
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(loc === 'ja' ? 'ja-JP' : 'en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
+  return formatDisplayDate(dateStr);
 }
 ---
 
@@ -164,6 +156,7 @@ function formatDate(dateStr: string, loc: string) {
 </section>
 
 <script>
+  {formatDisplayDateJS}
   // Star rating interaction
   (function() {
     const starBtns = document.querySelectorAll('#star-rating-input .star-btn');
@@ -346,15 +339,6 @@ function formatDate(dateStr: string, loc: string) {
           loadMoreBtn.textContent = reviewsList?.getAttribute('data-msg-load-more') || 'Load More Reviews';
         }
       });
-    }
-
-    function formatDateJS(dateStr: string, locale: string) {
-      try {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString(locale === 'ja' ? 'ja-JP' : 'en-US', {
-          year: 'numeric', month: 'long', day: 'numeric'
-        });
-      } catch { return dateStr; }
     }
 
     function escapeHtml(str: string) {

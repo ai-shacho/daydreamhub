@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../../lib/adminAuth';
+import { formatDisplayDate } from '../../../lib/dateFormat';
 
 const runtime = (Astro.locals as any).runtime;
 const db = runtime?.env?.DB;
@@ -73,7 +74,7 @@ const statusColor: Record<string,string> = {
           </div>
           <div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Check-in</p>
-            <p class="font-semibold text-slate-900">{booking.check_in_date || '—'}</p>
+            <p class="font-semibold text-slate-900">{formatDisplayDate(booking.check_in_date)}</p>
             <p class="text-sm text-slate-500">{booking.adults} adults{booking.children ? `, ${booking.children} children` : ''}</p>
           </div>
           <div>
@@ -128,7 +129,7 @@ const statusColor: Record<string,string> = {
                     log.status === 'alternative_offered' ? 'bg-blue-50 text-blue-700' :
                     'bg-slate-100 text-slate-600'
                   }`}>{log.status}</span>
-                  <span class="text-xs text-slate-400">{log.created_at}</span>
+                  <span class="text-xs text-slate-400">{formatDisplayDate(log.created_at)}</span>
                 </div>
                 {log.alternative_info && (
                   <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">

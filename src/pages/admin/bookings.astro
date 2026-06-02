@@ -208,7 +208,7 @@ const statusColors: Record<string, string> = {
               </td>
               <td class="px-4 py-3 text-slate-600">{b.hotel_name || "-"}</td>
               <td class="px-4 py-3 text-slate-600">{b.plan_name || "-"}</td>
-              <td class="px-4 py-3 text-slate-600">{b.check_in_date || "-"}</td>
+              <td class="px-4 py-3 text-slate-600">{formatDisplayDate(b.check_in_date)}</td>
               <td class="px-4 py-3 text-right font-mono text-slate-900">
                 {b.total_price_usd != null ? `$${Number(b.total_price_usd).toFixed(2)}` : "-"}
               </td>

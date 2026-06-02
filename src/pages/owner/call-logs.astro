@@ -1,6 +1,7 @@
 ---
 import OwnerLayout from '../../layouts/OwnerLayout.astro';
 import { verifyOwner, getOwnerHotelIds } from '../../lib/ownerAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -137,7 +138,7 @@ const statusColors: Record<string, string> = {
                   <div class="text-xs text-slate-400">{cl.hotel_phone || "No phone"}</div>
                 </td>
                 <td class="px-4 py-3 font-medium text-slate-900">{cl.guest_name || "-"}</td>
-                <td class="px-4 py-3 text-slate-600">{cl.check_in_date || "-"}</td>
+                <td class="px-4 py-3 text-slate-600">{formatDisplayDate(cl.check_in_date)}</td>
                 <td class="px-4 py-3 text-center font-mono">{cl.attempt_number}/3</td>
                 <td class="px-4 py-3 text-center">
                   <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[cl.status] || "bg-slate-100 text-slate-600"}`}>

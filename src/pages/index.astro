@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import ChatWidget from '../components/ChatWidget.astro';
+import { formatDisplayDate } from '../lib/dateFormat';
 
 const env = (Astro.locals as any).runtime?.env;
 const DB = env?.DB;
@@ -858,7 +859,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
                   {post.city && <span class="text-xs text-teal-600 font-medium">{post.city}</span>}
                   {post.published_at && (
                     <span class="text-xs text-gray-400">
-                      {new Date(post.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      {formatDisplayDate(post.published_at)}
                     </span>
                   )}
                 </div>
@@ -901,7 +902,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
                   'bg-slate-100 text-slate-600'
                 }`}>{item.category}</span>
                 <time class="text-xs text-gray-400">
-                  {new Date(item.published_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  {formatDisplayDate(item.published_at)}
                 </time>
               </div>
               {item.link ? (

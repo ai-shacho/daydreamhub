@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import BlogCard from '../../components/BlogCard.astro';
 import { getLocale, t, localePath } from '../../lib/i18n';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const locale = getLocale(Astro.url);
 const { slug } = Astro.params;
@@ -177,12 +178,7 @@ if (!post) {
 const displayTitle = post ? (locale === 'ja' && post.title_ja ? post.title_ja : post.title) : '';
 const displayContent = post ? (locale === 'ja' && post.content_ja ? post.content_ja : post.content) : '';
 const imageUrl = post?.thumbnail_url || '/images/placeholder-hotel.jpg';
-const formattedDate = post
-  ? new Date(post.published_at).toLocaleDateString(
-      locale === 'ja' ? 'ja-JP' : 'en-US',
-      { year: 'numeric', month: 'long', day: 'numeric' }
-    )
-  : '';
+const formattedDate = post ? formatDisplayDate(post.published_at) : '';
 ---
 
 <Layout

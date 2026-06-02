@@ -1,6 +1,7 @@
 ---
 import OwnerLayout from '../../layouts/OwnerLayout.astro';
 import { verifyOwner, getOwnerHotelIds } from '../../lib/ownerAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -264,7 +265,7 @@ const quickActions = [
               <div class="flex-1">
                 <p class={`text-sm font-medium ${requested ? 'text-slate-400 line-through' : 'text-slate-800'}`}>Request listing review</p>
                 <p class="text-xs text-slate-400">
-                  {requested ? `Requested on ${new Date(setupHotel.review_requested_at).toLocaleDateString('en-US')}. DayDreamHub will review and publish your listing.` : 'Submit your listing to DayDreamHub for final review.'}
+                  {requested ? `Requested on ${formatDisplayDate(setupHotel.review_requested_at)}. DayDreamHub will review and publish your listing.` : 'Submit your listing to DayDreamHub for final review.'}
                 </p>
               </div>
               {!requested && allReady && (
@@ -381,7 +382,7 @@ const quickActions = [
               <p class="text-sm text-slate-500 mt-0.5 line-clamp-2">{review.comment || "No comment provided."}</p>
               <div class="flex items-center justify-between mt-2">
                 <span class="text-xs text-slate-400">{review.guest_name} - {review.hotel_name || "N/A"}</span>
-                <span class="text-xs text-slate-400">{review.created_at?.split("T")[0] || ""}</span>
+                <span class="text-xs text-slate-400">{formatDisplayDate(review.created_at)}</span>
               </div>
             </div>
           ))}
@@ -423,7 +424,7 @@ const quickActions = [
                   <td class="px-5 py-3 text-slate-900 font-medium">{booking.guest_name}</td>
                   <td class="px-5 py-3 text-slate-600">{booking.hotel_name || "N/A"}</td>
                   <td class="px-5 py-3 text-slate-600">{booking.plan_name || "N/A"}</td>
-                  <td class="px-5 py-3 text-slate-600">{booking.check_in_date}</td>
+                  <td class="px-5 py-3 text-slate-600">{formatDisplayDate(booking.check_in_date)}</td>
                   <td class="px-5 py-3 text-slate-900 font-medium">${Number(booking.total_price_usd).toFixed(2)}</td>
                   <td class="px-5 py-3">
                     <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[booking.status] || "bg-slate-100 text-slate-700"}`}>

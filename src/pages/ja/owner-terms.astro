@@ -1,6 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-const lastUpdated = '2026-04-17';
+import { formatDisplayDate } from '../../lib/dateFormat';
+const lastUpdated = formatDisplayDate('2026-04-17');
 ---
 
 <Layout title="オーナー利用規約 | DayDreamHub" description="DayDreamHubに施設を掲載するオーナー・管理者向け利用規約。">

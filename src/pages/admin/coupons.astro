@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = (Astro.locals as any).runtime;
 const db = runtime?.env?.DB;
@@ -74,7 +75,7 @@ if (db) {
                   {coupon.used_count || 0}{coupon.max_uses ? `/${coupon.max_uses}` : ''}
                 </td>
                 <td class="px-4 py-3 text-slate-500">
-                  {coupon.expires_at ? new Date(coupon.expires_at).toLocaleDateString() : 'No expiry'}
+                  {coupon.expires_at ? formatDisplayDate(coupon.expires_at) : 'No expiry'}
                 </td>
                 <td class="px-4 py-3 text-center">
                   {coupon.is_active ? (

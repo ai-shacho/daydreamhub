@@ -1,6 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { getLocale, t, localePath } from '../../lib/i18n';
+import { formatDisplayDateJS } from '../../lib/dateFormat';
 
 const locale = getLocale(Astro.url);
 const orderId = Astro.url.searchParams.get('order') || '';
@@ -141,6 +142,7 @@ const paymentStatus = Astro.url.searchParams.get('payment_status') || '';
   </div>
 
   <script>
+    {formatDisplayDateJS}
     // Check booking status and show appropriate state
     (function() {
       const container = document.querySelector('[data-order-id]') as HTMLElement;
@@ -183,7 +185,7 @@ const paymentStatus = Astro.url.searchParams.get('payment_status') || '';
                 const priceEl = document.getElementById('detail-price');
                 if (hotelEl) hotelEl.textContent = data.hotel_name || '—';
                 if (planEl) planEl.textContent = data.plan_name || '—';
-                if (checkinEl) checkinEl.textContent = data.check_in_date || '—';
+                if (checkinEl) checkinEl.textContent = formatDisplayDate(data.check_in_date);
                 if (priceEl) priceEl.textContent = data.total_price_usd != null ? `$${Number(data.total_price_usd).toFixed(2)}` : '—';
                 card.classList.remove('hidden');
               }

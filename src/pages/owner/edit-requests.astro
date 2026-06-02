@@ -1,6 +1,7 @@
 ---
 import OwnerLayout from '../../layouts/OwnerLayout.astro';
 import { verifyOwner, getOwnerHotelIds } from '../../lib/ownerAuth';
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -217,7 +218,7 @@ const counts = {
                     </span>
                   </td>
                   <td class="px-4 py-3 text-slate-500 text-xs">
-                    {er.created_at ? new Date(er.created_at).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "—"}
+                    {formatDisplayDate(er.created_at)}
                   </td>
                   <td class="px-4 py-3 text-slate-600 text-xs max-w-[180px] truncate" title={er.admin_note || ""}>
                     {er.admin_note || "—"}

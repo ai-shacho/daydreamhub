@@ -1,5 +1,6 @@
 ---
 import { localePath } from '../lib/i18n';
+import { formatDisplayDate } from '../lib/dateFormat';
 
 interface Props {
   post: any;
@@ -12,10 +13,7 @@ const displayTitle = locale === 'ja' && post.title_ja ? post.title_ja : post.tit
 const displayExcerpt = locale === 'ja' ? (post.excerpt_ja || post.excerpt || '') : (post.excerpt || '');
 const blogLink = localePath(`/blog/${post.slug}`, locale);
 const imageUrl = post.thumbnail_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80';
-const formattedDate = new Date(post.published_at).toLocaleDateString(
-  locale === 'ja' ? 'ja-JP' : 'en-US',
-  { year: 'numeric', month: 'long', day: 'numeric' }
-);
+const formattedDate = formatDisplayDate(post.published_at);
 const maxExcerptLength = 120;
 const truncatedExcerpt = displayExcerpt
   ? displayExcerpt.length > maxExcerptLength

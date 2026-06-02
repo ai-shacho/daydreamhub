@@ -1,6 +1,7 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../../lib/adminAuth';
+import { formatDisplayDateJS } from '../../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
@@ -191,6 +192,7 @@ const { id } = Astro.params;
   </style>
 
   <script is:inline define:vars={{ leadId: id }}>
+    {formatDisplayDateJS}
     const STATUS = {
       new:         { label: '新規',   cls: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' },
       in_progress: { label: '追客中', cls: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' },
@@ -221,8 +223,7 @@ const { id } = Astro.params;
     }
 
     function fmtDate(d, opts) {
-      if (!d) return '—';
-      return new Date(d).toLocaleString('ja-JP', opts || { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return formatDisplayDate(d);
     }
 
     function showToast(msg) {
