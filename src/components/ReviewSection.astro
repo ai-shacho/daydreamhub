@@ -20,9 +20,6 @@ const ratingBreakdown = [5, 4, 3, 2, 1].map((star) => {
   return { star, count, percentage };
 });
 
-function formatDate(dateStr: string, loc: string) {
-  return formatDisplayDate(dateStr);
-}
 ---
 
 <section class="mb-10" id="reviews-section">
@@ -108,7 +105,7 @@ function formatDate(dateStr: string, loc: string) {
                   ))}
                 </div>
               </div>
-              <span class="text-xs text-gray-400">{formatDate(review.created_at, locale)}</span>
+              <span class="text-xs text-gray-400">{formatDisplayDate(review.created_at)}</span>
             </div>
             {review.title && <h4 class="font-semibold text-slate-800 mb-1">{review.title}</h4>}
             {review.comment && <p class="text-gray-600 text-sm leading-relaxed">{review.comment}</p>}

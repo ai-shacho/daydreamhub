@@ -56,9 +56,6 @@ const categoryColors: Record<string, string> = {
   maintenance: "bg-slate-100 text-slate-600",
 };
 
-function formatDate(dateStr: string): string {
-  return formatDisplayDate(dateStr);
-}
 ---
 
 <Layout title="新着情報 - DayDreamHub" description="DayDreamHubの最新のお知らせ、更新情報をお届けします。">
@@ -76,7 +73,7 @@ function formatDate(dateStr: string): string {
           <article class="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div class="flex items-center gap-3 mb-3">
               <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${categoryColors[n.category] || "bg-slate-100 text-slate-600"}`}>{categoryLabels[n.category] || n.category}</span>
-              <time class="text-xs text-gray-400">{formatDate(n.published_at)}</time>
+              <time class="text-xs text-gray-400">{formatDisplayDate(n.published_at)}</time>
             </div>
             {n.link ? (
               <a href={n.link} class="text-lg font-semibold text-gray-900 hover:text-cyan-600 transition-colors">{n.title}</a>

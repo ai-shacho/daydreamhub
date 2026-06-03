@@ -104,14 +104,7 @@ if (!admin) return Astro.redirect("/admin/login");
 </AdminLayout>
 
 <script>
-const MONTHS_OA = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-function formatDisplayDate(s: string | null | undefined): string {
-  if (!s) return '-';
-  const n = s.includes('T') ? s : s.replace(' ', 'T') + 'Z';
-  const d = new Date(n);
-  if (isNaN(d.getTime())) return '-';
-  return d.getUTCFullYear() + '-' + MONTHS_OA[d.getUTCMonth()] + '-' + String(d.getUTCDate()).padStart(2, '0');
-}
+import { formatDisplayDate } from '../../lib/dateFormat';
 
 const STATUS_COLORS: Record<string, string> = {
   new: 'bg-slate-100 text-slate-600',

@@ -87,9 +87,6 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
   failed:               { label: '失敗',              color: 'bg-red-100 text-red-600 border-red-200',          icon: '⚠️' },
 };
 
-function formatDate(dateStr: string): string {
-  return formatDisplayDate(dateStr);
-}
 ---
 
 <Layout title="マイページ — DayDreamHub">
@@ -164,7 +161,7 @@ function formatDate(dateStr: string): string {
                     </div>
                     <div>
                       <div class="text-xs text-gray-400 mb-0.5">日付</div>
-                      <div class="font-medium text-gray-700 text-xs">{formatDate(b.check_in_date)}</div>
+                      <div class="font-medium text-gray-700 text-xs">{formatDisplayDate(b.check_in_date)}</div>
                     </div>
                     <div>
                       <div class="text-xs text-gray-400 mb-0.5">時間</div>
@@ -185,7 +182,7 @@ function formatDate(dateStr: string): string {
                   )}
                   {b.status === 'confirmed' && (
                     <div class="mt-3 bg-green-50 border border-green-100 rounded-lg px-3 py-2 text-xs text-green-700">
-                      ✅ 予約が確定しました！{formatDate(b.check_in_date)}に{b.check_in_time || 'チェックイン時間'}までにホテルにお越しください。
+                      ✅ 予約が確定しました！{formatDisplayDate(b.check_in_date)}に{b.check_in_time || 'チェックイン時間'}までにホテルにお越しください。
                     </div>
                   )}
                   {(b.status === 'cancelled' || b.status === 'failed') && (
@@ -195,7 +192,7 @@ function formatDate(dateStr: string): string {
                   )}
 
                   <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-                    <span class="text-xs text-gray-300">予約日 {formatDate(b.created_at)}</span>
+                    <span class="text-xs text-gray-300">予約日 {formatDisplayDate(b.created_at)}</span>
                     <div class="flex gap-2 flex-wrap justify-end">
                       <a href={`/ja/hotel/${b.hotel_slug}`}
                         class="text-xs text-teal-600 hover:text-teal-700 font-medium border border-teal-200 hover:border-teal-400 px-3 py-1.5 rounded-lg transition-colors">
