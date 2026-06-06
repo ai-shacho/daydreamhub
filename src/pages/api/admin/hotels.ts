@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { sendListingApprovedEmail } from '../../../lib/email';
 import { verifyAdmin } from '../../../lib/adminAuth';
+import { isValidPropertyType, normalizePropertyType } from '../../../lib/propertyTypes';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
