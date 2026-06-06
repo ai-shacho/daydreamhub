@@ -1,6 +1,7 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { nearestAirport } from '../../lib/airports';
+import HotelCard from '../../components/HotelCard.astro';
 
 const DB = (Astro.locals as any).runtime?.env?.DB;
 
@@ -93,7 +94,7 @@ if (DB) {
       `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating, h.latitude, h.longitude,
               MIN(p.price_usd) as min_price
        FROM hotels h
-       LEFT JOIN plans p ON p.hotel_id = h.id
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
        ${whereSQL}
        GROUP BY h.id
        ${isAirportSort ? 'ORDER BY h.id DESC' : orderSQL}
@@ -503,7 +504,10 @@ function getHotelName(hotel: any) {
         <div id="hotel-grid-ja" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
           {hotels.length > 0 ? (
             hotels.map((hotel: any) => (
-              <a href={`/ja/hotel/${hotel.slug}`} class="group bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+              <HotelCard hotel={hotel} minPrice={hotel.min_price} locale="ja" />
+            ))
+          ) : hotels_REMOVE_PLACEHOLDER ? null : (
+              <a href={`/ja/hotel/${hotel.slug}`} class="REMOVE_THIS group bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
                 <div class="aspect-[3/2] bg-gray-100 overflow-hidden relative">
                   {hotel.thumbnail_url ? (
                     <img

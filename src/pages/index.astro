@@ -61,7 +61,7 @@ try {
       : DB.prepare(
           `SELECT h.id, h.name, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
                   MIN(p.price_usd) as min_price
-           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
            WHERE h.status = 'active'
            GROUP BY h.id
            ORDER BY h.rating DESC
@@ -99,7 +99,7 @@ try {
         DB.prepare(
           `SELECT id, name, slug, city, country, latitude, longitude, thumbnail_url,
                   MIN(p.price_usd) as min_price
-           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
            WHERE h.status = 'active' AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
            GROUP BY h.id LIMIT 100`
         ).all().catch(() => ({ results: [] })),
