@@ -112,37 +112,7 @@ const paymentStatus = Astro.url.searchParams.get('payment_status') || '';
   </div>
 
   <script>
-    // Poll order status and show appropriate state
-    const container = document.querySelector('[data-order-id]') as HTMLElement;
-    const orderId = container?.dataset.orderId;
-    const paymentStatus = container?.dataset.paymentStatus;
-
-    function showState(state: string) {
-      document.querySelectorAll('[id^="state-"]').forEach(el => el.classList.add('hidden'));
-      const el = document.getElementById(`state-${state}`);
-      if (el) el.classList.remove('hidden');
-    }
-
-    // PayPal PENDING: payment under review — no booking exists in DB, skip polling
-    if (paymentStatus === 'pending') {
-      showState('payment-review');
-    } else if (orderId) {
-      showState('pending');
-      async function pollStatus() {
-        try {
-          const res = await fetch(`/api/booking-status?order=${orderId}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.status === 'confirmed') { showState('confirmed'); return; }
-            if (data.status === 'alt_choice') { showState('alt-choice'); return; }
-            if (data.status === 'cancelled' || data.status === 'refunded') { showState('cancelled'); return; }
-          }
-          setTimeout(pollStatus, 5000);
-        } catch { setTimeout(pollStatus, 5000); }
-      }
-      pollStatus();
-    } else if (!paymentStatus) {
-      showState('confirmed');
-    }
+    import { initConfirmationStatus } from '../../../lib/confirmationStatus';
+    initConfirmationStatus();
   </script>
 </Layout>

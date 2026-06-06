@@ -61,6 +61,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
 
   return new Response(
     JSON.stringify({
+      id: booking.id,
       status: booking.status,
       alt_status: booking.alt_status,
       hotel_name: booking.hotel_name,

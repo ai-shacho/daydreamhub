@@ -1,7 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import { getLocale, t, localePath } from '../../lib/i18n';
-import { formatDisplayDateJS } from '../../lib/dateFormat';
 
 const locale = getLocale(Astro.url);
 const orderId = Astro.url.searchParams.get('order') || '';
@@ -142,105 +141,8 @@ const paymentStatus = Astro.url.searchParams.get('payment_status') || '';
   </div>
 
   <script>
-    {formatDisplayDateJS}
-    // Check booking status and show appropriate state
-    (function() {
-      const container = document.querySelector('[data-order-id]') as HTMLElement;
-      const orderId = container?.getAttribute('data-order-id');
-      const paymentStatus = container?.getAttribute('data-payment-status');
-
-      // PayPal PENDING: payment is under review — no booking in DB, no polling needed
-      if (paymentStatus === 'pending') {
-        document.getElementById('state-payment-review')?.classList.remove('hidden');
-        return;
-      }
-
-      if (!orderId) {
-        document.getElementById('state-confirmed')?.classList.remove('hidden');
-        return;
-      }
-
-      // Poll for booking status
-      async function checkStatus() {
-        try {
-          const res = await fetch(`/api/booking-status?order=${orderId}`);
-          const data = await res.json();
-
-          // Hide all states
-          document.getElementById('state-payment-review')?.classList.add('hidden');
-          document.getElementById('state-pending')?.classList.add('hidden');
-          document.getElementById('state-confirmed')?.classList.add('hidden');
-          document.getElementById('state-alt-choice')?.classList.add('hidden');
-          document.getElementById('state-cancelled')?.classList.add('hidden');
-
-          switch (data.status) {
-            case 'confirmed': {
-              document.getElementById('state-confirmed')?.classList.remove('hidden');
-              // Populate booking details card
-              const card = document.getElementById('booking-details-card');
-              if (card) {
-                const hotelEl = document.getElementById('detail-hotel');
-                const planEl = document.getElementById('detail-plan');
-                const checkinEl = document.getElementById('detail-checkin');
-                const priceEl = document.getElementById('detail-price');
-                if (hotelEl) hotelEl.textContent = data.hotel_name || '—';
-                if (planEl) planEl.textContent = data.plan_name || '—';
-                if (checkinEl) checkinEl.textContent = formatDisplayDate(data.check_in_date);
-                if (priceEl) priceEl.textContent = data.total_price_usd != null ? `$${Number(data.total_price_usd).toFixed(2)}` : '—';
-                card.classList.remove('hidden');
-              }
-              break;
-            }
-            case 'pending':
-            case 'calling':
-              document.getElementById('state-pending')?.classList.remove('hidden');
-              setTimeout(checkStatus, 10000);
-              break;
-            case 'alt_choice':
-              document.getElementById('state-alt-choice')?.classList.remove('hidden');
-              break;
-            case 'cancelled':
-            case 'refunded':
-              document.getElementById('state-cancelled')?.classList.remove('hidden');
-              break;
-            default:
-              document.getElementById('state-pending')?.classList.remove('hidden');
-              setTimeout(checkStatus, 10000);
-          }
-        } catch {
-          document.getElementById('state-pending')?.classList.remove('hidden');
-          setTimeout(checkStatus, 15000);
-        }
-      }
-
-      checkStatus();
-
-      // Alt choice buttons
-      document.getElementById('btn-retry-more')?.addEventListener('click', async () => {
-        try {
-          await fetch('/api/booking-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: orderId, action: 'retry' }),
-          });
-          document.getElementById('state-alt-choice')?.classList.add('hidden');
-          document.getElementById('state-pending')?.classList.remove('hidden');
-          setTimeout(checkStatus, 5000);
-        } catch { /* ignore */ }
-      });
-
-      document.getElementById('btn-refund')?.addEventListener('click', async () => {
-        try {
-          await fetch('/api/booking-action', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: orderId, action: 'refund' }),
-          });
-          document.getElementById('state-alt-choice')?.classList.add('hidden');
-          document.getElementById('state-cancelled')?.classList.remove('hidden');
-        } catch { /* ignore */ }
-      });
-    })();
+    import { initConfirmationStatus } from '../../lib/confirmationStatus';
+    initConfirmationStatus();
   </script>
 
 </Layout>
