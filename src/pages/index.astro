@@ -1179,13 +1179,23 @@ function escHtml(s) {
     return hotels;
   }
 
-  function addMsg(text, role) {
+  function addMsg(text, role, metadata) {
     showMessages();
     var wrap = document.createElement('div');
     wrap.className = 'flex gap-2' + (role === 'user' ? ' flex-row-reverse' : '');
     if (role === 'assistant') {
-      var slugs = extractHotelSlugs(text);
-      var externalHotels = extractExternalHotels(text);
+      // Task #47: prefer structured hotel data; fall back to text parsing
+      var _metaHotels = (metadata && Array.isArray(metadata.hotels) && metadata.hotels.length > 0) ? metadata.hotels : null;
+      var _internalMeta = _metaHotels ? _metaHotels.filter(function(h){ return h.source === 'internal'; }) : null;
+      var _externalMeta = _metaHotels ? _metaHotels.filter(function(h){ return h.source === 'external'; }) : null;
+
+      var slugs = (_internalMeta && _internalMeta.length > 0)
+        ? _internalMeta.map(function(h){ return h.slug; }).filter(Boolean)
+        : extractHotelSlugs(text);
+
+      var externalHotels = (_externalMeta && _externalMeta.length > 0)
+        ? _externalMeta.map(function(h){ return { name: h.name || '', phone: h.phone || '' }; })
+        : extractExternalHotels(text);
 
       // 自社ホテル: Book Now ボタン（無料）
       var bookBtns = slugs.map(function(slug) {
@@ -1709,7 +1719,7 @@ function escHtml(s) {
       });
       var data = await res.json();
       removeTyping();
-      addMsg(data.response || data.reply || data.message || (data.error ? '⚠️ ' + data.error : 'Sorry, something went wrong. Please try again.'), 'assistant');
+      addMsg(data.response || data.reply || data.message || (data.error ? '⚠️ ' + data.error : 'Sorry, something went wrong. Please try again.'), 'assistant', data.metadata);
 
       // 電話発信中なら自動ポーリング開始
       if (data.message_type === 'call_status' && data.metadata?.call_status === 'calling') {

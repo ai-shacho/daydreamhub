@@ -124,6 +124,9 @@ async function telnyxOrchestrate(
   const recentUserText = messages.filter(m => m.role === 'user').slice(-3).map(m => String(m.content)).join(' ').toLowerCase();
   const wantsClinic = /(clinic|wellness|medical|iv\s*drip|health\s*check|check[- ]?up|クリニック|ウェルネス|医療|健康診断|人間ドック|点滴|検査)/i.test(recentUserText);
   let hotelContext = '';
+  // Task #47: structured hotel data — populated below, used to return hotel_results
+  let _structInternalHotels: any[] = [];
+  let _structExternalHotels: any[] = [];
   if (db && lastUserMsg.length > 3) {
     try {
       // 都市名抽出: DB照合 → 既知リスト → メッセージからの汎用抽出 の順でフォールバック
@@ -284,6 +287,9 @@ async function telnyxOrchestrate(
           return true;
         }).slice(0, 3);
 
+        // Task #47: save internal hotels for structured response
+        _structInternalHotels = results;
+
         // 自社ホテルを先に表示
         if (results.length > 0) {
           hotelContext = `\n\n## DDH REGISTERED HOTELS (Free direct booking - no service fee):\n` +
@@ -323,6 +329,8 @@ async function telnyxOrchestrate(
               3
             );
           }
+          // Task #47: save external hotels for structured response
+          _structExternalHotels = extHotels;
 
           if (extHotels.length > 0) {
             const extLines = extHotels.map((h: any) => {
@@ -416,6 +424,31 @@ async function telnyxOrchestrate(
   text = sanitizeAIText(text);
   if (!text) text = 'Let me help you find a day-use hotel. Could you tell me your destination city and preferred date?';
 
+  // Task #47: return structured hotel data so the front-end renders cards without text parsing
+  const _allStructured = [
+    ..._structInternalHotels.map((h: any) => ({
+      id: h.id,
+      name: h.name,
+      slug: h.slug,
+      city: h.city,
+      country: h.country,
+      source: 'internal',
+      min_price: h.plans && h.plans.length > 0
+        ? Math.min(...h.plans.map((p: any) => Number(p.price_usd) || 9999))
+        : null,
+      plans: h.plans,
+    })),
+    ..._structExternalHotels.map((h: any) => ({
+      name: h.hotel_name || h.name || '',
+      address: h.address || '',
+      phone: h.hotel_phone || h.phone || '',
+      rating: h.rating || null,
+      source: 'external',
+    })),
+  ];
+  if (_allStructured.length > 0) {
+    return { text, messageType: 'hotel_results', metadata: { hotels: _allStructured } };
+  }
   return { text, messageType: 'text' };
 }
 
