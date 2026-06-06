@@ -153,20 +153,46 @@
     return out;
   }
 
-  function addMessage(text, role) {
+  function addMessage(text, role, metadata) {
     const wrap = document.createElement('div');
     wrap.className = 'flex gap-2' + (role === 'user' ? ' flex-row-reverse' : '');
 
     if (role === 'assistant') {
-      // AI avatar icon element (static)
       const avatar = document.createElement('div');
       avatar.className = 'w-7 h-7 bg-teal-100 rounded-full flex-shrink-0 flex items-center justify-center text-teal-600 text-xs font-bold mt-0.5';
       avatar.textContent = 'AI';
 
-      // Message bubble with markdown rendering
       const bubble = document.createElement('div');
       bubble.className = 'bg-slate-100 rounded-2xl rounded-tl-none px-3 py-2 text-sm text-slate-700 max-w-[85%]';
       bubble.innerHTML = renderMarkdown(text);
+
+      // Task #47: render hotel cards from structured data
+      const metaHotels = (metadata && Array.isArray(metadata.hotels) && metadata.hotels.length > 0) ? metadata.hotels : null;
+      if (metaHotels) {
+        const internal = metaHotels.filter(h => h.source === 'internal');
+        const external = metaHotels.filter(h => h.source === 'external');
+        let cardsHtml = '';
+        if (internal.length > 0) {
+          cardsHtml += internal.map(h => {
+            const price = h.min_price ? ` · $${h.min_price}〜` : '';
+            return `<a href="/hotel/${h.slug}" class="flex items-center justify-between bg-white border border-teal-100 rounded-xl px-3 py-2 mt-2 hover:bg-teal-50 transition-colors">
+              <span class="font-semibold text-teal-700 text-xs">${h.name}</span>
+              <span class="text-teal-500 text-xs font-bold">${price} 予約 →</span>
+            </a>`;
+          }).join('');
+        }
+        if (external.length > 0) {
+          const extLabel = pageLocale === 'ja' ? 'AI電話予約（+$7）' : 'AI Call to Book (+$7)';
+          cardsHtml += `<div class="mt-2 space-y-1">` + external.slice(0, 3).map(h =>
+            `<div class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs">
+              <span class="font-semibold block">${h.name}</span>
+              <span class="text-slate-400">${h.phone || ''}</span>
+            </div>`
+          ).join('') + `</div>
+          <a href="${pageLocale === 'ja' ? '/ja/' : '/'}" class="mt-1.5 block text-center bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-1.5 text-xs font-bold">${extLabel}</a>`;
+        }
+        if (cardsHtml) bubble.innerHTML += cardsHtml;
+      }
 
       wrap.appendChild(avatar);
       wrap.appendChild(bubble);
@@ -220,7 +246,7 @@
       const data = await res.json();
       removeTyping();
       const replyText = data.response || data.reply || data.message || (data.error ? "⚠️ " + data.error : "Sorry, something went wrong. Please try again.");
-      addMessage(replyText, "assistant");
+      addMessage(replyText, "assistant", data.metadata);
     } catch (e) {
       removeTyping();
       addMessage('Connection error. Please try again.', 'assistant');
