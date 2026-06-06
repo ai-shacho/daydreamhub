@@ -3,6 +3,7 @@ import Layout from '../../../layouts/Layout.astro';
 import ReviewSection from '../../../components/ReviewSection.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
 import { nearestAirport, airportNamesJa } from '../../../lib/airports';
+import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../../../lib/propertyTypes';
 
 const locale = getLocale(Astro.url);
 const { slug } = Astro.params;
@@ -254,11 +255,8 @@ const amenityLabels: Record<string, Record<string, string>> = {
 function getAmenityLabel(amenity: string): string {
   return amenityLabelMap[amenity] || amenity;
 }
-const propertyTypeLabels: Record<string, Record<string, string>> = {
-  hotel: { en: 'Hotel', ja: 'ホテル' }, villa: { en: 'Villa', ja: 'ヴィラ' },
-  'capsule-hotel': { en: 'Capsule Hotel', ja: 'カプセルホテル' }, hostel: { en: 'Hostel', ja: 'ホステル' },
-  apartment: { en: 'Apartment', ja: 'アパートメント' }, 'guest-house': { en: 'Guest House', ja: 'ゲストハウス' },
-};
+// Task #48: labels are now sourced from src/lib/propertyTypes.ts
+const propertyTypeLabels = PROPERTY_TYPE_LABELS;
 
 function renderStars(rating: number) {
   const clamped = Math.min(Math.max(rating, 0), 5);
@@ -364,7 +362,7 @@ for (const img of images) {
         <div>
           {hotel.property_type && (
             <span class="inline-block text-xs font-medium bg-gray-100 text-gray-600 rounded-full px-3 py-1 mb-3">
-              {propertyTypeLabels[hotel.property_type]?.[locale] || hotel.property_type}
+              {propertyTypeLabels[normalizePropertyType(hotel.property_type)]?.[locale] ?? propertyTypeLabels[hotel.property_type]?.[locale] ?? hotel.property_type}
             </span>
           )}
           <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{displayName}</h1>

@@ -240,6 +240,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const status = data.status || 'inactive';
     const isActive = status === 'active' ? 1 : 0;
+    const rawPt = data.property_type || 'hotel';
+    const propertyType = isValidPropertyType(rawPt) ? normalizePropertyType(rawPt) : 'hotel';
     const result = await db.prepare(
       `INSERT INTO hotels (name, name_ja, slug, description, description_ja, city, country, address, thumbnail_url, property_type, email, phone, amenities, is_active, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, datetime('now'))`
@@ -248,7 +250,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       data.description || null, data.description_ja || null,
       city, country,
       data.address || null, data.thumbnail_url || null,
-      data.property_type || 'hotel',
+      propertyType,
       data.email || null, data.phone || null,
       isActive, status
     ).run();

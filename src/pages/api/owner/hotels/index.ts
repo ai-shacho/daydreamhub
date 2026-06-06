@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { verifyOwner } from '../../../../lib/ownerAuth';
+import { isValidPropertyType, normalizePropertyType } from '../../../../lib/propertyTypes';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const json = { 'Content-Type': 'application/json' };
@@ -42,8 +43,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   for (const key of allowed) {
     if (key in data && data[key] !== '' && data[key] !== null && data[key] !== undefined) {
+      let val = data[key];
+      // Validate and normalize property_type
+      if (key === 'property_type') {
+        val = isValidPropertyType(String(val)) ? normalizePropertyType(String(val)) : 'hotel';
+      }
       cols.push(key);
-      vals.push(data[key]);
+      vals.push(val);
     }
   }
 

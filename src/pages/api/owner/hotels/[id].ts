@@ -1,5 +1,6 @@
 import { APIRoute } from 'astro';
 import { verifyOwner } from '../../../../lib/ownerAuth';
+import { isValidPropertyType, normalizePropertyType } from '../../../../lib/propertyTypes';
 
 export const GET: APIRoute = async ({ params, request, locals }) => {
   const hotelId = params.id;
@@ -98,8 +99,12 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     const bindings: any[] = [];
     for (const [key, value] of Object.entries(changes)) {
       if (!ALLOWED_FIELDS.has(key)) continue;
+      let val = value;
+      if (key === 'property_type' && val) {
+        val = isValidPropertyType(String(val)) ? normalizePropertyType(String(val)) : 'hotel';
+      }
       setClauses.push(`${key} = ?`);
-      bindings.push(value);
+      bindings.push(val);
     }
 
     if (setClauses.length === 0) {
