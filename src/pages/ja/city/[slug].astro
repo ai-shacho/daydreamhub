@@ -14,7 +14,6 @@ const offset = (page - 1) * perPage;
 
 let hotels: any[] = [];
 let total = 0;
-let plansMap = new Map<number, any[]>();
 let dbAvailable = false;
 
 try {
@@ -57,17 +56,6 @@ try {
       hotels = result2?.results || [];
     }
 
-    if (hotels.length > 0) {
-      const hotelIds = hotels.map((h: any) => h.id);
-      const placeholders = hotelIds.map(() => '?').join(',');
-      const plansResult = await db.prepare(
-        `SELECT * FROM plans WHERE hotel_id IN (${placeholders}) AND status = 'active'`
-      ).bind(...hotelIds).all();
-      for (const plan of plansResult?.results || []) {
-        if (!plansMap.has(plan.hotel_id)) plansMap.set(plan.hotel_id, []);
-        plansMap.get(plan.hotel_id)!.push(plan);
-      }
-    }
   }
 } catch (e) {
   dbAvailable = false;
@@ -117,12 +105,7 @@ function getPageNumbers(current: number, totalPg: number) {
 const pageNumbers = getPageNumbers(page, totalPages);
 const pageTitle = t('city.hotels_in', locale).replace('{city}', cityName);
 const resultsText = t('city.hotels_found', locale).replace('{count}', String(total)).replace('{city}', cityName);
-
-function getMinPrice(hotelId: number) {
-  const plans = plansMap.get(hotelId) || [];
-  if (plans.length === 0) return null;
-  return Math.min(...plans.map((p: any) => p.price_usd));
-}
+// min_price はメインクエリ（is_active = 1）から取得され、HotelCard へ直接渡される。
 ---
 
 <Layout title={pageTitle} description={pageTitle}>
