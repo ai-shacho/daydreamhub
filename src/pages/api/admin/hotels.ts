@@ -95,6 +95,17 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   const { id, ...fields } = data;
   if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
+  // Validate and normalize property_type if provided
+  if ('property_type' in fields && fields.property_type) {
+    const normalized = normalizePropertyType(String(fields.property_type));
+    if (!isValidPropertyType(normalized)) {
+      return new Response(JSON.stringify({ error: `Invalid property_type: ${fields.property_type}` }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    fields.property_type = normalized;
+  }
+
   const allowed = ['name','name_ja','slug','description','description_ja','city','country','address',
     'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy','is_active','status'];
   const updates: string[] = [];
