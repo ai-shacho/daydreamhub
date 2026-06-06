@@ -72,8 +72,25 @@ try {
   dbAvailable = false;
 }
 
-// DB未接続、またはホテルが0件の都市は404を返す
-if (!dbAvailable || hotels.length === 0) {
+// ── TEMP TEST INJECTION (Task #46) ────────────────────────────────────────
+// 撤去条件: env ENABLE_TEST_HOTELS=false に設定するか、このブロックを削除することで無効化。
+// 対象: slug=tokyo AND page=1 AND ENABLE_TEST_HOTELS != 'false' の場合のみ注入。
+// 本番影響なし: 既存の name NOT LIKE 'Test%' ロジックは一切変更しない。
+const _testEnvFlag = ((Astro.locals as any).runtime?.env?.ENABLE_TEST_HOTELS ?? 'true');
+const _testHotels: any[] = (slug === 'tokyo' && page === 1 && _testEnvFlag !== 'false')
+  ? [
+      { id: 'test-1', name: 'Test Hotel 1', name_ja: 'テストホテル1', address: '東京都渋谷区テスト1-1-1', city: 'Tokyo', country: 'Japan', phone: '+815032043020', is_test_injected: true },
+      { id: 'test-2', name: 'Test Hotel 2', name_ja: 'テストホテル2', address: '東京都新宿区テスト2-2-2', city: 'Tokyo', country: 'Japan', phone: '+818053689489', is_test_injected: true },
+      { id: 'test-3', name: 'Test Hotel 3', name_ja: 'テストホテル3', address: '東京都港区テスト3-3-3',   city: 'Tokyo', country: 'Japan', phone: '+818094160804', is_test_injected: true },
+    ]
+  : [];
+// ── END TEMP TEST INJECTION ────────────────────────────────────────────────
+
+// DB未接続・DB結果0件・テスト注入なし の場合のみ404
+if (!dbAvailable && _testHotels.length === 0) {
+  return Astro.redirect(localePath('/404', locale), 404);
+}
+if (hotels.length === 0 && _testHotels.length === 0) {
   return Astro.redirect(localePath('/404', locale), 404);
 }
 
