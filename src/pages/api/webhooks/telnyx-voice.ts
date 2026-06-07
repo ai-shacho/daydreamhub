@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { sendConciergeConfirmation, sendConciergeDeclineToGuest, sendAdminRefundAlert } from '../../../lib/email';
+import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
 async function telnyxCmd(apiKey: string, callControlId: string, cmd: string, body: any = {}) {
   const res = await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/${cmd}`, {
@@ -118,6 +119,53 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       .bind(...values).run().catch((e: any) => console.error('[telnyx-voice] concierge update failed:', e));
   }
 
+  // Helper (Task #52): この通話がグループ発信の一部なら、結果に応じて次のホテルへ進める/成約確定する。
+  // initiateNextGroupCall は current_order の条件付きUPDATEで冪等（二重発信を防止）。
+  async function advanceGroupAfterOutcome(outcome: string) {
+    if (!db || !conciergeCallId) return;
+    let cc: any = null;
+    try {
+      cc = await db.prepare('SELECT call_group_id FROM concierge_calls WHERE id = ?').bind(conciergeCallId).first();
+    } catch (e) { console.error('[telnyx-voice] group lookup failed:', e); }
+    const groupId = cc?.call_group_id;
+    if (!groupId) return; // 単発（非グループ）発信なら何もしない
+
+    if (outcome === 'booked' || outcome === 'available') {
+      // 成約 → グループを success に（次のホテルへは進めない）
+      await db.prepare("UPDATE concierge_call_groups SET status = 'success', updated_at = datetime('now') WHERE id = ? AND status != 'success'")
+        .bind(groupId).run().catch((e: any) => console.error('[telnyx-voice] group success update failed:', e));
+      return;
+    }
+
+    // 不成立（unavailable / no_answer / voicemail 等）→ 次のホテルへフォールバック発信
+    try {
+      const next = await initiateNextGroupCall(env, db, groupId);
+      console.log(`[telnyx-voice] advanceGroup group=${groupId} outcome=${outcome} →`, JSON.stringify(next));
+      if (next?.status === 'all_failed') {
+        await processGroupRefund(env, db, groupId).catch((e: any) => console.error('[telnyx-voice] group refund failed:', e));
+      }
+    } catch (e) {
+      console.error('[telnyx-voice] advanceGroup failed:', e);
+    }
+  }
+
+  // Helper (Task #52): 案内読み上げ＋入力収集を一体化（バージイン対応）。
+  // gather_using_speak は再生中でもDTMF押下を受け付け、押下で即 gather.ended になる＝早押し取りこぼしを防止。
+  async function gatherUsingSpeak(stateObj: any, payload: string, isPriceStep = false) {
+    const params: any = {
+      payload,
+      voice: 'Polly.Joanna',
+      language: 'en-US',
+      minimum_digits: 1,
+      maximum_digits: isPriceStep ? 6 : 1,
+      timeout_millis: isPriceStep ? 30000 : 20000,
+      inter_digit_timeout_millis: 4000,
+      client_state: encodeState(stateObj),
+    };
+    if (isPriceStep) params.terminating_digit = '#';
+    return telnyxCmd(apiKey, callControlId, 'gather_using_speak', params);
+  }
+
   console.log(`[${eventType}] ctrl=${callControlId.slice(0, 16)} bid=${bookingId} lid=${logId} step=${state.step} phase=${state.phase}`);
 
   // Record every event in DB
@@ -146,11 +194,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
             .bind(callControlId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
         }
-        await telnyxCmd(apiKey, callControlId, 'speak', {
-          payload: greeting,
-          voice: 'Polly.Joanna',
-          client_state: encodeState({ ...state, step: 'outreach_ask_interest' }),
-        });
+        await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest' }, greeting);
         break;
       }
 
@@ -170,11 +214,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           .bind(callControlId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('DB err:', e));
       }
 
-      await telnyxCmd(apiKey, callControlId, 'speak', {
-        payload: greeting,
-        voice: 'Polly.Joanna',
-        client_state: encodeState({ ...state, step: 'ask_dayuse', booking_id: bookingId, call_log_id: logId }),
-      });
+      await gatherUsingSpeak({ ...state, step: 'ask_dayuse', booking_id: bookingId, call_log_id: logId }, greeting);
       break;
     }
 
@@ -212,16 +252,19 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       console.log(`[gather] step=${step} speech="${speech}" digits=${digits} reason=${reason}`);
 
+      // Task #52: 入力内容（digits/speech/reason）を調査用に call_logs.note へ記録
+      if (db && logId) {
+        await db.prepare(`UPDATE call_logs SET note = COALESCE(note||' | ','') || ? WHERE id = ?`)
+          .bind(`input[step=${step},digits=${digits || '-'},speech=${(speech || '-').slice(0, 60)},reason=${reason || '-'}]`, logId)
+          .run().catch(e => console.error('[telnyx-voice] input log failed:', e));
+      }
+
       // ─── OUTREACH: Are you interested in being listed? ───
       if (step === 'outreach_ask_interest') {
         const answer = classifyYesNo(speech, digits);
 
         if (answer === 'repeat') {
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: "DayDreamHub is a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays. Listing your property is free. Are you interested? Press 1 or say yes. Press 2 or say no.",
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, step: 'outreach_ask_interest' }),
-          });
+          await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest' }, "DayDreamHub is a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays. Listing your property is free. Are you interested? Press 1 or say yes. Press 2 or say no.");
         } else if (answer === 'yes') {
           const farewell = "Wonderful! Our team will follow up with more details shortly. Thank you so much for your time, and we look forward to working with you. Goodbye!";
           if (db) {
@@ -267,11 +310,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
                 .bind(state.lead_id).run().catch(e => console.error('[telnyx-voice] outreach lead update failed:', e));
             }
           } else {
-            await telnyxCmd(apiKey, callControlId, 'speak', {
-              payload: "I'm sorry, I didn't catch that. Press 1 or say yes if you're interested in listing your property on DayDreamHub for free. Press 2 or say no if you're not interested.",
-              voice: 'Polly.Joanna',
-              client_state: encodeState({ ...state, step: 'outreach_ask_interest', retry_count: retryCount + 1 }),
-            });
+            await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest', retry_count: retryCount + 1 }, "I'm sorry, I didn't catch that. Press 1 or say yes if you're interested in listing your property on DayDreamHub for free. Press 2 or say no if you're not interested.");
           }
         }
         break;
@@ -287,11 +326,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTime = state.check_in_time || null;
           const checkOutTime = state.check_out_time || null;
           const timeInfo = checkInTime && checkOutTime ? ` from ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: `We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`,
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, step: 'ask_dayuse' }),
-          });
+          await gatherUsingSpeak({ ...state, step: 'ask_dayuse' }, `We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`);
         } else if (answer === 'yes') {
           // → STEP 2A: Ask for price
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
@@ -306,11 +341,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
               .bind(`[Hotel]: ${speech || 'pressed 1 (yes)'}\n[Agent]: ${priceAsk}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
           }
 
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: priceAsk,
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, step: 'ask_price', retry_count: 0 }),
-          });
+          await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: 0 }, priceAsk, true);
 
         } else if (answer === 'no') {
           // → STEP 2B: No day-use → record as potential partner
@@ -333,6 +364,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
+          // Task #52: グループ発信なら次のホテルへ
+          await advanceGroupAfterOutcome('unavailable');
 
         } else {
           // Timeout or unclear → retry
@@ -341,12 +374,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
+            await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No clear response to day-use question.' });
+            // Task #52: グループ発信なら次のホテルへ
+            await advanceGroupAfterOutcome('no_answer');
           } else {
-            await telnyxCmd(apiKey, callControlId, 'speak', {
-              payload: "I'm sorry, I did not receive a response. If you offer day-use plans, press 1 or say yes. If not, press 2 or say no.",
-              voice: 'Polly.Joanna',
-              client_state: encodeState({ ...state, step: 'ask_dayuse', retry_count: retryCount + 1 }),
-            });
+            await gatherUsingSpeak({ ...state, step: 'ask_dayuse', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. If you offer day-use plans, press 1 or say yes. If not, press 2 or say no.");
           }
         }
         break;
@@ -360,11 +392,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTimeR = state.check_in_time || null;
           const checkOutTimeR = state.check_out_time || null;
           const timeInfoR = checkInTimeR && checkOutTimeR ? ` from ${toAmPm(checkInTimeR)} to ${toAmPm(checkOutTimeR)}` : '';
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: `What is the rate for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`,
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, step: 'ask_price' }),
-          });
+          await gatherUsingSpeak({ ...state, step: 'ask_price' }, `What is the rate for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`, true);
           break;
         }
         const hotelSaid = speech || '';
@@ -388,11 +416,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
               .bind(`[Hotel]: ${hotelSaid}\n[Agent]: ${confirmAsk}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
           }
 
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: confirmAsk,
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, step: 'confirm_booking', price_quoted: priceResult.amount, retry_count: 0 }),
-          });
+          await gatherUsingSpeak({ ...state, step: 'confirm_booking', price_quoted: priceResult.amount, retry_count: 0 }, confirmAsk);
 
         } else {
           // Couldn't extract price → retry
@@ -403,17 +427,16 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
               await db.prepare(`UPDATE call_logs SET status='price_unclear', note='potential_partner', transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
                 .bind(`[Hotel]: ${hotelSaid}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
+            await updateConciergeCall('completed', { outcome: 'unavailable', ai_summary: 'Could not confirm price on call.' });
             await telnyxCmd(apiKey, callControlId, 'speak', {
               payload: farewell,
               voice: 'Polly.Joanna',
               client_state: encodeState({ ...state, phase: 'ending' }),
             });
+            // Task #52: グループ発信なら次のホテルへ
+            await advanceGroupAfterOutcome('unavailable');
           } else {
-            await telnyxCmd(apiKey, callControlId, 'speak', {
-              payload: "I'm sorry, could you repeat the price? Please say the amount in US dollars, or enter the number on your keypad and press the hash key when done.",
-              voice: 'Polly.Joanna',
-              client_state: encodeState({ ...state, step: 'ask_price', retry_count: retryCount + 1 }),
-            });
+            await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: retryCount + 1 }, "I'm sorry, could you repeat the price? Please say the amount in US dollars, or enter the number on your keypad and press the hash key when done.", true);
           }
         }
         break;
@@ -427,11 +450,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         if (answer === 'repeat') {
           const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
           const guests = state.guests || 1;
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceQuoted} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`,
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, step: 'confirm_booking' }),
-          });
+          await gatherUsingSpeak({ ...state, step: 'confirm_booking' }, `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceQuoted} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`);
         } else if (answer === 'yes') {
           // → Confirmed!
           const farewell = `Thank you! The reservation is confirmed at ${priceQuoted} dollars. Have a wonderful day!`;
@@ -477,6 +496,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
+          // Task #52: グループ発信なら成約確定（次のホテルへは進めない）
+          await advanceGroupAfterOutcome('booked');
 
         } else if (answer === 'no') {
           // → Declined (but potential partner)
@@ -530,6 +551,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
+          // Task #52: グループ発信なら次のホテルへ
+          await advanceGroupAfterOutcome('unavailable');
 
         } else {
           // Timeout or unclear → retry
@@ -538,12 +561,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
+            await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No clear response to booking confirmation.' });
+            // Task #52: グループ発信なら次のホテルへ
+            await advanceGroupAfterOutcome('no_answer');
           } else {
-            await telnyxCmd(apiKey, callControlId, 'speak', {
-              payload: "I'm sorry, I did not receive a response. Press 1 or say yes to confirm the reservation, or press 2 or say no to decline.",
-              voice: 'Polly.Joanna',
-              client_state: encodeState({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }),
-            });
+            await gatherUsingSpeak({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to confirm the reservation, or press 2 or say no to decline.");
           }
         }
         break;
@@ -555,9 +577,12 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     case 'call.hangup': {
       if (db && logId) {
         const log: any = await db.prepare(`SELECT status FROM call_logs WHERE id=?`).bind(logId).first().catch(() => null);
-        if (log && !['confirmed', 'declined', 'no_dayuse', 'price_unclear'].includes(log.status)) {
+        // 'no_answer' も除外: gather分岐で既に no_answer 設定＋フォールバック済みのケースを二重実行しない（冪等性）
+        if (log && !['confirmed', 'declined', 'no_dayuse', 'price_unclear', 'no_answer'].includes(log.status)) {
           await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
           await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No answer or call disconnected.' });
+          // Task #52: 応答前に切断された純粋な no_answer のみ、ここでフォールバック発信
+          await advanceGroupAfterOutcome('no_answer');
         }
         // Outreach: mark lead as no_answer if still in new/calling state
         if (state.phase === 'outreach' && state.lead_id) {

@@ -1,3 +1,5 @@
+import { getAccessToken, refundCapture } from './paypal';
+
 const LANGUAGE_MAP: Record<string, { code: string; name: string; nativeName: string; greeting: string; currency: string }> = {
   en: { code: "en", name: "English", nativeName: "English", greeting: "Hi there! This is Sarah from DayDreamHub. Thank you for your time.", currency: "USD" },
   fr: { code: "fr", name: "French", nativeName: "Français", greeting: "Bonjour! Je suis Sarah de DayDreamHub. Merci de prendre mon appel.", currency: "EUR" },
@@ -481,6 +483,26 @@ export async function initiateNextGroupCall(env: any, db: any, groupId: number) 
     total: group.total_calls,
     message: result.message
   };
+}
+
+// グループ全滅時の返金処理（telnyx-voice / ai-insights 両方から呼べるよう共通化）
+export async function processGroupRefund(env: any, db: any, groupId: number) {
+  const group: any = await db
+    .prepare('SELECT paypal_capture_id, payment_status, refund_status FROM concierge_call_groups WHERE id = ?')
+    .bind(groupId)
+    .first();
+  if (!group || group.payment_status !== 'paid' || group.refund_status === 'refunded') return;
+  if (!group.paypal_capture_id) return;
+  if (!env?.PAYPAL_CLIENT_ID || !env?.PAYPAL_SECRET) return;
+  const mode = env.PAYPAL_MODE || 'live';
+  const accessToken = await getAccessToken(env.PAYPAL_CLIENT_ID, env.PAYPAL_SECRET, mode);
+  const result = await refundCapture(accessToken, group.paypal_capture_id, mode);
+  await db
+    .prepare(
+      "UPDATE concierge_call_groups SET refund_status = ?, refund_id = ?, updated_at = datetime('now') WHERE id = ?"
+    )
+    .bind(result.status === 'COMPLETED' ? 'refunded' : 'refund_failed', result.id, groupId)
+    .run();
 }
 
 export async function initiateCall(env: any, db: any, sessionId: string, callId: number, params?: any) {
