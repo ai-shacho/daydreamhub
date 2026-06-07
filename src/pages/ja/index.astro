@@ -1210,13 +1210,23 @@ function escHtml(s) {
     return hotels;
   }
 
-  function addMsg(text, role) {
+  function addMsg(text, role, metadata) {
     showMessages();
     var wrap = document.createElement('div');
     wrap.className = 'flex gap-2' + (role === 'user' ? ' flex-row-reverse' : '');
     if (role === 'assistant') {
-      var hotelEntries = extractHotelSlugs(text);
-      var externalHotels = extractExternalHotels(text);
+      // Task #51: 構造化データ（metadata.hotels）を優先。無ければテキスト解析にフォールバック
+      var _metaHotels = (metadata && Array.isArray(metadata.hotels) && metadata.hotels.length > 0) ? metadata.hotels : null;
+      var _internalMeta = _metaHotels ? _metaHotels.filter(function(h){ return h.source === 'internal'; }) : null;
+      var _externalMeta = _metaHotels ? _metaHotels.filter(function(h){ return h.source === 'external'; }) : null;
+
+      var hotelEntries = (_internalMeta && _internalMeta.length > 0)
+        ? _internalMeta.map(function(h){ return { slug: h.slug, name: (h.name_ja || h.name) }; }).filter(function(h){ return h.slug; })
+        : extractHotelSlugs(text);
+
+      var externalHotels = (_externalMeta && _externalMeta.length > 0)
+        ? _externalMeta.map(function(h){ return { name: h.name || '', phone: h.phone || '' }; })
+        : extractExternalHotels(text);
 
       // 自社ホテル: 予約ボタン（マークダウンリンクから取得した実名を使用）
       var bookBtns = hotelEntries.map(function(h) {
@@ -1231,8 +1241,10 @@ function escHtml(s) {
 
       // 外部ホテル: 複数選択チェックボックス + まとめて電話ボタン（最大3件、合計$7）
       var callBtns = '';
-      if (externalHotels.length > 0) {
-        var top3 = externalHotels.slice(0, 3);
+      // 名前が取れていない候補は除外
+      var validExternal = externalHotels.filter(function(h){ return h.name && h.name.length >= 2; });
+      if (validExternal.length > 0) {
+        var top3 = validExternal.slice(0, 3);
         window._heroExternalHotels = top3;
         var items = top3.map(function(h, i) {
           var safeName = (h.name || '').replace(/"/g, '&quot;').slice(0, 60);
@@ -1615,7 +1627,7 @@ function escHtml(s) {
       });
       var data = await res.json();
       removeTyping();
-      addMsg(data.response || data.reply || data.message || (data.error ? '⚠️ ' + data.error : 'エラーが発生しました。もう一度お試しください。'), 'assistant');
+      addMsg(data.response || data.reply || data.message || (data.error ? '⚠️ ' + data.error : 'エラーが発生しました。もう一度お試しください。'), 'assistant', data.metadata);
 
       // 電話発信中なら自動ポーリング開始
       if (data.message_type === 'call_status' && data.metadata?.call_status === 'calling') {
