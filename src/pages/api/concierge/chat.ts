@@ -674,14 +674,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
       ).bind(session_id, locale).run();
 
       const { createCallGroup } = await import('../../../lib/tools');
+      const _adults = callGroupData.adults || 1;
+      const _children = callGroupData.children || 0;
       const requestDetails = {
         guest_name: callGroupData.guest_name,
         guest_email: callGroupData.guest_email,
+        // 正準キー（check_in_date / check_in_time / check_out_time / guests）に統一（Task #54）
         check_in_date: callGroupData.check_in_date,
         check_in_time: callGroupData.check_in_time || '10:00',
         check_out_time: callGroupData.check_out_time || '18:00',
-        adults: callGroupData.adults || 1,
-        children: callGroupData.children || 0,
+        adults: _adults,
+        children: _children,
+        guests: _adults + _children,
       };
       const group = await createCallGroup(env, {
         session_id,
@@ -735,6 +739,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           JSON.stringify({ error: 'hotels array and request_details required' }),
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
+      }
+      // 正準キー guests を明示的に補完（Task #54）
+      if (request_details.guests == null) {
+        request_details.guests = (request_details.adults || 1) + (request_details.children || 0);
       }
       await db
         .prepare(

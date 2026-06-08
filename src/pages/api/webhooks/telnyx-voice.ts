@@ -199,10 +199,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
 
       // STEP 1: Introduce DayDreamHub + ask about day-use availability
-      const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
+      const checkIn = (state.check_in_date || state.date || 'the requested date');
       const guests = state.guests || 1;
-      const checkInTime = state.check_in_time || null;
-      const checkOutTime = state.check_out_time || null;
+      const checkInTime = state.check_in_time || state.check_in || null;
+      const checkOutTime = state.check_out_time || state.check_out || null;
       const timeInfo = checkInTime && checkOutTime
         ? ` from ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}`
         : '';
@@ -321,18 +321,18 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const answer = classifyYesNo(speech, digits);
 
         if (answer === 'repeat') {
-          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim() || 'the requested date';
+          const checkIn = (state.check_in_date || state.date || 'the requested date');
           const guests = state.guests || 1;
-          const checkInTime = state.check_in_time || null;
-          const checkOutTime = state.check_out_time || null;
+          const checkInTime = state.check_in_time || state.check_in || null;
+          const checkOutTime = state.check_out_time || state.check_out || null;
           const timeInfo = checkInTime && checkOutTime ? ` from ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
           await gatherUsingSpeak({ ...state, step: 'ask_dayuse' }, `We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`);
         } else if (answer === 'yes') {
           // → STEP 2A: Ask for price
-          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
+          const checkIn = (state.check_in_date || state.date || 'the requested date');
           const guests = state.guests || 1;
-          const checkInTime = state.check_in_time || null;
-          const checkOutTime = state.check_out_time || null;
+          const checkInTime = state.check_in_time || state.check_in || null;
+          const checkOutTime = state.check_out_time || state.check_out || null;
           const timeInfo = checkInTime && checkOutTime ? ` from ${checkInTime} to ${checkOutTime}` : '';
           const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
 
@@ -387,10 +387,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       // ─── STEP 2A-1: Price inquiry ───
       if (step === 'ask_price') {
         if (digits === '3') {
-          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
+          const checkIn = (state.check_in_date || state.date || 'the requested date');
           const guests = state.guests || 1;
-          const checkInTimeR = state.check_in_time || null;
-          const checkOutTimeR = state.check_out_time || null;
+          const checkInTimeR = state.check_in_time || state.check_in || null;
+          const checkOutTimeR = state.check_out_time || state.check_out || null;
           const timeInfoR = checkInTimeR && checkOutTimeR ? ` from ${toAmPm(checkInTimeR)} to ${toAmPm(checkOutTimeR)}` : '';
           await gatherUsingSpeak({ ...state, step: 'ask_price' }, `What is the rate for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`, true);
           break;
@@ -404,10 +404,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         if (priceResult.amount && priceResult.amount > 0) {
           // Got price → confirm reservation
-          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
+          const checkIn = (state.check_in_date || state.date || 'the requested date');
           const guests = state.guests || 1;
-          const checkInTime = state.check_in_time || null;
-          const checkOutTime = state.check_out_time || null;
+          const checkInTime = state.check_in_time || state.check_in || null;
+          const checkOutTime = state.check_out_time || state.check_out || null;
           const timeInfo = checkInTime && checkOutTime ? `, ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
           const confirmAsk = `Thank you. To confirm: ${checkIn}${timeInfo}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceResult.amount} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`;
 
@@ -448,7 +448,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const priceQuoted = state.price_quoted || 0;
 
         if (answer === 'repeat') {
-          const checkIn = (state.check_in_date || 'the requested date').replace(/[^\x00-\x7F]/g, '').trim();
+          const checkIn = (state.check_in_date || state.date || 'the requested date');
           const guests = state.guests || 1;
           await gatherUsingSpeak({ ...state, step: 'confirm_booking' }, `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceQuoted} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`);
         } else if (answer === 'yes') {

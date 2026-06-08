@@ -510,11 +510,15 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
     const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details FROM concierge_calls WHERE id = ?").bind(callId).first();
     if (!callRow) return { call_id: callId, status: "failed", message: "Call record not found" };
     const details = JSON.parse(callRow.request_details);
+    // 正準キー（check_in_date / check_in_time / check_out_time / guests）を最優先で参照。
+    // 旧キー（date / check_in / check_out）にもフォールバック（Task #54）
     params = {
       hotel_name: callRow.hotel_name, hotel_phone: callRow.hotel_phone,
       hotel_source: callRow.hotel_source, guest_name: details.guest_name || "Guest",
-      date: details.date, check_in_time: details.check_in,
-      check_out_time: details.check_out, guests: details.guests,
+      date: details.check_in_date || details.date,
+      check_in_time: details.check_in_time || details.check_in,
+      check_out_time: details.check_out_time || details.check_out,
+      guests: details.guests ?? ((details.adults || 1) + (details.children || 0)),
       language: details.language, special_requests: details.special_requests,
       max_price: details.max_price || "",
       call_mode: details.call_mode || "initial",
@@ -544,7 +548,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       booking_id: null,
       hotel_id: null,
       guest_name: params.guest_name || 'Guest',
-      check_in_date: params.date || params.check_in_date || 'the requested date',
+      check_in_date: params.check_in_date || params.date || 'the requested date',
       check_in_time: params.check_in_time || null,
       check_out_time: params.check_out_time || null,
       guests: params.guests || 1,
