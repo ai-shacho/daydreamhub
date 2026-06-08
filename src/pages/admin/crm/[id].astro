@@ -1,7 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../../lib/adminAuth';
-import { formatDisplayDateJS } from '../../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
@@ -192,7 +191,15 @@ const { id } = Astro.params;
   </style>
 
   <script is:inline define:vars={{ leadId: id }}>
-    {formatDisplayDateJS}
+    // 日付フォーマット（YYYY-MMM-DD）をブラウザ側に直接定義（Task #55: {formatDisplayDateJS} 展開の構文エラーを解消）
+    function formatDisplayDate(dateStr) {
+      if (!dateStr) return '-';
+      var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+      var d = new Date(normalized);
+      if (isNaN(d.getTime())) return '-';
+      return d.getUTCFullYear() + '-' + MONTHS[d.getUTCMonth()] + '-' + String(d.getUTCDate()).padStart(2, '0');
+    }
     const STATUS = {
       new:         { label: '新規',   cls: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' },
       in_progress: { label: '追客中', cls: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' },
@@ -234,12 +241,20 @@ const { id } = Astro.params;
     }
 
     async function loadLead() {
-      const res = await fetch(`/api/crm/${leadId}`);
-      const data = await res.json();
-      if (!res.ok || !data.lead) return;
-      const lead = data.lead;
-      renderLeadCard(lead);
-      renderTimeline(data.reports || []);
+      try {
+        const res = await fetch(`/api/crm/${leadId}`);
+        if (!res.ok) throw new Error('API error ' + res.status);
+        const data = await res.json();
+        if (!data.lead) return;
+        const lead = data.lead;
+        renderLeadCard(lead);
+        renderTimeline(data.reports || []);
+      } catch (e) {
+        // Task #55: 取得失敗時もハングせずエラーを明示
+        console.error('[crm] loadLead failed:', e);
+        const nm = document.getElementById('lead-name');
+        if (nm) nm.textContent = '読み込みに失敗しました';
+      }
     }
 
     function renderLeadCard(lead) {

@@ -1,7 +1,6 @@
 ---
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../../lib/adminAuth';
-import { formatDisplayDateJS } from '../../../lib/dateFormat';
 
 const runtime = Astro.locals.runtime as any;
 const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
@@ -173,7 +172,15 @@ if (!admin) return Astro.redirect('/admin/login');
   </style>
 
   <script is:inline>
-    {formatDisplayDateJS}
+    // 日付フォーマット（YYYY-MMM-DD）をブラウザ側に直接定義（Task #55: {formatDisplayDateJS} 展開の構文エラーを解消）
+    function formatDisplayDate(dateStr) {
+      if (!dateStr) return '-';
+      var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+      var d = new Date(normalized);
+      if (isNaN(d.getTime())) return '-';
+      return d.getUTCFullYear() + '-' + MONTHS[d.getUTCMonth()] + '-' + String(d.getUTCDate()).padStart(2, '0');
+    }
     const STATUS = {
       new:         { label: '新規',   cls: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200' },
       in_progress: { label: '追客中', cls: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' },
@@ -203,11 +210,11 @@ if (!admin) return Astro.redirect('/admin/login');
       document.getElementById('empty-state').classList.add('hidden');
       document.getElementById('leads-tbody').innerHTML = '';
 
+      try {
       const qs = filter && filter !== 'all' ? `?filter=${filter}` : '';
       const res = await fetch(`/api/crm${qs}`);
+      if (!res.ok) throw new Error('API error ' + res.status);
       const data = await res.json();
-
-      document.getElementById('loading-state').classList.add('hidden');
 
       // Stats
       const s = data.stats || {};
@@ -255,6 +262,13 @@ if (!admin) return Astro.redirect('/admin/login');
         tr.addEventListener('click', () => { window.location.href = `/admin/crm/${lead.id}`; });
         tbody.appendChild(tr);
       });
+      } catch (e) {
+        console.error('[crm] loadLeads failed:', e);
+        document.getElementById('empty-state')?.classList.remove('hidden');
+      } finally {
+        // Task #55: API失敗時も必ずローディング表示を解除（無限ローディング防止）
+        document.getElementById('loading-state').classList.add('hidden');
+      }
     }
 
     // Tab switching
