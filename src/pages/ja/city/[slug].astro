@@ -68,7 +68,7 @@ try {
 const _testEnvFlag = ((Astro.locals as any).runtime?.env?.ENABLE_TEST_HOTELS ?? 'true');
 const _testHotels: any[] = (slug === 'tokyo' && page === 1 && _testEnvFlag !== 'false')
   ? [
-      { id: 'test-1', name: 'Test Hotel 1', name_ja: 'テストホテル1', address: '東京都渋谷区テスト1-1-1', city: 'Tokyo', country: 'Japan', phone: '+815032043020', is_test_injected: true },
+      { id: 'test-1', name: 'Test Hotel 1', name_ja: 'テストホテル1', address: '東京都渋谷区テスト1-1-1', city: 'Tokyo', country: 'Japan', phone: '+818038489554', is_test_injected: true },
       { id: 'test-2', name: 'Test Hotel 2', name_ja: 'テストホテル2', address: '東京都新宿区テスト2-2-2', city: 'Tokyo', country: 'Japan', phone: '+818053689489', is_test_injected: true },
       { id: 'test-3', name: 'Test Hotel 3', name_ja: 'テストホテル3', address: '東京都港区テスト3-3-3',   city: 'Tokyo', country: 'Japan', phone: '+818094160804', is_test_injected: true },
     ]
