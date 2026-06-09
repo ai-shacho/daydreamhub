@@ -2,7 +2,11 @@
 export interface CrmLead {
   id: number;
   hotel_id: number | null;
+  hotel_name: string;                 // ホテル名（必須・未登録ホテル対応）— Task #56
   progress: string;
+  next_progress_date: string | null;  // 次回進捗日 — Task #56
+  ddh_staff: string | null;           // DDHアポ担当者 — Task #56
+  progress_detail: string | null;     // 案件進捗の詳細 — Task #56
   lost_reason: string | null;
   last_updated: string | null;
   last_contact_date: string | null;
