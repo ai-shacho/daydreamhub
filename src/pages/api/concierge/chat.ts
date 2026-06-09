@@ -116,7 +116,9 @@ async function telnyxOrchestrate(
   const apiKey = env?.TELNYX_API_KEY;
   if (!apiKey) throw new Error('TELNYX_API_KEY not set');
 
-  const systemPrompt = locale === 'ja' ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
+  // Task #53-2: locale を堅牢に判定（'ja' / 'ja-JP' は日本語、それ以外は英語フォールバック）
+  const isJa = String(locale || '').toLowerCase().startsWith('ja');
+  const systemPrompt = isJa ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
 
   // Try to search hotels if the message seems to need it
   const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
@@ -360,9 +362,9 @@ async function telnyxOrchestrate(
     } catch (e) { /* ignore */ }
   }
 
-  const langOverride = locale === 'en'
-    ? `\n\n🔴 LANGUAGE OVERRIDE (HIGHEST PRIORITY): This session is in ENGLISH. You MUST write your entire reply in ENGLISH ONLY. Do NOT use Japanese, Thai, Korean, or any other language. Even if hotel names appear in Japanese, your response sentences must be in English.\n`
-    : `\n\n🔴 言語設定（最高優先）: このセッションは日本語です。必ず日本語で回答してください。\n`;
+  const langOverride = isJa
+    ? `\n\n🔴 言語設定（最高優先）: このセッションは日本語です。必ず日本語で回答してください。\n`
+    : `\n\n🔴 LANGUAGE OVERRIDE (HIGHEST PRIORITY): This session is in ENGLISH. You MUST write your entire reply in ENGLISH ONLY. Do NOT use Japanese, Thai, Korean, or any other language. Even if hotel names appear in Japanese, your response sentences must be in English.\n`;
 
   const systemWithContext = systemPrompt + hotelContext + langOverride +
     `\n\n` +
@@ -1152,7 +1154,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       result = await telnyxOrchestrate(env, claudeMessages, locale, db, session_id);
     } else {
       // Anthropic / Cloudflare AI fallback
-      const systemPrompt = locale === 'ja' ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
+      const isJa = String(locale || '').toLowerCase().startsWith('ja');
+      const systemPrompt = isJa ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
       const lastMsg = claudeMessages.filter((m: any) => m.role === 'user').pop()?.content || '';
       let hotelCtx = '';
       try {
