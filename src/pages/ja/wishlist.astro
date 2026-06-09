@@ -102,7 +102,7 @@ const isLoggedIn = !!authPayload;
 
     function renderHotelCard(hotel) {
       var minPriceHtml = hotel.min_price
-        ? '<p class="text-[#45A2C1] font-bold text-lg mb-2">$' + hotel.min_price + '~</p>' : '';
+        ? '<p class="text-[#45A2C1] font-bold text-lg mb-2">$' + hotel.min_price + '〜</p>' : '';
       return '<div class="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition-shadow relative">' +
         '<a href="' + BASE + '/hotel/' + hotel.slug + '">' +
           '<div class="w-full aspect-[4/3] overflow-hidden">' +
