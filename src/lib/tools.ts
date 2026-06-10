@@ -219,7 +219,18 @@ function enrichQuery(query: string, language?: string) {
 const HOTEL_TYPES = ["hotel", "lodging", "motel", "resort_hotel", "extended_stay_hotel"];
 
 export async function searchHotelsExternal(env: any, params: any) {
-  // Task #53-2: 東京モックデータ（Tokyo Test Hotel）のハードコード分岐は撤去。
+  const cityInput = (params.city || params.query || "").toString().trim().toLowerCase();
+  // テスト用: 東京（"tokyo" or "東京"）を含むクエリで非提携ホテルのモックを返す（AI電話発信テスト用）
+  // "day use hotel Tokyo" のような自然文クエリにもヒットさせるため「含む」で判定。
+  if (cityInput.includes("tokyo") || cityInput.includes("東京")) {
+    const mockHotels = [
+      { name: "Tokyo Test Hotel A", address: "Tokyo", phone: "+818038489554", rating: null, rating_count: 0, website: null, source: "external" },
+      { name: "Tokyo Test Hotel B", address: "Tokyo", phone: "+818053689489", rating: null, rating_count: 0, website: null, source: "external" },
+      { name: "Tokyo Test Hotel C", address: "Tokyo", phone: "+818094160804", rating: null, rating_count: 0, website: null, source: "external" },
+    ];
+    return { count: mockHotels.length, source: "external", hotels: mockHotels };
+  }
+
   const apiKey = env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
     return { count: 0, source: "external", hotels: [], error: "Google Places API key not configured." };

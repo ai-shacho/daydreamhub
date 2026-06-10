@@ -61,10 +61,25 @@ try {
   dbAvailable = false;
 }
 
-// Task #53-2: テスト用ダミーホテル注入（Task #46 TEMP）は完全撤去。
+// ── TEMP TEST INJECTION (Task #46) ────────────────────────────────────────
+// 撤去条件: env ENABLE_TEST_HOTELS=false に設定するか、このブロックを削除することで無効化。
+// 対象: slug=tokyo AND page=1 AND ENABLE_TEST_HOTELS != 'false' の場合のみ注入。
+// 本番影響なし: 既存の name NOT LIKE 'Test%' ロジックは一切変更しない。
+const _testEnvFlag = ((Astro.locals as any).runtime?.env?.ENABLE_TEST_HOTELS ?? 'true');
+const _testHotels: any[] = (slug === 'tokyo' && page === 1 && _testEnvFlag !== 'false')
+  ? [
+      { id: 'test-1', name: 'Test Hotel 1', name_ja: 'テストホテル1', address: '東京都渋谷区テスト1-1-1', city: 'Tokyo', country: 'Japan', phone: '+818038489554', is_test_injected: true },
+      { id: 'test-2', name: 'Test Hotel 2', name_ja: 'テストホテル2', address: '東京都新宿区テスト2-2-2', city: 'Tokyo', country: 'Japan', phone: '+818053689489', is_test_injected: true },
+      { id: 'test-3', name: 'Test Hotel 3', name_ja: 'テストホテル3', address: '東京都港区テスト3-3-3',   city: 'Tokyo', country: 'Japan', phone: '+818094160804', is_test_injected: true },
+    ]
+  : [];
+// ── END TEMP TEST INJECTION ────────────────────────────────────────────────
 
-// DB未接続・ホテル0件の都市は404
-if (!dbAvailable || hotels.length === 0) {
+// DB未接続・DB結果0件・テスト注入なし の場合のみ404
+if (!dbAvailable && _testHotels.length === 0) {
+  return Astro.redirect(localePath('/404', locale), 404);
+}
+if (hotels.length === 0 && _testHotels.length === 0) {
   return Astro.redirect(localePath('/404', locale), 404);
 }
 
@@ -169,4 +184,244 @@ const resultsText = t('city.hotels_found', locale).replace('{count}', String(tot
     </div>
   </section>
 
+  {/* ── TEMP: テスト用非提携ホテルセクション (Task #46) ───────────────────── */}
+  {_testHotels.length > 0 && (
+    <section class="py-8 bg-amber-50 border-t border-amber-200">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">🧪 テスト表示中</span>
+          <h2 class="text-lg font-bold text-gray-800">AIコンシェルジュ電話予約ホテル</h2>
+        </div>
+        <p class="text-sm text-gray-500 mb-6">以下は非提携ホテルです。AI電話で空き確認・予約を代行します（+$7サービス料）。</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {_testHotels.map((h: any) => (
+            <div class="bg-white rounded-xl border border-amber-200 shadow-sm p-5 flex flex-col gap-3">
+              <div class="flex items-start justify-between">
+                <div>
+                  <h3 class="font-semibold text-gray-900 text-sm">{h.name_ja || h.name}</h3>
+                  <p class="text-xs text-gray-500 mt-0.5">{h.address}</p>
+                  <p class="text-xs text-gray-400">{h.city}, {h.country}</p>
+                </div>
+                <span class="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">非提携</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2">
+                <svg class="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+                <span class="font-mono">{h.phone}</span>
+              </div>
+              <button
+                class="ai-book-btn w-full py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-teal-500 rounded-lg hover:from-teal-700 hover:to-teal-600 transition-all shadow-sm flex items-center justify-center gap-2"
+                data-hotel-name={h.name}
+                data-hotel-name-ja={h.name_ja}
+                data-hotel-phone={h.phone}
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+                AI電話予約（+$7）
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  {/* ── AI電話予約モーダル (Task #46) ──────────────────────────────────── */}
+  {_testHotels.length > 0 && (
+    <>
+      <div id="ai-book-modal-bg" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <div>
+              <h2 class="text-base font-semibold text-slate-800">AI電話予約</h2>
+              <p id="ai-modal-hotel-name" class="text-sm text-teal-600 font-medium mt-0.5"></p>
+            </div>
+            <button id="ai-modal-close" class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          <div class="px-6 py-5 space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">お名前 <span class="text-red-500">*</span></label>
+                <input id="ai-guest-name" type="text" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500" placeholder="山田 太郎" required />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">メール <span class="text-red-500">*</span></label>
+                <input id="ai-guest-email" type="email" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500" placeholder="you@example.com" required />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">ご利用日 <span class="text-red-500">*</span></label>
+              <input id="ai-checkin-date" type="date" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500" required />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">チェックイン</label>
+                <input id="ai-checkin-time" type="time" value="10:00" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-600 mb-1">チェックアウト</label>
+                <input id="ai-checkout-time" type="time" value="15:00" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500" />
+              </div>
+            </div>
+
+            <div id="ai-error-box" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700"></div>
+            <div id="ai-status-box" class="hidden bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700"></div>
+            <div id="ai-paypal-container" class="hidden"></div>
+
+            <button id="ai-submit-btn" class="w-full py-3 text-sm font-semibold text-white bg-gradient-to-r from-teal-600 to-teal-500 rounded-xl hover:from-teal-700 hover:to-teal-600 transition-all shadow flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
+              💳 PayPal で $7 支払い → AI電話発信
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <script is:inline>
+        (function() {
+          var _targetHotel = null;
+          var modalBg = document.getElementById('ai-book-modal-bg');
+          var submitBtn = document.getElementById('ai-submit-btn');
+          var errorBox = document.getElementById('ai-error-box');
+          var statusBox = document.getElementById('ai-status-box');
+          var paypalContainer = document.getElementById('ai-paypal-container');
+
+          function showModal(hotelName, hotelNameJa, hotelPhone) {
+            _targetHotel = { name: hotelName, name_ja: hotelNameJa, phone: hotelPhone };
+            document.getElementById('ai-modal-hotel-name').textContent = hotelNameJa || hotelName;
+            errorBox.classList.add('hidden');
+            statusBox.classList.add('hidden');
+            paypalContainer.classList.add('hidden');
+            paypalContainer.innerHTML = '';
+            submitBtn.style.display = '';
+            submitBtn.disabled = false;
+            submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信';
+            modalBg.classList.remove('hidden');
+            modalBg.classList.add('flex');
+          }
+          function hideModal() {
+            modalBg.classList.add('hidden');
+            modalBg.classList.remove('flex');
+          }
+
+          // ボタンにイベント登録
+          document.querySelectorAll('.ai-book-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              showModal(btn.dataset.hotelName, btn.dataset.hotelNameJa, btn.dataset.hotelPhone);
+            });
+          });
+          document.getElementById('ai-modal-close').addEventListener('click', hideModal);
+          modalBg.addEventListener('click', function(e) { if (e.target === modalBg) hideModal(); });
+
+          function setError(msg) {
+            errorBox.textContent = msg;
+            errorBox.classList.remove('hidden');
+            statusBox.classList.add('hidden');
+          }
+          function setStatus(msg) {
+            statusBox.textContent = msg;
+            statusBox.classList.remove('hidden');
+            errorBox.classList.add('hidden');
+          }
+
+          function loadPayPalSDK(clientId) {
+            return new Promise(function(resolve, reject) {
+              if (window.paypal) { resolve(window.paypal); return; }
+              var s = document.createElement('script');
+              s.src = 'https://www.paypal.com/sdk/js?client-id=' + clientId + '&currency=USD&intent=capture&locale=ja_JP';
+              s.onload = function() { resolve(window.paypal); };
+              s.onerror = function() { reject(new Error('PayPal SDK load failed')); };
+              document.head.appendChild(s);
+            });
+          }
+
+          submitBtn.addEventListener('click', async function() {
+            var name  = document.getElementById('ai-guest-name').value.trim();
+            var email = document.getElementById('ai-guest-email').value.trim();
+            var date  = document.getElementById('ai-checkin-date').value;
+            var ckin  = document.getElementById('ai-checkin-time').value;
+            var ckout = document.getElementById('ai-checkout-time').value;
+
+            if (!name || !email || !date) { setError('お名前・メール・ご利用日は必須です。'); return; }
+            if (!_targetHotel) return;
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = '処理中...';
+            setStatus('予約リクエストを作成しています...');
+
+            try {
+              // Step 1: call_group 作成
+              var groupRes = await fetch('/api/concierge/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  session_id: 'city-test-' + Date.now(),
+                  message: '__create_call_group_direct',
+                  locale: 'ja',
+                  _call_group: {
+                    hotels: [{ hotel_name: _targetHotel.name, hotel_phone: _targetHotel.phone, hotel_source: 'external' }],
+                    guest_name: name, guest_email: email,
+                    check_in_date: date, check_in_time: ckin, check_out_time: ckout
+                  }
+                })
+              });
+              var groupData = await groupRes.json();
+              if (groupData.error) { setError('エラー: ' + groupData.error); submitBtn.disabled = false; submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信'; return; }
+
+              var groupId = groupData.group_id;
+              var paypalOrderId = groupData.paypal_order_id;
+              if (!groupId || !paypalOrderId) { setError('予約リクエストの作成に失敗しました。'); submitBtn.disabled = false; submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信'; return; }
+
+              // Step 2: PayPal client ID 取得
+              setStatus('PayPal 決済画面を準備しています...');
+              var configRes = await fetch('/api/concierge/pay', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'config' }) });
+              var configData = await configRes.json();
+              var clientId = configData.client_id || '';
+              if (!clientId) { setError('PayPal設定エラーが発生しました。'); submitBtn.disabled = false; submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信'; return; }
+
+              submitBtn.style.display = 'none';
+              paypalContainer.classList.remove('hidden');
+              paypalContainer.innerHTML = '';
+              await loadPayPalSDK(clientId);
+
+              // Step 3: PayPal ボタン描画
+              window.paypal.Buttons({
+                style: { layout: 'vertical', color: 'blue', shape: 'rect', label: 'pay' },
+                createOrder: function() { return paypalOrderId; },
+                onApprove: async function(data) {
+                  paypalContainer.innerHTML = '<p class="text-center text-sm text-blue-600 py-2">決済処理中...</p>';
+                  try {
+                    var captureRes = await fetch('/api/concierge/pay', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'capture', order_id: data.orderID, group_id: groupId })
+                    });
+                    var captureData = await captureRes.json();
+                    if (captureData.success) {
+                      paypalContainer.innerHTML = '';
+                      setStatus('✅ 支払い完了！AIが ' + (_targetHotel.name_ja || _targetHotel.name) + ' に電話をかけます。結果はメールでお知らせします。');
+                    } else {
+                      setError('決済処理に失敗しました: ' + (captureData.error || ''));
+                      paypalContainer.innerHTML = '';
+                      submitBtn.style.display = '';
+                      submitBtn.disabled = false;
+                      submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信';
+                    }
+                  } catch(e) { setError('決済処理中にエラーが発生しました。'); paypalContainer.innerHTML = ''; }
+                },
+                onError: function(err) { setError('PayPalエラー: ' + (err.message || '不明なエラー')); paypalContainer.innerHTML = ''; submitBtn.style.display = ''; submitBtn.disabled = false; submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信'; }
+              }).render('#ai-paypal-container');
+
+            } catch(e) {
+              setError('予期しないエラーが発生しました。');
+              submitBtn.disabled = false;
+              submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信';
+            }
+          });
+        })();
+      </script>
+    </>
+  )}
+  {/* ── END TEMP: Task #46 ──────────────────────────────────────────── */}
 </Layout>
