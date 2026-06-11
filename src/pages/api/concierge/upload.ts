@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { analyzeFlightImage } from '../../../lib/claude';
+import { processFlightImageJob, failFlightImageJob, type FlightImageJobPayload } from '../../../lib/flight-image-jobs';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -8,7 +8,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const env = runtime?.env;
   const r2 = env?.IMAGES;
-  if (!r2 || !env?.ANTHROPIC_API_KEY) {
+  if (!r2 || !env?.DB) {
     return new Response(JSON.stringify({ error: 'Service not available' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
@@ -52,23 +52,40 @@ export const POST: APIRoute = async ({ request, locals }) => {
       httpMetadata: { contentType: image.type },
     });
 
-    let binary = '';
-    const chunkSize = 8192;
-    for (let i = 0; i < uint8.length; i += chunkSize) {
-      binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
-    }
-    const base64 = btoa(binary);
+    await env.DB
+      .prepare(
+        `INSERT INTO concierge_image_jobs (session_id, image_key, mime_type, status, created_at, updated_at)
+         VALUES (?1, ?2, ?3, 'queued', datetime('now'), datetime('now'))`
+      )
+      .bind(sessionId, imageKey, image.type)
+      .run();
 
-    let analysis: any = {};
-    try {
-      const result = await analyzeFlightImage(env, base64, image.type);
-      analysis = JSON.parse(result);
-    } catch {
-      analysis = { error: 'Could not analyze image' };
+    const payload: FlightImageJobPayload = {
+      image_key: imageKey,
+      session_id: sessionId,
+      mime_type: image.type,
+    };
+
+    if (env.FLIGHT_IMAGE_QUEUE) {
+      await env.FLIGHT_IMAGE_QUEUE.send(payload);
+      return new Response(JSON.stringify({ image_key: imageKey, job_status: 'queued' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
-    return new Response(JSON.stringify({ image_key: imageKey, analysis }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+
+    // Fallback for environments without queue binding
+    try {
+      const analysis = await processFlightImageJob(env, payload);
+      return new Response(JSON.stringify({ image_key: imageKey, job_status: 'completed', analysis }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (jobError) {
+      await failFlightImageJob(env, payload, jobError);
+      return new Response(JSON.stringify({ image_key: imageKey, job_status: 'failed' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   } catch (e) {
     console.error('Upload error:', e);
     return new Response(JSON.stringify({ error: 'Upload failed' }), {

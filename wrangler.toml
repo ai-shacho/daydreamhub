@@ -1,13 +1,8 @@
 name = "daydreamhub"
+main = "worker-entry.mjs"
 compatibility_date = "2024-12-18"
 compatibility_flags = ["nodejs_compat"]
-[build]
-command = "npm run build"
-directory = "dist"
-
-[site]
-bucket = "./dist"
-entry-point = "./dist/_worker.js"
+pages_build_output_dir = "dist"
 
 [[d1_databases]]
 binding = "DB"
@@ -21,6 +16,16 @@ bucket_name = "daydreamhub-images"
 
 [ai]
 binding = "AI"
+
+[[queues.producers]]
+binding = "FLIGHT_IMAGE_QUEUE"
+queue = "ddh-flight-image-jobs"
+
+[[queues.consumers]]
+queue = "ddh-flight-image-jobs"
+max_batch_size = 5
+max_batch_timeout = 10
+max_retries = 5
 
 # [triggers] - Pages does not support triggers; use external cron (e.g. cron-job.org)
 # crons = ["0 1 * * *"]
