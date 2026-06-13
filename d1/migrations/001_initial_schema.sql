@@ -103,7 +103,11 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 CREATE INDEX IF NOT EXISTS idx_bookings_hotel_id ON bookings(hotel_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_plan_id ON bookings(plan_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
+-- NOTE:
+-- Existing production DBs may already have a legacy `bookings` table definition
+-- without `user_id`. Because this baseline migration must be idempotent,
+-- avoid creating a `user_id` index here (it would fail with
+-- `no such column: user_id` when table creation is skipped by IF NOT EXISTS).
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 CREATE INDEX IF NOT EXISTS idx_bookings_created_at ON bookings(created_at);
 
@@ -184,7 +188,10 @@ CREATE TABLE IF NOT EXISTS wishlist (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_wishlist_user_id ON wishlist(user_id);
+-- NOTE:
+-- Existing production DBs may already have a legacy `wishlist` table definition
+-- without `user_id`. Keep this baseline migration idempotent by avoiding
+-- a `user_id` index creation here.
 CREATE INDEX IF NOT EXISTS idx_wishlist_hotel_id ON wishlist(hotel_id);
 
 -- Hotel staff mapping (do NOT include staff_role; added in migration 022)
@@ -200,7 +207,10 @@ CREATE TABLE IF NOT EXISTS hotel_staff (
   FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_hotel_staff_hotel_id ON hotel_staff(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_hotel_staff_user_id ON hotel_staff(user_id);
+-- NOTE:
+-- Existing production DBs may already have a legacy `hotel_staff` table definition
+-- without `user_id`. Keep this baseline migration idempotent by avoiding
+-- a `user_id` index creation here.
 
 -- Owner notification settings
 CREATE TABLE IF NOT EXISTS notification_settings (
