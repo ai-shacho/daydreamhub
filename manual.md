@@ -94,3 +94,4 @@ DayDreamHubは、世界中のホテルをデイユース（時間単位）で予
 
 © 2026 DayDreamHub — プラットフォーム仕様書 v2.0
 社内限定資料 — 外部への共有はご遠慮ください
+> CI/CD test note: trigger-only doc update on 2026-06-13 (no production logic changes).
