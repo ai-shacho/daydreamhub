@@ -15,8 +15,6 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
 -- Hotels (do NOT include columns that are added by later migrations: review_requested_at, coords_verified_at, status)
 CREATE TABLE IF NOT EXISTS hotels (
@@ -46,10 +44,6 @@ CREATE TABLE IF NOT EXISTS hotels (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_hotels_slug ON hotels(slug);
-CREATE INDEX IF NOT EXISTS idx_hotels_city ON hotels(city);
-CREATE INDEX IF NOT EXISTS idx_hotels_country ON hotels(country);
-CREATE INDEX IF NOT EXISTS idx_hotels_is_active ON hotels(is_active);
 
 -- Plans
 CREATE TABLE IF NOT EXISTS plans (
@@ -75,8 +69,6 @@ CREATE TABLE IF NOT EXISTS plans (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_plans_hotel_id ON plans(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_plans_hotel_active ON plans(hotel_id, is_active);
 
 -- Bookings
 CREATE TABLE IF NOT EXISTS bookings (
@@ -101,15 +93,11 @@ CREATE TABLE IF NOT EXISTS bookings (
   FOREIGN KEY (plan_id) REFERENCES plans(id) ON DELETE SET NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_bookings_hotel_id ON bookings(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_plan_id ON bookings(plan_id);
 -- NOTE:
 -- Existing production DBs may already have a legacy `bookings` table definition
 -- without `user_id`. Because this baseline migration must be idempotent,
 -- avoid creating a `user_id` index here (it would fail with
 -- `no such column: user_id` when table creation is skipped by IF NOT EXISTS).
-CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
-CREATE INDEX IF NOT EXISTS idx_bookings_created_at ON bookings(created_at);
 
 -- Reviews
 CREATE TABLE IF NOT EXISTS reviews (
@@ -128,9 +116,6 @@ CREATE TABLE IF NOT EXISTS reviews (
   FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_reviews_hotel_id ON reviews(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_reviews_booking_id ON reviews(booking_id);
-CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(status);
 
 -- Review replies
 CREATE TABLE IF NOT EXISTS review_replies (
@@ -145,7 +130,6 @@ CREATE TABLE IF NOT EXISTS review_replies (
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE SET NULL,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_review_replies_review_id ON review_replies(review_id);
 
 -- Amenities master
 CREATE TABLE IF NOT EXISTS amenities (
@@ -164,8 +148,6 @@ CREATE TABLE IF NOT EXISTS hotel_amenities (
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE,
   FOREIGN KEY (amenity_id) REFERENCES amenities(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_hotel_amenities_hotel_id ON hotel_amenities(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_hotel_amenities_amenity_id ON hotel_amenities(amenity_id);
 
 -- Hotel images
 CREATE TABLE IF NOT EXISTS hotel_images (
@@ -176,7 +158,6 @@ CREATE TABLE IF NOT EXISTS hotel_images (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_hotel_images_hotel_id ON hotel_images(hotel_id);
 
 -- Wishlist / favorites
 CREATE TABLE IF NOT EXISTS wishlist (
@@ -192,7 +173,6 @@ CREATE TABLE IF NOT EXISTS wishlist (
 -- Existing production DBs may already have a legacy `wishlist` table definition
 -- without `user_id`. Keep this baseline migration idempotent by avoiding
 -- a `user_id` index creation here.
-CREATE INDEX IF NOT EXISTS idx_wishlist_hotel_id ON wishlist(hotel_id);
 
 -- Hotel staff mapping (do NOT include staff_role; added in migration 022)
 CREATE TABLE IF NOT EXISTS hotel_staff (
@@ -206,7 +186,6 @@ CREATE TABLE IF NOT EXISTS hotel_staff (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_hotel_staff_hotel_id ON hotel_staff(hotel_id);
 -- NOTE:
 -- Existing production DBs may already have a legacy `hotel_staff` table definition
 -- without `user_id`. Keep this baseline migration idempotent by avoiding
@@ -238,9 +217,6 @@ CREATE TABLE IF NOT EXISTS call_logs (
   FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_call_logs_booking_id ON call_logs(booking_id);
-CREATE INDEX IF NOT EXISTS idx_call_logs_hotel_id ON call_logs(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_call_logs_status ON call_logs(status);
 
 -- Hotel edit requests
 CREATE TABLE IF NOT EXISTS hotel_edit_requests (
@@ -257,8 +233,6 @@ CREATE TABLE IF NOT EXISTS hotel_edit_requests (
   FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_hotel_edit_requests_hotel_id ON hotel_edit_requests(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_hotel_edit_requests_status ON hotel_edit_requests(status);
 
 -- Blocked dates / inventory lock
 CREATE TABLE IF NOT EXISTS blocked_dates (
@@ -270,8 +244,6 @@ CREATE TABLE IF NOT EXISTS blocked_dates (
   UNIQUE(hotel_id, blocked_date),
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_blocked_dates_hotel_id ON blocked_dates(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_blocked_dates_date ON blocked_dates(blocked_date);
 
 -- Admin login attempts
 CREATE TABLE IF NOT EXISTS admin_login_attempts (
@@ -281,9 +253,6 @@ CREATE TABLE IF NOT EXISTS admin_login_attempts (
   success INTEGER NOT NULL DEFAULT 0,
   attempted_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_email ON admin_login_attempts(email);
-CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_ip ON admin_login_attempts(ip);
-CREATE INDEX IF NOT EXISTS idx_admin_login_attempts_attempted_at ON admin_login_attempts(attempted_at);
 
 -- News / What's New
 CREATE TABLE IF NOT EXISTS news (
@@ -296,8 +265,6 @@ CREATE TABLE IF NOT EXISTS news (
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_news_category ON news(category);
-CREATE INDEX IF NOT EXISTS idx_news_published_at ON news(published_at);
 
 -- Email/message logs
 CREATE TABLE IF NOT EXISTS messages (
@@ -316,11 +283,6 @@ CREATE TABLE IF NOT EXISTS messages (
   FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_messages_booking_id ON messages(booking_id);
-CREATE INDEX IF NOT EXISTS idx_messages_hotel_id ON messages(hotel_id);
-CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status);
-CREATE INDEX IF NOT EXISTS idx_messages_direction ON messages(direction);
-CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
 
 -- Exchange-rate cache
 CREATE TABLE IF NOT EXISTS exchange_rate_cache (
@@ -336,7 +298,6 @@ CREATE TABLE IF NOT EXISTS concierge_sessions (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_concierge_sessions_updated_at ON concierge_sessions(updated_at);
 
 -- Concierge message history
 CREATE TABLE IF NOT EXISTS concierge_messages (
@@ -350,8 +311,6 @@ CREATE TABLE IF NOT EXISTS concierge_messages (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (session_id) REFERENCES concierge_sessions(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_concierge_messages_session_id ON concierge_messages(session_id);
-CREATE INDEX IF NOT EXISTS idx_concierge_messages_created_at ON concierge_messages(created_at);
 
 -- Concierge grouped phone-booking requests
 CREATE TABLE IF NOT EXISTS concierge_call_groups (
@@ -372,9 +331,6 @@ CREATE TABLE IF NOT EXISTS concierge_call_groups (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (session_id) REFERENCES concierge_sessions(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_concierge_call_groups_session_id ON concierge_call_groups(session_id);
-CREATE INDEX IF NOT EXISTS idx_concierge_call_groups_status ON concierge_call_groups(status);
-CREATE INDEX IF NOT EXISTS idx_concierge_call_groups_payment_status ON concierge_call_groups(payment_status);
 
 -- Concierge individual call attempts
 CREATE TABLE IF NOT EXISTS concierge_calls (
@@ -412,10 +368,6 @@ CREATE TABLE IF NOT EXISTS concierge_calls (
   FOREIGN KEY (call_group_id) REFERENCES concierge_call_groups(id) ON DELETE SET NULL,
   FOREIGN KEY (hotel_id) REFERENCES hotels(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_concierge_calls_session_id ON concierge_calls(session_id);
-CREATE INDEX IF NOT EXISTS idx_concierge_calls_group_order ON concierge_calls(call_group_id, call_order);
-CREATE INDEX IF NOT EXISTS idx_concierge_calls_status ON concierge_calls(status);
-CREATE INDEX IF NOT EXISTS idx_concierge_calls_telnyx_call_id ON concierge_calls(telnyx_call_id);
 
 -- Blog posts (base columns only; automation columns are added by later migration 029)
 CREATE TABLE IF NOT EXISTS blog_posts (
@@ -432,6 +384,3 @@ CREATE TABLE IF NOT EXISTS blog_posts (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_blog_posts_slug ON blog_posts(slug);
-CREATE INDEX IF NOT EXISTS idx_blog_posts_city ON blog_posts(city);
-CREATE INDEX IF NOT EXISTS idx_blog_posts_published_at ON blog_posts(published_at);
