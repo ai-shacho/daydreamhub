@@ -64,6 +64,13 @@
     width:480px;height:480px;border-radius:50%;
     background:radial-gradient(circle,rgba(255,138,92,.30),transparent 70%);
   }
+  .cover-bg{
+    position:absolute;inset:0;
+    background-image:var(--img-cover);
+    background-size:cover;background-position:center;
+    opacity:.32;mix-blend-mode:luminosity;z-index:0;
+  }
+  .cover .brand,.cover h1,.cover .tag,.cover .pill,.cover .meta{position:relative;z-index:2;}
   .cover .brand{font-size:15px;letter-spacing:.32em;opacity:.85;font-weight:600;}
   .cover h1{font-size:52px;line-height:1.12;margin:18px 0 10px;font-weight:800;letter-spacing:-.01em;}
   .cover .tag{font-size:19px;opacity:.92;font-weight:500;max-width:140mm;}
@@ -147,6 +154,13 @@
   .pillrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
   .tag2{background:var(--bg-soft);border:1px solid var(--line);color:var(--indigo);
     font-size:12px;padding:6px 13px;border-radius:999px;font-weight:600;}
+
+  .citygrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px;}
+  .citycard{height:78px;border-radius:12px;position:relative;overflow:hidden;
+    background-size:cover;background-position:center;border:1px solid var(--line);}
+  .citycard span{position:absolute;left:0;right:0;bottom:0;padding:7px 10px;color:#fff;
+    font-size:12px;font-weight:700;letter-spacing:.02em;
+    background:linear-gradient(transparent,rgba(20,26,60,.85));}
 
   .callout{
     border-left:4px solid var(--accent);background:#fff7f2;border-radius:0 12px 12px 0;
@@ -333,11 +347,16 @@
 
   <h3 style="color:var(--indigo);font-size:15px;margin-bottom:10px;">展開エリア（一例）</h3>
   <p class="psub" style="margin-bottom:10px;">世界80都市以上に展開。多言語・多通貨に対応し、各地のニーズに合わせて拡張中。</p>
-  <div class="pillrow" style="margin-bottom:24px;">
-    <span class="tag2">カイロ</span><span class="tag2">ギザ</span><span class="tag2">ナイロビ</span>
-    <span class="tag2">カルガリー</span><span class="tag2">ナイアガラ</span><span class="tag2">トビリシ</span>
-    <span class="tag2">ゴリス</span><span class="tag2">オウル</span><span class="tag2">エクアドル</span>
-    <span class="tag2">…and more</span>
+  <div class="citygrid">
+    <div class="citycard" style="background-image:var(--img-cairo);"><span>カイロ</span></div>
+    <div class="citycard" style="background-image:var(--img-giza);"><span>ギザ</span></div>
+    <div class="citycard" style="background-image:var(--img-nairobi);"><span>ナイロビ</span></div>
+    <div class="citycard" style="background-image:var(--img-tbilisi);"><span>トビリシ</span></div>
+    <div class="citycard" style="background-image:var(--img-calgary);"><span>カルガリー</span></div>
+    <div class="citycard" style="background-image:var(--img-niagara);"><span>ナイアガラ</span></div>
+    <div class="citycard" style="background-image:var(--img-goris);"><span>ゴリス</span></div>
+    <div class="citycard" style="background-image:var(--img-oulu);"><span>オウル</span></div>
+    <div class="citycard" style="background-image:var(--img-ecuador);"><span>エクアドル ほか</span></div>
   </div>
 
   <h3 style="color:var(--indigo);font-size:15px;margin-bottom:10px;">決済・対応</h3>
