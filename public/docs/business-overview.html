@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DayDreamHub 事業概要</title>
+<style>
+  :root{
+    --indigo:#1e2a78;
+    --indigo2:#3b48b5;
+    --sky:#4f7cff;
+    --accent:#ff8a5c;
+    --accent2:#ffd166;
+    --ink:#1d2333;
+    --muted:#5b6477;
+    --line:#e3e7f2;
+    --bg-soft:#f5f7fd;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  body{
+    font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+    color:var(--ink);
+    line-height:1.7;
+    background:#e9ecf6;
+    font-size:14px;
+  }
+
+  /* A4 page */
+  .page{
+    width:210mm;
+    min-height:297mm;
+    padding:18mm 16mm;
+    margin:0 auto 10mm;
+    background:var(--card);
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 4px 24px rgba(30,42,120,.12);
+  }
+  @page{ size:A4; margin:0; }
+  @media print{
+    body{background:#fff;}
+    .page{margin:0;box-shadow:none;page-break-after:always;}
+    .page:last-child{page-break-after:auto;}
+  }
+
+  /* ===== Cover ===== */
+  .cover{
+    background:linear-gradient(135deg,var(--indigo) 0%,var(--indigo2) 55%,var(--sky) 100%);
+    color:#fff;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding:0 22mm;
+  }
+  .cover::before{
+    content:"";position:absolute;top:-120px;right:-120px;
+    width:420px;height:420px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,209,102,.35),transparent 70%);
+  }
+  .cover::after{
+    content:"";position:absolute;bottom:-160px;left:-100px;
+    width:480px;height:480px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,138,92,.30),transparent 70%);
+  }
+  .cover .brand{font-size:15px;letter-spacing:.32em;opacity:.85;font-weight:600;}
+  .cover h1{font-size:52px;line-height:1.12;margin:18px 0 10px;font-weight:800;letter-spacing:-.01em;}
+  .cover .tag{font-size:19px;opacity:.92;font-weight:500;max-width:140mm;}
+  .cover .pill{
+    display:inline-block;margin-top:30px;padding:8px 18px;border-radius:999px;
+    background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);
+    font-size:13px;letter-spacing:.05em;backdrop-filter:blur(2px);
+  }
+  .cover .meta{
+    position:absolute;bottom:20mm;left:22mm;right:22mm;
+    display:flex;justify-content:space-between;align-items:flex-end;
+    font-size:12px;opacity:.85;border-top:1px solid rgba(255,255,255,.25);padding-top:14px;
+  }
+
+  /* ===== Section chrome ===== */
+  .phead{display:flex;align-items:baseline;gap:14px;margin-bottom:6px;}
+  .pnum{
+    font-size:13px;font-weight:800;color:#fff;background:var(--indigo2);
+    border-radius:7px;padding:3px 10px;letter-spacing:.05em;
+  }
+  .ptitle{font-size:26px;font-weight:800;color:var(--indigo);letter-spacing:-.01em;}
+  .psub{color:var(--muted);font-size:13px;margin-bottom:22px;padding-left:2px;}
+  .rule{height:3px;width:46px;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;margin:14px 0 24px;}
+
+  .foot{
+    position:absolute;bottom:10mm;left:16mm;right:16mm;
+    display:flex;justify-content:space-between;
+    font-size:10.5px;color:#9aa3bb;border-top:1px solid var(--line);padding-top:8px;
+  }
+
+  /* ===== building blocks ===== */
+  p{margin-bottom:12px;}
+  .lead{font-size:15.5px;color:#2c3450;margin-bottom:20px;}
+  strong{color:var(--indigo);}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+
+  .card{
+    border:1px solid var(--line);border-radius:14px;padding:18px 18px;
+    background:var(--card);
+  }
+  .card.soft{background:var(--bg-soft);}
+  .card h3{font-size:15px;color:var(--indigo);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+  .card p{font-size:12.8px;color:var(--muted);margin:0;}
+  .ico{
+    width:30px;height:30px;border-radius:9px;flex:0 0 30px;
+    display:inline-flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--indigo2),var(--sky));color:#fff;font-size:15px;
+  }
+
+  .stat{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:6px 0 26px;}
+  .stat .s{
+    background:linear-gradient(135deg,#f3f6ff,#eef2ff);
+    border:1px solid var(--line);border-radius:14px;padding:16px 12px;text-align:center;
+  }
+  .stat .n{font-size:30px;font-weight:800;color:var(--indigo);line-height:1;}
+  .stat .l{font-size:11px;color:var(--muted);margin-top:7px;letter-spacing:.02em;}
+
+  .flow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:6px;}
+  .step{position:relative;background:var(--bg-soft);border:1px solid var(--line);border-radius:14px;padding:18px 16px;}
+  .step .k{font-size:34px;font-weight:800;color:#cfd6f0;line-height:.9;}
+  .step h4{font-size:14px;color:var(--indigo);margin:6px 0 6px;}
+  .step p{font-size:12px;color:var(--muted);margin:0;}
+
+  .tworow{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:8px;}
+  .way{border-radius:16px;padding:22px 20px;color:#fff;position:relative;overflow:hidden;}
+  .way.a{background:linear-gradient(135deg,var(--indigo),var(--indigo2));}
+  .way.b{background:linear-gradient(135deg,#b3461f,var(--accent));}
+  .way .badge{font-size:11px;letter-spacing:.12em;opacity:.85;font-weight:700;text-transform:uppercase;}
+  .way h3{font-size:20px;margin:8px 0 12px;font-weight:800;}
+  .way ul{list-style:none;}
+  .way li{font-size:13px;padding:5px 0 5px 22px;position:relative;opacity:.96;}
+  .way li::before{content:"›";position:absolute;left:6px;top:4px;font-weight:800;opacity:.7;}
+
+  table{width:100%;border-collapse:collapse;font-size:12.8px;margin-top:4px;}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{background:var(--bg-soft);color:var(--indigo);font-size:12px;letter-spacing:.03em;}
+  td .role{font-weight:700;color:var(--ink);}
+
+  .pillrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+  .tag2{background:var(--bg-soft);border:1px solid var(--line);color:var(--indigo);
+    font-size:12px;padding:6px 13px;border-radius:999px;font-weight:600;}
+
+  .callout{
+    border-left:4px solid var(--accent);background:#fff7f2;border-radius:0 12px 12px 0;
+    padding:14px 18px;font-size:13px;color:#7a3a1d;margin-top:18px;
+  }
+  .callout b{color:#b3461f;}
+
+  .note{font-size:11px;color:#9aa3bb;margin-top:14px;font-style:italic;}
+
+  .tech{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  .tech .t{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--card);}
+  .tech .t b{color:var(--indigo);font-size:13px;}
+  .tech .t span{display:block;color:var(--muted);font-size:12px;margin-top:3px;}
+
+  .closing{background:linear-gradient(135deg,var(--indigo) 0%,var(--indigo2) 60%,var(--sky) 100%);color:#fff;}
+  .closing .ptitle{color:#fff;}
+  .closing .psub{color:rgba(255,255,255,.8);}
+  .closing .vbox{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.25);
+    border-radius:14px;padding:20px 22px;margin-bottom:16px;}
+  .closing .vbox h3{font-size:16px;margin-bottom:6px;}
+  .closing .vbox p{font-size:13px;opacity:.92;margin:0;}
+</style>
+</head>
+<body>
+
+<!-- ===================== COVER ===================== -->
+<section class="page cover">
+  <div class="brand">DAY · DREAM · HUB</div>
+  <h1>DayDreamHub<br>事業概要</h1>
+  <div class="tag">世界中のホテルを「時間単位」で予約できる、デイユース特化のオンライン旅行プラットフォーム。</div>
+  <span class="pill">事業参画メンバー向け｜ピッチ資料 v1.0</span>
+  <div class="meta">
+    <div>Day Dream Hub.com LLC</div>
+    <div>2026年6月 / Confidential</div>
+  </div>
+</section>
+
+<!-- ===================== 1. 事業概要 ===================== -->
+<section class="page">
+  <div class="phead"><span class="pnum">01</span><span class="ptitle">事業概要</span></div>
+  <div class="rule"></div>
+
+  <p class="lead"><strong>DayDreamHub</strong> は、世界中のホテルを<strong>デイユース（時間単位）</strong>で予約できるオンライン旅行代理店（OTA）プラットフォームです。「泊まる」ためではなく、<strong>数時間だけ快適な個室がほしい</strong>瞬間に応えます。</p>
+
+  <div class="card soft" style="margin-bottom:22px;">
+    <h3>デイユースホテルとは</h3>
+    <p>宿泊を伴わず、日中の数時間〜半日だけ客室を利用するサービス。乗り継ぎ・チェックアウト後やチェックイン前の待ち時間、仕事・休憩・リフレッシュなど、「泊まらないけど部屋が要る」ニーズに、宿泊の約半額で応えます。</p>
+  </div>
+
+  <div class="stat">
+    <div class="s"><div class="n">80+</div><div class="l">展開都市（世界）</div></div>
+    <div class="s"><div class="n">≈½</div><div class="l">宿泊比の価格水準</div></div>
+    <div class="s"><div class="n">2</div><div class="l">予約方式</div></div>
+    <div class="s"><div class="n">24/7</div><div class="l">AIによる検索・予約</div></div>
+  </div>
+
+  <div class="grid3">
+    <div class="card"><h3><span class="ico">✈️</span>乗継・待機</h3><p>フライトの乗り継ぎや到着前後の待ち時間に、空港近くの部屋で休む。</p></div>
+    <div class="card"><h3><span class="ico">💼</span>仕事・集中</h3><p>静かな個室をワークスペースとして数時間だけ確保する。</p></div>
+    <div class="card"><h3><span class="ico">🛀</span>休息・上質な時間</h3><p>観光や買い物の合間のリフレッシュ、プライベートな滞在に。</p></div>
+  </div>
+
+  <div class="foot"><span>DayDreamHub 事業概要</span><span>01 / 06</span></div>
+</section>
+
+<!-- ===================== 2. 課題とソリューション ===================== -->
+<section class="page">
+  <div class="phead"><span class="pnum">02</span><span class="ptitle">課題とソリューション</span></div>
+  <div class="rule"></div>
+
+  <div class="grid2" style="margin-bottom:24px;">
+    <div class="card" style="border-color:#f3d4c8;background:#fff7f2;">
+      <h3 style="color:#b3461f;">課題</h3>
+      <p style="color:#7a3a1d;line-height:1.75;">
+        ・大手OTAは「宿泊（1泊）」前提で、数時間利用の受け皿が薄い。<br><br>
+        ・デイユースを扱う宿でも、世界横断で探せる場所がなく予約は分断。<br><br>
+        ・ホテル側も日中の空き時間（遊休在庫）を収益化しきれていない。
+      </p>
+    </div>
+    <div class="card" style="border-color:#cfe0ff;background:#f3f7ff;">
+      <h3>ソリューション</h3>
+      <p style="line-height:1.75;">
+        ・デイユース<strong>専門</strong>で世界中の宿を横断検索・予約。<br><br>
+        ・<strong>2つの予約方式</strong>で、掲載済み・未掲載のどちらの宿にも対応。<br><br>
+        ・<strong>AIコンシェルジュ</strong>が検索から予約代行までを支援し、遊休在庫をマッチング。
+      </p>
+    </div>
+  </div>
+
+  <h3 style="color:var(--indigo);font-size:16px;margin-bottom:6px;">2つの予約方式</h3>
+  <p class="psub" style="margin-bottom:14px;">ホテルがプラットフォームに掲載されているかどうかで、最適な経路へ自動で振り分けます。</p>
+
+  <div class="tworow">
+    <div class="way a">
+      <div class="badge">Listed Hotels</div>
+      <h3>掲載ホテルを直接予約</h3>
+      <ul>
+        <li>提携ホテルへ予約リクエストを送信</li>
+        <li>前払い式（PayPal）。ホテル未承認なら全額返金</li>
+        <li>ゲストへの<strong style="color:#ffe;">サービス手数料は一切なし</strong></li>
+      </ul>
+    </div>
+    <div class="way b">
+      <div class="badge">Unlisted Hotels</div>
+      <h3>AI電話予約</h3>
+      <ul>
+        <li>未掲載の宿にも、AIが代わりに電話で空き状況を確認</li>
+        <li>最大3軒へ自動架電。空きがなければ返金</li>
+        <li>世界中どこでも、掲載の有無を問わず予約に挑戦</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout"><b>独自性：</b>「掲載済みは直接予約・未掲載はAIが架電」という二段構えで、<b>在庫の制約を越えて</b>ゲストの予約成立率を高めるのが他OTAにない強み。</div>
+
+  <div class="foot"><span>DayDreamHub 事業概要</span><span>02 / 06</span></div>
+</section>
+
+<!-- ===================== 3. 仕組み・ステークホルダー ===================== -->
+<section class="page">
+  <div class="phead"><span class="pnum">03</span><span class="ptitle">仕組みとビジネスモデル</span></div>
+  <div class="rule"></div>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin-bottom:12px;">予約の流れ（ゲスト）</h3>
+  <div class="flow" style="margin-bottom:26px;">
+    <div class="step"><div class="k">1</div><h4>探す</h4><p>都市・特徴・部屋タイプ・予算でデイユースプランを検索（AI検索対応）。</p></div>
+    <div class="step"><div class="k">2</div><h4>申し込む</h4><p>プラン・日時・人数を選び予約。前払いプランはPayPalで決済。</p></div>
+    <div class="step"><div class="k">3</div><h4>確定</h4><p>ホテルが承認すると確認メールが届く。未承認なら全額返金。</p></div>
+  </div>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin-bottom:12px;">3つのステークホルダー</h3>
+  <table style="margin-bottom:8px;">
+    <tr><th style="width:22%;">役割</th><th>担うこと</th></tr>
+    <tr><td><span class="role">ゲスト</span></td><td>ホテルを検索・予約し、時間単位で利用。PayPalで決済。</td></tr>
+    <tr><td><span class="role">オーナー（宿）</span></td><td>ホテル情報・料金・空室を管理し、予約を承認／拒否。<strong>掲載料は無料</strong>。</td></tr>
+    <tr><td><span class="role">管理者</span></td><td>全体運営、ホテル・ユーザー・ブログ・クーポンの管理、品質審査。</td></tr>
+  </table>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin:24px 0 12px;">収益・成長の考え方</h3>
+  <div class="grid3">
+    <div class="card soft"><h3><span class="ico">🏨</span>供給を増やす</h3><p>掲載料ゼロ・オープン掲載で宿のハードルを下げ、デイユース在庫を拡大。</p></div>
+    <div class="card soft"><h3><span class="ico">🤖</span>需要を取りこぼさない</h3><p>未掲載でもAI架電で予約成立。マッチング機会を最大化。</p></div>
+    <div class="card soft"><h3><span class="ico">🌍</span>横展開する</h3><p>80都市超の多言語・多通貨基盤で、新規エリアへ低コストに展開。</p></div>
+  </div>
+
+  <div class="foot"><span>DayDreamHub 事業概要</span><span>03 / 06</span></div>
+</section>
+
+<!-- ===================== 4. プロダクト機能 ===================== -->
+<section class="page">
+  <div class="phead"><span class="pnum">04</span><span class="ptitle">プロダクトの主要機能</span></div>
+  <div class="rule"></div>
+  <p class="psub" style="margin-bottom:20px;">ゲスト・オーナー・管理者それぞれに最適化した3つの管理面（パネル）で構成。</p>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin-bottom:10px;">ゲスト向け</h3>
+  <div class="grid3" style="margin-bottom:22px;">
+    <div class="card"><h3><span class="ico">🔍</span>AI検索・絞り込み</h3><p>都市・特徴・部屋タイプ・予算帯で瞬時に検索。</p></div>
+    <div class="card"><h3><span class="ico">🗺️</span>インタラクティブマップ</h3><p>地図上でホテルを探索。AIアシスタントが検索・予約を支援（テキスト／画像対応）。</p></div>
+    <div class="card"><h3><span class="ico">🎫</span>マイページ</h3><p>予約管理とサポートチケットをダッシュボードから完結。</p></div>
+  </div>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin-bottom:10px;">オーナー向け</h3>
+  <div class="grid3" style="margin-bottom:22px;">
+    <div class="card"><h3><span class="ico">📊</span>ダッシュボード</h3><p>予約・売上などの指標を可視化し運営を最適化。</p></div>
+    <div class="card"><h3><span class="ico">📅</span>カレンダー・空室管理</h3><p>需要に応じて空室・料金を柔軟に調整。</p></div>
+    <div class="card"><h3><span class="ico">✅</span>予約管理</h3><p>予約の承認／拒否、プラン・画像の登録を一元管理。</p></div>
+  </div>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin-bottom:10px;">管理者向け</h3>
+  <div class="grid3">
+    <div class="card"><h3><span class="ico">🛡️</span>ホテル審査</h3><p>新規ホテルの多段階検証で品質と基準遵守を担保。</p></div>
+    <div class="card"><h3><span class="ico">👥</span>ユーザー・権限管理</h3><p>ロール・権限の管理と定期監査でガバナンスを維持。</p></div>
+    <div class="card"><h3><span class="ico">📝</span>コンテンツ・販促</h3><p>ブログ・バナー・クーポンを管理し集客を強化。</p></div>
+  </div>
+
+  <div class="foot"><span>DayDreamHub 事業概要</span><span>04 / 06</span></div>
+</section>
+
+<!-- ===================== 5. 基盤・技術 ===================== -->
+<section class="page">
+  <div class="phead"><span class="pnum">05</span><span class="ptitle">グローバル基盤と技術</span></div>
+  <div class="rule"></div>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin-bottom:10px;">展開エリア（一例）</h3>
+  <p class="psub" style="margin-bottom:10px;">世界80都市以上に展開。多言語・多通貨に対応し、各地のニーズに合わせて拡張中。</p>
+  <div class="pillrow" style="margin-bottom:24px;">
+    <span class="tag2">カイロ</span><span class="tag2">ギザ</span><span class="tag2">ナイロビ</span>
+    <span class="tag2">カルガリー</span><span class="tag2">ナイアガラ</span><span class="tag2">トビリシ</span>
+    <span class="tag2">ゴリス</span><span class="tag2">オウル</span><span class="tag2">エクアドル</span>
+    <span class="tag2">…and more</span>
+  </div>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin-bottom:10px;">決済・対応</h3>
+  <div class="grid2" style="margin-bottom:24px;">
+    <div class="card"><h3><span class="ico">💳</span>決済</h3><p>PayPalを主決済とし、前払い／現地払いプランに対応。前払いの未承認時は全額返金。</p></div>
+    <div class="card"><h3><span class="ico">🌐</span>多言語・多通貨</h3><p>英語／日本語などの多言語UIと、エリアに応じた通貨表示に対応。</p></div>
+  </div>
+
+  <h3 style="color:var(--indigo);font-size:15px;margin-bottom:10px;">技術スタック</h3>
+  <div class="tech">
+    <div class="t"><b>フロント／SSR</b><span>Astro（Cloudflare アダプタ）＋ Tailwind CSS</span></div>
+    <div class="t"><b>インフラ</b><span>Cloudflare Workers（エッジSSR）</span></div>
+    <div class="t"><b>データベース</b><span>Cloudflare D1（SQLite）</span></div>
+    <div class="t"><b>AI機能</b><span>AIコンシェルジュ／AI電話予約・地図アシスタント</span></div>
+  </div>
+  <p class="note">エッジ実行＋サーバレス構成により、グローバル展開でも低遅延・低運用コストを実現。</p>
+
+  <div class="foot"><span>DayDreamHub 事業概要</span><span>05 / 06</span></div>
+</section>
+
+<!-- ===================== 6. まとめ ===================== -->
+<section class="page closing">
+  <div class="phead"><span class="pnum" style="background:rgba(255,255,255,.2);">06</span><span class="ptitle">まとめ ── なぜ今、デイユースか</span></div>
+  <div class="rule" style="background:linear-gradient(90deg,var(--accent2),#fff);"></div>
+
+  <div class="vbox">
+    <h3>① 拡大する「泊まらない」需要</h3>
+    <p>乗継・リモートワーク・短時間のリフレッシュなど、宿泊以外の利用シーンは世界的に拡大。そこに特化したプレイヤーはまだ少ない。</p>
+  </div>
+  <div class="vbox">
+    <h3>② 在庫制約を越える二段構えの予約</h3>
+    <p>掲載ホテルは直接予約、未掲載はAIが架電。供給の薄いエリアでも予約を成立させ、機会損失を最小化する。</p>
+  </div>
+  <div class="vbox">
+    <h3>③ 軽量・グローバルなAIプラットフォーム</h3>
+    <p>エッジ基盤＋AIコンシェルジュで、80都市超を少人数・低コストで運営・拡張できる構造。</p>
+  </div>
+
+  <div style="margin-top:26px;border-top:1px solid rgba(255,255,255,.25);padding-top:18px;">
+    <div style="font-size:22px;font-weight:800;margin-bottom:6px;">A room for a few hours — anywhere in the world.</div>
+    <div style="font-size:13px;opacity:.9;">世界中の「ちょっと部屋がほしい」を、デイユースで叶える。</div>
+  </div>
+
+  <div class="meta" style="position:absolute;bottom:16mm;left:16mm;right:16mm;display:flex;justify-content:space-between;font-size:11px;opacity:.85;border-top:1px solid rgba(255,255,255,.25);padding-top:12px;">
+    <div>Day Dream Hub.com LLC　｜　customer@daydreamhub.com</div>
+    <div>Confidential — 社内・参画候補者限定</div>
+  </div>
+</section>
+
+</body>
+</html>
