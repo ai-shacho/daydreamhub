@@ -1,6 +1,22 @@
 -- Phase 1: Blog Automation Foundation Migration
 -- Adds columns for hybrid theme system, angles, automation status, and indexes
 
+-- Safety backfill: some existing DBs may not have blog_posts yet.
+CREATE TABLE IF NOT EXISTS blog_posts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  title_ja TEXT,
+  slug TEXT NOT NULL UNIQUE,
+  excerpt TEXT,
+  city TEXT,
+  thumbnail_url TEXT,
+  content TEXT,
+  content_ja TEXT,
+  published_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 ALTER TABLE blog_posts ADD COLUMN auto_generated INTEGER DEFAULT 0;
 ALTER TABLE blog_posts ADD COLUMN favorite_theme TEXT;
 ALTER TABLE blog_posts ADD COLUMN selected_angle TEXT;
