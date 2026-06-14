@@ -66,6 +66,23 @@ function toAmPm(time: string | null): string {
   return m ? `${hour}:${String(m).padStart(2, '0')} ${period}` : `${hour} ${period}`;
 }
 
+function spellEmailForSpeech(email: string | null | undefined): string {
+  if (!email) return '';
+  return email
+    .trim()
+    .toLowerCase()
+    .split('')
+    .map((ch) => {
+      if (ch === '@') return 'at';
+      if (ch === '.') return 'dot';
+      if (ch === '-') return 'dash';
+      if (ch === '_') return 'underscore';
+      if (ch === '+') return 'plus';
+      return ch;
+    })
+    .join(', ');
+}
+
 // Classify yes/no/repeat from speech (button or voice)
 function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | 'repeat' | null {
   if (digits === '1') return 'yes';
@@ -572,7 +589,18 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           price_quoted: String(priceQuoted),
         });
 
-        const farewell = `Thank you! The reservation is confirmed: date ${checkIn}, time ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceQuoted} dollars including taxes and fees, paid on-site at check-in. The guest's full details, including name and contact information, will be sent to you shortly in a follow-up booking confirmation email or fax. Have a wonderful day!`;
+        let guestName = state.guest_name || 'the guest';
+        let spelledGuestEmail = '';
+        if (db && conciergeCallId) {
+          const guestInfo: any = await db.prepare(
+            `SELECT guest_name, guest_email FROM concierge_calls WHERE id = ?`
+          ).bind(conciergeCallId).first().catch(() => null);
+          if (guestInfo?.guest_name) guestName = guestInfo.guest_name;
+          spelledGuestEmail = spellEmailForSpeech(guestInfo?.guest_email || '');
+        }
+
+        const emailLine = spelledGuestEmail || 'not provided';
+        const farewell = `Thank you! The reservation is confirmed: date ${checkIn}, time ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceQuoted} dollars including taxes and fees, paid on-site at check-in. For your records, the guest's name is ${guestName}. Their email address is spelled: ${emailLine}. We will also send these details shortly in a follow-up confirmation email. Have a wonderful day!`;
         if (db) {
           if (logId) {
             await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
