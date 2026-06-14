@@ -572,7 +572,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           price_quoted: String(priceQuoted),
         });
 
-        const farewell = `Thank you! The reservation is confirmed: date ${checkIn}, time ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceQuoted} dollars including taxes and fees, paid on-site at check-in. Have a wonderful day!`;
+        const farewell = `Thank you! The reservation is confirmed: date ${checkIn}, time ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceQuoted} dollars including taxes and fees, paid on-site at check-in. The guest's full details, including name and contact information, will be sent to you shortly in a follow-up booking confirmation email or fax. Have a wonderful day!`;
         if (db) {
           if (logId) {
             await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
