@@ -18,12 +18,10 @@ bucket_name = "daydreamhub-images"
 [ai]
 binding = "AI"
 
-[[queues.producers]]
-binding = "FLIGHT_IMAGE_QUEUE"
-queue = "ddh-flight-image-jobs"
-
-# Task #57: Pages は queue consumer を持てないため [[queues.consumers]] を削除。
-# consumer は別の Worker（worker-entry.mjs + 専用 wrangler 設定）でデプロイすること。
+# Task #57: queue 'ddh-flight-image-jobs' は未作成で Pages デプロイが
+# "Queue not found" で失敗するため、producer/consumer 設定を一旦すべて削除。
+# upload.ts は `if (env.FLIGHT_IMAGE_QUEUE)` でガードしておりbinding無しでも安全に動作。
+# concierge image queue を本番稼働させる際は、queue 作成＋専用 Worker(worker-entry.mjs) を別途用意すること。
 
 # [triggers] - Pages does not support triggers; use external cron (e.g. cron-job.org)
 # crons = ["0 1 * * *"]
