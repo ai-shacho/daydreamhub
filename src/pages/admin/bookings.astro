@@ -30,9 +30,9 @@ const sortCol = url.searchParams.get("sort") || "";
 const sortOrder = url.searchParams.get("order") === "asc" ? "ASC" : "DESC";
 
 const sortableColumns: Record<string, string> = {
-  id: "b.id",
-  check_in: "b.check_in_date",
-  created: "b.created_at",
+  id: "u.id",
+  check_in: "u.check_in_date",
+  created: "u.created_at",
 };
 
 function sortLink(col: string) {
@@ -52,31 +52,67 @@ let error = "";
 
 if (db) {
   try {
-    let query = `SELECT b.*, h.name as hotel_name, p.name as plan_name
-      FROM bookings b
-      LEFT JOIN hotels h ON h.id = b.hotel_id
-      LEFT JOIN plans p ON p.id = b.plan_id
+    let query = `
+      SELECT * FROM (
+        SELECT
+          b.id,
+          b.guest_name,
+          b.guest_email,
+          b.adults,
+          b.children,
+          b.infants,
+          b.check_in_date,
+          b.total_price_usd,
+          b.status,
+          b.created_at,
+          h.name as hotel_name,
+          p.name as plan_name,
+          'regular' as source
+        FROM bookings b
+        LEFT JOIN hotels h ON h.id = b.hotel_id
+        LEFT JOIN plans p ON p.id = b.plan_id
+
+        UNION ALL
+
+        SELECT
+          c.id,
+          c.guest_name,
+          c.guest_email,
+          COALESCE(json_extract(c.request_details, '$.guests'), 1) as adults,
+          0 as children,
+          0 as infants,
+          json_extract(c.request_details, '$.date') as check_in_date,
+          c.price_quoted as total_price_usd,
+          c.outcome as status,
+          c.created_at,
+          c.hotel_name,
+          'AI Concierge' as plan_name,
+          'concierge' as source
+        FROM concierge_calls c
+        WHERE c.guest_email IS NOT NULL
+          AND c.outcome IN ('booked', 'available', 'success')
+      ) u
       WHERE 1=1`;
     const binds: any[] = [];
 
     if (statusFilter) {
-      query += " AND b.status = ?";
+      query += " AND u.status = ?";
       binds.push(statusFilter);
     }
     if (search) {
-      query += " AND (b.guest_name LIKE ? OR b.guest_email LIKE ? OR h.name LIKE ?)";
+      query += " AND (u.guest_name LIKE ? OR u.guest_email LIKE ? OR u.hotel_name LIKE ?)";
       binds.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     if (dateFrom) {
-      query += " AND b.check_in_date >= ?";
+      query += " AND u.check_in_date >= ?";
       binds.push(dateFrom);
     }
     if (dateTo) {
-      query += " AND b.check_in_date <= ?";
+      query += " AND u.check_in_date <= ?";
       binds.push(dateTo);
     }
 
-    const orderByCol = sortableColumns[sortCol] || "b.created_at";
+    const orderByCol = sortableColumns[sortCol] || "u.created_at";
     query += ` ORDER BY ${orderByCol} ${sortOrder} LIMIT 200`;
     const result = await db.prepare(query).bind(...binds).all();
     bookings = result?.results || [];
@@ -206,7 +242,12 @@ const statusColors: Record<string, string> = {
                   {(b.infants > 0) && <span>👶 {b.infants}</span>}
                 </div>
               </td>
-              <td class="px-4 py-3 text-slate-600">{b.hotel_name || "-"}</td>
+              <td class="px-4 py-3 text-slate-600">
+                <div class="flex items-center gap-2">
+                  <span>{b.hotel_name || "-"}</span>
+                  {b.source === 'concierge' && <span class="inline-flex items-center px-2 py-0.5 rounded bg-violet-100 text-violet-700 text-[10px] font-semibold">AI</span>}
+                </div>
+              </td>
               <td class="px-4 py-3 text-slate-600">{b.plan_name || "-"}</td>
               <td class="px-4 py-3 text-slate-600">{formatDisplayDate(b.check_in_date)}</td>
               <td class="px-4 py-3 text-right font-mono text-slate-900">

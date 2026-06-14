@@ -23,40 +23,78 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const search = url.searchParams.get('search') || '';
   const offset = (page - 1) * perPage;
 
+  const unionBase = `
+    SELECT * FROM (
+      SELECT
+        b.id,
+        b.guest_name,
+        b.guest_email,
+        b.adults,
+        b.children,
+        b.infants,
+        b.check_in_date,
+        b.total_price_usd,
+        b.status,
+        b.created_at,
+        h.name as hotel_name,
+        p.name as plan_name,
+        'regular' as source
+      FROM bookings b
+      LEFT JOIN hotels h ON h.id = b.hotel_id
+      LEFT JOIN plans p ON p.id = b.plan_id
+
+      UNION ALL
+
+      SELECT
+        c.id,
+        c.guest_name,
+        c.guest_email,
+        COALESCE(json_extract(c.request_details, '$.guests'), 1) as adults,
+        0 as children,
+        0 as infants,
+        json_extract(c.request_details, '$.date') as check_in_date,
+        c.price_quoted as total_price_usd,
+        c.outcome as status,
+        c.created_at,
+        c.hotel_name,
+        'AI Concierge' as plan_name,
+        'concierge' as source
+      FROM concierge_calls c
+      WHERE c.guest_email IS NOT NULL
+        AND c.outcome IN ('booked', 'available', 'success')
+    ) u`;
+
   const conditions: string[] = [];
   const params: any[] = [];
   if (status) {
-    conditions.push('b.status = ?');
+    conditions.push('u.status = ?');
     params.push(status);
   }
   if (dateFrom) {
-    conditions.push('b.check_in_date >= ?');
+    conditions.push('u.check_in_date >= ?');
     params.push(dateFrom);
   }
   if (dateTo) {
-    conditions.push('b.check_in_date <= ?');
+    conditions.push('u.check_in_date <= ?');
     params.push(dateTo);
   }
   if (search) {
-    conditions.push('(b.guest_name LIKE ? OR b.guest_email LIKE ? OR h.name LIKE ?)');
+    conditions.push('(u.guest_name LIKE ? OR u.guest_email LIKE ? OR u.hotel_name LIKE ?)');
     params.push(`%${search}%`, `%${search}%`, `%${search}%`);
   }
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const countResult = await db
-    .prepare(`SELECT COUNT(*) as total FROM bookings b LEFT JOIN hotels h ON h.id = b.hotel_id ${whereClause}`)
+    .prepare(`SELECT COUNT(*) as total FROM (${unionBase} ${whereClause}) x`)
     .bind(...params)
     .first();
   const total = countResult?.total || 0;
 
   const bookings = await db
     .prepare(
-      `SELECT b.*, h.name as hotel_name, p.name as plan_name
-       FROM bookings b
-       LEFT JOIN hotels h ON h.id = b.hotel_id
-       LEFT JOIN plans p ON p.id = b.plan_id
+      `${unionBase}
        ${whereClause}
-       ORDER BY b.created_at DESC
+       ORDER BY u.created_at DESC
        LIMIT ? OFFSET ?`
     )
     .bind(...params, perPage, offset)

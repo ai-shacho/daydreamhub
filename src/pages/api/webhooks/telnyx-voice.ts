@@ -178,6 +178,50 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     }).catch((e: any) => console.error('[telnyx-voice] result email failed:', e));
   }
 
+  async function sendAdminConciergeBookedEmail() {
+    if (!db || !conciergeCallId || !env?.RESEND_API_KEY || !env?.ADMIN_EMAIL) return;
+
+    const call: any = await db.prepare(
+      `SELECT id, guest_name, guest_email, hotel_name, hotel_phone, request_details, ai_summary, price_quoted
+       FROM concierge_calls WHERE id = ?`
+    ).bind(conciergeCallId).first().catch(() => null);
+    if (!call) return;
+
+    let details: any = {};
+    try { details = JSON.parse(call.request_details || '{}'); } catch {}
+
+    const payload = {
+      from: 'DaydreamHub <noreply@daydreamhub.com>',
+      to: [env.ADMIN_EMAIL],
+      subject: `[AI Concierge] Booking confirmed - ${call.hotel_name || 'Unknown hotel'}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827">
+          <h2 style="margin:0 0 16px">AI Concierge Booking Confirmed</h2>
+          <table style="border-collapse:collapse;width:100%">
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Guest Name</td><td style="padding:8px;border:1px solid #e5e7eb">${call.guest_name || '-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Guest Email</td><td style="padding:8px;border:1px solid #e5e7eb">${call.guest_email || '-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Hotel</td><td style="padding:8px;border:1px solid #e5e7eb">${call.hotel_name || '-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Hotel Phone</td><td style="padding:8px;border:1px solid #e5e7eb">${call.hotel_phone || '-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Date</td><td style="padding:8px;border:1px solid #e5e7eb">${details.date || '-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Check-in / Check-out</td><td style="padding:8px;border:1px solid #e5e7eb">${details.check_in_time || '-'} / ${details.check_out_time || '-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Guests</td><td style="padding:8px;border:1px solid #e5e7eb">${details.guests || '-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Price Quoted</td><td style="padding:8px;border:1px solid #e5e7eb">${call.price_quoted || '-'}</td></tr>
+            <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">AI Summary</td><td style="padding:8px;border:1px solid #e5e7eb">${call.ai_summary || '-'}</td></tr>
+          </table>
+        </div>
+      `,
+    };
+
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }).catch((e: any) => console.error('[telnyx-voice] admin concierge email failed:', e));
+  }
+
   // Helper (Task #52): この通話がグループ発信の一部なら、結果に応じて次のホテルへ進める/成約確定する。
   // initiateNextGroupCall は current_order の条件付きUPDATEで冪等（二重発信を防止）。
   async function advanceGroupAfterOutcome(outcome: string) {
@@ -607,6 +651,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           client_state: encodeState({ ...state, phase: 'ending' }),
         });
         await sendResultEmailOnce('success');
+        await sendAdminConciergeBookedEmail();
         await advanceGroupAfterOutcome('booked');
         break;
       }
@@ -634,8 +679,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           }
         }
       } else if (conciergeCallId) {
-        await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No answer or call disconnected.' });
-        await sendResultEmailOnce('no_answer');
+        const cc: any = await db?.prepare(`SELECT outcome FROM concierge_calls WHERE id = ?`).bind(conciergeCallId).first().catch(() => null);
+        if (!['booked', 'available', 'success'].includes(String(cc?.outcome || ''))) {
+          await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No answer or call disconnected.' });
+          await sendResultEmailOnce('no_answer');
+        }
       }
       break;
     }
