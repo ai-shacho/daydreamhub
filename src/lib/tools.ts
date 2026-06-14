@@ -567,7 +567,8 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       language: details.language, special_requests: details.special_requests,
       max_price: details.max_price || "",
       call_mode: details.call_mode || "initial",
-      confirmed_price: details.confirmed_price || ""
+      confirmed_price: details.confirmed_price || "",
+      guest_phone: details.guest_phone || ""
     };
     if (details.budget && !details.max_price) {
       try {
@@ -593,6 +594,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       booking_id: null,
       hotel_id: null,
       guest_name: params.guest_name || 'Guest',
+      guest_phone: params.guest_phone || null,
       check_in_date: params.check_in_date || params.date || 'the requested date',
       check_in_time: params.check_in_time || null,
       check_out_time: params.check_out_time || null,

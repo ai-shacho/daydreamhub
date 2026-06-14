@@ -26,6 +26,13 @@ function hotelLink(hotelName: string, hotelSlug?: string): string {
   return `<strong>${name}</strong>`;
 }
 
+function formatQuotedPriceUsd(price?: string): string {
+  if (!price) return '';
+  const num = String(price).replace(/[^\d.]/g, '');
+  if (!num) return `$${price} USD`;
+  return `$${num} USD`;
+}
+
 function emailFooter(): string {
   return `
     <div style="margin-top:32px;padding-top:24px;border-top:1px solid #e5e7eb;text-align:center">
@@ -386,12 +393,11 @@ export async function sendConciergeConfirmation(
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-in</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-out</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkOut)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>
-      ${data.priceQuoted ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Quoted Price</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.priceQuoted)}</td></tr>` : ''}
+      ${data.priceQuoted ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Quoted Price</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(formatQuotedPriceUsd(data.priceQuoted))}</td></tr>` : ''}
     </table>
     <div style="margin:16px 0;padding:12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:4px">
-      <strong>Important:</strong> The hotel room charge is paid directly at the hotel upon check-in. The $7 service fee was for the AI booking call only.
+      <strong>Important:</strong> Payment is made directly at the hotel upon check-in. Please note that depending on the hotel, you may be required to pay in the local currency. The $7 service fee was for the AI booking call only.
     </div>
-    ${data.aiSummary ? `<div style="margin:16px 0;padding:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:4px"><strong>Call Summary:</strong><br>${escapeHtml(data.aiSummary)}</div>` : ''}
     <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub AI Concierge - <a href="${SITE_URL}">daydreamhub.com</a></p>
   </div>
 </div>`;
@@ -909,11 +915,11 @@ export async function sendConciergeResultEmail(
     data.date ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.date)}</td></tr>` : '',
     (data.checkIn || data.checkOut) ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Time</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn || '?')} - ${escapeHtml(data.checkOut || '?')}</td></tr>` : '',
     data.guests ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>` : '',
-    data.priceQuoted ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Quoted Price</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.priceQuoted)}</td></tr>` : '',
+    data.priceQuoted ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Quoted Price</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(formatQuotedPriceUsd(data.priceQuoted))}</td></tr>` : '',
   ].filter(Boolean).join('');
 
   const actionNote = data.resultType === 'success'
-    ? 'Please keep this email for reference when checking in.'
+    ? 'Please keep this email for reference when checking in. Payment is made directly at the hotel upon check-in. Please note that depending on the hotel, you may be required to pay in the local currency.'
     : data.resultType === 'all_failed'
       ? 'If payment was captured, refund handling will proceed according to our policy.'
       : 'You can try another hotel search anytime on DaydreamHub.';
@@ -931,8 +937,6 @@ export async function sendConciergeResultEmail(
     ${detailsRows ? `<table style="border-collapse:collapse;width:100%;margin:16px 0">${detailsRows}</table>` : ''}
 
     ${attemptedHotels ? `<div style="margin:16px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px"><strong>Hotels contacted</strong><ol style="padding-left:20px;margin:8px 0">${attemptedHotels}</ol></div>` : ''}
-
-    ${data.aiSummary ? `<div style="margin:16px 0;padding:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px"><strong>Call summary</strong><br>${escapeHtml(data.aiSummary)}</div>` : ''}
 
     <div style="margin:16px 0;padding:12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px">
       ${escapeHtml(actionNote)}

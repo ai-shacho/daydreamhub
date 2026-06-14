@@ -481,6 +481,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     flight_info,
     guest_name,
     guest_email,
+    guest_phone,
+    guests,
   } = body;
   if (!message || typeof message !== 'string' || !session_id) {
     return new Response(JSON.stringify({ error: 'message and session_id required' }), {
@@ -628,12 +630,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
           { headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (guest_name || guest_email) {
+      if (guest_name || guest_email || guest_phone || guests) {
         let requestDetails: any = {};
         try {
           requestDetails = JSON.parse(c.request_details || '{}');
         } catch {}
         if (guest_name) requestDetails.guest_name = guest_name;
+        if (guest_phone) requestDetails.guest_phone = guest_phone;
+        if (guests) requestDetails.guests = Number(guests);
         await db
           .prepare(
             `UPDATE concierge_calls SET guest_name = COALESCE(?, guest_name), guest_email = COALESCE(?, guest_email), request_details = ?, updated_at = datetime('now') WHERE id = ?`
@@ -676,18 +680,20 @@ export const POST: APIRoute = async ({ request, locals }) => {
       ).bind(session_id, locale).run();
 
       const { createCallGroup } = await import('../../../lib/tools');
-      const _adults = callGroupData.adults || 1;
-      const _children = callGroupData.children || 0;
+      const normalizedGuests = Number(callGroupData.guests || guests || 0);
+      const _adults = Number(callGroupData.adults || 0) || (normalizedGuests > 0 ? normalizedGuests : 1);
+      const _children = Number(callGroupData.children || 0);
       const requestDetails = {
         guest_name: callGroupData.guest_name,
         guest_email: callGroupData.guest_email,
+        guest_phone: callGroupData.guest_phone || callGroupData.phone || guest_phone || null,
         // 正準キー（check_in_date / check_in_time / check_out_time / guests）に統一（Task #54）
         check_in_date: callGroupData.check_in_date,
         check_in_time: callGroupData.check_in_time || '10:00',
         check_out_time: callGroupData.check_out_time || '18:00',
         adults: _adults,
         children: _children,
-        guests: _adults + _children,
+        guests: normalizedGuests > 0 ? normalizedGuests : (_adults + _children),
       };
       const group = await createCallGroup(env, {
         session_id,
@@ -803,7 +809,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           { headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (guest_name || guest_email) {
+      if (guest_name || guest_email || guest_phone || guests) {
         await db
           .prepare(
             "UPDATE concierge_call_groups SET guest_name = COALESCE(?, guest_name), guest_email = COALESCE(?, guest_email), updated_at = datetime('now') WHERE id = ?"
@@ -822,6 +828,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
             details = JSON.parse(row.request_details || '{}');
           } catch {}
           if (guest_name) details.guest_name = guest_name;
+          if (guest_phone) details.guest_phone = guest_phone;
+          if (guests) details.guests = Number(guests);
           await db
             .prepare(
               "UPDATE concierge_calls SET guest_name = COALESCE(?, guest_name), guest_email = COALESCE(?, guest_email), request_details = ?, updated_at = datetime('now') WHERE id = ?"

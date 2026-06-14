@@ -74,6 +74,30 @@
   </button>
 </div>
 
+<!-- Call-to-book confirmation card -->
+<div id="call-booking-overlay" class="fixed inset-0 z-[1200] bg-black/40 hidden items-center justify-center p-4">
+  <div class="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-4">
+    <h3 class="text-sm font-bold text-slate-800 mb-2">AI Call to Book (+$7)</h3>
+    <p class="text-xs text-slate-500 mb-3">Please confirm your details before we start calling the hotel.</p>
+    <div class="space-y-2">
+      <input id="cb-guest-name" type="text" placeholder="Your name" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+      <input id="cb-guest-email" type="email" placeholder="Email" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+      <input id="cb-guest-phone" type="tel" placeholder="Phone number" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+      <input id="cb-guests" type="number" min="1" max="10" value="2" placeholder="Guests" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+      <input id="cb-date" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+      <div class="grid grid-cols-2 gap-2">
+        <input id="cb-checkin" type="time" value="10:00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <input id="cb-checkout" type="time" value="18:00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+      </div>
+    </div>
+    <p id="cb-error" class="hidden text-xs text-red-600 mt-2"></p>
+    <div class="flex gap-2 mt-4">
+      <button id="cb-cancel" class="flex-1 border border-slate-300 rounded-lg py-2 text-sm">Cancel</button>
+      <button id="cb-submit" class="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-semibold">Continue</button>
+    </div>
+  </div>
+</div>
+
 <script is:inline>
 (function() {
   const sessionId = 'chat_' + Math.random().toString(36).slice(2, 11);
@@ -90,6 +114,13 @@
   const iconOpen = document.getElementById('chat-icon-open');
   const iconClose = document.getElementById('chat-icon-close');
   const badge = document.getElementById('chat-badge');
+  const callOverlay = document.getElementById('call-booking-overlay');
+  const callCancelBtn = document.getElementById('cb-cancel');
+  const callSubmitBtn = document.getElementById('cb-submit');
+  const callErr = document.getElementById('cb-error');
+
+  let latestExternalHotels = [];
+  let selectedExternalHotel = null;
 
   function openChat() {
     isOpen = true;
@@ -183,13 +214,14 @@
         }
         if (external.length > 0) {
           const extLabel = pageLocale === 'ja' ? 'AI電話予約（+$7）' : 'AI Call to Book (+$7)';
-          cardsHtml += `<div class="mt-2 space-y-1">` + external.slice(0, 3).map(h =>
+          latestExternalHotels = external.slice(0, 3);
+          cardsHtml += `<div class="mt-2 space-y-1">` + latestExternalHotels.map((h, idx) =>
             `<div class="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs">
               <span class="font-semibold block">${h.name}</span>
               <span class="text-slate-400">${h.phone || ''}</span>
+              <button data-call-book-index="${idx}" class="mt-2 w-full text-center bg-blue-500 hover:bg-blue-600 text-white rounded-lg py-1.5 text-xs font-bold">${extLabel}</button>
             </div>`
-          ).join('') + `</div>
-          <a href="${pageLocale === 'ja' ? '/ja/' : '/'}" class="mt-1.5 block text-center bg-blue-500 hover:bg-blue-600 text-white rounded-xl py-1.5 text-xs font-bold">${extLabel}</a>`;
+          ).join('') + `</div>`;
         }
         if (cardsHtml) bubble.innerHTML += cardsHtml;
       }
@@ -203,6 +235,93 @@
     }
     messages.appendChild(wrap);
     messages.scrollTop = messages.scrollHeight;
+  }
+
+  function hideCallOverlay() {
+    selectedExternalHotel = null;
+    callOverlay.classList.add('hidden');
+    callOverlay.classList.remove('flex');
+    callErr.classList.add('hidden');
+    callErr.textContent = '';
+  }
+
+  function showCallOverlay(hotel) {
+    selectedExternalHotel = hotel;
+    callOverlay.classList.remove('hidden');
+    callOverlay.classList.add('flex');
+    const dateInput = document.getElementById('cb-date');
+    if (dateInput && !dateInput.value) {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      dateInput.value = d.toISOString().slice(0, 10);
+    }
+  }
+
+  async function submitCallBooking() {
+    const guestName = (document.getElementById('cb-guest-name').value || '').trim();
+    const guestEmail = (document.getElementById('cb-guest-email').value || '').trim();
+    const guestPhone = (document.getElementById('cb-guest-phone').value || '').trim();
+    const guests = Number(document.getElementById('cb-guests').value || 0);
+    const checkInDate = (document.getElementById('cb-date').value || '').trim();
+    const checkInTime = (document.getElementById('cb-checkin').value || '10:00').trim();
+    const checkOutTime = (document.getElementById('cb-checkout').value || '18:00').trim();
+
+    if (!selectedExternalHotel) return;
+    if (!guestName || !guestEmail || !guestPhone || !guests || !checkInDate) {
+      callErr.textContent = pageLocale === 'ja'
+        ? '氏名・メール・電話番号・人数・日付を入力してください。'
+        : 'Please enter name, email, phone, guests, and date.';
+      callErr.classList.remove('hidden');
+      return;
+    }
+
+    callSubmitBtn.disabled = true;
+    try {
+      const payload = {
+        session_id: sessionId,
+        locale: pageLocale,
+        message: '__create_call_group_direct',
+        guests,
+        guest_phone: guestPhone,
+        _call_group: {
+          guest_name: guestName,
+          guest_email: guestEmail,
+          guest_phone: guestPhone,
+          guests,
+          adults: guests,
+          children: 0,
+          check_in_date: checkInDate,
+          check_in_time: checkInTime,
+          check_out_time: checkOutTime,
+          hotels: [{
+            hotel_name: selectedExternalHotel.name,
+            hotel_phone: selectedExternalHotel.phone || '',
+            hotel_source: 'external',
+            recommendation_reason: 'Requested via chat call-to-book card'
+          }]
+        }
+      };
+
+      const res = await fetch('/api/concierge/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      hideCallOverlay();
+      if (data.paypal_url) {
+        addMessage(pageLocale === 'ja' ? 'PayPal決済ページを開きます。決済後にAIがホテルへ電話します。' : 'Opening PayPal. After payment, AI will start calling the hotel.', 'assistant');
+        window.open(data.paypal_url, '_blank', 'noopener,noreferrer');
+      } else {
+        const replyText = data.response || (pageLocale === 'ja' ? 'AI電話予約を開始しました。' : 'AI phone booking started.');
+        addMessage(replyText, 'assistant');
+      }
+    } catch (_e) {
+      callErr.textContent = pageLocale === 'ja' ? '送信に失敗しました。再度お試しください。' : 'Failed to submit. Please try again.';
+      callErr.classList.remove('hidden');
+    } finally {
+      callSubmitBtn.disabled = false;
+    }
   }
 
   function addTyping() {
@@ -261,6 +380,21 @@
   input.addEventListener('input', () => {
     input.style.height = 'auto';
     input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+  });
+
+  messages.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!target || !(target instanceof HTMLElement)) return;
+    const idx = target.getAttribute('data-call-book-index');
+    if (idx == null) return;
+    const hotel = latestExternalHotels[Number(idx)];
+    if (hotel) showCallOverlay(hotel);
+  });
+
+  callCancelBtn.addEventListener('click', hideCallOverlay);
+  callSubmitBtn.addEventListener('click', submitCallBooking);
+  callOverlay.addEventListener('click', (e) => {
+    if (e.target === callOverlay) hideCallOverlay();
   });
 
   sendBtn.addEventListener('click', sendMessage);
