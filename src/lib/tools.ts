@@ -217,6 +217,41 @@ function enrichQuery(query: string, language?: string) {
 }
 
 const HOTEL_TYPES = ["hotel", "lodging", "motel", "resort_hotel", "extended_stay_hotel"];
+const EXCLUDED_PROPERTY_TYPES = new Set([
+  "guest_house",
+  "bed_and_breakfast",
+  "hostel",
+  "campground",
+  "vacation_rental",
+  "cottage",
+  "chalet"
+]);
+const EXCLUDED_LUXURY_CHAIN_KEYWORDS = [
+  "ritz-carlton",
+  "four seasons",
+  "st. regis",
+  "w hotel",
+  "mandarin oriental",
+  "peninsula",
+  "rosewood",
+  "six senses",
+  "banyan tree",
+  "conrad",
+  "waldorf",
+  "luxury collection",
+  "jw marriott",
+  "intercontinental",
+  "regent",
+  "sofitel",
+  "fairmont",
+  "raffles",
+  "oberoi",
+  "taj",
+  "park hyatt",
+  "grand hyatt"
+];
+const MIN_USER_RATING_COUNT = 50;
+const MAX_USER_RATING_COUNT = 5000;
 
 export async function searchHotelsExternal(env: any, params: any) {
   const cityInput = (params.city || params.query || "").toString().trim().toLowerCase();
@@ -291,9 +326,19 @@ function processPlacesResults(data: any) {
   const hotels = places
     .filter((p: any) => {
       if (!p.internationalPhoneNumber && !p.nationalPhoneNumber) return false;
+
+      const userRatingCount = p.userRatingCount || 0;
+      if (userRatingCount < MIN_USER_RATING_COUNT || userRatingCount >= MAX_USER_RATING_COUNT) return false;
+
       const types = p.types || [];
       const isLodging = types.some((t: string) => HOTEL_TYPES.includes(t));
-      return types.length === 0 || isLodging;
+      if (types.length > 0 && !isLodging) return false;
+      if (types.some((t: string) => EXCLUDED_PROPERTY_TYPES.has(t))) return false;
+
+      const hotelName = (p.displayName?.text || "").toLowerCase();
+      if (EXCLUDED_LUXURY_CHAIN_KEYWORDS.some((keyword) => hotelName.includes(keyword))) return false;
+
+      return true;
     })
     .sort((a: any, b: any) => {
       const ratingDiff = (b.rating || 0) - (a.rating || 0);
