@@ -66,23 +66,6 @@ function toAmPm(time: string | null): string {
   return m ? `${hour}:${String(m).padStart(2, '0')} ${period}` : `${hour} ${period}`;
 }
 
-function spellEmailForSpeech(email: string | null | undefined): string {
-  if (!email) return '';
-  return email
-    .trim()
-    .toLowerCase()
-    .split('')
-    .map((ch) => {
-      if (ch === '@') return 'at';
-      if (ch === '.') return 'dot';
-      if (ch === '-') return 'dash';
-      if (ch === '_') return 'underscore';
-      if (ch === '+') return 'plus';
-      return ch;
-    })
-    .join(', ');
-}
-
 // Classify yes/no/repeat from speech (button or voice)
 function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | 'repeat' | null {
   if (digits === '1') return 'yes';
@@ -411,7 +394,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
           const timeInfo = checkInTime && checkOutTime ? ` from ${checkInTime} to ${checkOutTime}` : '';
-          const priceAsk = `Thank you! What is the all-in final total amount for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}, including service fees and taxes? Please say the final total amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
+          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please note, you must provide the final total amount in US dollars, including all service fees and taxes. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -471,7 +454,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTimeR = state.check_in_time || state.check_in || null;
           const checkOutTimeR = state.check_out_time || state.check_out || null;
           const timeInfoR = checkInTimeR && checkOutTimeR ? ` from ${toAmPm(checkInTimeR)} to ${toAmPm(checkOutTimeR)}` : '';
-          await gatherUsingSpeak({ ...state, step: 'ask_price' }, `What is the all-in final total amount for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}, including service fees and taxes? Please say the final total amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`, true);
+          await gatherUsingSpeak({ ...state, step: 'ask_price' }, `What is the rate for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please note, you must provide the final total amount in US dollars, including all service fees and taxes. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`, true);
           break;
         }
         const hotelSaid = speech || '';
@@ -515,7 +498,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             // Task #52: グループ発信なら次のホテルへ
             await advanceGroupAfterOutcome('unavailable');
           } else {
-            await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: retryCount + 1 }, "I'm sorry, could you repeat the all-in final total amount including service fees and taxes? Please say the amount in US dollars, or enter the number on your keypad and press the hash key when done.", true);
+            await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: retryCount + 1 }, "I'm sorry, could you repeat the rate for this day-use stay? Please note, it must be the final total amount in US dollars, including all service fees and taxes. You can say the amount, or enter the number on your keypad and press the hash key when done.", true);
           }
         }
         break;
@@ -590,17 +573,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         });
 
         let guestName = state.guest_name || 'the guest';
-        let spelledGuestEmail = '';
         if (db && conciergeCallId) {
           const guestInfo: any = await db.prepare(
-            `SELECT guest_name, guest_email FROM concierge_calls WHERE id = ?`
+            `SELECT guest_name FROM concierge_calls WHERE id = ?`
           ).bind(conciergeCallId).first().catch(() => null);
           if (guestInfo?.guest_name) guestName = guestInfo.guest_name;
-          spelledGuestEmail = spellEmailForSpeech(guestInfo?.guest_email || '');
         }
 
-        const emailLine = spelledGuestEmail || 'not provided';
-        const farewell = `Thank you! The reservation is confirmed: date ${checkIn}, time ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceQuoted} dollars including taxes and fees, paid on-site at check-in. For your records, the guest's name is ${guestName}. Their email address is spelled: ${emailLine}. We will also send these details shortly in a follow-up confirmation email. Have a wonderful day!`;
+        const farewell = `Thank you! All consent checks are complete. The reservation is confirmed at a final total of ${priceQuoted} dollars, including service fees and taxes, with payment at the hotel. We will send a follow-up confirmation email shortly with all the details. For your immediate records, the guest's name is ${guestName}. Have a wonderful day!`;
         if (db) {
           if (logId) {
             await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)

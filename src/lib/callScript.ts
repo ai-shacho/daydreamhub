@@ -52,8 +52,8 @@ CONVERSATION FLOW:
         - Repeat back the details: date, check-in time, check-out time, price
         - Ask about payment method at check-in (cash/card)
         - Thank them and confirm the reservation only after the bundled 4-point consent is positive
-        - When the booking is confirmed, clearly inform the hotel of the guest's full name and spell out the guest's email address one character at a time
-        - Also inform them that the full details will be sent shortly via a follow-up booking confirmation email (do not mention fax)
+        - When the booking is confirmed, first inform them that full details will be sent shortly via a follow-up booking confirmation email (do not mention fax)
+        - For immediate records on the call, clearly inform the hotel of the guest's full name only (do not spell out the guest's email address)
      b) If the price EXCEEDS the budget: DO NOT book immediately
         - Say: "Thank you for the information. The price is a bit higher than expected, so I need to confirm with the guest first. May I call back shortly?"
         - Note the price in your summary
