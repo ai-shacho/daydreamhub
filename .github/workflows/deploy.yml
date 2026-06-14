@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  WRANGLER_LOG: debug
 
 jobs:
   deploy:
@@ -22,6 +22,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
         timeout-minutes: 3
+
+      - name: Install Wrangler (pinned)
+        run: npm install -g wrangler@3
 
       - name: Build
         run: npm run build
@@ -62,7 +65,7 @@ jobs:
           for secret_name in "${secrets[@]}"; do
             secret_value="${!secret_name}"
             if [ -n "$secret_value" ]; then
-              echo "$secret_value" | npx wrangler pages secret put "$secret_name" --project-name=daydreamhub
+              echo "$secret_value" | wrangler pages secret put "$secret_name" --project-name=daydreamhub --log-level debug
             fi
           done
 
@@ -71,7 +74,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply daydreamhub-db --remote
+          wranglerVersion: '3'
+          command: d1 migrations apply daydreamhub-db --remote --log-level debug
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -83,4 +87,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=daydreamhub
+          wranglerVersion: '3'
+          command: pages deploy dist --project-name=daydreamhub --log-level debug
