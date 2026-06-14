@@ -846,6 +846,111 @@ export async function sendListingApprovedEmail(
   });
 }
 
+export type ConciergeResultEmailType = 'success' | 'no_answer' | 'declined' | 'all_failed';
+
+export async function sendConciergeResultEmail(
+  apiKey: string,
+  data: {
+    guestName: string;
+    guestEmail: string;
+    resultType: ConciergeResultEmailType;
+    hotelName?: string;
+    hotelPhone?: string;
+    date?: string;
+    checkIn?: string;
+    checkOut?: string;
+    guests?: number;
+    priceQuoted?: string;
+    aiSummary?: string;
+    attemptedHotels?: string[];
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const resultMeta = {
+    success: {
+      subject: `✅ Booking confirmed${data.hotelName ? ` - ${data.hotelName}` : ''} | DaydreamHub`,
+      title: 'Booking Confirmed',
+      color: '#059669',
+      message: data.hotelName
+        ? `Great news — we confirmed your booking with <strong>${escapeHtml(data.hotelName)}</strong>.`
+        : 'Great news — we confirmed your booking.',
+    },
+    no_answer: {
+      subject: `📞 We couldn't reach the hotel this time | DaydreamHub`,
+      title: 'No Response from Hotel',
+      color: '#6b7280',
+      message: data.hotelName
+        ? `We could not get a response from <strong>${escapeHtml(data.hotelName)}</strong> during this call attempt.`
+        : 'We could not get a response from the hotel during this call attempt.',
+    },
+    declined: {
+      subject: `❌ Hotel could not accept the request | DaydreamHub`,
+      title: 'Request Not Accepted',
+      color: '#dc2626',
+      message: data.hotelName
+        ? `<strong>${escapeHtml(data.hotelName)}</strong> could not accept this request.`
+        : 'The hotel could not accept this request.',
+    },
+    all_failed: {
+      subject: `⚠️ All contacted hotels were unavailable | DaydreamHub`,
+      title: 'All Hotels Unavailable',
+      color: '#d97706',
+      message: 'We contacted all candidate hotels but none could confirm your request.',
+    },
+  }[data.resultType];
+
+  const attemptedHotels = (data.attemptedHotels || [])
+    .filter(Boolean)
+    .map((h, i) => `<li style="margin:4px 0">${i + 1}. ${escapeHtml(h)}</li>`)
+    .join('');
+
+  const detailsRows = [
+    data.hotelName ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>` : '',
+    data.hotelPhone ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Hotel Phone</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelPhone)}</td></tr>` : '',
+    data.date ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.date)}</td></tr>` : '',
+    (data.checkIn || data.checkOut) ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Time</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn || '?')} - ${escapeHtml(data.checkOut || '?')}</td></tr>` : '',
+    data.guests ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>` : '',
+    data.priceQuoted ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Quoted Price</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.priceQuoted)}</td></tr>` : '',
+  ].filter(Boolean).join('');
+
+  const actionNote = data.resultType === 'success'
+    ? 'Please keep this email for reference when checking in.'
+    : data.resultType === 'all_failed'
+      ? 'If payment was captured, refund handling will proceed according to our policy.'
+      : 'You can try another hotel search anytime on DaydreamHub.';
+
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:${resultMeta.color};color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:24px">${resultMeta.title}</h1>
+    <p style="margin:8px 0 0;opacity:0.9">DaydreamHub AI Concierge</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+    <p style="font-size:16px">Hello ${escapeHtml(data.guestName || 'there')},</p>
+    <p>${resultMeta.message}</p>
+
+    ${detailsRows ? `<table style="border-collapse:collapse;width:100%;margin:16px 0">${detailsRows}</table>` : ''}
+
+    ${attemptedHotels ? `<div style="margin:16px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px"><strong>Hotels contacted</strong><ol style="padding-left:20px;margin:8px 0">${attemptedHotels}</ol></div>` : ''}
+
+    ${data.aiSummary ? `<div style="margin:16px 0;padding:12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px"><strong>Call summary</strong><br>${escapeHtml(data.aiSummary)}</div>` : ''}
+
+    <div style="margin:16px 0;padding:12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px">
+      ${escapeHtml(actionNote)}
+    </div>
+
+    ${emailFooter()}
+  </div>
+</div>`;
+
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.guestEmail,
+    subject: resultMeta.subject,
+    html,
+  });
+}
+
 export async function sendAdminBookingStatusUpdate(
   apiKey: string,
   data: {
