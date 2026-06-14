@@ -399,7 +399,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
           const timeInfo = checkInTime && checkOutTime ? ` from ${checkInTime} to ${checkOutTime}` : '';
-          const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
+          const priceAsk = `Thank you! What is the final total rate for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}, including service fees and taxes? Please say the total amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -459,7 +459,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTimeR = state.check_in_time || state.check_in || null;
           const checkOutTimeR = state.check_out_time || state.check_out || null;
           const timeInfoR = checkInTimeR && checkOutTimeR ? ` from ${toAmPm(checkInTimeR)} to ${toAmPm(checkOutTimeR)}` : '';
-          await gatherUsingSpeak({ ...state, step: 'ask_price' }, `What is the rate for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please say the amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`, true);
+          await gatherUsingSpeak({ ...state, step: 'ask_price' }, `What is the final total rate for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}, including service fees and taxes? Please say the total amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`, true);
           break;
         }
         const hotelSaid = speech || '';
@@ -476,7 +476,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
           const timeInfo = checkInTime && checkOutTime ? `, ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
-          const confirmAsk = `Thank you. To confirm: ${checkIn}${timeInfo}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceResult.amount} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`;
+          const confirmAsk = `Thank you. To confirm: ${checkIn}${timeInfo}, ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceResult.amount} dollars including service fees and taxes. Shall we proceed to a step-by-step final confirmation? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -521,9 +521,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         if (answer === 'repeat') {
           if (step === 'confirm_booking') {
-            await gatherUsingSpeak({ ...state, step: 'confirm_booking' }, `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceQuoted} dollars. Shall we proceed to the final confirmation questions? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`);
+            await gatherUsingSpeak({ ...state, step: 'confirm_booking' }, `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceQuoted} dollars including service fees and taxes. Shall we proceed to step-by-step final confirmation questions? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`);
           } else if (step === 'consent_price') {
-            await gatherUsingSpeak({ ...state, step: 'consent_price' }, `Consent check one of four. The total quoted amount is ${priceQuoted} US dollars. Do you agree with this total amount? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+            await gatherUsingSpeak({ ...state, step: 'consent_price' }, `Consent check one of four. The final total amount, including service fees and taxes, is ${priceQuoted} US dollars. Do you agree with this total amount? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
           } else if (step === 'consent_date') {
             await gatherUsingSpeak({ ...state, step: 'consent_date', consent_price: 1 }, `Consent check two of four. The booking date is ${checkIn}. Is this date correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
           } else if (step === 'consent_time') {
@@ -578,7 +578,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         // yes path
         if (step === 'confirm_booking') {
-          await gatherUsingSpeak({ ...state, step: 'consent_price', retry_count: 0 }, `Thank you. Before finalizing, I need four quick consent checks. First: the total quoted amount is ${priceQuoted} US dollars. Do you agree with this amount? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+          await gatherUsingSpeak({ ...state, step: 'consent_price', retry_count: 0 }, `Thank you. Before finalizing, I need four quick consent checks, one by one. First: the final total amount, including service fees and taxes, is ${priceQuoted} US dollars. Do you agree with this amount? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
           break;
         }
 
@@ -631,7 +631,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           break;
         }
 
-        const farewell = `Thank you! All consent checks are complete. The reservation is confirmed at ${priceQuoted} dollars with payment at the hotel. Have a wonderful day!`;
+        const farewell = `Thank you! All consent checks are complete. The reservation is confirmed at a final total of ${priceQuoted} dollars, including service fees and taxes, with payment at the hotel. Have a wonderful day!`;
         if (db) {
           if (logId) {
             await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -640,7 +640,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           await updateConciergeCall('completed', {
             outcome: 'booked',
             price_quoted: String(priceQuoted),
-            ai_summary: `Confirmed at $${priceQuoted} after all 4 consents.`,
+            ai_summary: `Confirmed at final total $${priceQuoted} (including service fees and taxes) after all 4 consents.`,
           });
           if (bookingId) {
             await db.prepare(`UPDATE bookings SET status='confirmed', updated_at=datetime('now') WHERE id=?`)
