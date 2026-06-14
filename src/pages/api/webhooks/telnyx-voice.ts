@@ -124,6 +124,65 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       .bind(...values).run().catch((e: any) => console.error('[telnyx-voice] concierge update failed:', e));
   }
 
+  async function sendResultEmailOnce(resultType: ConciergeResultEmailType) {
+    if (!db || !conciergeCallId || !env?.RESEND_API_KEY) return;
+
+    const call: any = await db.prepare(
+      `SELECT id, call_group_id, guest_name, guest_email, hotel_name, hotel_phone, request_details, ai_summary, price_quoted
+       FROM concierge_calls WHERE id = ?`
+    ).bind(conciergeCallId).first().catch(() => null);
+    if (!call?.guest_email) return;
+
+    if (resultType === 'all_failed' && call.call_group_id) {
+      const claim: any = await db.prepare(
+        `UPDATE concierge_calls SET result_email_sent = 1, updated_at = datetime('now') WHERE call_group_id = ? AND result_email_sent = 0`
+      ).bind(call.call_group_id).run().catch(() => null);
+      if (Number(claim?.meta?.changes || 0) === 0) return;
+
+      const attemptedRows: any[] = await db.prepare(
+        `SELECT hotel_name FROM concierge_calls WHERE call_group_id = ? ORDER BY call_order ASC, id ASC`
+      ).bind(call.call_group_id).all().then((r: any) => r?.results || []).catch(() => []);
+
+      let details: any = {};
+      try { details = JSON.parse(call.request_details || '{}'); } catch {}
+
+      await sendConciergeResultEmail(env.RESEND_API_KEY, {
+        guestName: call.guest_name || 'Guest',
+        guestEmail: call.guest_email,
+        resultType: 'all_failed',
+        date: details.date || '',
+        checkIn: details.check_in_time || '',
+        checkOut: details.check_out_time || '',
+        guests: details.guests || 1,
+        aiSummary: call.ai_summary || undefined,
+        attemptedHotels: attemptedRows.map((r: any) => r.hotel_name).filter(Boolean),
+      }).catch((e: any) => console.error('[telnyx-voice] result email failed:', e));
+      return;
+    }
+
+    const claim: any = await db.prepare(
+      `UPDATE concierge_calls SET result_email_sent = 1, updated_at = datetime('now') WHERE id = ? AND result_email_sent = 0`
+    ).bind(conciergeCallId).run().catch(() => null);
+    if (Number(claim?.meta?.changes || 0) === 0) return;
+
+    let details: any = {};
+    try { details = JSON.parse(call.request_details || '{}'); } catch {}
+
+    await sendConciergeResultEmail(env.RESEND_API_KEY, {
+      guestName: call.guest_name || 'Guest',
+      guestEmail: call.guest_email,
+      resultType,
+      hotelName: call.hotel_name || undefined,
+      hotelPhone: call.hotel_phone || undefined,
+      date: details.date || '',
+      checkIn: details.check_in_time || '',
+      checkOut: details.check_out_time || '',
+      guests: details.guests || 1,
+      priceQuoted: call.price_quoted || undefined,
+      aiSummary: call.ai_summary || undefined,
+    }).catch((e: any) => console.error('[telnyx-voice] result email failed:', e));
+  }
+
   // Helper (Task #52): この通話がグループ発信の一部なら、結果に応じて次のホテルへ進める/成約確定する。
   // initiateNextGroupCall は current_order の条件付きUPDATEで冪等（二重発信を防止）。
   async function advanceGroupAfterOutcome(outcome: string) {
@@ -148,6 +207,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       console.log(`[telnyx-voice] advanceGroup group=${groupId} outcome=${outcome} →`, JSON.stringify(next));
       if (next?.status === 'all_failed') {
         await processGroupRefund(env, db, groupId).catch((e: any) => console.error('[telnyx-voice] group refund failed:', e));
+        await sendResultEmailOnce('all_failed');
       }
     } catch (e) {
       console.error('[telnyx-voice] advanceGroup failed:', e);
@@ -369,6 +429,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
+          await sendResultEmailOnce('declined');
           // Task #52: グループ発信なら次のホテルへ
           await advanceGroupAfterOutcome('unavailable');
 
@@ -380,6 +441,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
             await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No clear response to day-use question.' });
+            await sendResultEmailOnce('no_answer');
             // Task #52: グループ発信なら次のホテルへ
             await advanceGroupAfterOutcome('no_answer');
           } else {
@@ -433,6 +495,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
                 .bind(`[Hotel]: ${hotelSaid}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
             await updateConciergeCall('completed', { outcome: 'unavailable', ai_summary: 'Could not confirm price on call.' });
+            await sendResultEmailOnce('declined');
             await telnyxCmd(apiKey, callControlId, 'speak', {
               payload: farewell,
               voice: 'Polly.Joanna',
@@ -493,6 +556,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
+          await sendResultEmailOnce('declined');
           await advanceGroupAfterOutcome('unavailable');
           break;
         }
@@ -504,6 +568,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
             await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: `No clear response during consent step: ${step}` });
+            await sendResultEmailOnce('no_answer');
             await advanceGroupAfterOutcome('no_answer');
           } else {
             await gatherUsingSpeak({ ...state, step, retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to agree, or press 2 or say no to decline.");
@@ -556,6 +621,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             ai_summary: 'Booking not confirmed: missing required consents.',
             price_quoted: String(priceQuoted),
           });
+          await sendResultEmailOnce('declined');
           await telnyxCmd(apiKey, callControlId, 'speak', {
             payload: 'Thank you. We could not verify all required consents, so we will not finalize the booking on this call. Goodbye.',
             voice: 'Polly.Joanna',
@@ -587,6 +653,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           voice: 'Polly.Joanna',
           client_state: encodeState({ ...state, phase: 'ending' }),
         });
+        await sendResultEmailOnce('success');
         await advanceGroupAfterOutcome('booked');
         break;
       }
@@ -601,6 +668,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         if (log && !['confirmed', 'declined', 'no_dayuse', 'price_unclear', 'no_answer'].includes(log.status)) {
           await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
           await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No answer or call disconnected.' });
+          await sendResultEmailOnce('no_answer');
           // Task #52: 応答前に切断された純粋な no_answer のみ、ここでフォールバック発信
           await advanceGroupAfterOutcome('no_answer');
         }
@@ -614,6 +682,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
       } else if (conciergeCallId) {
         await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No answer or call disconnected.' });
+        await sendResultEmailOnce('no_answer');
       }
       break;
     }

@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getAccessToken, refundCapture } from '../../../lib/paypal';
-import { sendConciergeConfirmation } from '../../../lib/email';
+import { sendConciergeConfirmation, sendConciergeResultEmail } from '../../../lib/email';
 import { getCurrencyForCountry, getExchangeRates, formatPriceWithUSD, initiateNextGroupCall } from '../../../lib/tools';
 
 const FAX_PATTERNS = [
@@ -258,6 +258,70 @@ async function sendBookingConfirmations(env: any, db: any, callId: number) {
   }
 }
 
+async function sendConciergeResultEmailOnce(
+  env: any,
+  db: any,
+  callId: number,
+  resultType: 'success' | 'no_answer' | 'declined' | 'all_failed'
+) {
+  if (!env?.RESEND_API_KEY) return;
+
+  const call: any = await db.prepare(
+    `SELECT id, call_group_id, guest_name, guest_email, hotel_name, hotel_phone, request_details, ai_summary, price_quoted
+     FROM concierge_calls WHERE id = ?`
+  ).bind(callId).first().catch(() => null);
+  if (!call?.guest_email) return;
+
+  if (resultType === 'all_failed' && call.call_group_id) {
+    const claim: any = await db.prepare(
+      `UPDATE concierge_calls SET result_email_sent = 1, updated_at = datetime('now') WHERE call_group_id = ? AND result_email_sent = 0`
+    ).bind(call.call_group_id).run().catch(() => null);
+    if (Number(claim?.meta?.changes || 0) === 0) return;
+
+    const attemptedHotels: string[] = await db.prepare(
+      `SELECT hotel_name FROM concierge_calls WHERE call_group_id = ? ORDER BY call_order ASC, id ASC`
+    ).bind(call.call_group_id).all().then((r: any) => (r?.results || []).map((x: any) => x.hotel_name).filter(Boolean)).catch(() => []);
+
+    let details: any = {};
+    try { details = JSON.parse(call.request_details || '{}'); } catch {}
+
+    await sendConciergeResultEmail(env.RESEND_API_KEY, {
+      guestName: call.guest_name || 'Guest',
+      guestEmail: call.guest_email,
+      resultType: 'all_failed',
+      date: details.date || '',
+      checkIn: details.check_in_time || '',
+      checkOut: details.check_out_time || '',
+      guests: details.guests || 1,
+      aiSummary: call.ai_summary || undefined,
+      attemptedHotels,
+    }).catch((e: any) => console.error('Result email failed:', e));
+    return;
+  }
+
+  const claim: any = await db.prepare(
+    `UPDATE concierge_calls SET result_email_sent = 1, updated_at = datetime('now') WHERE id = ? AND result_email_sent = 0`
+  ).bind(callId).run().catch(() => null);
+  if (Number(claim?.meta?.changes || 0) === 0) return;
+
+  let details: any = {};
+  try { details = JSON.parse(call.request_details || '{}'); } catch {}
+
+  await sendConciergeResultEmail(env.RESEND_API_KEY, {
+    guestName: call.guest_name || 'Guest',
+    guestEmail: call.guest_email,
+    resultType,
+    hotelName: call.hotel_name || undefined,
+    hotelPhone: call.hotel_phone || undefined,
+    date: details.date || '',
+    checkIn: details.check_in_time || '',
+    checkOut: details.check_out_time || '',
+    guests: details.guests || 1,
+    priceQuoted: call.price_quoted || undefined,
+    aiSummary: call.ai_summary || undefined,
+  }).catch((e: any) => console.error('Result email failed:', e));
+}
+
 function parseOutcome(summary: string, transcript: string): string {
   const text = `${summary} ${transcript}`.toLowerCase();
   if (
@@ -411,6 +475,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             .run();
           try {
             await sendBookingConfirmations(env, db, conciergeCall.id);
+            await sendConciergeResultEmailOnce(env, db, conciergeCall.id, 'success');
           } catch (e) {
             console.error('Failed to send booking confirmations:', e);
           }
@@ -427,6 +492,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             if (nextResult.status === 'all_failed') {
               try {
                 await processGroupRefund(env, db, conciergeCall.call_group_id);
+                await sendConciergeResultEmailOnce(env, db, conciergeCall.id, 'all_failed');
               } catch (e) {
                 console.error('Failed to process group refund:', e);
               }
@@ -441,6 +507,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (bookingOutcome === 'booked') {
         try {
           await sendBookingConfirmations(env, db, conciergeCall.id);
+          await sendConciergeResultEmailOnce(env, db, conciergeCall.id, 'success');
         } catch (e) {
           console.error('Failed to send booking confirmations:', e);
         }
@@ -451,6 +518,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
       ) {
         try {
           await processRefund(env, db, conciergeCall.id);
+          await sendConciergeResultEmailOnce(
+            env,
+            db,
+            conciergeCall.id,
+            bookingOutcome === 'no_answer' || bookingOutcome === 'voicemail' ? 'no_answer' : 'declined'
+          );
         } catch (e) {
           console.error('Failed to process refund:', e);
         }
