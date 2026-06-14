@@ -131,6 +131,9 @@ function sortIcon(col: string) {
   if (sortBy !== col) return "↕";
   return sortOrder === "asc" ? "↑" : "↓";
 }
+
+const hotelsExportParams = Astro.url.searchParams.toString();
+const hotelsExportUrl = hotelsExportParams ? `/api/admin/hotels-export?${hotelsExportParams}` : '/api/admin/hotels-export';
 ---
 
 <AdminLayout title="Hotels" activeNav="hotels">
@@ -214,9 +217,14 @@ function sortIcon(col: string) {
 
   <div class="flex items-center justify-between mb-3">
     <p class="hotel-count text-sm text-slate-500">{hotels.length} hotel{hotels.length !== 1 ? "s" : ""} found</p>
-    <a href="/admin/hotels/new" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
-      + Add Hotel
-    </a>
+    <div class="flex items-center gap-2">
+      <a href={hotelsExportUrl} class="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors">
+        Export CSV
+      </a>
+      <a href="/admin/hotels/new" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+        + Add Hotel
+      </a>
+    </div>
   </div>
 
   <!-- Table -->
