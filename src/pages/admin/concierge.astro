@@ -387,26 +387,59 @@ const refundColors: Record<string, string> = {
         const callsContainer = detailRow.querySelector(`.calls-container[data-group-id="${groupId}"]`);
         if (callsContainer && callsContainer.innerHTML.includes('Loading')) {
           try {
-            const res = await fetch(`/api/admin/concierge?group_id=${groupId}`);
+            const res = await fetch(`/api/admin/concierge-calls?group_id=${groupId}`);
             if (res.ok) {
               const data = await res.json();
               const calls = data.calls || [];
               if (calls.length === 0) {
                 callsContainer.innerHTML = '<span class="text-xs text-slate-400">No calls found</span>';
               } else {
-                let html = '<div class="space-y-2">';
+                const esc = (value: any) => String(value ?? '')
+                  .replaceAll('&', '&amp;')
+                  .replaceAll('<', '&lt;')
+                  .replaceAll('>', '&gt;')
+                  .replaceAll('"', '&quot;');
+
+                let html = '<div class="space-y-3">';
                 calls.forEach((c: any) => {
-                  const statusColor = c.status === 'success' ? 'bg-emerald-100 text-emerald-700' :
+                  const statusColor = c.status === 'completed' || c.status === 'success' ? 'bg-emerald-100 text-emerald-700' :
                                       c.status === 'failed' ? 'bg-red-100 text-red-700' :
                                       c.status === 'calling' ? 'bg-blue-100 text-blue-700' :
                                       'bg-slate-100 text-slate-600';
-                  html += `<div class="flex items-center gap-3 text-xs bg-white rounded border border-slate-200 px-3 py-2">
-                    <span class="font-mono text-slate-400">#${c.call_order}</span>
-                    <span class="text-slate-700 font-medium">${c.hotel_name || '-'}</span>
-                    <span class="text-slate-500">${c.hotel_phone || '-'}</span>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">${c.status}</span>
-                    <span class="text-slate-400">${c.telnyx_call_id ? 'Call: ' + c.telnyx_call_id.slice(0, 12) + '...' : ''}</span>
-                  </div>`;
+                  const outcomeColor = c.outcome === 'booked' || c.outcome === 'success' ? 'bg-emerald-100 text-emerald-700' :
+                                       c.outcome === 'over_budget' ? 'bg-amber-100 text-amber-700' :
+                                       c.outcome === 'no_answer' || c.outcome === 'failed' ? 'bg-red-100 text-red-700' :
+                                       'bg-slate-100 text-slate-600';
+                  const summary = c.ai_summary ? esc(c.ai_summary) : '-';
+                  const availability = c.availability_info ? esc(c.availability_info) : '-';
+                  const price = c.price_quoted ? esc(c.price_quoted) : '-';
+                  const reason = c.recommendation_reason ? esc(c.recommendation_reason) : '-';
+                  const phone = c.hotel_phone ? esc(c.hotel_phone) : '-';
+                  const telnyxId = c.telnyx_call_id ? esc(c.telnyx_call_id) : '-';
+                  const duration = (typeof c.duration_seconds === 'number' && c.duration_seconds > 0) ? `${c.duration_seconds}s` : '-';
+                  const attempt = c.attempt && c.max_attempts ? `${c.attempt}/${c.max_attempts}` : '-';
+
+                  html += `<details class="bg-white rounded border border-slate-200" open>
+                    <summary class="list-none cursor-pointer px-3 py-2">
+                      <div class="flex flex-wrap items-center gap-2 text-xs">
+                        <span class="font-mono text-slate-400">#${c.call_order}</span>
+                        <span class="font-mono text-slate-400">Try ${attempt}</span>
+                        <span class="text-slate-800 font-medium">${esc(c.hotel_name || '-')}</span>
+                        <span class="text-slate-500">${phone}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">${esc(c.status || '-')}</span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${outcomeColor}">${esc(c.outcome || '-')}</span>
+                        <span class="text-slate-500">Price: ${price}</span>
+                      </div>
+                    </summary>
+                    <div class="px-3 pb-3 grid grid-cols-1 lg:grid-cols-2 gap-2 text-xs">
+                      <div class="text-slate-600"><span class="text-slate-500">Summary:</span> ${summary}</div>
+                      <div class="text-slate-600"><span class="text-slate-500">Availability:</span> ${availability}</div>
+                      <div class="text-slate-600"><span class="text-slate-500">Reason:</span> ${reason}</div>
+                      <div class="text-slate-600"><span class="text-slate-500">Duration:</span> ${duration}</div>
+                      <div class="text-slate-600"><span class="text-slate-500">Telnyx Call:</span> <span class="font-mono">${telnyxId}</span></div>
+                      <div class="text-slate-600"><span class="text-slate-500">Updated:</span> ${esc(c.updated_at || '-')}</div>
+                    </div>
+                  </details>`;
                 });
                 html += '</div>';
                 callsContainer.innerHTML = html;
@@ -435,7 +468,7 @@ const refundColors: Record<string, string> = {
 
       if (isHidden && container.innerHTML.includes('Loading')) {
         try {
-          const res = await fetch(`/api/admin/concierge?session_id=${sessionId}&type=messages`);
+          const res = await fetch(`/api/admin/concierge-calls?session_id=${sessionId}`);
           if (res.ok) {
             const data = await res.json();
             const messages = data.messages || [];
@@ -467,7 +500,7 @@ const refundColors: Record<string, string> = {
     const scriptEl = document.getElementById('script-default');
     if (!scriptEl) return;
     try {
-      const res = await fetch('/api/admin/concierge?type=script');
+      const res = await fetch('/api/admin/telnyx-assistant');
       if (res.ok) {
         const data = await res.json();
         scriptEl.textContent = data.script || 'No script found';
@@ -491,7 +524,11 @@ const refundColors: Record<string, string> = {
     if (msgEl) msgEl.textContent = 'Checking...';
 
     try {
-      const res = await fetch('/api/admin/concierge?type=assistant');
+      const res = await fetch('/api/admin/telnyx-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check' }),
+      });
       if (res.ok) {
         const data = await res.json();
         if (msgEl) msgEl.innerHTML = '<span class="text-emerald-600">Assistant loaded successfully</span>';
@@ -516,10 +553,10 @@ const refundColors: Record<string, string> = {
     if (msgEl) msgEl.textContent = 'Updating...';
 
     try {
-      const res = await fetch('/api/admin/concierge', {
+      const res = await fetch('/api/admin/telnyx-assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_script' }),
+        body: JSON.stringify({ action: 'update' }),
       });
 
       if (res.ok) {

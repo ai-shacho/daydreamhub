@@ -45,17 +45,27 @@ export const GET: APIRoute = async ({ request, locals }) => {
   try {
     const result = await db
       .prepare(
-        `SELECT id, call_order, hotel_name, hotel_phone, hotel_source, hotel_id,
+        `SELECT id, session_id, call_group_id, call_order, attempt, max_attempts,
+                hotel_name, hotel_phone, hotel_source, hotel_id,
                 status, outcome, ai_summary, availability_info, price_quoted, recommendation_reason,
-                telnyx_call_id, guest_name, guest_email, confirmation_email_sent,
+                request_details, telnyx_call_id, guest_name, guest_email,
+                confirmation_email_sent, confirmation_fax_sent,
                 duration_seconds, created_at, updated_at
          FROM concierge_calls
          WHERE call_group_id = ?
-         ORDER BY call_order ASC`
+         ORDER BY call_order ASC, attempt ASC`
       )
       .bind(parseInt(groupId))
       .all();
-    return new Response(JSON.stringify({ calls: result?.results || [] }), {
+
+    const calls = (result?.results || []).map((row: any) => ({
+      ...row,
+      has_summary: Boolean(row?.ai_summary),
+      has_price: row?.price_quoted != null && String(row.price_quoted).trim() !== '',
+      is_success: row?.status === 'completed' || row?.outcome === 'booked' || row?.outcome === 'success',
+    }));
+
+    return new Response(JSON.stringify({ calls }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (e: any) {
