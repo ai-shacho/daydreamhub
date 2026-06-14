@@ -97,23 +97,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       data.bank_account || ''
     ).run();
 
-    // Register as inactive hotel
-    const baseSlug = data.hotel_name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    const uniqueSlug = `${baseSlug}-${Date.now()}`;
-    await db.prepare(`
-      INSERT INTO hotels (name, slug, city, country, email, phone, is_active, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 0, datetime('now'))
-    `).bind(
-      data.hotel_name,
-      uniqueSlug,
-      data.city || '',
-      data.country || '',
-      data.booking_email || '',
-      data.hotel_phone || ''
-    ).run();
+    // Task #57: 申込時の「空ホテル自動作成」は廃止。hotels への INSERT は行わない。
+    // ホテルレコードは承認後にオーナー/管理者が必要に応じて作成する運用へ移行。
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     return new Response(JSON.stringify({ error: 'DB insert failed', details: message }), {
