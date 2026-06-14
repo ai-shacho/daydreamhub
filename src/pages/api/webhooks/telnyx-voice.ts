@@ -83,11 +83,6 @@ function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | 'repeat' 
   return null;
 }
 
-function hasAllConsents(row: any): boolean {
-  return [row?.consent_price, row?.consent_date, row?.consent_time, row?.consent_onsite_payment]
-    .every((v: any) => Number(v) === 1);
-}
-
 export const POST: APIRoute = async ({ request, locals, url }) => {
   const env = (locals as any).runtime?.env;
   const db = env?.DB;
@@ -399,7 +394,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
           const timeInfo = checkInTime && checkOutTime ? ` from ${checkInTime} to ${checkOutTime}` : '';
-          const priceAsk = `Thank you! What is the final total rate for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}, including service fees and taxes? Please say the total amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
+          const priceAsk = `Thank you! What is the all-in final total amount for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}, including service fees and taxes? Please say the final total amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -459,7 +454,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTimeR = state.check_in_time || state.check_in || null;
           const checkOutTimeR = state.check_out_time || state.check_out || null;
           const timeInfoR = checkInTimeR && checkOutTimeR ? ` from ${toAmPm(checkInTimeR)} to ${toAmPm(checkOutTimeR)}` : '';
-          await gatherUsingSpeak({ ...state, step: 'ask_price' }, `What is the final total rate for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}, including service fees and taxes? Please say the total amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`, true);
+          await gatherUsingSpeak({ ...state, step: 'ask_price' }, `What is the all-in final total amount for a day-use stay on ${checkIn}${timeInfoR} for ${guests} ${guests === 1 ? 'person' : 'people'}, including service fees and taxes? Please say the final total amount in US dollars. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`, true);
           break;
         }
         const hotelSaid = speech || '';
@@ -475,8 +470,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const guests = state.guests || 1;
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
-          const timeInfo = checkInTime && checkOutTime ? `, ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
-          const confirmAsk = `Thank you. To confirm: ${checkIn}${timeInfo}, ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceResult.amount} dollars including service fees and taxes. Shall we proceed to a step-by-step final confirmation? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`;
+          const confirmAsk = `To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${priceResult.amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -504,14 +498,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             // Task #52: グループ発信なら次のホテルへ
             await advanceGroupAfterOutcome('unavailable');
           } else {
-            await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: retryCount + 1 }, "I'm sorry, could you repeat the price? Please say the amount in US dollars, or enter the number on your keypad and press the hash key when done.", true);
+            await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: retryCount + 1 }, "I'm sorry, could you repeat the all-in final total amount including service fees and taxes? Please say the amount in US dollars, or enter the number on your keypad and press the hash key when done.", true);
           }
         }
         break;
       }
 
-      // ─── STEP 2A-2: Confirm booking + 4-point consent flow ───
-      if (step === 'confirm_booking' || step === 'consent_price' || step === 'consent_date' || step === 'consent_time' || step === 'consent_onsite_payment') {
+      // ─── STEP 2A-2: Confirm booking (single-shot 4-point consent) ───
+      if (step === 'confirm_booking') {
         const answer = classifyYesNo(speech, digits);
         const priceQuoted = state.price_quoted || 0;
         const checkIn = (state.check_in_date || state.date || 'the requested date');
@@ -520,17 +514,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const guests = state.guests || 1;
 
         if (answer === 'repeat') {
-          if (step === 'confirm_booking') {
-            await gatherUsingSpeak({ ...state, step: 'confirm_booking' }, `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceQuoted} dollars including service fees and taxes. Shall we proceed to step-by-step final confirmation questions? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`);
-          } else if (step === 'consent_price') {
-            await gatherUsingSpeak({ ...state, step: 'consent_price' }, `Consent check one of four. The final total amount, including service fees and taxes, is ${priceQuoted} US dollars. Do you agree with this total amount? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
-          } else if (step === 'consent_date') {
-            await gatherUsingSpeak({ ...state, step: 'consent_date', consent_price: 1 }, `Consent check two of four. The booking date is ${checkIn}. Is this date correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
-          } else if (step === 'consent_time') {
-            await gatherUsingSpeak({ ...state, step: 'consent_time', consent_price: 1, consent_date: 1 }, `Consent check three of four. The stay time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}. Is this time correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
-          } else {
-            await gatherUsingSpeak({ ...state, step: 'consent_onsite_payment', consent_price: 1, consent_date: 1, consent_time: 1 }, `Final consent check, four of four. Payment will be made directly at the hotel on site at check-in. Do you agree? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
-          }
+          await gatherUsingSpeak(
+            { ...state, step: 'confirm_booking' },
+            `To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${priceQuoted} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no.`
+          );
           break;
         }
 
@@ -544,7 +531,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             await updateConciergeCall('completed', {
               outcome: 'unavailable',
               price_quoted: String(priceQuoted),
-              ai_summary: `Declined during consent step: ${step}`,
+              ai_summary: 'Declined during bundled final confirmation.',
             });
             if (bookingId) {
               await db.prepare(`UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id=?`)
@@ -567,40 +554,16 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
-            await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: `No clear response during consent step: ${step}` });
+            await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No clear response during bundled final confirmation.' });
             await sendResultEmailOnce('no_answer');
             await advanceGroupAfterOutcome('no_answer');
           } else {
-            await gatherUsingSpeak({ ...state, step, retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to agree, or press 2 or say no to decline.");
+            await gatherUsingSpeak({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to agree, or press 2 or say no to decline.");
           }
           break;
         }
 
-        // yes path
-        if (step === 'confirm_booking') {
-          await gatherUsingSpeak({ ...state, step: 'consent_price', retry_count: 0 }, `Thank you. Before finalizing, I need four quick consent checks, one by one. First: the final total amount, including service fees and taxes, is ${priceQuoted} US dollars. Do you agree with this amount? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
-          break;
-        }
-
-        if (step === 'consent_price') {
-          await updateConciergeCall('calling', { consent_price: 1, price_quoted: String(priceQuoted) });
-          await gatherUsingSpeak({ ...state, step: 'consent_date', consent_price: 1, retry_count: 0 }, `Thank you. Second consent check: the booking date is ${checkIn}. Is this date correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
-          break;
-        }
-
-        if (step === 'consent_date') {
-          await updateConciergeCall('calling', { consent_price: 1, consent_date: 1, price_quoted: String(priceQuoted) });
-          await gatherUsingSpeak({ ...state, step: 'consent_time', consent_price: 1, consent_date: 1, retry_count: 0 }, `Thank you. Third consent check: the stay time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}. Is this time correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
-          break;
-        }
-
-        if (step === 'consent_time') {
-          await updateConciergeCall('calling', { consent_price: 1, consent_date: 1, consent_time: 1, price_quoted: String(priceQuoted) });
-          await gatherUsingSpeak({ ...state, step: 'consent_onsite_payment', consent_price: 1, consent_date: 1, consent_time: 1, retry_count: 0 }, `Final consent check: payment will be made directly at the hotel on site at check-in. Do you agree? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
-          break;
-        }
-
-        // consent_onsite_payment yes -> finalize only if all 4 consents are present
+        // yes -> set all 4 consents immediately and finalize booking
         await updateConciergeCall('calling', {
           consent_price: 1,
           consent_date: 1,
@@ -609,29 +572,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           price_quoted: String(priceQuoted),
         });
 
-        let consentRow: any = null;
-        if (db && conciergeCallId) {
-          consentRow = await db.prepare('SELECT consent_price, consent_date, consent_time, consent_onsite_payment FROM concierge_calls WHERE id = ?')
-            .bind(conciergeCallId).first().catch(() => null);
-        }
-
-        if (!hasAllConsents(consentRow || { consent_price: 1, consent_date: 1, consent_time: 1, consent_onsite_payment: 1 })) {
-          await updateConciergeCall('completed', {
-            outcome: 'available',
-            ai_summary: 'Booking not confirmed: missing required consents.',
-            price_quoted: String(priceQuoted),
-          });
-          await sendResultEmailOnce('declined');
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: 'Thank you. We could not verify all required consents, so we will not finalize the booking on this call. Goodbye.',
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, phase: 'ending' }),
-          });
-          await advanceGroupAfterOutcome('unavailable');
-          break;
-        }
-
-        const farewell = `Thank you! All consent checks are complete. The reservation is confirmed at a final total of ${priceQuoted} dollars, including service fees and taxes, with payment at the hotel. Have a wonderful day!`;
+        const farewell = `Thank you! The reservation is confirmed: date ${checkIn}, time ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}, at a final total of ${priceQuoted} dollars including taxes and fees, paid on-site at check-in. Have a wonderful day!`;
         if (db) {
           if (logId) {
             await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -639,8 +580,12 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           }
           await updateConciergeCall('completed', {
             outcome: 'booked',
+            consent_price: 1,
+            consent_date: 1,
+            consent_time: 1,
+            consent_onsite_payment: 1,
             price_quoted: String(priceQuoted),
-            ai_summary: `Confirmed at final total $${priceQuoted} (including service fees and taxes) after all 4 consents.`,
+            ai_summary: `Confirmed at final total $${priceQuoted} (including taxes and fees) with bundled 4-point consent accepted.`,
           });
           if (bookingId) {
             await db.prepare(`UPDATE bookings SET status='confirmed', updated_at=datetime('now') WHERE id=?`)
