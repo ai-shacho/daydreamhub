@@ -1,5 +1,6 @@
 name = "daydreamhub"
-main = "worker-entry.mjs"
+# Task #57: Pages デプロイは "main" を許可しないため削除（wrangler 4.71 で検証厳格化）。
+# queue consumer worker（worker-entry.mjs）は別の wrangler 設定でデプロイすること。
 compatibility_date = "2024-12-18"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "dist"
@@ -21,11 +22,8 @@ binding = "AI"
 binding = "FLIGHT_IMAGE_QUEUE"
 queue = "ddh-flight-image-jobs"
 
-[[queues.consumers]]
-queue = "ddh-flight-image-jobs"
-max_batch_size = 5
-max_batch_timeout = 10
-max_retries = 5
+# Task #57: Pages は queue consumer を持てないため [[queues.consumers]] を削除。
+# consumer は別の Worker（worker-entry.mjs + 専用 wrangler 設定）でデプロイすること。
 
 # [triggers] - Pages does not support triggers; use external cron (e.g. cron-job.org)
 # crons = ["0 1 * * *"]
