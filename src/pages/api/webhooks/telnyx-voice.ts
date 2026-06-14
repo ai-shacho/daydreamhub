@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { sendConciergeConfirmation, sendConciergeDeclineToGuest, sendAdminRefundAlert } from '../../../lib/email';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
 async function telnyxCmd(apiKey: string, callControlId: string, cmd: string, body: any = {}) {
@@ -81,6 +80,11 @@ function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | 'repeat' 
       return 'no';
   }
   return null;
+}
+
+function hasAllConsents(row: any): boolean {
+  return [row?.consent_price, row?.consent_date, row?.consent_time, row?.consent_onsite_payment]
+    .every((v: any) => Number(v) === 1);
 }
 
 export const POST: APIRoute = async ({ request, locals, url }) => {
@@ -442,132 +446,147 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         break;
       }
 
-      // ─── STEP 2A-2: Confirm booking ───
-      if (step === 'confirm_booking') {
+      // ─── STEP 2A-2: Confirm booking + 4-point consent flow ───
+      if (step === 'confirm_booking' || step === 'consent_price' || step === 'consent_date' || step === 'consent_time' || step === 'consent_onsite_payment') {
         const answer = classifyYesNo(speech, digits);
         const priceQuoted = state.price_quoted || 0;
+        const checkIn = (state.check_in_date || state.date || 'the requested date');
+        const checkInTime = state.check_in_time || state.check_in || null;
+        const checkOutTime = state.check_out_time || state.check_out || null;
+        const guests = state.guests || 1;
 
         if (answer === 'repeat') {
-          const checkIn = (state.check_in_date || state.date || 'the requested date');
-          const guests = state.guests || 1;
-          await gatherUsingSpeak({ ...state, step: 'confirm_booking' }, `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceQuoted} dollars. Shall we finalize this booking? Press 1 or say yes to confirm. Press 2 or say no to decline. Press 3 to hear this again.`);
-        } else if (answer === 'yes') {
-          // → Confirmed!
-          const farewell = `Thank you! The reservation is confirmed at ${priceQuoted} dollars. Have a wonderful day!`;
-
-          if (db) {
-            if (logId) {
-              await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
-                .bind(priceQuoted, `[Hotel]: ${speech || 'pressed 1 (yes)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
-              await updateConciergeCall('completed', { outcome: 'booked', price_quoted: String(priceQuoted), ai_summary: `Confirmed at $${priceQuoted}` });
-            }
-            if (bookingId) {
-              await db.prepare(`UPDATE bookings SET status='confirmed', updated_at=datetime('now') WHERE id=?`)
-                .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
-
-              // Send confirmation email to guest
-              const resendKey = env?.RESEND_API_KEY;
-              if (resendKey) {
-                const bk = await db.prepare(
-                  `SELECT b.guest_name, b.guest_email, b.check_in_date, b.check_in_time, b.check_out_time, b.adults, b.children,
-                          h.name as hotel_name, h.phone as hotel_phone
-                   FROM bookings b LEFT JOIN hotels h ON h.id = b.hotel_id WHERE b.id = ?`
-                ).bind(bookingId).first().catch(() => null);
-                if (bk?.guest_email) {
-                  await sendConciergeConfirmation(resendKey, {
-                    guestName: bk.guest_name || 'Guest',
-                    guestEmail: bk.guest_email,
-                    hotelName: bk.hotel_name || state.hotel_name || 'Hotel',
-                    hotelPhone: bk.hotel_phone || '',
-                    date: bk.check_in_date || state.check_in_date || '',
-                    checkIn: bk.check_in_time || state.check_in_time || '',
-                    checkOut: bk.check_out_time || state.check_out_time || '',
-                    guests: (bk.adults || 1) + (bk.children || 0),
-                    priceQuoted: priceQuoted ? `$${priceQuoted}` : undefined,
-                    aiSummary: `Confirmed at $${priceQuoted} by AI phone call.`,
-                  }).catch(e => console.error('[telnyx-voice] confirmation email failed:', e));
-                }
-              }
-            }
+          if (step === 'confirm_booking') {
+            await gatherUsingSpeak({ ...state, step: 'confirm_booking' }, `To confirm: ${checkIn}, ${guests} ${guests === 1 ? 'person' : 'people'}, at ${priceQuoted} dollars. Shall we proceed to the final confirmation questions? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`);
+          } else if (step === 'consent_price') {
+            await gatherUsingSpeak({ ...state, step: 'consent_price' }, `Consent check one of four. The total quoted amount is ${priceQuoted} US dollars. Do you agree with this total amount? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+          } else if (step === 'consent_date') {
+            await gatherUsingSpeak({ ...state, step: 'consent_date', consent_price: 1 }, `Consent check two of four. The booking date is ${checkIn}. Is this date correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+          } else if (step === 'consent_time') {
+            await gatherUsingSpeak({ ...state, step: 'consent_time', consent_price: 1, consent_date: 1 }, `Consent check three of four. The stay time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}. Is this time correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+          } else {
+            await gatherUsingSpeak({ ...state, step: 'consent_onsite_payment', consent_price: 1, consent_date: 1, consent_time: 1 }, `Final consent check, four of four. Payment will be made directly at the hotel on site at check-in. Do you agree? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
           }
+          break;
+        }
 
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: farewell,
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, phase: 'ending' }),
-          });
-          // Task #52: グループ発信なら成約確定（次のホテルへは進めない）
-          await advanceGroupAfterOutcome('booked');
-
-        } else if (answer === 'no') {
-          // → Declined (but potential partner)
-          const farewell = "Understood. We may reach out in the future to explore potential collaboration on day-use plans. Thank you for your time. Goodbye!";
-
+        if (answer === 'no') {
+          const farewell = "Understood. We cannot finalize the booking without full agreement. Thank you for your time. Goodbye!";
           if (db) {
             if (logId) {
-              await db.prepare(`UPDATE call_logs SET status='declined', note='potential_partner', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+              await db.prepare(`UPDATE call_logs SET status='declined', note='consent_missing', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
                 .bind(priceQuoted, `[Hotel]: ${speech || 'pressed 2 (no)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
-              await updateConciergeCall('completed', { outcome: 'unavailable', price_quoted: String(priceQuoted), ai_summary: 'Hotel declined to confirm the booking.' });
             }
+            await updateConciergeCall('completed', {
+              outcome: 'unavailable',
+              price_quoted: String(priceQuoted),
+              ai_summary: `Declined during consent step: ${step}`,
+            });
             if (bookingId) {
               await db.prepare(`UPDATE bookings SET status='cancelled', updated_at=datetime('now') WHERE id=?`)
                 .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
-
-              const resendKey = env?.RESEND_API_KEY;
-              const adminEmail = env?.ADMIN_EMAIL || 'info@daydreamhub.com';
-              if (resendKey) {
-                const bk = await db.prepare(
-                  `SELECT b.guest_name, b.guest_email, b.check_in_date, b.check_in_time, b.check_out_time,
-                          b.adults, b.children, b.paypal_capture_id,
-                          h.name as hotel_name
-                   FROM bookings b LEFT JOIN hotels h ON h.id = b.hotel_id WHERE b.id = ?`
-                ).bind(bookingId).first().catch(() => null);
-
-                if (bk?.guest_email) {
-                  const declineData = {
-                    guestName: bk.guest_name || 'Guest',
-                    guestEmail: bk.guest_email,
-                    hotelName: bk.hotel_name || state.hotel_name || 'Hotel',
-                    date: bk.check_in_date || state.check_in_date || '',
-                    checkIn: bk.check_in_time || state.check_in_time || '',
-                    checkOut: bk.check_out_time || state.check_out_time || '',
-                    guests: (bk.adults || 1) + (bk.children || 0),
-                  };
-                  await sendConciergeDeclineToGuest(resendKey, declineData)
-                    .catch(e => console.error('[telnyx-voice] decline email to guest failed:', e));
-                  await sendAdminRefundAlert(resendKey, {
-                    adminEmail,
-                    bookingId: Number(bookingId),
-                    ...declineData,
-                    paypalCaptureId: bk.paypal_capture_id || undefined,
-                  }).catch(e => console.error('[telnyx-voice] admin refund alert failed:', e));
-                }
-              }
             }
           }
-
           await telnyxCmd(apiKey, callControlId, 'speak', {
             payload: farewell,
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
-          // Task #52: グループ発信なら次のホテルへ
           await advanceGroupAfterOutcome('unavailable');
+          break;
+        }
 
-        } else {
-          // Timeout or unclear → retry
+        if (answer !== 'yes') {
           if (retryCount >= 1) {
             await telnyxCmd(apiKey, callControlId, 'hangup', {});
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
-            await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: 'No clear response to booking confirmation.' });
-            // Task #52: グループ発信なら次のホテルへ
+            await updateConciergeCall('completed', { outcome: 'no_answer', ai_summary: `No clear response during consent step: ${step}` });
             await advanceGroupAfterOutcome('no_answer');
           } else {
-            await gatherUsingSpeak({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to confirm the reservation, or press 2 or say no to decline.");
+            await gatherUsingSpeak({ ...state, step, retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to agree, or press 2 or say no to decline.");
+          }
+          break;
+        }
+
+        // yes path
+        if (step === 'confirm_booking') {
+          await gatherUsingSpeak({ ...state, step: 'consent_price', retry_count: 0 }, `Thank you. Before finalizing, I need four quick consent checks. First: the total quoted amount is ${priceQuoted} US dollars. Do you agree with this amount? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+          break;
+        }
+
+        if (step === 'consent_price') {
+          await updateConciergeCall('calling', { consent_price: 1, price_quoted: String(priceQuoted) });
+          await gatherUsingSpeak({ ...state, step: 'consent_date', consent_price: 1, retry_count: 0 }, `Thank you. Second consent check: the booking date is ${checkIn}. Is this date correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+          break;
+        }
+
+        if (step === 'consent_date') {
+          await updateConciergeCall('calling', { consent_price: 1, consent_date: 1, price_quoted: String(priceQuoted) });
+          await gatherUsingSpeak({ ...state, step: 'consent_time', consent_price: 1, consent_date: 1, retry_count: 0 }, `Thank you. Third consent check: the stay time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}. Is this time correct? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+          break;
+        }
+
+        if (step === 'consent_time') {
+          await updateConciergeCall('calling', { consent_price: 1, consent_date: 1, consent_time: 1, price_quoted: String(priceQuoted) });
+          await gatherUsingSpeak({ ...state, step: 'consent_onsite_payment', consent_price: 1, consent_date: 1, consent_time: 1, retry_count: 0 }, `Final consent check: payment will be made directly at the hotel on site at check-in. Do you agree? Press 1 or say yes. Press 2 or say no. Press 3 to repeat.`);
+          break;
+        }
+
+        // consent_onsite_payment yes -> finalize only if all 4 consents are present
+        await updateConciergeCall('calling', {
+          consent_price: 1,
+          consent_date: 1,
+          consent_time: 1,
+          consent_onsite_payment: 1,
+          price_quoted: String(priceQuoted),
+        });
+
+        let consentRow: any = null;
+        if (db && conciergeCallId) {
+          consentRow = await db.prepare('SELECT consent_price, consent_date, consent_time, consent_onsite_payment FROM concierge_calls WHERE id = ?')
+            .bind(conciergeCallId).first().catch(() => null);
+        }
+
+        if (!hasAllConsents(consentRow || { consent_price: 1, consent_date: 1, consent_time: 1, consent_onsite_payment: 1 })) {
+          await updateConciergeCall('completed', {
+            outcome: 'available',
+            ai_summary: 'Booking not confirmed: missing required consents.',
+            price_quoted: String(priceQuoted),
+          });
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: 'Thank you. We could not verify all required consents, so we will not finalize the booking on this call. Goodbye.',
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, phase: 'ending' }),
+          });
+          await advanceGroupAfterOutcome('unavailable');
+          break;
+        }
+
+        const farewell = `Thank you! All consent checks are complete. The reservation is confirmed at ${priceQuoted} dollars with payment at the hotel. Have a wonderful day!`;
+        if (db) {
+          if (logId) {
+            await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+              .bind(priceQuoted, `[Hotel]: ${speech || 'pressed 1 (yes)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+          }
+          await updateConciergeCall('completed', {
+            outcome: 'booked',
+            price_quoted: String(priceQuoted),
+            ai_summary: `Confirmed at $${priceQuoted} after all 4 consents.`,
+          });
+          if (bookingId) {
+            await db.prepare(`UPDATE bookings SET status='confirmed', updated_at=datetime('now') WHERE id=?`)
+              .bind(bookingId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
           }
         }
+
+        await telnyxCmd(apiKey, callControlId, 'speak', {
+          payload: farewell,
+          voice: 'Polly.Joanna',
+          client_state: encodeState({ ...state, phase: 'ending' }),
+        });
+        await advanceGroupAfterOutcome('booked');
         break;
       }
 

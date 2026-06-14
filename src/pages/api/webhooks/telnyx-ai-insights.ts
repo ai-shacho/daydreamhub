@@ -131,6 +131,11 @@ https://daydreamhub.com
 `.trim();
 }
 
+function hasAllConsents(row: any): boolean {
+  return [row?.consent_price, row?.consent_date, row?.consent_time, row?.consent_onsite_payment]
+    .every((v: any) => Number(v) === 1);
+}
+
 export function parseConciergeOutcome(summary: string, transcript: string): string {
   const text = `${summary} ${transcript}`.toLowerCase();
   if (/booked|reserved|confirmed|予約完了|承知|確定/.test(text)) return 'booked';
@@ -347,13 +352,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const conciergeCall = await db
       .prepare(
-        'SELECT id, session_id, call_group_id FROM concierge_calls WHERE telnyx_call_id = ?'
+        'SELECT id, session_id, call_group_id, consent_price, consent_date, consent_time, consent_onsite_payment FROM concierge_calls WHERE telnyx_call_id = ?'
       )
       .bind(callSid)
       .first();
 
     if (conciergeCall) {
-      const bookingOutcome = parseConciergeOutcome(summary, transcript);
+      const parsedOutcome = parseConciergeOutcome(summary, transcript);
+      const consentReady = hasAllConsents(conciergeCall);
+      const bookingOutcome = parsedOutcome === 'booked' && !consentReady ? 'available' : parsedOutcome;
       let priceQuoted = extractPrice(summary, transcript);
       const env = runtime?.env;
 
@@ -387,7 +394,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         .run();
 
       if (conciergeCall.call_group_id) {
-        const isSuccess = bookingOutcome === 'booked' || bookingOutcome === 'available';
+        const isSuccess = bookingOutcome === 'booked' && consentReady;
         const isFailed =
           bookingOutcome === 'unavailable' ||
           bookingOutcome === 'no_answer' ||
