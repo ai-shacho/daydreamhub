@@ -66,6 +66,18 @@ const statusColor: Record<string,string> = {
           </span>
         </div>
         <div class="grid grid-cols-2 gap-4">
+          <div class="col-span-2">
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Edit Total Price (USD)</p>
+            <div class="flex items-center gap-2">
+              <input id="total-price-input" type="number" min="0" step="0.01" value={booking.total_price_usd}
+                class="w-48 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500" />
+              <button id="save-price-btn" class="px-3 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors">
+                Save Price
+              </button>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Use 0 or a positive number.</p>
+            <div id="price-result" class="hidden mt-2 text-xs p-2 rounded-lg"></div>
+          </div>
           <div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Guest</p>
             <p class="font-semibold text-slate-900">{booking.guest_name || '—'}</p>
@@ -200,6 +212,38 @@ async function updateStatus(newStatus) {
     result.textContent = `❌ ${e.message}`;
   }
 }
+
+document.getElementById('save-price-btn')?.addEventListener('click', async () => {
+  const input = document.getElementById('total-price-input');
+  const result = document.getElementById('price-result');
+  const value = Number(input?.value);
+
+  if (!Number.isFinite(value) || value < 0) {
+    result.className = 'block mt-2 text-xs p-2 rounded-lg bg-red-50 text-red-700';
+    result.textContent = '❌ Please enter a valid number (0 or greater).';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: parseInt(location.pathname.split('/').pop()),
+        total_price_usd: value,
+      }),
+    });
+
+    const data = await res.json();
+    result.className = `block mt-2 text-xs p-2 rounded-lg ${res.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`;
+    result.textContent = res.ok ? '✅ Price updated' : `❌ ${data.error || 'Failed to update price'}`;
+
+    if (res.ok) setTimeout(() => location.reload(), 700);
+  } catch (e) {
+    result.className = 'block mt-2 text-xs p-2 rounded-lg bg-red-50 text-red-700';
+    result.textContent = `❌ ${e.message}`;
+  }
+});
 
 document.getElementById('trigger-call')?.addEventListener('click', async function() {
   const res = await fetch('/api/admin/call', {

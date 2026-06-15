@@ -1,13 +1,11 @@
 import type { APIRoute } from 'astro';
 import { getBookingInfoForCall, triggerAutoCall } from '../../../lib/autoCall';
-
-async function verifyAdminRequest(_request: Request, _jwtSecret: string): Promise<boolean> {
-  return true;
-}
+import { verifyAdmin } from '../../../lib/adminAuth';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
-  if (!(await verifyAdminRequest(request, jwtSecret))) {
+  const admin = await verifyAdmin(request, jwtSecret);
+  if (!admin) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -105,9 +103,10 @@ export const GET: APIRoute = async ({ request, locals }) => {
   });
 };
 
-export const PUT: APIRoute = async ({ request, locals }) => {
+const updateBookingStatus: APIRoute = async ({ request, locals }) => {
   const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
-  if (!(await verifyAdminRequest(request, jwtSecret))) {
+  const admin = await verifyAdmin(request, jwtSecret);
+  if (!admin) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -180,9 +179,141 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   }
 };
 
+export const PATCH: APIRoute = async ({ request, locals }) => {
+  const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
+  const admin = await verifyAdmin(request, jwtSecret);
+  if (!admin) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const db = (locals as any).runtime?.env?.DB;
+  let body: any;
+
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const id = Number(body?.id);
+  const hasPriceUpdate = Object.prototype.hasOwnProperty.call(body || {}, 'total_price_usd');
+
+  if (!id || Number.isNaN(id)) {
+    return new Response(JSON.stringify({ error: 'Missing or invalid id' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (hasPriceUpdate) {
+    const price = Number(body.total_price_usd);
+
+    if (!Number.isFinite(price) || price < 0) {
+      return new Response(JSON.stringify({ error: 'total_price_usd must be a number greater than or equal to 0' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    try {
+      const result = await db
+        .prepare(`UPDATE bookings SET total_price_usd = ?, updated_at = datetime('now') WHERE id = ?`)
+        .bind(price, id)
+        .run();
+
+      if (result.meta.changes === 0) {
+        return new Response(JSON.stringify({ error: 'Booking not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({ message: 'Booking price updated', id, total_price_usd: price }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      return new Response(JSON.stringify({ error: 'Failed to update booking price', details: message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
+  const status = body?.status;
+  if (!status) {
+    return new Response(JSON.stringify({ error: 'Missing required fields: status or total_price_usd' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed', 'refunded'];
+  if (!validStatuses.includes(status)) {
+    return new Response(
+      JSON.stringify({ error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  try {
+    const result = await db
+      .prepare(`UPDATE bookings SET status = ?, updated_at = datetime('now') WHERE id = ?`)
+      .bind(status, id)
+      .run();
+
+    if (result.meta.changes === 0) {
+      return new Response(JSON.stringify({ error: 'Booking not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (status === 'pending') {
+      try {
+        const bookingInfo = await getBookingInfoForCall(db, id);
+        if (bookingInfo) {
+          const runtime = (locals as any).runtime;
+          await triggerAutoCall(
+            {
+              DB: db,
+              TELNYX_API_KEY: runtime?.env?.TELNYX_API_KEY || '',
+              TELNYX_CONNECTION_ID: runtime?.env?.TELNYX_CONNECTION_ID || '',
+              TELNYX_FROM_NUMBER: runtime?.env?.TELNYX_FROM_NUMBER || '',
+            },
+            bookingInfo
+          );
+        }
+      } catch (callError) {
+        console.error('Auto-call trigger failed:', callError);
+      }
+    }
+
+    return new Response(JSON.stringify({ message: 'Booking status updated', id, status }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: 'Failed to update booking', details: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+};
+
+export const PUT = updateBookingStatus;
+
 export const DELETE: APIRoute = async ({ request, locals }) => {
   const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
-  if (!(await verifyAdminRequest(request, jwtSecret))) {
+  const admin = await verifyAdmin(request, jwtSecret);
+  if (!admin) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
