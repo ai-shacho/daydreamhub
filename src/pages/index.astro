@@ -1393,6 +1393,16 @@ function escHtml(s) {
   };
 
   window._heroSubmitCallBook = async function() {
+    var submitBtn = event?.target;
+    var defaultSubmitText = '💳 Pay $7 via PayPal → AI Booking';
+    var resetSubmitBtn = function() {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.style.display = '';
+        submitBtn.textContent = defaultSubmitText;
+      }
+    };
+
     var name = document.getElementById('call-guest-name')?.value?.trim();
     var email = document.getElementById('call-guest-email')?.value?.trim();
     var phone = document.getElementById('call-guest-phone')?.value?.trim();
@@ -1401,19 +1411,21 @@ function escHtml(s) {
     var checkoutTime = document.getElementById('call-checkout-time')?.value || '18:00';
     var guests = document.getElementById('call-guests')?.value || '2';
     if (!name || !email || !date) {
+      resetSubmitBtn();
       alert('Please fill in name, email, and date');
       return;
     }
     if (!phone) {
+      resetSubmitBtn();
       alert('Please enter your phone number.');
       return;
     }
     var selectedHotels = window._heroSelectedHotels || [];
     if (selectedHotels.length === 0) {
+      resetSubmitBtn();
       alert('No hotels selected.');
       return;
     }
-    var submitBtn = event?.target;
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Processing...'; }
 
     try {
@@ -1463,10 +1475,26 @@ function escHtml(s) {
       var loadPayPalSDK = function(clientId) {
         return new Promise(function(resolve, reject) {
           if (window.paypal) { resolve(window.paypal); return; }
+          var done = false;
+          var timer = setTimeout(function() {
+            if (done) return;
+            done = true;
+            reject(new Error('PayPal SDK load timeout'));
+          }, 15000);
           var script = document.createElement('script');
           script.src = 'https://www.paypal.com/sdk/js?client-id=' + clientId + '&currency=USD&intent=capture&locale=en_US';
-          script.onload = function() { resolve(window.paypal); };
-          script.onerror = reject;
+          script.onload = function() {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            resolve(window.paypal);
+          };
+          script.onerror = function(err) {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            reject(err || new Error('PayPal SDK load failed'));
+          };
           document.head.appendChild(script);
         });
       };
@@ -1486,7 +1514,17 @@ function escHtml(s) {
         return;
       }
 
-      await loadPayPalSDK(clientId);
+      try {
+        await loadPayPalSDK(clientId);
+      } catch (sdkErr) {
+        if (data.paypal_url) {
+          window.open(data.paypal_url, '_blank');
+          addMsg('PayPal popup could not be loaded on this device. Opened secure PayPal checkout in a new tab.', 'assistant');
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = 'Complete payment in new tab'; }
+          return;
+        }
+        throw sdkErr;
+      }
 
       window.paypal.Buttons({
         createOrder: function() { return paypalOrderId; },
@@ -1554,7 +1592,7 @@ function escHtml(s) {
 
     } catch(e) {
       addMsg('❌ Network error. Please try again.', 'assistant');
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+      resetSubmitBtn();
     }
   };
 
@@ -1567,12 +1605,16 @@ function escHtml(s) {
       var res = await fetch('/api/hotels/' + slug + '/plans');
       var data = await res.json();
       if (!data.hotel || !data.plans || data.plans.length === 0) {
-        btn.textContent = '❌ No plans available';
+        btn.disabled = false;
+        btn.textContent = '🏨 Book Now — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30);
+        addMsg('❌ No plans available for this hotel right now.', 'assistant');
         return;
       }
       showBookingForm(data.hotel, data.plans, btn);
     } catch(e) {
-      btn.textContent = '❌ Error loading plans';
+      btn.disabled = false;
+      btn.textContent = '🏨 Book Now — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30);
+      addMsg('❌ Error loading plans. Please try again.', 'assistant');
     }
   };
 

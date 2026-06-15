@@ -1362,31 +1362,43 @@ function escHtml(s) {
         '<ul class="text-xs mb-3 space-y-0.5 pl-1">' + hotelListHtml + '</ul>' +
         '<p class="text-white/70 text-xs mb-3">AIが上から順番にホテルへ電話して空きを確認します。<br>サービス料 <strong class="text-amber-400">合計$7</strong>（全件不成立時は全額返金）</p>' +
         '<div class="space-y-2">' +
-          '<div>' +
-            '<label class="text-xs text-white/60 block mb-1">お名前</label>' +
-            '<input id="call-guest-name" type="text" placeholder="山田 太郎" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
-          '</div>' +
-          '<div>' +
-            '<label class="text-xs text-white/60 block mb-1">メールアドレス</label>' +
-            '<input id="call-guest-email" type="email" placeholder="your@email.com" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
-          '</div>' +
           '<div class="grid grid-cols-2 gap-2">' +
             '<div>' +
-              '<label class="text-xs text-white/60 block mb-1">📅 チェックイン日</label>' +
-              '<input id="call-checkin-date" type="date" value="' + today + '" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+              '<label class="text-xs text-white/60 block mb-1">お名前</label>' +
+              '<input id="call-guest-name" type="text" placeholder="山田 太郎" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
             '</div>' +
             '<div>' +
-              '<label class="text-xs text-white/60 block mb-1">🕐 チェックイン時間</label>' +
+              '<label class="text-xs text-white/60 block mb-1">メールアドレス</label>' +
+              '<input id="call-guest-email" type="email" placeholder="your@email.com" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<label class="text-xs text-white/60 block mb-1">電話番号</label>' +
+            '<input id="call-guest-phone" type="tel" placeholder="+81 90 1234 5678" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+          '</div>' +
+          '<div class="grid grid-cols-4 gap-2">' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">📅 チェックイン日</label>' +
+              '<input id="call-checkin-date" type="text" readonly placeholder="YYYY-MM-DD" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">🕐 チェックイン</label>' +
               '<select id="call-checkin-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
                 ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'].map(function(t){ return '<option value="' + t + '"' + (t==='10:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
               '</select>' +
             '</div>' +
-          '</div>' +
-          '<div>' +
-            '<label class="text-xs text-white/60 block mb-1">🕔 チェックアウト時間</label>' +
-            '<select id="call-checkout-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
-              ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'].map(function(t){ return '<option value="' + t + '"' + (t==='18:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
-            '</select>' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">🕔 チェックアウト</label>' +
+              '<select id="call-checkout-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
+                ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'].map(function(t){ return '<option value="' + t + '"' + (t==='18:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
+              '</select>' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">人数</label>' +
+              '<select id="call-guests" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
+                [1,2,3,4,5,6,7,8,9,10].map(function(n){ return '<option value="' + n + '"' + (n===2?' selected':'') + '>' + n + '</option>'; }).join('') +
+              '</select>' +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<button onclick="window._heroSubmitCallBook()" ' +
@@ -1400,24 +1412,55 @@ function escHtml(s) {
     messagesEl.scrollTop = messagesEl.scrollHeight;
     btn.textContent = '📞 選択したホテルに電話 ($7)';
     btn.disabled = false;
+
+    if (window.flatpickr) {
+      var todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      window.flatpickr('#call-checkin-date', {
+        locale: 'ja',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'Y-m-d',
+        minDate: todayDate,
+        defaultDate: todayDate,
+        disableMobile: true
+      });
+    }
   };
 
   window._heroSubmitCallBook = async function() {
+    var submitBtn = event?.target;
+    var defaultSubmitText = '💳 PayPalで$7支払い → AI電話予約へ進む';
+    var resetSubmitBtn = function() {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = defaultSubmitText;
+      }
+    };
+
     var name = document.getElementById('call-guest-name')?.value?.trim();
     var email = document.getElementById('call-guest-email')?.value?.trim();
+    var phone = document.getElementById('call-guest-phone')?.value?.trim();
     var date = document.getElementById('call-checkin-date')?.value;
     var checkinTime = document.getElementById('call-checkin-time')?.value || '10:00';
     var checkoutTime = document.getElementById('call-checkout-time')?.value || '18:00';
+    var guests = document.getElementById('call-guests')?.value || '2';
     if (!name || !email || !date) {
+      resetSubmitBtn();
       alert('お名前・メール・日付を入力してください');
+      return;
+    }
+    if (!phone) {
+      resetSubmitBtn();
+      alert('電話番号を入力してください');
       return;
     }
     var selectedHotels = window._heroSelectedHotels || [];
     if (selectedHotels.length === 0) {
+      resetSubmitBtn();
       alert('ホテルが選択されていません');
       return;
     }
-    var submitBtn = event?.target;
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '処理中...'; }
 
     try {
@@ -1439,20 +1482,69 @@ function escHtml(s) {
         })
       });
       var data = await res.json();
+      if (data.error) {
+        addMsg('❌ エラー: ' + data.error, 'assistant');
+        resetSubmitBtn();
+        return;
+      }
+
       if (data.paypal_url) {
         window.open(data.paypal_url, '_blank');
         var hotelListText = selectedHotels.map(function(h, i){ return (i+1) + '. ' + h.name; }).join('\n');
-        addMsg('✅ PayPalページを開きました。支払い完了後、AIが以下のホテルに順番に電話します。\n\n' + hotelListText + '\n\n👤 ' + name + '\n📅 ' + date, 'assistant');
-        setTimeout(function(){
-          addMsg('💡 支払い完了後、このチャットに「電話済み」と入力すると結果を確認できます。', 'assistant');
-        }, 2000);
-      } else if (data.error) {
-        addMsg('❌ エラー: ' + data.error, 'assistant');
+        addMsg('✅ PayPalページを開きました。支払い完了後、AIが以下のホテルに順番に電話します。\n\n' + hotelListText + '\n\n👤 ' + name + '\n📞 ' + phone + '\n📅 ' + date + ' ' + checkinTime + '〜' + checkoutTime + '（' + guests + '名）', 'assistant');
+
+        if (data.group_id) {
+          var start = Date.now();
+          var pollTimer = setInterval(async function() {
+            if (Date.now() - start > 180000) {
+              clearInterval(pollTimer);
+              return;
+            }
+            try {
+              var statusRes = await fetch('/api/concierge/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId, locale: 'ja', message: '__check_call_status:' + data.group_id })
+              });
+              var statusData = await statusRes.json();
+              if (statusData.response) {
+                addMsg(statusData.response, 'assistant', statusData.metadata);
+              }
+              var status = statusData.metadata?.call_status || statusData.metadata?.status;
+              if (status && status !== 'calling' && status !== 'pending') {
+                clearInterval(pollTimer);
+              }
+            } catch (pollErr) {
+              // continue polling
+            }
+          }, 30000);
+        }
       } else {
         addMsg(data.response || '予約リクエストを受け付けました。', 'assistant');
       }
+
+      if (data.group_id) {
+        var confirmRes = await fetch('/api/concierge/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId,
+            message: '__confirm_group_payment:' + data.group_id,
+            locale: 'ja',
+            guest_name: name,
+            guest_email: email,
+            details: {
+              guest_phone: phone,
+              guests: parseInt(guests, 10)
+            }
+          })
+        });
+        var confirmData = await confirmRes.json();
+        if (confirmData?.response) addMsg(confirmData.response, 'assistant', confirmData.metadata);
+      }
     } catch(e) {
       addMsg('❌ 通信エラーが発生しました。もう一度お試しください。', 'assistant');
+      resetSubmitBtn();
     }
   };
 
@@ -1465,12 +1557,16 @@ function escHtml(s) {
       var res = await fetch('/api/hotels/' + slug + '/plans');
       var data = await res.json();
       if (!data.hotel || !data.plans || data.plans.length === 0) {
-        btn.textContent = '❌ プランがありません';
+        btn.disabled = false;
+        btn.textContent = '🏨 予約する — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30);
+        addMsg('❌ 利用可能なプランが見つかりませんでした。', 'assistant');
         return;
       }
       showBookingForm(data.hotel, data.plans, btn);
     } catch(e) {
-      btn.textContent = '❌ 読み込みエラー';
+      btn.disabled = false;
+      btn.textContent = '🏨 予約する — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30);
+      addMsg('❌ 読み込みエラーが発生しました。再度お試しください。', 'assistant');
     }
   };
 
