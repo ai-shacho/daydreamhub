@@ -562,29 +562,28 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (c.status === 'completed') {
         // ホテルが言ったこと（transcript/ai_summary）をそのまま含める
         const hotelSaid = c.availability_info ? `\n\n📋 **ホテルとの通話内容:**\n${c.availability_info}` : '';
-        const aiNote = c.ai_summary ? `\n\n🤖 **AIサマリー:** ${c.ai_summary}` : '';
         const priceNote = c.price_quoted ? (locale === 'ja' ? `\n💰 **料金:** ${c.price_quoted}` : `\n💰 **Price:** ${c.price_quoted}`) : '';
 
         if (c.outcome === 'booked' || c.outcome === 'available') {
           responseText = locale === 'ja'
-            ? `✅ **${c.hotel_name}の予約が取れました！**${priceNote}${aiNote}${hotelSaid}`
-            : `✅ **Booking confirmed at ${c.hotel_name}!**${priceNote}${aiNote}${hotelSaid}`;
+            ? `✅ **${c.hotel_name}の予約が取れました！**${priceNote}${hotelSaid}`
+            : `✅ **Booking confirmed at ${c.hotel_name}!**${priceNote}${hotelSaid}`;
         } else if (c.outcome === 'unavailable') {
           responseText = locale === 'ja'
-            ? `❌ **${c.hotel_name}は空きがありません。**${aiNote}${hotelSaid}`
-            : `❌ **${c.hotel_name} is not available.**${aiNote}${hotelSaid}`;
+            ? `❌ **${c.hotel_name}は空きがありません。**${hotelSaid}`
+            : `❌ **${c.hotel_name} is not available.**${hotelSaid}`;
         } else if (c.outcome === 'no_answer' || c.outcome === 'voicemail') {
           responseText = locale === 'ja'
-            ? `📵 **${c.hotel_name}に繋がりませんでした。**${aiNote}${hotelSaid}`
-            : `📵 **Could not reach ${c.hotel_name}.**${aiNote}${hotelSaid}`;
+            ? `📵 **${c.hotel_name}に繋がりませんでした。**${hotelSaid}`
+            : `📵 **Could not reach ${c.hotel_name}.**${hotelSaid}`;
         } else if (c.outcome === 'over_budget') {
           responseText = locale === 'ja'
-            ? `💸 **${c.hotel_name}は予算オーバーです。**${priceNote}${aiNote}${hotelSaid}`
-            : `💸 **${c.hotel_name} exceeds budget.**${priceNote}${aiNote}${hotelSaid}`;
+            ? `💸 **${c.hotel_name}は予算オーバーです。**${priceNote}${hotelSaid}`
+            : `💸 **${c.hotel_name} exceeds budget.**${priceNote}${hotelSaid}`;
         } else {
           responseText = locale === 'ja'
-            ? `📞 **${c.hotel_name}への電話が完了しました。**${priceNote}${aiNote}${hotelSaid}`
-            : `📞 **Call to ${c.hotel_name} completed.**${priceNote}${aiNote}${hotelSaid}`;
+            ? `📞 **${c.hotel_name}への電話が完了しました。**${priceNote}${hotelSaid}`
+            : `📞 **Call to ${c.hotel_name} completed.**${priceNote}${hotelSaid}`;
         }
       } else if (c.status === 'failed') {
         responseText = locale === 'ja'
