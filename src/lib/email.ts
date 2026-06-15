@@ -942,6 +942,10 @@ export async function sendConciergeResultEmail(
       ${escapeHtml(actionNote)}
     </div>
 
+    ${data.resultType === 'success' ? `<div style="margin:12px 0;padding:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px">
+      If you wish to cancel your reservation, please call the hotel directly. When you contact them, please let the hotel know that the reservation was made via a DayDreamHub phone booking.
+    </div>` : ''}
+
     ${emailFooter()}
   </div>
 </div>`;
