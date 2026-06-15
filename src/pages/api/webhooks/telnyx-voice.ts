@@ -514,7 +514,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const guests = state.guests || 1;
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
-          const confirmAsk = `To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${priceResult.amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no.`;
+          const confirmAsk = `To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${priceResult.amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -550,6 +550,29 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       // ─── STEP 2A-2: Confirm booking (single-shot 4-point consent) ───
       if (step === 'confirm_booking') {
+        // Allow price correction at final confirmation via speech or DTMF (e.g. 50#)
+        const dtmfConfirmPrice = /^\d{1,6}$/.test((digits || '').trim()) ? parseInt((digits || '').trim(), 10) : NaN;
+        let correctedPrice: number | null = !isNaN(dtmfConfirmPrice) && dtmfConfirmPrice > 0 ? dtmfConfirmPrice : null;
+        if (correctedPrice === null && speech) {
+          const extracted = await aiExtractPrice(apiKey, speech);
+          if (extracted.amount && extracted.amount > 0) correctedPrice = extracted.amount;
+        }
+
+        if (correctedPrice && correctedPrice > 0 && Number(correctedPrice) !== Number(state.price_quoted || 0)) {
+          const checkIn = (state.check_in_date || state.date || 'the requested date');
+          const checkInTime = state.check_in_time || state.check_in || null;
+          const checkOutTime = state.check_out_time || state.check_out || null;
+          const guests = state.guests || 1;
+          const confirmAskUpdated = `The total amount has been updated to ${correctedPrice} dollars. To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${correctedPrice} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`;
+
+          if (db && logId) {
+            await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+              .bind(`[Hotel]: ${speech || (digits ? `pressed ${digits}` : 'price corrected')}\n[Agent]: ${confirmAskUpdated}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+          }
+
+          await gatherUsingSpeak({ ...state, step: 'confirm_booking', price_quoted: correctedPrice, retry_count: 0 }, confirmAskUpdated, true);
+          break;
+        }
         const answer = classifyYesNo(speech, digits);
         const priceQuoted = state.price_quoted || 0;
         const checkIn = (state.check_in_date || state.date || 'the requested date');
@@ -560,7 +583,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         if (answer === 'repeat') {
           await gatherUsingSpeak(
             { ...state, step: 'confirm_booking' },
-            `To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${priceQuoted} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no.`
+            `To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${priceQuoted} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`
           );
           break;
         }
@@ -602,7 +625,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             await sendResultEmailOnce('no_answer');
             await advanceGroupAfterOutcome('no_answer');
           } else {
-            await gatherUsingSpeak({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to agree, or press 2 or say no to decline.");
+            await gatherUsingSpeak({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to agree, or press 2 or say no to decline. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.", true);
           }
           break;
         }

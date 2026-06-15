@@ -447,14 +447,30 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }
       }
 
+      const preserveConfirmedPrice = consentReady && bookingOutcome === 'booked';
+      const effectivePriceQuoted = preserveConfirmedPrice ? null : priceQuoted;
+
       await db
         .prepare(
           `UPDATE concierge_calls
-           SET ai_summary = ?, status = 'completed', outcome = ?, price_quoted = ?,
+           SET ai_summary = ?, status = 'completed', outcome = ?,
+               price_quoted = CASE
+                 WHEN ? = 1 THEN COALESCE(price_quoted, ?)
+                 ELSE ?
+               END,
                availability_info = ?, duration_seconds = ?, updated_at = datetime('now')
            WHERE id = ?`
         )
-        .bind(summary, bookingOutcome, priceQuoted, transcript, duration, conciergeCall.id)
+        .bind(
+          summary,
+          bookingOutcome,
+          preserveConfirmedPrice ? 1 : 0,
+          effectivePriceQuoted,
+          effectivePriceQuoted,
+          transcript,
+          duration,
+          conciergeCall.id
+        )
         .run();
 
       if (conciergeCall.call_group_id) {
