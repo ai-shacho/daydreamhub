@@ -1346,10 +1346,16 @@ function escHtml(s) {
             '<label class="text-[11px] text-white/50 block mb-0.5">Phone</label>' +
             '<input id="call-guest-phone" type="tel" placeholder="+1 555 123 4567" class="w-full bg-white/10 text-white placeholder-white/30 rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none" />' +
           '</div>' +
-          '<div class="grid grid-cols-4 gap-2">' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
             '<div>' +
               '<label class="text-[11px] text-white/50 block mb-0.5">📅 Date</label>' +
               '<input id="call-checkin-date" type="text" readonly placeholder="YYYY-MM-DD" class="w-full bg-white/10 text-white placeholder-white/30 rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-[11px] text-white/50 block mb-0.5">Guests</label>' +
+              '<select id="call-guests" class="w-full bg-white/10 text-white rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none">' +
+                [1,2,3,4,5,6,7,8,9,10].map(function(n){ return '<option value="' + n + '"' + (n===2?' selected':'') + '>' + n + '</option>'; }).join('') +
+              '</select>' +
             '</div>' +
             '<div>' +
               '<label class="text-[11px] text-white/50 block mb-0.5">🕐 Check-in</label>' +
@@ -1361,12 +1367,6 @@ function escHtml(s) {
               '<label class="text-[11px] text-white/50 block mb-0.5">🕔 Check-out</label>' +
               '<select id="call-checkout-time" class="w-full bg-white/10 text-white rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none">' +
                 ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'].map(function(t){ return '<option value="' + t + '"' + (t==='18:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
-              '</select>' +
-            '</div>' +
-            '<div>' +
-              '<label class="text-[11px] text-white/50 block mb-0.5">Guests</label>' +
-              '<select id="call-guests" class="w-full bg-white/10 text-white rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none">' +
-                [1,2,3,4,5,6,7,8,9,10].map(function(n){ return '<option value="' + n + '"' + (n===2?' selected':'') + '>' + n + '</option>'; }).join('') +
               '</select>' +
             '</div>' +
           '</div>' +
