@@ -7,46 +7,176 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Install wrangler
-        run: npm install -g wrangler@latest
-
-      - name: Create static files
+      - name: Create project directory structure
         run: |
-          mkdir -p public
-          cat > public/index.html << 'EOF'
+          mkdir -p form-apo-service/public
+          mkdir -p form-apo-service/functions/api
+
+      - name: Create actual LP files
+        run: |
+          # public/index.html
+          cat > form-apo-service/public/index.html << 'INDEXHTML'
           <!DOCTYPE html>
           <html lang="ja">
           <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>フォームアポ</title>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>フォームアポ — 問い合わせフォーム営業、まるごと代行。</title>
+          <link rel="stylesheet" href="/style.css">
           </head>
           <body>
-            <h1>フォームアポ</h1>
-            <p>Deploy test</p>
+          <header>
+          <h1>フォームアポ</h1>
+          <p class="tagline">問い合わせフォーム営業、まるごと代行。</p>
+          </header>
+          <section class="hero">
+          <h2>新規商談を、安定的に供給します。</h2>
+          <p class="hero-copy">あなたの代わりに <strong>問い合わせフォーム営業</strong> を代行。<br>フォーム送信から返信対応・日程調整まで、一手に担います。</p>
+          <p class="offer">まずはアポを10件、取ってきます。</p>
+          </section>
+          <section class="details">
+          <h2>こんな会社におすすめ</h2>
+          <ul>
+          <li>AI導入支援を提供しているが、リードが足りない</li>
+          <li>人材紹介サービスをもっと売りたい</li>
+          <li>Instagram運用を営業する時間がない</li>
+          <li>WEB制作会社だが新規案件が途切れがち</li>
+          </ul>
+          </section>
+          <section class="pricing">
+          <h2>料金</h2>
+          <p><strong>初月無料</strong> — まずは実績を確認してください。</p>
+          <p>成果報酬（アポ確定課金）はキックオフで個別に決定します。</p>
+          <p class="note">※固定単価は掲載しておりません。初回打合せにてご提案します。</p>
+          </section>
+          <section class="cta">
+          <h2>お申込み</h2>
+          <p>以下のフォームからお申込みください。</p>
+          <form id="apply-form">
+          <label>会社名 <input type="text" name="company" required></label>
+          <label>お名前 <input type="text" name="name" required></label>
+          <label>メールアドレス <input type="email" name="email" required></label>
+          <label>電話番号 <input type="tel" name="phone" required></label>
+          <label>お問い合わせ <textarea name="message" rows="4"></textarea></label>
+          <button type="submit">申し込む</button>
+          </form>
+          </section>
+          <script>
+          document.getElementById('apply-form')?.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const form = e.target;
+          const data = Object.fromEntries(new FormData(form));
+          try {
+          const res = await fetch('/api/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+          });
+          if (res.ok) {
+          window.location.href = '/thanks.html';
+          } else {
+          alert('送信に失敗しました。もう一度お試しください。');
+          }
+          } catch {
+          alert('通信エラーが発生しました。');
+          }
+          });
+          </script>
           </body>
           </html>
-          EOF
+INDEXHTML
+
+          # public/style.css
+          cat > form-apo-service/public/style.css << 'STYLECSS'
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body {
+          font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+          line-height: 1.7; color: #1a1a2e; max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem;
+          background: #fafafa;
+          }
+          h1 { font-size: 2rem; color: #2563eb; }
+          h2 { font-size: 1.4rem; color: #1e3a8a; margin-top: 2.5rem; margin-bottom: .75rem; }
+          .tagline { color: #475569; font-size: 1.1rem; margin-top: .25rem; }
+          .hero { background: #eef2ff; border-radius: 12px; padding: 2rem 1.5rem; margin: 2rem 0; }
+          .hero h2 { margin-top: 0; }
+          .hero-copy { font-size: 1.1rem; margin: 1rem 0; }
+          .offer { background: #2563eb; color: #fff; display: inline-block; padding: .5rem 1.5rem;
+          border-radius: 999px; font-size: 1.2rem; font-weight: bold; margin-top: 1rem; }
+          ul { list-style: none; }
+          li { padding: .5rem 0 .5rem 1.5rem; position: relative; }
+          li::before { content: "✓"; color: #2563eb; position: absolute; left: 0; font-weight: bold; }
+          .pricing { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; }
+          .note { color: #64748b; font-size: .9rem; margin-top: .5rem; }
+          form { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+          label { display: flex; flex-direction: column; font-weight: 600; font-size: .95rem; gap: .3rem; }
+          input, textarea { padding: .6rem .75rem; border: 1px solid #cbd5e1; border-radius: 6px;
+          font-size: 1rem; font-family: inherit; }
+          button { background: #2563eb; color: #fff; border: none; padding: .75rem; font-size: 1.1rem;
+          border-radius: 8px; cursor: pointer; font-weight: bold; }
+          button:hover { background: #1d4ed8; }
+          @media (max-width: 480px) { body { padding: 1rem; } h1 { font-size: 1.6rem; } }
+STYLECSS
+
+          # public/thanks.html
+          cat > form-apo-service/public/thanks.html << 'THANKSHTML'
+          <!DOCTYPE html>
+          <html lang="ja">
+          <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>お申込みありがとうございます — フォームアポ</title>
+          <link rel="stylesheet" href="/style.css">
+          </head>
+          <body>
+          <h1>お申込みありがとうございます</h1>
+          <div class="hero">
+          <p>お申込みを受け付けました。<br>担当者から2営業日以内にご連絡いたします。</p>
+          <p style="margin-top:1rem"><a href="/">トップページに戻る</a></p>
+          </div>
+          </body>
+          </html>
+THANKSHTML
+
+          # functions/api/apply.js
+          cat > form-apo-service/functions/api/apply.js << 'APPLYJS'
+          export async function onRequest(context) {
+          try {
+          if (context.request.method !== 'POST') {
+          return new Response('Method Not Allowed', { status: 405 });
+          }
+          const data = await context.request.json();
+          const token = context.env.TELEGRAM_BOT_TOKEN;
+          const chatId = context.env.TELEGRAM_CHAT_ID;
+          if (token && chatId) {
+          const text = `【フォームアポ】新規お申込み\n\n会社名: ${data.company}\nお名前: ${data.name}\nメール: ${data.email}\n電話: ${data.phone}\nメッセージ: ${data.message || '（なし）'}`;
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text })
+          });
+          }
+          return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+          });
+          } catch (e) {
+          return new Response(JSON.stringify({ error: e.message }), {
+          status: 500, headers: { 'Content-Type': 'application/json' }
+          });
+          }
+          }
+APPLYJS
+
+      - name: Install wrangler
+        run: npm install -g wrangler@latest
 
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_BASE_URL: https://api.cloudflare.com/client/v4
         run: |
-          echo "Creating Cloudflare Pages project..."
-          # First create the project if it doesn't exist
-          curl -s -X POST "$CLOUDFLARE_API_BASE_URL/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data '{"name":"form-apo","production_branch":"main"}' || echo "Project may already exist"
-          
-          wrangler pages deploy public --project-name=form-apo
+          wrangler pages deploy form-apo-service/public --project-name=form-apo
