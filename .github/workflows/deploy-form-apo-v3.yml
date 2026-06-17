@@ -1,0 +1,51 @@
+name: Deploy form-apo-service
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  repository_dispatch:
+    types: [deploy-form-apo]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create files
+        run: |
+          mkdir -p form-apo-service/public form-apo-service/functions/api
+          cat > form-apo-service/public/index.html << 'FEOF'
+          <!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>フォームアポ</title><link rel="stylesheet" href="/style.css"></head><body><h1>フォームアポ</h1><p class="tagline">問い合わせフォーム営業、まるごと代行。</p><section class="hero"><h2>新規商談を、安定的に供給します。</h2><p>まずはアポを10件、取ってきます。</p></section></body></html>
+FEOF
+          cat > form-apo-service/public/style.css << 'FEOF'
+          *{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.7;color:#1a1a2e;max-width:720px;margin:0 auto;padding:2rem;background:#fafafa}h1{color:#2563eb}
+FEOF
+          cat > form-apo-service/public/thanks.html << 'FEOF'
+          <!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>ありがとうございます</title></head><body><h1>お申込みありがとうございます</h1></body></html>
+FEOF
+          cat > form-apo-service/functions/api/apply.js << 'FEOF'
+          export async function onRequest(context) {
+            if (context.request.method !== 'POST') return new Response('Method Not Allowed', { status: 405 });
+            const data = await context.request.json();
+            const token = context.env.TELEGRAM_BOT_TOKEN;
+            const chatId = context.env.TELEGRAM_CHAT_ID;
+            if (token && chatId) {
+              await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ chat_id: chatId, text: `【フォームアポ】申込\n${data.name} / ${data.company} / ${data.email}` })
+              });
+            }
+            return new Response(JSON.stringify({ success: true }), { headers: {'Content-Type':'application/json'} });
+          }
+FEOF
+
+      - name: Install wrangler
+        run: npm install -g wrangler@latest
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler pages deploy form-apo-service/public --project-name=form-apo
