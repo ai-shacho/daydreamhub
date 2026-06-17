@@ -2,6 +2,8 @@ name: Deploy form-apo-service
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [deploy-form-apo]
 
 jobs:
   deploy:
