@@ -1,6 +1,8 @@
 name: Deploy form-apo-service
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   repository_dispatch:
     types: [deploy-form-apo]
@@ -9,19 +11,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            form-apo
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Create project directory structure
+      - name: Create project files
         run: |
           mkdir -p form-apo-service/public
           mkdir -p form-apo-service/functions/api
 
-      - name: Create actual LP files
-        run: |
-          # public/index.html
+          # =============== public/index.html ===============
           cat > form-apo-service/public/index.html << 'INDEXHTML'
           <!DOCTYPE html>
           <html lang="ja">
@@ -93,7 +98,7 @@ jobs:
           </html>
 INDEXHTML
 
-          # public/style.css
+          # =============== public/style.css ===============
           cat > form-apo-service/public/style.css << 'STYLECSS'
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body {
@@ -111,7 +116,7 @@ INDEXHTML
           border-radius: 999px; font-size: 1.2rem; font-weight: bold; margin-top: 1rem; }
           ul { list-style: none; }
           li { padding: .5rem 0 .5rem 1.5rem; position: relative; }
-          li::before { content: "✓"; color: #2563eb; position: absolute; left: 0; font-weight: bold; }
+          li::before { content: "\2713"; color: #2563eb; position: absolute; left: 0; font-weight: bold; }
           .pricing { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; }
           .note { color: #64748b; font-size: .9rem; margin-top: .5rem; }
           form { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
@@ -124,7 +129,7 @@ INDEXHTML
           @media (max-width: 480px) { body { padding: 1rem; } h1 { font-size: 1.6rem; } }
 STYLECSS
 
-          # public/thanks.html
+          # =============== public/thanks.html ===============
           cat > form-apo-service/public/thanks.html << 'THANKSHTML'
           <!DOCTYPE html>
           <html lang="ja">
@@ -144,7 +149,7 @@ STYLECSS
           </html>
 THANKSHTML
 
-          # functions/api/apply.js
+          # =============== functions/api/apply.js ===============
           cat > form-apo-service/functions/api/apply.js << 'APPLYJS'
           export async function onRequest(context) {
           try {
