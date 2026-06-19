@@ -324,6 +324,27 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     return telnyxCmd(apiKey, callControlId, 'gather_using_speak', params);
   }
 
+  async function setOutreachAttemptOutcome(outcome: string, rawReason = '') {
+    if (!db || !logId) return;
+    await db.prepare(`UPDATE outreach_call_attempts SET outcome=?, raw_hangup_reason=COALESCE(NULLIF(?,''), raw_hangup_reason), updated_at=datetime('now') WHERE call_log_id=?`)
+      .bind(outcome, rawReason, logId)
+      .run().catch((e: any) => console.error('[telnyx-voice] outreach attempt update failed:', e));
+  }
+
+  async function updateOutreachLead(status: string, opts: { needsRecall?: number; doNotCall?: number; materials?: number; explanation?: number } = {}) {
+    if (!db || !state.lead_id) return;
+    await db.prepare(`UPDATE outreach_leads
+      SET status=?,
+          needs_recall=COALESCE(?, needs_recall),
+          do_not_call=COALESCE(?, do_not_call),
+          requested_materials=COALESCE(?, requested_materials),
+          requested_explanation=COALESCE(?, requested_explanation),
+          updated_at=datetime('now')
+      WHERE id=?`)
+      .bind(status, opts.needsRecall ?? null, opts.doNotCall ?? null, opts.materials ?? null, opts.explanation ?? null, state.lead_id)
+      .run().catch((e: any) => console.error('[telnyx-voice] outreach lead update failed:', e));
+  }
+
   console.log(`[${eventType}] ctrl=${callControlId.slice(0, 16)} bid=${bookingId} lid=${logId} step=${state.step} phase=${state.phase}`);
 
   // Record every event in DB
@@ -338,6 +359,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET telnyx_call_id=? WHERE id=?`)
           .bind(callControlId, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+        await db.prepare(`UPDATE outreach_call_attempts SET telnyx_call_id=?, updated_at=datetime('now') WHERE call_log_id=?`)
+          .bind(callControlId, logId).run().catch(() => {});
       }
       break;
     }
@@ -347,7 +370,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       // ── OUTREACH PHASE ──────────────────────────────────────────────────────
       if (state.phase === 'outreach') {
-        const greeting = "Hello! This is Sarah calling from DayDreamHub, a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays, and we'd love to list your property on our site — completely free to join. Are you interested in learning more? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.";
+        const greeting = "Hello! This is Sarah calling from DayDreamHub, a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays, and listing is completely free. If you would like our materials, press 1. If you would like a follow-up explanation call, press 2. You can also answer by voice.";
         if (db && logId) {
           await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
             .bind(callControlId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
@@ -418,58 +441,70 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           .run().catch(e => console.error('[telnyx-voice] input log failed:', e));
       }
 
-      // ─── OUTREACH: Are you interested in being listed? ───
+      // ─── OUTREACH: DTMF capture for follow-up preference (no reject on keypad) ───
       if (step === 'outreach_ask_interest') {
-        const intentResult = await aiClassifyIntent(apiKey, speech, digits, 'outreach_interest');
+        if (digits === '1') {
+          const farewell = "Great, thank you. We will send you our materials shortly. Have a wonderful day. Goodbye!";
+          if (db && logId) {
+            await db.prepare(`UPDATE call_logs SET status='confirmed', transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+              .bind(`[Hotel]: pressed 1 (request materials)\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
+          }
+          await updateOutreachLead('interested', { needsRecall: 0, materials: 1, explanation: 0 });
+          await setOutreachAttemptOutcome('interested', 'dtmf:1_materials');
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: farewell,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, phase: 'ending' }),
+          });
+          break;
+        }
+
+        if (digits === '2') {
+          const farewell = "Great, thank you. Our team will call you back to explain the details. Have a wonderful day. Goodbye!";
+          if (db && logId) {
+            await db.prepare(`UPDATE call_logs SET status='confirmed', transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+              .bind(`[Hotel]: pressed 2 (request explanation call)\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
+          }
+          await updateOutreachLead('interested', { needsRecall: 0, materials: 0, explanation: 1 });
+          await setOutreachAttemptOutcome('interested', 'dtmf:2_explanation');
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: farewell,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, phase: 'ending' }),
+          });
+          break;
+        }
+
+        const intentResult = await aiClassifyIntent(apiKey, speech, '', 'outreach_interest');
 
         if (intentResult.intent === 'repeat') {
-          await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest' }, "DayDreamHub is a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays. Listing your property is free. Are you interested? Press 1 or say yes. Press 2 or say no.");
-        } else if (intentResult.intent === 'affirm') {
-          const farewell = "Wonderful! Our team will follow up with more details shortly. Thank you so much for your time, and we look forward to working with you. Goodbye!";
-          if (db) {
-            if (logId) {
-              await db.prepare(`UPDATE call_logs SET status='confirmed', transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
-                .bind(`[Hotel]: ${speech || 'pressed 1 (yes)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
-            }
-            if (state.lead_id) {
-              await db.prepare(`UPDATE outreach_leads SET status='interested', updated_at=datetime('now') WHERE id=?`)
-                .bind(state.lead_id).run().catch(e => console.error('[telnyx-voice] outreach lead update failed:', e));
-            }
-          }
-          await telnyxCmd(apiKey, callControlId, 'speak', {
-            payload: farewell,
-            voice: 'Polly.Joanna',
-            client_state: encodeState({ ...state, phase: 'ending' }),
-          });
+          await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest' }, "DayDreamHub is a day-use hotel booking platform. Listing is free. Press 1 if you want our materials, or press 2 if you want a follow-up explanation call. You can also answer by voice.");
         } else if (intentResult.intent === 'deny') {
           const farewell = "No problem at all. Thank you for your time. If you ever change your mind, feel free to visit daydreamhub.com. Have a great day. Goodbye!";
-          if (db) {
-            if (logId) {
-              await db.prepare(`UPDATE call_logs SET status='declined', transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
-                .bind(`[Hotel]: ${speech || 'pressed 2 (no)'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
-            }
-            if (state.lead_id) {
-              await db.prepare(`UPDATE outreach_leads SET status='not_interested', updated_at=datetime('now') WHERE id=?`)
-                .bind(state.lead_id).run().catch(e => console.error('[telnyx-voice] outreach lead update failed:', e));
-            }
+          if (db && logId) {
+            await db.prepare(`UPDATE call_logs SET status='declined', transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
+              .bind(`[Hotel]: ${speech || 'not interested'}\n[Agent]: ${farewell}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
           }
+          await updateOutreachLead('not_interested', { needsRecall: 0, doNotCall: 1 });
+          await setOutreachAttemptOutcome('not_interested', 'voice_rejected');
           await telnyxCmd(apiKey, callControlId, 'speak', {
             payload: farewell,
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
+        } else if (intentResult.intent === 'affirm') {
+          const followup = "Thank you. To help us route correctly, press 1 for materials or press 2 for a follow-up explanation call.";
+          await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest', retry_count: retryCount }, followup);
         } else {
           if (retryCount >= 1) {
             await telnyxCmd(apiKey, callControlId, 'hangup', {});
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
             }
-            if (db && state.lead_id) {
-              await db.prepare(`UPDATE outreach_leads SET status='no_answer', updated_at=datetime('now') WHERE id=?`)
-                .bind(state.lead_id).run().catch(e => console.error('[telnyx-voice] outreach lead update failed:', e));
-            }
+            await updateOutreachLead('no_answer', { needsRecall: 1 });
+            await setOutreachAttemptOutcome('no_answer', reason || 'outreach_unclear');
           } else {
-            await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest', retry_count: retryCount + 1 }, "I'm sorry, I didn't catch that. Press 1 or say yes if you're interested in listing your property on DayDreamHub for free. Press 2 or say no if you're not interested.");
+            await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest', retry_count: retryCount + 1 }, "Sorry, I didn't catch that. Press 1 for materials, press 2 for a follow-up explanation call, or answer by voice.");
           }
         }
         break;
@@ -749,12 +784,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           // Task #52: 応答前に切断された純粋な no_answer のみ、ここでフォールバック発信
           await advanceGroupAfterOutcome('no_answer');
         }
-        // Outreach: mark lead as no_answer if still in new/calling state
+        // Outreach: mark lead as voicemail/no_answer and needs_recall if still unresolved
         if (state.phase === 'outreach' && state.lead_id) {
           const lead: any = await db.prepare(`SELECT status FROM outreach_leads WHERE id=?`).bind(state.lead_id).first().catch(() => null);
+          const hangupReason = String(payload?.hangup_cause || payload?.hangup_reason || payload?.sip_hangup_cause || '').toLowerCase();
+          const voicemail = /voicemail|machine|answering/.test(hangupReason);
           if (lead && !['interested', 'not_interested'].includes(lead.status)) {
-            await db.prepare(`UPDATE outreach_leads SET status='no_answer', updated_at=datetime('now') WHERE id=?`)
-              .bind(state.lead_id).run().catch(e => console.error('[telnyx-voice] outreach lead hangup update failed:', e));
+            await updateOutreachLead(voicemail ? 'voicemail' : 'no_answer', { needsRecall: 1 });
+            await setOutreachAttemptOutcome(voicemail ? 'voicemail' : 'no_answer', hangupReason || 'hangup');
           }
         }
       } else if (conciergeCallId) {

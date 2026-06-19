@@ -45,7 +45,7 @@ if (!admin) return Astro.redirect('/admin/login');
     </section>
 
     <div class="flex gap-1 border-b border-slate-200 text-sm" id="filter-tabs">
-      {['all', 'new', 'calling', 'interested', 'appointment_set', 'contact_obtained', 'not_interested', 'declined', 'no_answer'].map((s) => (
+      {['all', 'new', 'calling', 'interested', 'appointment_set', 'contact_obtained', 'not_interested', 'declined', 'no_answer', 'voicemail'].map((s) => (
         <button
           class={`filter-tab px-3 py-2 border-b-2 font-medium transition-colors ${s === 'all' ? 'border-teal-500 text-teal-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
           data-status={s}
@@ -57,20 +57,21 @@ if (!admin) return Astro.redirect('/admin/login');
 
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full text-sm min-w-[1100px]">
+        <table class="w-full text-sm min-w-[1300px]">
           <thead class="bg-slate-50 border-b border-slate-200">
             <tr>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Hotel</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Phone</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Status</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Flags</th>
+              <th class="text-left px-4 py-3 text-slate-600 font-medium">Call Time (JST / Local)</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Notes</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Updated</th>
               <th class="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody id="lead-tbody" class="divide-y divide-slate-100">
-            <tr><td colspan="7" class="text-center py-8 text-slate-400">Loading…</td></tr>
+            <tr><td colspan="8" class="text-center py-8 text-slate-400">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -129,6 +130,7 @@ const STATUS_COLORS = {
   declined: 'bg-red-100 text-red-600',
   not_interested: 'bg-red-100 text-red-600',
   no_answer: 'bg-yellow-100 text-yellow-700',
+  voicemail: 'bg-violet-100 text-violet-700',
 };
 
 let currentFilter = 'all';
@@ -205,15 +207,34 @@ function badgesForLead(lead) {
   const flags = [];
   if (status === 'interested' || status === 'appointment_set') flags.push('<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px]">アポ獲得</span>');
   if (status === 'contact_obtained') flags.push('<span class="px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700 text-[11px]">連絡先獲得</span>');
-  if (status === 'not_interested' || status === 'declined') flags.push('<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[11px]">再架電除外</span>');
+  if (lead.requested_materials) flags.push('<span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[11px]">資料希望</span>');
+  if (lead.requested_explanation) flags.push('<span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[11px]">説明希望</span>');
+  if (lead.needs_recall) flags.push('<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px]">要再架電</span>');
+  if (status === 'not_interested' || status === 'declined' || lead.do_not_call) flags.push('<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[11px]">再架電除外</span>');
   if (!flags.length) flags.push('<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[11px]">-</span>');
   return flags.join(' ');
+}
+
+function formatCallDateTime(raw) {
+  if (!raw) return '-';
+  const d = new Date(raw.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return esc(raw);
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
 }
 
 function renderTable() {
   const tbody = document.getElementById('lead-tbody');
   if (!leads.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-400">No leads found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">No leads found.</td></tr>';
     return;
   }
 
@@ -226,6 +247,10 @@ function renderTable() {
         <td class="px-4 py-3 text-slate-600 font-mono text-xs">${esc(l.phone || '')}</td>
         <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${color}">${statusLabel}</span></td>
         <td class="px-4 py-3">${badgesForLead(l)}</td>
+        <td class="px-4 py-3 text-xs text-slate-600">
+          <div>JST: ${formatCallDateTime(l.last_call_started_at_jst)}</div>
+          <div class="text-slate-400">${esc(l.last_call_lead_timezone || 'UTC')}: ${formatCallDateTime(l.last_call_started_at_local)}</div>
+        </td>
         <td class="px-4 py-3 text-slate-500 text-xs max-w-xs truncate">${esc(l.notes || '')}</td>
         <td class="px-4 py-3 text-slate-400 text-xs">${formatDisplayDate(l.updated_at)}</td>
         <td class="px-4 py-3">
@@ -281,6 +306,8 @@ function openDrawer(lead, callLog) {
     <div><div class="text-xs text-slate-500">Hotel</div><div class="font-semibold">${esc(lead.hotel_name || '')}</div></div>
     <div><div class="text-xs text-slate-500">Phone / Email</div><div>${esc(lead.phone || '')} ${lead.email ? ` / ${esc(lead.email)}` : ''}</div></div>
     <div><div class="text-xs text-slate-500">Current Status</div><div>${esc(lead.status || 'new')}</div></div>
+    <div><div class="text-xs text-slate-500">Recall / Preference Flags</div><div>needs_recall=${Number(lead.needs_recall || 0)} / materials=${Number(lead.requested_materials || 0)} / explanation=${Number(lead.requested_explanation || 0)} / do_not_call=${Number(lead.do_not_call || 0)}</div></div>
+    <div><div class="text-xs text-slate-500">Last Call Time</div><div>JST: ${formatCallDateTime(lead.last_call_started_at_jst)} / ${esc(lead.last_call_lead_timezone || 'UTC')}: ${formatCallDateTime(lead.last_call_started_at_local)}</div></div>
     <div><div class="text-xs text-slate-500">Notes</div><div class="whitespace-pre-wrap">${esc(lead.notes || '-')}</div></div>
     <hr class="my-2" />
     <div class="font-semibold">Latest Call</div>

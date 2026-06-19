@@ -9,6 +9,55 @@ const normalizePhone = (value: string) =>
 
 const normalizeHotelName = (value: string) => (value || '').trim().toLowerCase();
 
+const COUNTRY_TIMEZONE_MAP: Record<string, string> = {
+  japan: 'Asia/Tokyo',
+  usa: 'America/New_York',
+  'united states': 'America/New_York',
+  canada: 'America/Toronto',
+  uk: 'Europe/London',
+  'united kingdom': 'Europe/London',
+  france: 'Europe/Paris',
+  germany: 'Europe/Berlin',
+  italy: 'Europe/Rome',
+  spain: 'Europe/Madrid',
+  australia: 'Australia/Sydney',
+  singapore: 'Asia/Singapore',
+  thailand: 'Asia/Bangkok',
+  indonesia: 'Asia/Jakarta',
+  philippines: 'Asia/Manila',
+  india: 'Asia/Kolkata',
+  uae: 'Asia/Dubai',
+};
+
+function estimateTimezone(country?: string | null): string {
+  const key = String(country || '').trim().toLowerCase();
+  return COUNTRY_TIMEZONE_MAP[key] || 'UTC';
+}
+
+function toSqlDateInTz(date: Date, timeZone: string): { dateTime: string; weekday: number | null; hour: number } {
+  const dtf = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    weekday: 'short',
+  });
+  const parts = dtf.formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  const w = get('weekday').toLowerCase();
+  const weekdayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  const hh = Number(get('hour') || '0');
+  return {
+    dateTime: `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`,
+    weekday: weekdayMap[w] ?? null,
+    hour: hh,
+  };
+}
+
 async function getContext(request: Request, locals: any) {
   const runtime = locals?.runtime;
   const env = runtime?.env;
@@ -28,7 +77,22 @@ export const GET: APIRoute = async ({ request, locals, url }) => {
 
   const listExists = await db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='outreach_lists'`).first();
 
-  let leadsQuery = `SELECT l.* FROM outreach_leads l`;
+  let leadsQuery = `SELECT l.*,
+    a.call_started_at_jst AS last_call_started_at_jst,
+    a.call_started_at_local AS last_call_started_at_local,
+    a.lead_timezone AS last_call_lead_timezone,
+    a.call_started_weekday_jst AS last_call_weekday_jst,
+    a.call_started_hour_jst AS last_call_hour_jst,
+    a.call_started_weekday_local AS last_call_weekday_local,
+    a.call_started_hour_local AS last_call_hour_local,
+    a.outcome AS last_call_outcome
+    FROM outreach_leads l
+    LEFT JOIN outreach_call_attempts a ON a.id = (
+      SELECT oa.id FROM outreach_call_attempts oa
+      WHERE oa.lead_id = l.id
+      ORDER BY oa.created_at DESC, oa.id DESC
+      LIMIT 1
+    )`;
   const binds: any[] = [];
 
   if (listExists && listId > 0) {
@@ -52,7 +116,7 @@ export const GET: APIRoute = async ({ request, locals, url }) => {
               COALESCE(SUM(CASE WHEN l.status IN ('interested','appointment_set') THEN 1 ELSE 0 END),0) AS success_count,
               COALESCE(SUM(CASE WHEN l.status IN ('not_interested','declined') THEN 1 ELSE 0 END),0) AS rejected_count,
               COALESCE(SUM(CASE WHEN l.status IN ('calling') THEN 1 ELSE 0 END),0) AS calling_count,
-              COALESCE(SUM(CASE WHEN l.status IN ('new','no_answer') OR l.status IS NULL THEN 1 ELSE 0 END),0) AS pending_count
+              COALESCE(SUM(CASE WHEN l.status IN ('new','no_answer','voicemail') OR l.status IS NULL THEN 1 ELSE 0 END),0) AS pending_count
        FROM outreach_lists ol
        LEFT JOIN outreach_list_members m ON m.list_id = ol.id AND m.status != 'removed'
        LEFT JOIN outreach_leads l ON l.id = m.lead_id
@@ -237,14 +301,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
             `SELECT l.*
              FROM outreach_leads l
              JOIN outreach_list_members m ON m.lead_id = l.id AND m.list_id = ?
-             WHERE l.status IN ('new','no_answer')
+             WHERE l.status IN ('new','no_answer','voicemail')
              ORDER BY l.updated_at ASC, l.id ASC
              LIMIT 1`
           )
           .bind(listId)
           .first()
       : await db
-          .prepare(`SELECT * FROM outreach_leads WHERE status IN ('new','no_answer') ORDER BY updated_at ASC, id ASC LIMIT 1`)
+          .prepare(`SELECT * FROM outreach_leads WHERE status IN ('new','no_answer','voicemail') ORDER BY updated_at ASC, id ASC LIMIT 1`)
           .first();
 
     if (!nextLead) {
@@ -318,10 +382,37 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (callLogId && callSid) {
         await db.prepare(`UPDATE call_logs SET telnyx_call_id=? WHERE id=?`).bind(callSid, callLogId).run();
       }
+      const now = new Date();
+      const jst = toSqlDateInTz(now, 'Asia/Tokyo');
+      const localTz = estimateTimezone(lead.country);
+      const local = toSqlDateInTz(now, localTz);
+
       await db
         .prepare(`UPDATE outreach_leads SET status='calling', call_log_id=?, updated_at=datetime('now') WHERE id=?`)
         .bind(callLogId, lead_id)
         .run();
+
+      await db
+        .prepare(`INSERT INTO outreach_call_attempts (
+          lead_id, call_log_id, telnyx_call_id, outcome,
+          call_started_at_utc, call_started_at_jst, call_started_weekday_jst, call_started_hour_jst,
+          lead_timezone, call_started_at_local, call_started_weekday_local, call_started_hour_local,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, 'in_progress', datetime('now'), ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`)
+        .bind(
+          lead_id,
+          callLogId,
+          callSid,
+          jst.dateTime,
+          jst.weekday,
+          jst.hour,
+          localTz,
+          local.dateTime,
+          local.weekday,
+          local.hour
+        )
+        .run()
+        .catch(() => {});
 
       return new Response(JSON.stringify({ success: true, lead_id, call_log_id: callLogId, call_sid: callSid }), {
         headers: { 'Content-Type': 'application/json' },
@@ -332,6 +423,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
         .bind(e.message, callLogId)
         .run()
         .catch(() => {});
+      await db
+        .prepare(`INSERT INTO outreach_call_attempts (lead_id, call_log_id, outcome, raw_hangup_reason, call_started_at_utc, lead_timezone, created_at, updated_at)
+                  VALUES (?, ?, 'failed', ?, datetime('now'), ?, datetime('now'), datetime('now'))`)
+        .bind(lead_id, callLogId, e.message || 'telnyx_error', estimateTimezone(lead.country))
+        .run()
+        .catch(() => {});
       return new Response(JSON.stringify({ error: e.message }), { status: 500 });
     }
   }
@@ -339,9 +436,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (action === 'update_lead') {
     const { lead_id, notes, status } = body;
     if (!lead_id) return new Response(JSON.stringify({ error: 'lead_id is required' }), { status: 400 });
+    const nextStatus = String(status || '').trim();
+    const doNotCall = ['declined', 'not_interested'].includes(nextStatus) ? 1 : null;
+    const needsRecall = ['no_answer', 'voicemail'].includes(nextStatus) ? 1 : (['declined', 'not_interested', 'interested', 'appointment_set', 'contact_obtained'].includes(nextStatus) ? 0 : null);
+
     await db
-      .prepare(`UPDATE outreach_leads SET notes=COALESCE(?,notes), status=COALESCE(?,status), updated_at=datetime('now') WHERE id=?`)
-      .bind(notes ?? null, status ?? null, lead_id)
+      .prepare(`UPDATE outreach_leads
+                SET notes=COALESCE(?,notes),
+                    status=COALESCE(?,status),
+                    do_not_call=COALESCE(?, do_not_call),
+                    needs_recall=COALESCE(?, needs_recall),
+                    updated_at=datetime('now')
+                WHERE id=?`)
+      .bind(notes ?? null, status ?? null, doNotCall, needsRecall, lead_id)
       .run();
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
