@@ -1,6 +1,14 @@
 import type { APIRoute } from 'astro';
 import { verifyAdmin } from '../../../lib/adminAuth';
 
+const normalizePhone = (value: string) =>
+  (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\-().+]/g, '');
+
+const normalizeHotelName = (value: string) => (value || '').trim().toLowerCase();
+
 export const GET: APIRoute = async ({ request, locals, url }) => {
   const runtime = (locals as any).runtime;
   const env = runtime?.env;
@@ -45,9 +53,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!hotel_name || !phone) {
       return new Response(JSON.stringify({ error: 'hotel_name and phone are required' }), { status: 400 });
     }
+    const phone_norm = normalizePhone(phone);
+    const hotel_name_norm = normalizeHotelName(hotel_name);
+
+    // Reuse existing lead when phone OR hotel name already exists
+    const existing: any = await db.prepare(
+      `SELECT id FROM outreach_leads WHERE phone_norm = ? OR hotel_name_norm = ? LIMIT 1`
+    ).bind(phone_norm, hotel_name_norm).first();
+
+    if (existing?.id) {
+      return new Response(JSON.stringify({ success: true, id: existing.id, reused: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     await db.prepare(
-      `INSERT INTO outreach_leads (hotel_name, phone, country, email, notes) VALUES (?, ?, ?, ?, ?)`
-    ).bind(hotel_name, phone, country || '', email || '', notes || '').run();
+      `INSERT INTO outreach_leads (hotel_name, phone, phone_norm, hotel_name_norm, country, email, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(hotel_name, phone, phone_norm, hotel_name_norm, country || '', email || '', notes || '').run();
     const row: any = await db.prepare(`SELECT last_insert_rowid() as id`).first();
     return new Response(JSON.stringify({ success: true, id: row?.id }), {
       headers: { 'Content-Type': 'application/json' },
@@ -64,14 +87,34 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const lines = (csv as string).split('\n').map((l: string) => l.trim()).filter(Boolean);
     let imported = 0;
     let skipped = 0;
+
     for (const line of lines) {
       const cols = line.split(',').map((c: string) => c.trim().replace(/^"|"$/g, ''));
       const [hotel_name, phone, country, email] = cols;
       if (!hotel_name || !phone) { skipped++; continue; }
-      await db.prepare(
-        `INSERT OR IGNORE INTO outreach_leads (hotel_name, phone, country, email) VALUES (?, ?, ?, ?)`
-      ).bind(hotel_name, phone, country || '', email || '').run().catch(() => { skipped++; });
-      imported++;
+
+      const phone_norm = normalizePhone(phone);
+      const hotel_name_norm = normalizeHotelName(hotel_name);
+
+      // Duplicate policy (Kenta req.): skip when hotel name OR phone already exists
+      const existing: any = await db.prepare(
+        `SELECT id FROM outreach_leads WHERE phone_norm = ? OR hotel_name_norm = ? LIMIT 1`
+      ).bind(phone_norm, hotel_name_norm).first();
+
+      if (existing?.id) {
+        skipped++;
+        continue;
+      }
+
+      try {
+        await db.prepare(
+          `INSERT INTO outreach_leads (hotel_name, phone, phone_norm, hotel_name_norm, country, email)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        ).bind(hotel_name, phone, phone_norm, hotel_name_norm, country || '', email || '').run();
+        imported++;
+      } catch {
+        skipped++;
+      }
     }
     return new Response(JSON.stringify({ success: true, imported, skipped }), {
       headers: { 'Content-Type': 'application/json' },
