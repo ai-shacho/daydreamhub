@@ -66,21 +66,71 @@ function toAmPm(time: string | null): string {
   return m ? `${hour}:${String(m).padStart(2, '0')} ${period}` : `${hour} ${period}`;
 }
 
-// Classify yes/no/repeat from speech (button or voice)
-function classifyYesNo(speech: string, digits: string): 'yes' | 'no' | 'repeat' | null {
-  if (digits === '1') return 'yes';
-  if (digits === '2') return 'no';
-  if (digits === '3') return 'repeat';
-  if (speech) {
-    const l = speech.toLowerCase();
-    if (l.includes('yes') || l.includes('yeah') || l.includes('sure') || l.includes('ok') ||
-        l.includes('confirm') || l.includes('available') || l.includes('we do') || l.includes('we can'))
-      return 'yes';
-    if (l.includes('no') || l.includes('don\'t') || l.includes('not') || l.includes('unavailable') ||
-        l.includes('full') || l.includes('booked') || l.includes('decline') || l.includes('can\'t') || l.includes('cannot'))
-      return 'no';
+type HybridIntent = 'affirm' | 'deny' | 'repeat' | 'price' | 'unclear';
+
+async function aiClassifyIntent(
+  apiKey: string,
+  speech: string,
+  digits: string,
+  context: 'outreach_interest' | 'ask_dayuse' | 'confirm_booking' | 'ask_price'
+): Promise<{ intent: HybridIntent; amount?: number | null; raw?: string }> {
+  // Fast deterministic path for DTMF (most reliable across handset types)
+  if (context !== 'ask_price') {
+    if (digits === '1') return { intent: 'affirm' };
+    if (digits === '2') return { intent: 'deny' };
+    if (digits === '3') return { intent: 'repeat' };
+    if (/^\d{1,6}$/.test((digits || '').trim())) {
+      const amount = parseInt((digits || '').trim(), 10);
+      if (!isNaN(amount) && amount > 0) return { intent: 'price', amount, raw: digits };
+    }
   }
-  return null;
+
+  if (context === 'ask_price') {
+    const amount = digits ? parseInt(digits.replace(/\D/g, ''), 10) : NaN;
+    if (!isNaN(amount) && amount > 0) return { intent: 'price', amount, raw: digits };
+  }
+
+  // If no speech, classify as unclear quickly.
+  if (!speech?.trim()) return { intent: 'unclear' };
+
+  try {
+    const r = await fetch('https://api.telnyx.com/v2/ai/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai/gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You classify spoken responses from hotel staff in a phone call. Return JSON only with schema: {"intent":"affirm|deny|repeat|price|unclear","amount":number|null,"raw":"string"}. Use context to disambiguate. intent=price when user provides or corrects a numeric amount in USD. For yes/no style confirmations, use affirm/deny. If uncertain, use unclear.'
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({ context, speech, digits })
+          },
+        ],
+        max_tokens: 90,
+        temperature: 0,
+      }),
+    });
+    const d: any = await r.json();
+    const content = d.choices?.[0]?.message?.content || '';
+    const m = content.match(/\{[\s\S]*\}/);
+    if (m) {
+      const parsed = JSON.parse(m[0]);
+      const intent = (parsed.intent || 'unclear') as HybridIntent;
+      const amount = typeof parsed.amount === 'number' ? parsed.amount : null;
+      return { intent, amount, raw: parsed.raw || speech };
+    }
+  } catch (e) {
+    console.error('AI intent classify error:', e);
+  }
+
+  // Fallback when LLM output is unavailable
+  const amountMatch = speech.match(/(\d{1,6})/);
+  if (amountMatch) return { intent: 'price', amount: parseInt(amountMatch[1], 10), raw: amountMatch[1] };
+  return { intent: 'unclear' };
 }
 
 export const POST: APIRoute = async ({ request, locals, url }) => {
@@ -260,10 +310,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       payload,
       voice: 'Polly.Joanna',
       language: 'en-US',
+      input: ['dtmf', 'speech'],
       minimum_digits: 1,
       maximum_digits: isPriceStep ? 6 : 1,
-      timeout_millis: isPriceStep ? 30000 : 20000,
-      inter_digit_timeout_millis: 4000,
+      timeout_millis: isPriceStep ? 45000 : 30000,
+      inter_digit_timeout_millis: isPriceStep ? 6000 : 5000,
+      speech_timeout: 'auto',
+      speech_end_timeout: 2500,
+      profanity_filter: false,
       client_state: encodeState(stateObj),
     };
     if (isPriceStep) params.terminating_digit = '#';
@@ -329,13 +383,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         break;
       }
       // After any speech, start listening for DTMF or voice
-      const isPriceStep = state.step === 'ask_price';
+      const isPriceStep = state.step === 'ask_price' || state.step === 'confirm_booking';
       const gatherParams: any = {
         maximum_digits: isPriceStep ? 6 : 1,
         minimum_digits: 1,
-        timeout_millis: isPriceStep ? 20000 : 15000,
+        timeout_millis: isPriceStep ? 45000 : 30000,
+        inter_digit_timeout_millis: isPriceStep ? 6000 : 5000,
         speech_timeout: 'auto',
-        speech_end_timeout: 2000,
+        speech_end_timeout: 2500,
         input: ['dtmf', 'speech'],
         language: 'en-US',
         profanity_filter: false,
@@ -365,11 +420,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       // ─── OUTREACH: Are you interested in being listed? ───
       if (step === 'outreach_ask_interest') {
-        const answer = classifyYesNo(speech, digits);
+        const intentResult = await aiClassifyIntent(apiKey, speech, digits, 'outreach_interest');
 
-        if (answer === 'repeat') {
+        if (intentResult.intent === 'repeat') {
           await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest' }, "DayDreamHub is a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays. Listing your property is free. Are you interested? Press 1 or say yes. Press 2 or say no.");
-        } else if (answer === 'yes') {
+        } else if (intentResult.intent === 'affirm') {
           const farewell = "Wonderful! Our team will follow up with more details shortly. Thank you so much for your time, and we look forward to working with you. Goodbye!";
           if (db) {
             if (logId) {
@@ -386,7 +441,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             voice: 'Polly.Joanna',
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
-        } else if (answer === 'no') {
+        } else if (intentResult.intent === 'deny') {
           const farewell = "No problem at all. Thank you for your time. If you ever change your mind, feel free to visit daydreamhub.com. Have a great day. Goodbye!";
           if (db) {
             if (logId) {
@@ -422,22 +477,22 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       // ─── STEP 1: Do you offer day-use plans? ───
       if (step === 'ask_dayuse') {
-        const answer = classifyYesNo(speech, digits);
+        const intentResult = await aiClassifyIntent(apiKey, speech, digits, 'ask_dayuse');
 
-        if (answer === 'repeat') {
+        if (intentResult.intent === 'repeat') {
           const checkIn = (state.check_in_date || state.date || 'the requested date');
           const guests = state.guests || 1;
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
           const timeInfo = checkInTime && checkOutTime ? ` from ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
           await gatherUsingSpeak({ ...state, step: 'ask_dayuse' }, `We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`);
-        } else if (answer === 'yes') {
+        } else if (intentResult.intent === 'affirm') {
           // → STEP 2A: Ask for price
           const checkIn = (state.check_in_date || state.date || 'the requested date');
           const guests = state.guests || 1;
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
-          const timeInfo = checkInTime && checkOutTime ? ` from ${checkInTime} to ${checkOutTime}` : '';
+          const timeInfo = checkInTime && checkOutTime ? ` from ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}` : '';
           const priceAsk = `Thank you! What is the rate for a day-use stay on ${checkIn}${timeInfo} for ${guests} ${guests === 1 ? 'person' : 'people'}? Please note, you must provide the final total amount in US dollars, including all service fees and taxes. For example, say fifty dollars. Or enter the number on your keypad and press the hash key when done. Press 3 to hear this again.`;
 
           if (db && logId) {
@@ -447,7 +502,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
           await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: 0 }, priceAsk, true);
 
-        } else if (answer === 'no') {
+        } else if (intentResult.intent === 'deny') {
           // → STEP 2B: No day-use → record as potential partner
           const farewell = "Understood. We currently have guests seeking day-use stays in your area. We may follow up to discuss whether a day-use plan could work for your property. Thank you for your time. Goodbye!";
 
@@ -484,7 +539,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             // Task #52: グループ発信なら次のホテルへ
             await advanceGroupAfterOutcome('no_answer');
           } else {
-            await gatherUsingSpeak({ ...state, step: 'ask_dayuse', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. If you offer day-use plans, press 1 or say yes. If not, press 2 or say no.");
+            await gatherUsingSpeak({ ...state, step: 'ask_dayuse', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. If you offer day-use plans, press 1 or say yes. If not, press 2 or say no. If keypad input does not work, please answer by voice.");
           }
         }
         break;
@@ -502,10 +557,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           break;
         }
         const hotelSaid = speech || '';
-        // DTMF digits (e.g. "50#" → digits="50") take priority over speech
-        const dtmfPrice = digits ? parseInt(digits.replace(/\D/g, ''), 10) : NaN;
-        const priceResult = (!isNaN(dtmfPrice) && dtmfPrice > 0)
-          ? { amount: dtmfPrice, raw: digits }
+        // Hybrid intent: prioritize DTMF, then let LLM classify free-form speech.
+        const intentResult = await aiClassifyIntent(apiKey, hotelSaid, digits, 'ask_price');
+        const priceResult = (intentResult.intent === 'price' && intentResult.amount && intentResult.amount > 0)
+          ? { amount: intentResult.amount, raw: intentResult.raw || hotelSaid }
           : await aiExtractPrice(apiKey, hotelSaid);
 
         if (priceResult.amount && priceResult.amount > 0) {
@@ -521,7 +576,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
               .bind(`[Hotel]: ${hotelSaid}\n[Agent]: ${confirmAsk}`, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
           }
 
-          await gatherUsingSpeak({ ...state, step: 'confirm_booking', price_quoted: priceResult.amount, retry_count: 0 }, confirmAsk);
+          await gatherUsingSpeak({ ...state, step: 'confirm_booking', price_quoted: priceResult.amount, retry_count: 0 }, confirmAsk, true);
 
         } else {
           // Couldn't extract price → retry
@@ -542,7 +597,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             // Task #52: グループ発信なら次のホテルへ
             await advanceGroupAfterOutcome('unavailable');
           } else {
-            await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: retryCount + 1 }, "I'm sorry, could you repeat the rate for this day-use stay? Please note, it must be the final total amount in US dollars, including all service fees and taxes. You can say the amount, or enter the number on your keypad and press the hash key when done.", true);
+            await gatherUsingSpeak({ ...state, step: 'ask_price', retry_count: retryCount + 1 }, "I'm sorry, could you repeat the rate for this day-use stay? Please note, it must be the final total amount in US dollars, including all service fees and taxes. You can say the amount, or enter the number on your keypad and press the hash key when done. If keypad entry fails, speaking the amount is also fine.", true);
           }
         }
         break;
@@ -550,9 +605,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       // ─── STEP 2A-2: Confirm booking (single-shot 4-point consent) ───
       if (step === 'confirm_booking') {
-        // Allow price correction at final confirmation via speech or DTMF (e.g. 50#)
-        const dtmfConfirmPrice = /^\d{1,6}$/.test((digits || '').trim()) ? parseInt((digits || '').trim(), 10) : NaN;
-        let correctedPrice: number | null = !isNaN(dtmfConfirmPrice) && dtmfConfirmPrice > 0 ? dtmfConfirmPrice : null;
+        // Hybrid intent for final confirmation: affirm/deny/repeat + price correction from free speech.
+        const intentResult = await aiClassifyIntent(apiKey, speech || '', digits || '', 'confirm_booking');
+        let correctedPrice: number | null = (intentResult.intent === 'price' && intentResult.amount && intentResult.amount > 0)
+          ? intentResult.amount
+          : null;
         if (correctedPrice === null && speech) {
           const extracted = await aiExtractPrice(apiKey, speech);
           if (extracted.amount && extracted.amount > 0) correctedPrice = extracted.amount;
@@ -563,7 +620,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const checkInTime = state.check_in_time || state.check_in || null;
           const checkOutTime = state.check_out_time || state.check_out || null;
           const guests = state.guests || 1;
-          const confirmAskUpdated = `The total amount has been updated to ${correctedPrice} dollars. To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${correctedPrice} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`;
+          const confirmAskUpdated = `The total amount has been updated to ${correctedPrice} dollars. To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${correctedPrice} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`;
 
           if (db && logId) {
             await db.prepare(`UPDATE call_logs SET transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
@@ -573,14 +630,13 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           await gatherUsingSpeak({ ...state, step: 'confirm_booking', price_quoted: correctedPrice, retry_count: 0 }, confirmAskUpdated, true);
           break;
         }
-        const answer = classifyYesNo(speech, digits);
         const priceQuoted = state.price_quoted || 0;
         const checkIn = (state.check_in_date || state.date || 'the requested date');
         const checkInTime = state.check_in_time || state.check_in || null;
         const checkOutTime = state.check_out_time || state.check_out || null;
         const guests = state.guests || 1;
 
-        if (answer === 'repeat') {
+        if (intentResult.intent === 'repeat') {
           await gatherUsingSpeak(
             { ...state, step: 'confirm_booking' },
             `To confirm your reservation: The date is ${checkIn}, time is ${toAmPm(checkInTime)} to ${toAmPm(checkOutTime)}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${priceQuoted} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`
@@ -588,7 +644,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           break;
         }
 
-        if (answer === 'no') {
+        if (intentResult.intent === 'deny') {
           const farewell = "Understood. We cannot finalize the booking without full agreement. Thank you for your time. Goodbye!";
           if (db) {
             if (logId) {
@@ -615,7 +671,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           break;
         }
 
-        if (answer !== 'yes') {
+        if (intentResult.intent !== 'affirm') {
           if (retryCount >= 1) {
             await telnyxCmd(apiKey, callControlId, 'hangup', {});
             if (db && logId) {
@@ -625,7 +681,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             await sendResultEmailOnce('no_answer');
             await advanceGroupAfterOutcome('no_answer');
           } else {
-            await gatherUsingSpeak({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to agree, or press 2 or say no to decline. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.", true);
+            await gatherUsingSpeak({ ...state, step: 'confirm_booking', retry_count: retryCount + 1 }, "I'm sorry, I did not receive a response. Press 1 or say yes to agree, or press 2 or say no to decline. If the amount is different, please say the correct amount, or enter the amount and then press the hash key. If keypad input does not work, voice response is okay.", true);
           }
           break;
         }
