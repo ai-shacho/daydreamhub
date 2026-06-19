@@ -261,7 +261,7 @@ export async function searchHotelsExternal(env: any, params: any) {
     const mockHotels = [
       { name: "Tokyo Test Hotel A", address: "Tokyo", phone: "+818038489554", rating: null, rating_count: 0, website: null, source: "external" },
       { name: "Tokyo Test Hotel B", address: "Tokyo", phone: "+818053689489", rating: null, rating_count: 0, website: null, source: "external" },
-      { name: "Tokyo Test Hotel C", address: "Tokyo", phone: "+17207275686", rating: null, rating_count: 0, website: null, source: "external" },
+      { name: "Tokyo Test Hotel C", address: "Tokyo", phone: "+818094160804", rating: null, rating_count: 0, website: null, source: "external" },
     ];
     return { count: mockHotels.length, source: "external", hotels: mockHotels };
   }
