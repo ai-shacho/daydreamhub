@@ -1476,8 +1476,15 @@ function escHtml(s) {
             hotels: selectedHotels.map(function(h) {
               return { hotel_name: h.name, hotel_phone: h.phone, hotel_source: 'external' };
             }),
-            guest_name: name, guest_email: email, check_in_date: date,
-            check_in_time: checkinTime, check_out_time: checkoutTime
+            guest_name: name,
+            guest_email: email,
+            guest_phone: phone,
+            check_in_date: date,
+            check_in_time: checkinTime,
+            check_out_time: checkoutTime,
+            guests: parseInt(guests, 10),
+            adults: parseInt(guests, 10),
+            children: 0
           }
         })
       });
@@ -1533,6 +1540,8 @@ function escHtml(s) {
             locale: 'ja',
             guest_name: name,
             guest_email: email,
+            guest_phone: phone,
+            guests: parseInt(guests, 10),
             details: {
               guest_phone: phone,
               guests: parseInt(guests, 10)

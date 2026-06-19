@@ -484,6 +484,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     guest_phone,
     guests,
   } = body;
+  const detailsPayload =
+    body?.details && typeof body.details === 'object' ? body.details : {};
+  const effectiveGuestPhone = guest_phone || detailsPayload.guest_phone || detailsPayload.phone;
+  const effectiveGuestsRaw = guests ?? detailsPayload.guests;
+  const effectiveGuests =
+    effectiveGuestsRaw !== undefined && effectiveGuestsRaw !== null && effectiveGuestsRaw !== ''
+      ? Number(effectiveGuestsRaw)
+      : null;
   if (!message || typeof message !== 'string' || !session_id) {
     return new Response(JSON.stringify({ error: 'message and session_id required' }), {
       status: 400,
@@ -629,14 +637,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
           { headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (guest_name || guest_email || guest_phone || guests) {
+      if (guest_name || guest_email || effectiveGuestPhone || effectiveGuests !== null) {
         let requestDetails: any = {};
         try {
           requestDetails = JSON.parse(c.request_details || '{}');
         } catch {}
         if (guest_name) requestDetails.guest_name = guest_name;
-        if (guest_phone) requestDetails.guest_phone = guest_phone;
-        if (guests) requestDetails.guests = Number(guests);
+        if (effectiveGuestPhone) requestDetails.guest_phone = effectiveGuestPhone;
+        if (effectiveGuests !== null && !Number.isNaN(effectiveGuests)) requestDetails.guests = effectiveGuests;
         await db
           .prepare(
             `UPDATE concierge_calls SET guest_name = COALESCE(?, guest_name), guest_email = COALESCE(?, guest_email), request_details = ?, updated_at = datetime('now') WHERE id = ?`
@@ -808,7 +816,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           { headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (guest_name || guest_email || guest_phone || guests) {
+      if (guest_name || guest_email || effectiveGuestPhone || effectiveGuests !== null) {
         await db
           .prepare(
             "UPDATE concierge_call_groups SET guest_name = COALESCE(?, guest_name), guest_email = COALESCE(?, guest_email), updated_at = datetime('now') WHERE id = ?"
@@ -827,8 +835,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
             details = JSON.parse(row.request_details || '{}');
           } catch {}
           if (guest_name) details.guest_name = guest_name;
-          if (guest_phone) details.guest_phone = guest_phone;
-          if (guests) details.guests = Number(guests);
+          if (effectiveGuestPhone) details.guest_phone = effectiveGuestPhone;
+          if (effectiveGuests !== null && !Number.isNaN(effectiveGuests)) details.guests = effectiveGuests;
           await db
             .prepare(
               "UPDATE concierge_calls SET guest_name = COALESCE(?, guest_name), guest_email = COALESCE(?, guest_email), request_details = ?, updated_at = datetime('now') WHERE id = ?"
