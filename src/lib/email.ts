@@ -920,9 +920,11 @@ export async function sendConciergeResultEmail(
 
   const actionNote = data.resultType === 'success'
     ? 'Please keep this email for reference when checking in. Payment is made directly at the hotel upon check-in. Please note that depending on the hotel, you may be required to pay in the local currency.'
-    : data.resultType === 'all_failed'
-      ? 'If payment was captured, refund handling will proceed according to our policy.'
-      : 'You can try another hotel search anytime on DaydreamHub.';
+    : data.resultType === 'no_answer'
+      ? 'You can try another hotel search anytime on DaydreamHub. If we are unable to reach any of the selected hotels after attempting all of them, your $7 fee will be fully refunded.'
+      : data.resultType === 'all_failed'
+        ? 'We called all the selected hotels, but none were available or answered. Your $7 fee is being refunded.'
+        : 'You can try another hotel search anytime on DaydreamHub.';
 
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
