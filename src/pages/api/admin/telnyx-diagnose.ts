@@ -187,7 +187,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
         body: JSON.stringify({
           connection_id: env.TELNYX_FROM_NUMBER ? undefined : '2895762800573941720',
           to: testCallTo,
-          from: env.TELNYX_FROM_NUMBER || '+14407260039',
+          from: env.TELNYX_FROM_NUMBER || '+12242939610',
           answering_machine_detection: 'disabled',
           webhook_url: 'https://daydreamhub.pages.dev/api/webhooks/telnyx-voice',
         }),
