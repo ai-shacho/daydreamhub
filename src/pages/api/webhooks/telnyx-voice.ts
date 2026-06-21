@@ -133,6 +133,20 @@ async function aiClassifyIntent(
   return { intent: 'unclear' };
 }
 
+function getOutreachScript(variant: string | undefined) {
+  const code = String(variant || 'A').toUpperCase();
+  if (code === 'B') {
+    return {
+      opening: 'Hi, this is Sarah from DayDreamHub. We help hotels get incremental daytime bookings at no listing cost. If you want our intro materials, press 1. If you prefer a short explanation call from our team, press 2. You can also answer by voice.',
+      followup: 'Great, thanks. Press 1 for materials, or press 2 for a follow-up explanation call.',
+    };
+  }
+  return {
+    opening: 'Hello! This is Sarah calling from DayDreamHub, a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays, and listing is completely free. If you would like our materials, press 1. If you would like a follow-up explanation call, press 2. You can also answer by voice.',
+    followup: 'Thank you. To help us route correctly, press 1 for materials or press 2 for a follow-up explanation call.',
+  };
+}
+
 export const POST: APIRoute = async ({ request, locals, url }) => {
   const env = (locals as any).runtime?.env;
   const db = env?.DB;
@@ -370,7 +384,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       // ── OUTREACH PHASE ──────────────────────────────────────────────────────
       if (state.phase === 'outreach') {
-        const greeting = "Hello! This is Sarah calling from DayDreamHub, a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays, and listing is completely free. If you would like our materials, press 1. If you would like a follow-up explanation call, press 2. You can also answer by voice.";
+        const script = getOutreachScript(state.script_variant);
+        const greeting = script.opening;
         if (db && logId) {
           await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
             .bind(callControlId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
@@ -493,7 +508,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             client_state: encodeState({ ...state, phase: 'ending' }),
           });
         } else if (intentResult.intent === 'affirm') {
-          const followup = "Thank you. To help us route correctly, press 1 for materials or press 2 for a follow-up explanation call.";
+          const followup = getOutreachScript(state.script_variant).followup;
           await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest', retry_count: retryCount }, followup);
         } else {
           if (retryCount >= 1) {

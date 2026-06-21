@@ -44,6 +44,14 @@ if (!admin) return Astro.redirect('/admin/login');
       <p id="dialer-status" class="text-xs text-slate-500">待機中</p>
     </section>
 
+    <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="font-semibold text-slate-800">A/B Script Variants</h2>
+        <p class="text-xs text-slate-500">attempt結果をvariant単位で集計</p>
+      </div>
+      <div id="variant-stats" class="text-xs text-slate-400">Loading variant stats...</div>
+    </section>
+
     <div class="flex gap-1 border-b border-slate-200 text-sm" id="filter-tabs">
       {['all', 'new', 'calling', 'interested', 'appointment_set', 'contact_obtained', 'not_interested', 'declined', 'no_answer', 'voicemail'].map((s) => (
         <button
@@ -65,13 +73,14 @@ if (!admin) return Astro.redirect('/admin/login');
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Status</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Flags</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Call Time (JST / Local)</th>
+              <th class="text-left px-4 py-3 text-slate-600 font-medium">TZ / Attempts / Variant</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Notes</th>
               <th class="text-left px-4 py-3 text-slate-600 font-medium">Updated</th>
               <th class="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody id="lead-tbody" class="divide-y divide-slate-100">
-            <tr><td colspan="8" class="text-center py-8 text-slate-400">Loading…</td></tr>
+            <tr><td colspan="9" class="text-center py-8 text-slate-400">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -107,8 +116,9 @@ if (!admin) return Astro.redirect('/admin/login');
     <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 p-6">
       <h2 class="text-lg font-bold text-slate-800 mb-2">Import CSV to New List</h2>
       <input id="import-list-name" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-2" placeholder="List name (e.g. Tokyo Hotels Batch A)" />
-      <p class="text-xs text-slate-500 mb-3">format: <code class="bg-slate-100 px-1 rounded">hotel_name,phone,country,email</code></p>
-      <textarea id="csv-input" rows="10" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono" placeholder="Grand Hotel Tokyo,+81312345678,Japan,info@grandtokyo.jp"></textarea>
+      <p class="text-xs text-slate-500 mb-3">format: <code class="bg-slate-100 px-1 rounded">hotel_name,phone,country,email,timezone</code>（header付き推奨）</p>
+      <input id="csv-file" type="file" accept=".csv,text/csv" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-2" />
+      <textarea id="csv-input" rows="8" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono" placeholder="Fallback: paste CSV text here"></textarea>
       <div class="flex gap-2 mt-3">
         <button id="btn-import-confirm" class="flex-1 bg-teal-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-teal-700">Import</button>
         <button id="btn-import-cancel" class="flex-1 bg-slate-100 text-slate-700 py-2 rounded-lg text-sm font-medium hover:bg-slate-200">Cancel</button>
@@ -137,6 +147,8 @@ let currentFilter = 'all';
 let currentListId = 0;
 let lists = [];
 let leads = [];
+let variants = [];
+let variantStats = [];
 let autoCalling = false;
 let autoTimer = null;
 
@@ -158,7 +170,10 @@ async function loadDashboard() {
   const data = await r.json();
   lists = data.lists || [];
   leads = data.leads || [];
+  variants = data.variants || [];
+  variantStats = data.variant_stats || [];
   renderLists();
+  renderVariantStats();
   renderTable();
 }
 
@@ -202,6 +217,26 @@ function renderLists() {
   });
 }
 
+function renderVariantStats() {
+  const el = document.getElementById('variant-stats');
+  if (!el) return;
+  if (!variants.length) {
+    el.innerHTML = '<div class="text-slate-400">No variants configured.</div>';
+    return;
+  }
+  const statsMap = Object.fromEntries((variantStats || []).map((s) => [String(s.script_variant || ''), s]));
+  el.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 gap-2">${variants.map((v) => {
+    const s = statsMap[v.code] || {};
+    const attempts = Number(s.attempts || 0);
+    const interested = Number(s.interested || 0);
+    const rate = attempts ? Math.round((interested / attempts) * 100) : 0;
+    return `<div class="border border-slate-200 rounded-lg p-2 bg-slate-50">
+      <div class="font-semibold text-slate-700">${esc(v.code)} - ${esc(v.name || '')} ${Number(v.active) ? '' : '<span class="text-[10px] text-rose-600">(inactive)</span>'}</div>
+      <div class="text-slate-500">attempts: ${attempts} / interested: ${interested} / CVR: ${rate}%</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
 function badgesForLead(lead) {
   const status = String(lead.status || 'new');
   const flags = [];
@@ -234,7 +269,7 @@ function formatCallDateTime(raw) {
 function renderTable() {
   const tbody = document.getElementById('lead-tbody');
   if (!leads.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-8 text-slate-400">No leads found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-8 text-slate-400">No leads found.</td></tr>';
     return;
   }
 
@@ -250,6 +285,10 @@ function renderTable() {
         <td class="px-4 py-3 text-xs text-slate-600">
           <div>JST: ${formatCallDateTime(l.last_call_started_at_jst)}</div>
           <div class="text-slate-400">${esc(l.last_call_lead_timezone || 'UTC')}: ${formatCallDateTime(l.last_call_started_at_local)}</div>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-600">
+          <div>${esc(l.timezone || l.last_call_lead_timezone || 'UTC')}</div>
+          <div class="text-slate-400">attempts: ${Number(l.total_attempts || 0)} / variant: ${esc(l.assigned_script_variant || l.last_script_variant || '-')}</div>
         </td>
         <td class="px-4 py-3 text-slate-500 text-xs max-w-xs truncate">${esc(l.notes || '')}</td>
         <td class="px-4 py-3 text-slate-400 text-xs">${formatDisplayDate(l.updated_at)}</td>
@@ -423,10 +462,23 @@ document.getElementById('btn-import-cancel').addEventListener('click', () => {
   document.getElementById('modal-import').classList.add('hidden');
 });
 document.getElementById('btn-import-confirm').addEventListener('click', async () => {
+  const file = document.getElementById('csv-file')?.files?.[0] || null;
   const csv = document.getElementById('csv-input').value.trim();
-  if (!csv) return;
+  if (!file && !csv) return;
   const listName = document.getElementById('import-list-name').value.trim();
-  const res = await api({ action: 'import_csv', csv, list_name: listName || null });
+
+  let res;
+  if (file) {
+    const fd = new FormData();
+    fd.append('action', 'import_csv_file');
+    fd.append('list_name', listName || '');
+    fd.append('file', file);
+    const r = await fetch('/api/admin/outreach', { method: 'POST', body: fd, credentials: 'include' });
+    res = await r.json();
+  } else {
+    res = await api({ action: 'import_csv', csv, list_name: listName || null });
+  }
+
   const msg = document.getElementById('import-result');
   msg.classList.remove('hidden');
   if (res.error) {
@@ -435,6 +487,7 @@ document.getElementById('btn-import-confirm').addEventListener('click', async ()
     msg.textContent = `Imported ${res.imported} leads (${res.skipped} duplicate/invalid).`;
     document.getElementById('csv-input').value = '';
     document.getElementById('import-list-name').value = '';
+    if (document.getElementById('csv-file')) document.getElementById('csv-file').value = '';
     if (res.list_id) currentListId = Number(res.list_id);
     await loadDashboard();
   }
