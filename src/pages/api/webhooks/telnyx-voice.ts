@@ -38,7 +38,7 @@ async function aiExtractPrice(apiKey: string, hotelSaid: string): Promise<{ amou
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-5.5-instant',
+        model: 'openai/gpt-5.5-instant',
         messages: [
           { role: 'system', content: 'Extract the price in USD from what the hotel said. Reply JSON only: {"amount": 50, "raw": "fifty dollars"}. If no clear price found, reply {"amount": null, "raw": ""}' },
           { role: 'user', content: `Hotel said: "${hotelSaid}"` },
@@ -98,7 +98,7 @@ async function aiClassifyIntent(
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-5.5-instant',
+        model: 'openai/gpt-5.5-instant',
         messages: [
           {
             role: 'system',
