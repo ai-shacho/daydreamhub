@@ -420,34 +420,42 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await telnyxCmd(apiKey, callControlId, 'hangup', {});
         break;
       }
-      // After any speech, start listening for DTMF or voice
-      const isPriceStep = state.step === 'ask_price' || state.step === 'confirm_booking';
-      const gatherParams: any = {
-        maximum_digits: isPriceStep ? 6 : 1,
-        minimum_digits: 1,
-        timeout_millis: isPriceStep ? 45000 : 30000,
-        inter_digit_timeout_millis: isPriceStep ? 6000 : 5000,
-        speech_timeout: 'auto',
-        speech_end_timeout: 2500,
-        input: ['dtmf', 'speech'],
-        language: 'en-US',
-        profanity_filter: false,
-        client_state: encodeState({ ...state, booking_id: bookingId, call_log_id: logId }),
-      };
-      if (isPriceStep) gatherParams.terminating_digit = '#';
-      console.log(`[telnyx-voice] gather sent: step=${state.step} isPriceStep=${isPriceStep}`);
-      await telnyxCmd(apiKey, callControlId, 'gather', gatherParams);
+
+      // gather_using_speak already enters listening mode, so avoid duplicate gather start.
+      // Keep a guarded fallback only for legacy/plain speak flows that explicitly request it.
+      if (state?.force_gather_after_speak) {
+        const isPriceStep = state.step === 'ask_price' || state.step === 'confirm_booking';
+        const gatherParams: any = {
+          maximum_digits: isPriceStep ? 6 : 1,
+          minimum_digits: 1,
+          timeout_millis: isPriceStep ? 45000 : 30000,
+          inter_digit_timeout_millis: isPriceStep ? 6000 : 5000,
+          speech_timeout: 'auto',
+          speech_end_timeout: 2500,
+          input: ['dtmf', 'speech'],
+          language: 'en-US',
+          profanity_filter: false,
+          client_state: encodeState({ ...state, booking_id: bookingId, call_log_id: logId }),
+        };
+        if (isPriceStep) gatherParams.terminating_digit = '#';
+        console.log(`[telnyx-voice] legacy gather sent after speak: step=${state.step} isPriceStep=${isPriceStep}`);
+        await telnyxCmd(apiKey, callControlId, 'gather', gatherParams);
+      } else {
+        console.log(`[telnyx-voice] skip gather on speak.ended (step=${state.step || '-'}) to avoid gather_using_speak race`);
+      }
       break;
     }
 
     case 'call.gather.ended': {
-      const speech: string = payload.speech || '';
+      const speech: string = (payload.speech || payload.transcription || payload.text || '').toString().trim();
       const digits: string = payload.digits || '';
       const reason: string = payload.reason || '';
       const step = state.step || 'ask_dayuse';
       const retryCount = state.retry_count || 0;
 
       console.log(`[gather] step=${step} speech="${speech}" digits=${digits} reason=${reason}`);
+
+      try {
 
       // Task #52: 入力内容（digits/speech/reason）を調査用に call_logs.note へ記録
       if (db && logId) {
@@ -785,6 +793,24 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         break;
       }
 
+      } catch (e) {
+        console.error('[telnyx-voice] call.gather.ended handler error:', e);
+        const fallbackPrompt = "I'm sorry, I encountered an error. Let me repeat.";
+
+        if (retryCount >= 1) {
+          await telnyxCmd(apiKey, callControlId, 'speak', {
+            payload: `${fallbackPrompt} Let's try again later. Goodbye.`,
+            voice: 'Polly.Joanna',
+            client_state: encodeState({ ...state, phase: 'ending' }),
+          });
+        } else {
+          await gatherUsingSpeak(
+            { ...state, step, retry_count: retryCount + 1 },
+            `${fallbackPrompt} Please respond once more.`,
+            step === 'ask_price' || step === 'confirm_booking'
+          );
+        }
+      }
       break;
     }
 
