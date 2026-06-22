@@ -31,6 +31,124 @@ function decodeState(raw: string | null | undefined): any {
   }
 }
 
+function deepGet(obj: any, path: string): any {
+  return path.split('.').reduce((acc: any, key) => {
+    if (acc == null) return undefined;
+    if (key.endsWith(']')) {
+      const m = key.match(/^(\w+)\[(\d+)\]$/);
+      if (!m) return undefined;
+      const arr = acc[m[1]];
+      return Array.isArray(arr) ? arr[Number(m[2])] : undefined;
+    }
+    return acc[key];
+  }, obj);
+}
+
+function pickFirstString(obj: any, paths: string[]): string {
+  for (const p of paths) {
+    const v = deepGet(obj, p);
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return '';
+}
+
+function pickStringArray(obj: any, paths: string[]): string[] {
+  const out: string[] = [];
+  for (const p of paths) {
+    const v = deepGet(obj, p);
+    if (typeof v === 'string' && v.trim()) out.push(v.trim());
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        if (typeof item === 'string' && item.trim()) out.push(item.trim());
+        if (item && typeof item === 'object') {
+          const nested = ['url', 'media_url', 'recording_url', 'download_url', 'href']
+            .map((k) => (typeof (item as any)[k] === 'string' ? (item as any)[k].trim() : ''))
+            .filter(Boolean);
+          out.push(...nested);
+        }
+      }
+    }
+  }
+  return [...new Set(out)];
+}
+
+function localClassifyShortIntent(text: string, context: 'outreach_interest' | 'ask_dayuse' | 'confirm_booking' | 'ask_price'): HybridIntent | null {
+  const normalized = (text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+
+  const affirmWords = new Set(['yes', 'yeah', 'yep', 'correct', 'sure', 'ok', 'okay', 'affirmative']);
+  const denyWords = new Set(['no', 'nope', 'nah', 'negative']);
+  const repeatWords = new Set(['repeat', 'again', 'pardon', 'sorry', 'what']);
+  const fillerWords = new Set(['hello', 'hi', 'hey', 'test', 'testing']);
+
+  const words = normalized.split(' ').filter(Boolean);
+  if (words.length <= 3) {
+    if (words.some((w) => repeatWords.has(w))) return 'repeat';
+    if (words.some((w) => affirmWords.has(w))) return 'affirm';
+    if (words.some((w) => denyWords.has(w))) return 'deny';
+    if (context === 'ask_price') {
+      const amount = normalized.match(/\b(\d{1,6})\b/);
+      if (amount) return 'price';
+    }
+    if (words.every((w) => fillerWords.has(w))) return 'unclear';
+  }
+
+  return null;
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchSpeechFromUrls(apiKey: string, urls: string[], callControlId: string): Promise<{ speech: string; source: string | null; attempts: string[] }> {
+  const attempts: string[] = [];
+  const extractSpeech = (obj: any): string => {
+    if (!obj || typeof obj !== 'object') return '';
+    const direct = pickFirstString(obj, [
+      'speech', 'text', 'transcript', 'data.transcript', 'data.text',
+      'result.transcript', 'result.text', 'results[0].transcript',
+      'results[0].alternatives[0].transcript', 'alternatives[0].transcript'
+    ]);
+    if (direct) return direct;
+    return '';
+  };
+
+  for (const url of urls) {
+    for (let i = 0; i < 3; i++) {
+      try {
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        attempts.push(`url=${url} try=${i + 1} status=${res.status}`);
+        if (!res.ok) {
+          if (res.status >= 500 || res.status === 429) {
+            await sleep(250 * (i + 1));
+            continue;
+          }
+          break;
+        }
+
+        const contentType = (res.headers.get('content-type') || '').toLowerCase();
+        if (contentType.includes('application/json')) {
+          const data: any = await res.json().catch(() => null);
+          const speech = extractSpeech(data);
+          if (speech) return { speech, source: url, attempts };
+        } else {
+          const text = (await res.text().catch(() => '')).trim();
+          if (text && text.length <= 500) return { speech: text, source: url, attempts };
+        }
+      } catch (e: any) {
+        attempts.push(`url=${url} try=${i + 1} error=${e?.message || 'fetch_error'}`);
+      }
+      await sleep(250 * (i + 1));
+    }
+  }
+
+  console.log(`[telnyx-voice] speech fetch failed ctrl=${(callControlId || '').slice(0, 16)} urls=${urls.length} attempts=${attempts.join('; ')}`);
+  return { speech: '', source: null, attempts };
+}
+
 // AI to extract price from hotel's spoken response
 async function aiExtractPrice(apiKey: string, hotelSaid: string): Promise<{ amount: number | null; raw: string }> {
   try {
@@ -88,6 +206,17 @@ async function aiClassifyIntent(
   if (context === 'ask_price') {
     const amount = digits ? parseInt(digits.replace(/\D/g, ''), 10) : NaN;
     if (!isNaN(amount) && amount > 0) return { intent: 'price', amount, raw: digits };
+  }
+
+  // Local deterministic path for short words (no LLM dependency)
+  const localIntent = localClassifyShortIntent(speech, context);
+  if (localIntent) {
+    if (localIntent === 'price') {
+      const localAmount = speech.match(/\b(\d{1,6})\b/);
+      const parsed = localAmount ? parseInt(localAmount[1], 10) : null;
+      return { intent: 'price', amount: parsed, raw: speech };
+    }
+    return { intent: localIntent, raw: speech };
   }
 
   // If no speech, classify as unclear quickly.
@@ -447,20 +576,55 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     }
 
     case 'call.gather.ended': {
-      const speech: string = (payload.speech || payload.transcription || payload.text || '').toString().trim();
-      const digits: string = payload.digits || '';
-      const reason: string = payload.reason || '';
+      const speechPaths = [
+        'speech', 'transcription', 'text',
+        'result.speech', 'result.transcription', 'result.text',
+        'gather_result.speech', 'gather_result.transcription',
+        'speech_result.transcript', 'speech_results[0].transcript',
+        'transcription_data.transcript', 'media.transcript',
+        'recording.transcript', 'analysis.transcript'
+      ];
+      const digitsPaths = ['digits', 'dtmf', 'digit', 'gather_result.digits', 'result.digits'];
+      const reasonPaths = ['reason', 'result.reason', 'gather_result.reason', 'cause'];
+      const audioUrlPaths = [
+        'recording_url', 'media_url', 'audio_url', 'recording.download_url',
+        'recording.url', 'recordings[0].url', 'recordings', 'media_urls',
+        'recording_urls', 'recording_files', 'transcription_url',
+        'analysis_url', 'result.transcription_url', 'result.recording_url'
+      ];
+
+      let speech: string = pickFirstString(payload, speechPaths);
+      const digits: string = pickFirstString(payload, digitsPaths);
+      const reason: string = pickFirstString(payload, reasonPaths);
       const step = state.step || 'ask_dayuse';
       const retryCount = state.retry_count || 0;
+      const audioUrls = pickStringArray(payload, audioUrlPaths);
 
-      console.log(`[gather] step=${step} speech="${speech}" digits=${digits} reason=${reason}`);
+      let speechSource = 'inline_payload';
+      let speechFetchAttempts: string[] = [];
+      if (!speech && audioUrls.length > 0) {
+        const fetched = await fetchSpeechFromUrls(apiKey, audioUrls, callControlId);
+        speechFetchAttempts = fetched.attempts;
+        if (fetched.speech) {
+          speech = fetched.speech.trim();
+          speechSource = `fetched:${fetched.source || 'unknown'}`;
+        } else {
+          speechSource = 'missing_after_fetch';
+        }
+      }
+
+      const acquisitionFailed = !speech && !digits && audioUrls.length > 0;
+      const maxRetryCount = acquisitionFailed ? 2 : 1;
+
+      console.log(`[gather] step=${step} speech="${speech}" digits=${digits} reason=${reason} src=${speechSource} audioUrls=${audioUrls.length}`);
 
       try {
 
       // Task #52: 入力内容（digits/speech/reason）を調査用に call_logs.note へ記録
       if (db && logId) {
+        const attemptsSummary = speechFetchAttempts.length ? `,fetch=${speechFetchAttempts.join(' || ').slice(0, 240)}` : '';
         await db.prepare(`UPDATE call_logs SET note = COALESCE(note||' | ','') || ? WHERE id = ?`)
-          .bind(`input[step=${step},digits=${digits || '-'},speech=${(speech || '-').slice(0, 60)},reason=${reason || '-'}]`, logId)
+          .bind(`input[step=${step},digits=${digits || '-'},speech=${(speech || '-').slice(0, 80)},reason=${reason || '-'},src=${speechSource},audio_urls=${audioUrls.length}${attemptsSummary}]`, logId)
           .run().catch(e => console.error('[telnyx-voice] input log failed:', e));
       }
 
@@ -519,7 +683,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           const followup = getOutreachScript(state.script_variant).followup;
           await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest', retry_count: retryCount }, followup);
         } else {
-          if (retryCount >= 1) {
+          if (retryCount >= maxRetryCount) {
             await telnyxCmd(apiKey, callControlId, 'hangup', {});
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
@@ -587,7 +751,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         } else {
           // Timeout or unclear → retry
-          if (retryCount >= 1) {
+          if (retryCount >= maxRetryCount) {
             await telnyxCmd(apiKey, callControlId, 'hangup', {});
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
@@ -638,7 +802,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         } else {
           // Couldn't extract price → retry
-          if (retryCount >= 1) {
+          if (retryCount >= maxRetryCount) {
             // 2 failures → give up, record what we have
             const farewell = "I sincerely apologize for the inconvenience. We were unable to confirm the price on this call. We truly appreciate your patience and your time. We will be in touch again soon. Thank you so much, and have a wonderful day. Goodbye!";
             if (db && logId) {
@@ -730,7 +894,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
 
         if (intentResult.intent !== 'affirm') {
-          if (retryCount >= 1) {
+          if (retryCount >= maxRetryCount) {
             await telnyxCmd(apiKey, callControlId, 'hangup', {});
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
@@ -797,7 +961,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         console.error('[telnyx-voice] call.gather.ended handler error:', e);
         const fallbackPrompt = "I'm sorry, I encountered an error. Let me repeat.";
 
-        if (retryCount >= 1) {
+        if (retryCount >= maxRetryCount) {
           await telnyxCmd(apiKey, callControlId, 'speak', {
             payload: `${fallbackPrompt} Let's try again later. Goodbye.`,
             voice: 'Polly.Joanna',
