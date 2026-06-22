@@ -456,10 +456,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       input: ['dtmf', 'speech'],
       minimum_digits: 1,
       maximum_digits: isPriceStep ? 6 : 1,
-      timeout_millis: isPriceStep ? 45000 : 30000,
-      inter_digit_timeout_millis: isPriceStep ? 6000 : 5000,
+      timeout_millis: isPriceStep ? 60000 : 45000,
+      inter_digit_timeout_millis: isPriceStep ? 7000 : 6000,
       speech_timeout: 'auto',
-      speech_end_timeout: 2500,
+      speech_end_timeout: 3200,
       profanity_filter: false,
       client_state: encodeState(stateObj),
     };
@@ -557,10 +557,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const gatherParams: any = {
           maximum_digits: isPriceStep ? 6 : 1,
           minimum_digits: 1,
-          timeout_millis: isPriceStep ? 45000 : 30000,
-          inter_digit_timeout_millis: isPriceStep ? 6000 : 5000,
+          timeout_millis: isPriceStep ? 60000 : 45000,
+          inter_digit_timeout_millis: isPriceStep ? 7000 : 6000,
           speech_timeout: 'auto',
-          speech_end_timeout: 2500,
+          speech_end_timeout: 3200,
           input: ['dtmf', 'speech'],
           language: 'en-US',
           profanity_filter: false,
@@ -613,8 +613,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
       }
 
+      const likelyTimeoutNoInput = !speech && !digits && /timeout|no_input|noinput/i.test(reason || '');
       const acquisitionFailed = !speech && !digits && audioUrls.length > 0;
-      const maxRetryCount = acquisitionFailed ? 2 : 1;
+      const maxRetryCount = acquisitionFailed || likelyTimeoutNoInput ? 3 : 2;
 
       console.log(`[gather] step=${step} speech="${speech}" digits=${digits} reason=${reason} src=${speechSource} audioUrls=${audioUrls.length}`);
 
