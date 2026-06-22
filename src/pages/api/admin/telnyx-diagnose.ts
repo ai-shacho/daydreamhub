@@ -156,6 +156,12 @@ export const GET: APIRoute = async ({ request, locals }) => {
           body: JSON.stringify({
             name: 'DayDreamHub Concierge Booking',
             instructions: CALL_SCRIPT_PROMPT,
+            telephony_settings: {
+              send_conversation_message_events: true,
+            },
+            post_conversation_settings: {
+              enabled: true,
+            },
           }),
         }
       );

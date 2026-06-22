@@ -66,6 +66,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
       );
     }
     const instructions = CALL_SCRIPT_PROMPT;
+    const updatePayload = {
+      instructions,
+      telephony_settings: {
+        send_conversation_message_events: true,
+      },
+      post_conversation_settings: {
+        enabled: true,
+      },
+    };
     try {
       const response = await fetch(
         `https://api.telnyx.com/v2/ai/assistants/${env.TELNYX_AI_ASSISTANT_ID}`,
@@ -75,7 +84,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             Authorization: `Bearer ${env.TELNYX_API_KEY}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ instructions }),
+          body: JSON.stringify(updatePayload),
         }
       );
       if (!response.ok) {
