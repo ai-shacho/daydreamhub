@@ -57,16 +57,24 @@ export const GET: APIRoute = async ({ request, locals }) => {
   }
 
   if (callSid && env?.TELNYX_API_KEY) {
-    try {
-      const r = await fetch(
-        `https://api.telnyx.com/v2/calls/${encodeURIComponent(callSid)}`,
-        { headers: { Authorization: `Bearer ${env.TELNYX_API_KEY}` } }
-      );
-      diagnosis.call_lookup = r.ok
-        ? await r.json()
-        : { status: 'ERROR', code: r.status, body: await r.text() };
-    } catch (e: any) {
-      diagnosis.call_lookup = { status: 'FETCH_ERROR', message: e.message };
+    const looksLikeCallSessionId = /^v\d+:/.test(callSid);
+    if (looksLikeCallSessionId) {
+      diagnosis.call_lookup = {
+        status: 'SKIPPED',
+        reason: 'call_sid appears to be a call_session_id (vN:...), not a call_control_id',
+      };
+    } else {
+      try {
+        const r = await fetch(
+          `https://api.telnyx.com/v2/calls/${encodeURIComponent(callSid)}`,
+          { headers: { Authorization: `Bearer ${env.TELNYX_API_KEY}` } }
+        );
+        diagnosis.call_lookup = r.ok
+          ? await r.json()
+          : { status: 'ERROR', code: r.status, body: await r.text() };
+      } catch (e: any) {
+        diagnosis.call_lookup = { status: 'FETCH_ERROR', message: e.message };
+      }
     }
   }
 
@@ -109,11 +117,14 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
   if (callSid && env?.TELNYX_API_KEY) {
     const callData: any = diagnosis.call_lookup;
-    const sessionId = callData?.data?.call_session_id;
+    const sessionId = /^v\d+:/.test(callSid)
+      ? callSid
+      : callData?.data?.call_session_id;
+
     if (sessionId) {
       try {
         const r = await fetch(
-          `https://api.telnyx.com/v2/call_events?filter[call_session_id]=${sessionId}&page[size]=20`,
+          `https://api.telnyx.com/v2/call_events?filter[call_session_id]=${encodeURIComponent(sessionId)}&page[size]=100`,
           { headers: { Authorization: `Bearer ${env.TELNYX_API_KEY}` } }
         );
         diagnosis.call_events = r.ok
