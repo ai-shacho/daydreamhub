@@ -39,7 +39,7 @@ if (db) {
       db.prepare("SELECT COUNT(*) as c FROM concierge_call_groups WHERE status = 'success'").first(),
       db.prepare("SELECT COUNT(*) as c FROM concierge_call_groups WHERE status = 'all_failed'").first(),
       db.prepare("SELECT COUNT(*) as c FROM concierge_call_groups WHERE refund_status = 'refunded'").first(),
-      db.prepare("SELECT COUNT(*) as c FROM concierge_call_groups WHERE payment_status = 'paid'").first(),
+      db.prepare("SELECT COUNT(*) as c FROM concierge_call_groups WHERE payment_status = 'paid' AND status = 'success' AND (refund_status IS NULL OR refund_status != 'refunded')").first(),
     ]);
     stats.total = totalRes?.c ?? 0;
     stats.calling = callingRes?.c ?? 0;
