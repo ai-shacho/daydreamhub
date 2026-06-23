@@ -289,6 +289,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   const eventType: string = event?.data?.event_type || '';
   const payload = event?.data?.payload || {};
   const callControlId: string = payload.call_control_id || '';
+  const callSessionId: string = payload.call_session_id || '';
+  const unifiedCallId: string = callSessionId || callControlId || '';
   const state = decodeState(payload.client_state);
 
   // Skip old-style concierge AI calls (handled by telnyx-ai-insights.ts)
@@ -488,7 +490,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       .run().catch((e: any) => console.error('[telnyx-voice] outreach lead update failed:', e));
   }
 
-  console.log(`[${eventType}] ctrl=${callControlId.slice(0, 16)} bid=${bookingId} lid=${logId} step=${state.step} phase=${state.phase}`);
+  console.log(`[${eventType}] ctrl=${callControlId.slice(0, 16)} sid=${callSessionId.slice(0, 16)} bid=${bookingId} lid=${logId} step=${state.step} phase=${state.phase}`);
 
   // Record every event in DB
   if (db && logId) {
@@ -501,9 +503,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     case 'call.initiated': {
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET telnyx_call_id=? WHERE id=?`)
-          .bind(callControlId, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
+          .bind(unifiedCallId, logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
         await db.prepare(`UPDATE outreach_call_attempts SET telnyx_call_id=?, updated_at=datetime('now') WHERE call_log_id=?`)
-          .bind(callControlId, logId).run().catch(() => {});
+          .bind(unifiedCallId, logId).run().catch(() => {});
       }
       break;
     }
@@ -517,7 +519,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const greeting = script.opening;
         if (db && logId) {
           await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
-            .bind(callControlId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
+            .bind(unifiedCallId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
         }
         await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest' }, greeting);
         break;
@@ -536,7 +538,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       if (db && logId) {
         await db.prepare(`UPDATE call_logs SET status='awaiting_response', telnyx_call_id=?, transcription=? WHERE id=?`)
-          .bind(callControlId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('DB err:', e));
+          .bind(unifiedCallId, `[Agent]: ${greeting}`, logId).run().catch(e => console.error('DB err:', e));
       }
 
       await gatherUsingSpeak({ ...state, step: 'ask_dayuse', booking_id: bookingId, call_log_id: logId }, greeting);

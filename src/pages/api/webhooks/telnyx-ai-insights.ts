@@ -405,7 +405,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response('Invalid JSON', { status: 400 });
   }
   const data = payload.data || payload;
-  const callSid = data.call_sid || data.call_control_id || data.call_id || '';
+  const callControlId = data.call_control_id || '';
+  const callSessionId = data.call_session_id || data.call_sid || '';
+  const callFallbackId = data.call_id || '';
+  const callSid = callSessionId || callControlId || callFallbackId || '';
+  const callIdCandidates = Array.from(new Set([callSid, callSessionId, callControlId, callFallbackId].filter(Boolean)));
+  const c1 = callIdCandidates[0] || null;
+  const c2 = callIdCandidates[1] || null;
+  const c3 = callIdCandidates[2] || null;
+  const c4 = callIdCandidates[3] || null;
   const summary = data.summary || data.ai_summary || '';
   const transcript = data.transcript || '';
   const duration = data.duration_seconds || data.duration || null;
@@ -416,9 +424,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     const conciergeCall = await db
       .prepare(
-        'SELECT id, session_id, call_group_id, consent_price, consent_date, consent_time, consent_onsite_payment FROM concierge_calls WHERE telnyx_call_id = ?'
+        `SELECT id, session_id, call_group_id, consent_price, consent_date, consent_time, consent_onsite_payment
+         FROM concierge_calls
+         WHERE telnyx_call_id IN (?1, ?2, ?3, ?4)
+         ORDER BY updated_at DESC
+         LIMIT 1`
       )
-      .bind(callSid)
+      .bind(c1, c2, c3, c4)
       .first();
 
     if (conciergeCall) {
@@ -549,8 +561,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     // Outreach call handling
     const call = await db
-      .prepare('SELECT id, target_id FROM outreach_calls WHERE telnyx_call_id = ?')
-      .bind(callSid)
+      .prepare(
+        `SELECT id, target_id
+         FROM outreach_calls
+         WHERE telnyx_call_id IN (?1, ?2, ?3, ?4)
+         ORDER BY id DESC
+         LIMIT 1`
+      )
+      .bind(c1, c2, c3, c4)
       .first();
     if (!call) {
       return new Response('OK', { status: 200 });

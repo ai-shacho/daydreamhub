@@ -629,7 +629,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
     }
 
     const resData: any = await response.json();
-    const telnyxCallId = resData.data?.call_control_id || resData.data?.call_session_id || "";
+    const telnyxCallId = resData.data?.call_session_id || resData.data?.call_control_id || "";
     await db.prepare(`UPDATE concierge_calls SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now') WHERE id = ?`).bind(telnyxCallId, callId).run();
 
     return { call_id: callId, status: "calling", message: `Calling ${params.hotel_name}...` };

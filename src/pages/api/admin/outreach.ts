@@ -470,7 +470,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         await db.prepare(`UPDATE call_logs SET status='failed', error_detail=? WHERE id=?`).bind(JSON.stringify(data), callLogId).run().catch(() => {});
         return new Response(JSON.stringify({ error: 'Telnyx error', details: data }), { status: res.status });
       }
-      const callSid = data?.data?.call_control_id || data?.data?.call_session_id || null;
+      const callSid = data?.data?.call_session_id || data?.data?.call_control_id || null;
       if (callLogId && callSid) {
         await db.prepare(`UPDATE call_logs SET telnyx_call_id=? WHERE id=?`).bind(callSid, callLogId).run();
       }
