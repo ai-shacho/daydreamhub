@@ -10,7 +10,7 @@ if (!admin) return Astro.redirect('/admin/login');
 ---
 
 <AdminLayout title="Sales Dialer" activeNav="outreach">
-  <div class="max-w-7xl mx-auto mt-6 px-4 space-y-6">
+  <div class="w-full max-w-[96rem] mx-auto mt-6 px-4 space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-xl font-bold text-slate-800">Sales Outreach Dialer</h1>
@@ -63,8 +63,7 @@ if (!admin) return Astro.redirect('/admin/login');
       ))}
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-      <div class="overflow-x-auto">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
         <table class="w-full text-sm min-w-[1300px]">
           <thead class="bg-slate-50 border-b border-slate-200">
             <tr>
@@ -83,7 +82,6 @@ if (!admin) return Astro.redirect('/admin/login');
             <tr><td colspan="9" class="text-center py-8 text-slate-400">Loading…</td></tr>
           </tbody>
         </table>
-      </div>
     </div>
   </div>
 
@@ -240,12 +238,15 @@ function renderVariantStats() {
 function badgesForLead(lead) {
   const status = String(lead.status || 'new');
   const flags = [];
-  if (status === 'interested' || status === 'appointment_set') flags.push('<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px]">アポ獲得</span>');
+
+  if (status === 'appointment_set') flags.push('<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px]">アポ獲得</span>');
+  if (status === 'interested') flags.push('<span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[11px]">興味あり</span>');
   if (status === 'contact_obtained') flags.push('<span class="px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-700 text-[11px]">連絡先獲得</span>');
-  if (lead.requested_materials) flags.push('<span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[11px]">資料希望</span>');
+  if (lead.requested_materials) flags.push('<span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[11px]">資料請求</span>');
   if (lead.requested_explanation) flags.push('<span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[11px]">説明希望</span>');
   if (lead.needs_recall) flags.push('<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px]">要再架電</span>');
   if (status === 'not_interested' || status === 'declined' || lead.do_not_call) flags.push('<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[11px]">再架電除外</span>');
+
   if (!flags.length) flags.push('<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[11px]">-</span>');
   return flags.join(' ');
 }

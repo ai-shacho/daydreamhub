@@ -223,7 +223,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
   }
 
-  const { action } = body;
+  let action = String(body?.action || '');
 
   if (action === 'upsert_variant') {
     const code = String(body.code || '').trim().toUpperCase();
@@ -410,6 +410,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       });
     }
 
+    action = 'call_lead';
     body.action = 'call_lead';
     body.lead_id = nextLead.id;
   }
