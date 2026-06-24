@@ -141,14 +141,34 @@ const STATUS_COLORS = {
   voicemail: 'bg-violet-100 text-violet-700',
 };
 
+const LEAD_STATUS_OPTIONS = [
+  'new',
+  'calling',
+  'interested',
+  'appointment_set',
+  'contact_obtained',
+  'not_interested',
+  'declined',
+  'no_answer',
+  'voicemail',
+];
+
 let currentFilter = 'all';
 let currentListId = 0;
 let lists = [];
+
+function normalizeListId(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
 let leads = [];
 let variants = [];
 let variantStats = [];
 let autoCalling = false;
-let autoTimer = null;
+let autoDialLoopActive = false;
+let callActionLocked = false;
+let callStatusPollTimer = null;
+const AUTO_DIAL_NEXT_DELAY_MS = 4000;
 
 async function api(body) {
   const r = await fetch('/api/admin/outreach', {
@@ -160,25 +180,66 @@ async function api(body) {
   return r.json();
 }
 
+function statusLabel(status) {
+  return String(status || 'new').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function setCallActionLock(locked) {
+  callActionLocked = locked;
+  const callNext = document.getElementById('btn-call-next');
+  if (callNext) callNext.disabled = !!locked;
+
+  const startBtn = document.getElementById('btn-start-auto');
+  if (startBtn && autoCalling) startBtn.disabled = true;
+
+  document.querySelectorAll('.btn-call').forEach((btn) => {
+    btn.disabled = !!locked;
+    btn.classList.toggle('opacity-60', !!locked);
+    btn.classList.toggle('cursor-not-allowed', !!locked);
+  });
+}
+
 async function loadDashboard() {
-  const params = new URLSearchParams();
-  if (currentFilter !== 'all') params.set('status', currentFilter);
-  if (currentListId) params.set('list_id', String(currentListId));
-  const r = await fetch(`/api/admin/outreach?${params.toString()}`, { credentials: 'include' });
-  const data = await r.json();
-  lists = data.lists || [];
-  leads = data.leads || [];
-  variants = data.variants || [];
-  variantStats = data.variant_stats || [];
-  renderLists();
-  renderVariantStats();
-  renderTable();
+  const statusEl = document.getElementById('dialer-status');
+
+  try {
+    currentListId = normalizeListId(currentListId);
+
+    const params = new URLSearchParams();
+    if (currentFilter !== 'all') params.set('status', currentFilter);
+    if (currentListId) params.set('list_id', String(currentListId));
+
+    const r = await fetch(`/api/admin/outreach?${params.toString()}`, { credentials: 'include' });
+    const data = await r.json();
+
+    lists = Array.isArray(data.lists) ? data.lists : [];
+    leads = Array.isArray(data.leads) ? data.leads : [];
+    variants = Array.isArray(data.variants) ? data.variants : [];
+    variantStats = Array.isArray(data.variant_stats) ? data.variant_stats : [];
+
+    renderLists();
+    renderVariantStats();
+    renderTable();
+  } catch (err) {
+    console.error('Failed to load outreach dashboard:', err);
+    lists = [];
+    leads = [];
+    variants = [];
+    variantStats = [];
+    renderLists();
+    renderVariantStats();
+    renderTable();
+    if (statusEl) statusEl.textContent = 'Error: ダッシュボードの読み込みに失敗しました。コンソールを確認してください。';
+  }
 }
 
 function renderLists() {
   const wrap = document.getElementById('list-cards');
   const label = document.getElementById('active-list-label');
-  const active = lists.find((l) => l.id === currentListId);
+  if (!wrap || !label) return;
+
+  currentListId = normalizeListId(currentListId);
+  const active = lists.find((l) => normalizeListId(l?.id) === currentListId);
   label.textContent = active ? active.name : 'All Leads';
 
   if (!lists.length) {
@@ -192,27 +253,21 @@ function renderLists() {
       <p class="text-xs text-slate-500 mt-1">全件表示</p>
     </button>`,
     ...lists.map((l) => {
+      const listId = normalizeListId(l?.id);
       const total = Number(l.total_rows || 0);
       const done = Number(l.success_count || 0) + Number(l.rejected_count || 0);
       const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
-      return `<button class="list-card text-left border rounded-xl p-3 ${currentListId === l.id ? 'border-teal-500 bg-teal-50' : 'border-slate-200'}" data-id="${l.id}">
+      return `<button class="list-card text-left border rounded-xl p-3 ${currentListId === listId ? 'border-teal-500 bg-teal-50' : 'border-slate-200'}" data-id="${listId}">
         <div class="flex items-center justify-between gap-2">
           <div class="font-medium text-slate-700 truncate">${esc(l.name)}</div>
           <span class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">${esc(l.status || 'active')}</span>
         </div>
-        <p class="text-xs text-slate-500 mt-1">${Number(l.imported_rows || 0)} imported / ${Number(l.duplicate_rows || 0)} dup</p>
+        <p class="text-xs text-slate-500 mt-1">${Number(l.imported_rows || 0)} imported / ${Number(l.duplicate_rows || 0)} dup / ${Number(l.invalid_rows || 0)} invalid</p>
         <div class="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden"><div class="h-full bg-teal-500" style="width:${pct}%"></div></div>
         <div class="mt-2 text-[11px] text-slate-500">Done ${done}/${total} ・ Calling ${Number(l.calling_count || 0)} ・ Pending ${Number(l.pending_count || 0)}</div>
       </button>`;
     }),
   ].join('');
-
-  wrap.querySelectorAll('.list-card').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      currentListId = Number(e.currentTarget.dataset.id || '0');
-      await loadDashboard();
-    });
-  });
 }
 
 function renderVariantStats() {
@@ -238,6 +293,10 @@ function renderVariantStats() {
 function badgesForLead(lead) {
   const status = String(lead.status || 'new');
   const flags = [];
+
+  if (lead.list_member_status === 'duplicate') {
+    flags.push('<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[11px]">リスト内 duplicate</span>');
+  }
 
   if (status === 'appointment_set') flags.push('<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[11px]">アポ獲得</span>');
   if (status === 'interested') flags.push('<span class="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[11px]">興味あり</span>');
@@ -277,11 +336,14 @@ function renderTable() {
   tbody.innerHTML = leads
     .map((l) => {
       const color = STATUS_COLORS[l.status] || 'bg-slate-100 text-slate-600';
-      const statusLabel = String(l.status || 'new').replace('_', ' ');
+      const currentStatus = LEAD_STATUS_OPTIONS.includes(String(l.status || '')) ? String(l.status) : 'new';
+      const statusSelect = `<select class="lead-status-select border border-slate-300 rounded px-2 py-1 text-xs bg-white ${color}" data-id="${l.id}" ${callActionLocked ? 'disabled' : ''}>
+        ${LEAD_STATUS_OPTIONS.map((s) => `<option value="${s}" ${s === currentStatus ? 'selected' : ''}>${statusLabel(s)}</option>`).join('')}
+      </select>`;
       return `<tr class="hover:bg-slate-50" data-id="${l.id}">
         <td class="px-4 py-3 font-medium text-slate-800">${esc(l.hotel_name)}</td>
         <td class="px-4 py-3 text-slate-600 font-mono text-xs">${esc(l.phone || '')}</td>
-        <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${color}">${statusLabel}</span></td>
+        <td class="px-4 py-3">${statusSelect}</td>
         <td class="px-4 py-3">${badgesForLead(l)}</td>
         <td class="px-4 py-3 text-xs text-slate-600">
           <div>JST: ${formatCallDateTime(l.last_call_started_at_jst)}</div>
@@ -308,9 +370,34 @@ function renderTable() {
     .join('');
 
   tbody.querySelectorAll('.btn-call').forEach((btn) => btn.addEventListener('click', async (e) => {
+    if (callActionLocked) return;
+    setCallActionLock(true);
+    try {
+      const id = Number(e.currentTarget.dataset.id);
+      const res = await api({ action: 'call_lead', lead_id: id });
+      if (res.error) {
+        alert(res.error);
+        return;
+      }
+      document.getElementById('dialer-status').textContent = `Calling lead #${res.lead_id || id}...`;
+      await loadDashboard();
+      await waitUntilNoCalling();
+      document.getElementById('dialer-status').textContent = 'Call ended';
+      await loadDashboard();
+    } finally {
+      setCallActionLock(false);
+    }
+  }));
+
+  tbody.querySelectorAll('.lead-status-select').forEach((select) => select.addEventListener('change', async (e) => {
     const id = Number(e.currentTarget.dataset.id);
-    const res = await api({ action: 'call_lead', lead_id: id });
-    if (res.error) alert(res.error);
+    const status = e.currentTarget.value;
+    const res = await api({ action: 'update_lead', lead_id: id, status });
+    if (res.error) {
+      alert(res.error);
+      await loadDashboard();
+      return;
+    }
     await loadDashboard();
   }));
 
@@ -337,6 +424,8 @@ function renderTable() {
     if (data.error) return alert(data.error);
     openDrawer(data.lead, data.call_log);
   }));
+
+  setCallActionLock(callActionLocked);
 }
 
 function openDrawer(lead, callLog) {
@@ -388,17 +477,103 @@ document.querySelectorAll('.filter-tab').forEach((tab) => {
   });
 });
 
-document.getElementById('btn-call-next').addEventListener('click', async () => {
-  const res = await api({ action: 'call_next', list_id: currentListId || null });
-  const statusEl = document.getElementById('dialer-status');
-  if (res.done) {
-    statusEl.textContent = '完了: コール可能なホテルがありません';
-  } else if (res.error) {
-    statusEl.textContent = `Error: ${res.error}`;
-  } else {
-    statusEl.textContent = `Calling lead #${res.lead_id || '-'}...`;
+document.getElementById('list-cards')?.addEventListener('click', async (e) => {
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+
+  const card = target.closest('.list-card');
+  if (!(card instanceof HTMLElement)) return;
+
+  try {
+    const nextListId = normalizeListId(card.dataset.id);
+    currentListId = nextListId;
+    await loadDashboard();
+  } catch (err) {
+    console.error('Failed to switch list card:', err);
+    const statusEl = document.getElementById('dialer-status');
+    if (statusEl) statusEl.textContent = 'Error: リスト切替に失敗しました。コンソールを確認してください。';
   }
-  await loadDashboard();
+});
+
+async function triggerCallNext(manual = false) {
+  if (callActionLocked) return;
+  setCallActionLock(true);
+  const statusEl = document.getElementById('dialer-status');
+  let callPlaced = false;
+
+  try {
+    const res = await api({ action: 'call_next', list_id: currentListId || null });
+    if (res.done) {
+      statusEl.textContent = manual ? '完了: コール可能なホテルがありません' : 'Auto dial complete';
+      if (autoCalling) stopAuto();
+    } else if (res.error) {
+      statusEl.textContent = manual ? `Error: ${res.error}` : `Auto dial error: ${res.error}`;
+      if (autoCalling) stopAuto();
+    } else if (res.skipped) {
+      statusEl.textContent = `Skipped (outside local window). Trying next...`;
+      if (autoCalling) {
+        setCallActionLock(false);
+        await loadDashboard();
+        await runAutoDialLoop();
+        return;
+      }
+    } else {
+      callPlaced = true;
+      statusEl.textContent = `Calling lead #${res.lead_id || '-'}...`;
+      if (autoCalling) statusEl.textContent = `Auto calling lead #${res.lead_id || '-'}... waiting for hangup`;
+    }
+
+    await loadDashboard();
+
+    if (manual && callPlaced) {
+      await waitUntilNoCalling();
+      statusEl.textContent = 'Call ended';
+      await loadDashboard();
+    }
+  } finally {
+    if (!autoCalling) setCallActionLock(false);
+  }
+}
+
+async function waitUntilNoCalling({ stopWhenAutoOff = false } = {}) {
+  while (true) {
+    if (stopWhenAutoOff && !autoCalling) return false;
+    const res = await api({ action: 'get_calling_status', list_id: currentListId || null });
+    const count = Number(res.calling_count || 0);
+    if (count <= 0) return true;
+    await new Promise((resolve) => {
+      callStatusPollTimer = window.setTimeout(resolve, 1500);
+    });
+  }
+}
+
+async function runAutoDialLoop() {
+  if (autoDialLoopActive) return;
+  autoDialLoopActive = true;
+  const statusEl = document.getElementById('dialer-status');
+
+  try {
+    while (autoCalling) {
+      await triggerCallNext(false);
+      if (!autoCalling) break;
+      const ended = await waitUntilNoCalling({ stopWhenAutoOff: true });
+      if (!ended) break;
+      statusEl.textContent = `Call ended. Waiting ${Math.round(AUTO_DIAL_NEXT_DELAY_MS / 1000)}s before next dial...`;
+      await loadDashboard();
+      await new Promise((resolve) => {
+        callStatusPollTimer = window.setTimeout(resolve, AUTO_DIAL_NEXT_DELAY_MS);
+      });
+      if (!autoCalling) break;
+      statusEl.textContent = 'Dialing next lead...';
+    }
+  } finally {
+    autoDialLoopActive = false;
+    if (!autoCalling) setCallActionLock(false);
+  }
+}
+
+document.getElementById('btn-call-next').addEventListener('click', async () => {
+  await triggerCallNext(true);
 });
 
 document.getElementById('btn-start-auto').addEventListener('click', async () => {
@@ -406,30 +581,14 @@ document.getElementById('btn-start-auto').addEventListener('click', async () => 
   autoCalling = true;
   document.getElementById('btn-start-auto').disabled = true;
   document.getElementById('btn-stop-auto').disabled = false;
-  const statusEl = document.getElementById('dialer-status');
-  statusEl.textContent = 'Auto dial started (interval 20s)';
-
-  const tick = async () => {
-    if (!autoCalling) return;
-    const res = await api({ action: 'call_next', list_id: currentListId || null });
-    if (res.done || res.error) {
-      statusEl.textContent = res.done ? 'Auto dial complete' : `Auto dial error: ${res.error}`;
-      stopAuto();
-      await loadDashboard();
-      return;
-    }
-    statusEl.textContent = `Auto calling lead #${res.lead_id || '-'} ... next in 20s`;
-    await loadDashboard();
-    autoTimer = setTimeout(tick, 20000);
-  };
-
-  tick();
+  document.getElementById('dialer-status').textContent = 'Auto dial started (call-end driven)';
+  await runAutoDialLoop();
 });
 
 function stopAuto() {
   autoCalling = false;
-  if (autoTimer) clearTimeout(autoTimer);
-  autoTimer = null;
+  if (callStatusPollTimer) clearTimeout(callStatusPollTimer);
+  callStatusPollTimer = null;
   document.getElementById('btn-start-auto').disabled = false;
   document.getElementById('btn-stop-auto').disabled = true;
 }
@@ -437,6 +596,7 @@ function stopAuto() {
 document.getElementById('btn-stop-auto').addEventListener('click', () => {
   stopAuto();
   document.getElementById('dialer-status').textContent = 'Auto dial stopped';
+  setCallActionLock(false);
 });
 
 document.getElementById('btn-add').addEventListener('click', () => {
@@ -485,12 +645,31 @@ document.getElementById('btn-import-confirm').addEventListener('click', async ()
   if (res.error) {
     msg.textContent = `Error: ${res.error}`;
   } else {
-    msg.textContent = `Imported ${res.imported} leads (${res.skipped} duplicate/invalid).`;
+    const dup = Number(res.duplicate_rows ?? 0);
+    const invalid = Number(res.invalid_rows ?? 0);
+    msg.textContent = `Imported ${Number(res.imported || 0)} leads (${dup} dup / ${invalid} invalid).`;
+
     document.getElementById('csv-input').value = '';
     document.getElementById('import-list-name').value = '';
     if (document.getElementById('csv-file')) document.getElementById('csv-file').value = '';
-    if (res.list_id) currentListId = Number(res.list_id);
+
+    if (res.list_id !== undefined && res.list_id !== null) currentListId = normalizeListId(res.list_id);
+
+    // Ensure uploaded valid rows are immediately visible in the table.
+    currentFilter = 'all';
+    document.querySelectorAll('.filter-tab').forEach((t) => {
+      const isAll = t.dataset.status === 'all';
+      t.classList.toggle('border-teal-500', isAll);
+      t.classList.toggle('text-teal-700', isAll);
+      t.classList.toggle('border-transparent', !isAll);
+      t.classList.toggle('text-slate-500', !isAll);
+    });
+
     await loadDashboard();
+
+    // Auto-close modal and keep selected uploaded list as active.
+    document.getElementById('modal-import').classList.add('hidden');
+    msg.classList.add('hidden');
   }
 });
 

@@ -9,6 +9,36 @@ const normalizePhone = (value: string) =>
 
 const normalizeHotelName = (value: string) => (value || '').trim().toLowerCase();
 
+const VALID_LEAD_STATUSES = new Set([
+  'new',
+  'calling',
+  'interested',
+  'appointment_set',
+  'contact_obtained',
+  'not_interested',
+  'declined',
+  'no_answer',
+  'voicemail',
+]);
+
+const LEGACY_STATUS_MAP: Record<string, string> = {
+  'not interested': 'not_interested',
+  notinterested: 'not_interested',
+  appointment: 'appointment_set',
+  'appointment set': 'appointment_set',
+  'contact obtained': 'contact_obtained',
+  contacted: 'contact_obtained',
+};
+
+const TEST_BYPASS_DEDUPE_ON_IMPORT = false;
+
+function normalizeLeadStatus(raw: any): string | null {
+  const input = String(raw ?? '').trim().toLowerCase();
+  if (!input) return null;
+  const mapped = LEGACY_STATUS_MAP[input] || input;
+  return VALID_LEAD_STATUSES.has(mapped) ? mapped : null;
+}
+
 const COUNTRY_TIMEZONE_MAP: Record<string, string> = {
   japan: 'Asia/Tokyo',
   usa: 'America/New_York',
@@ -129,7 +159,14 @@ export const GET: APIRoute = async ({ request, locals, url }) => {
 
   const listExists = await db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='outreach_lists'`).first();
 
+  const hasListTables = !!listExists;
+  const listSelect = hasListTables ? `m.source_row_no,
+    m.status AS list_member_status,` : `NULL AS source_row_no,
+    NULL AS list_member_status,`;
+  const listJoin = hasListTables ? `LEFT JOIN outreach_list_members m ON m.lead_id = l.id` : '';
+
   let leadsQuery = `SELECT l.*,
+    ${listSelect}
     a.call_started_at_jst AS last_call_started_at_jst,
     a.call_started_at_local AS last_call_started_at_local,
     a.lead_timezone AS last_call_lead_timezone,
@@ -146,20 +183,31 @@ export const GET: APIRoute = async ({ request, locals, url }) => {
       WHERE oa.lead_id = l.id
       ORDER BY oa.created_at DESC, oa.id DESC
       LIMIT 1
-    )`;
+    )
+    ${listJoin}`;
   const binds: any[] = [];
+  const where: string[] = [];
 
-  if (listExists && listId > 0) {
-    leadsQuery += ` JOIN outreach_list_members m ON m.lead_id = l.id AND m.list_id = ?`;
+  if (hasListTables && listId > 0) {
+    where.push(`m.list_id = ?`);
+    // Table should show only valid/imported rows for the selected list.
+    // Duplicates/invalid rows are excluded from list members with status='active'.
+    where.push(`m.status = 'active'`);
     binds.push(listId);
   }
 
   if (status) {
-    leadsQuery += ` WHERE l.status = ?`;
+    where.push(`l.status = ?`);
     binds.push(status);
   }
 
-  leadsQuery += ` ORDER BY l.updated_at DESC`;
+  if (where.length) {
+    leadsQuery += ` WHERE ${where.join(' AND ')}`;
+  }
+
+  leadsQuery += hasListTables && listId > 0
+    ? ` ORDER BY COALESCE(m.source_row_no, 999999999) ASC, l.id ASC`
+    : ` ORDER BY l.updated_at DESC`;
 
   const leadsResult = await db.prepare(leadsQuery).bind(...binds).all();
 
@@ -309,6 +357,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     let imported = 0;
     let duplicateRows = 0;
+    let invalidRows = 0;
 
     for (let i = 0; i < rows.length; i++) {
       const cols = rows[i];
@@ -318,24 +367,41 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const email = idxEmail >= 0 ? cols[idxEmail] : cols[3];
       const timezone = idxTimezone >= 0 ? cols[idxTimezone] : cols[4];
 
-      if (!hotel_name || !phone) {
-        duplicateRows++;
+      const hotelNameTrimmed = String(hotel_name || '').trim();
+      const phoneTrimmed = String(phone || '').trim();
+      if (!hotelNameTrimmed || !phoneTrimmed) {
+        invalidRows++;
         continue;
       }
 
-      const phone_norm = normalizePhone(phone);
-      const hotel_name_norm = normalizeHotelName(hotel_name);
+      // Basic phone format validation: keep only reasonably callable rows.
+      const digitsOnly = phoneTrimmed.replace(/\D/g, '');
+      if (digitsOnly.length < 6) {
+        invalidRows++;
+        continue;
+      }
 
-      const existing: any = await db.prepare(`SELECT id FROM outreach_leads WHERE phone_norm = ? OR hotel_name_norm = ? LIMIT 1`).bind(phone_norm, hotel_name_norm).first();
+      const phone_norm = normalizePhone(phoneTrimmed);
+      const hotel_name_norm = normalizeHotelName(hotelNameTrimmed);
+      const bypassDedupe = TEST_BYPASS_DEDUPE_ON_IMPORT;
+
+      const existing: any = bypassDedupe
+        ? null
+        : await db.prepare(`SELECT id FROM outreach_leads WHERE phone_norm = ? OR hotel_name_norm = ? LIMIT 1`).bind(phone_norm, hotel_name_norm).first();
+
       const tz = String(timezone || '').trim() || estimateTimezone(country || '');
       const tzSource = String(timezone || '').trim() ? 'csv' : (country ? 'country_guess' : 'unknown');
 
       let leadId = existing?.id;
       if (!leadId) {
+        const phoneNormForInsert = bypassDedupe && phone_norm
+          ? `${phone_norm}__import_${Date.now()}_${i}`
+          : phone_norm;
+
         await db.prepare(
           `INSERT INTO outreach_leads (hotel_name, phone, phone_norm, hotel_name_norm, country, email, timezone, timezone_source, first_list_id, last_list_id)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(hotel_name, phone, phone_norm, hotel_name_norm, country || '', email || '', tz, tzSource, listId, listId).run();
+        ).bind(hotelNameTrimmed, phoneTrimmed, phoneNormForInsert, hotel_name_norm, country || '', email || '', tz, tzSource, listId, listId).run();
         const row: any = await db.prepare(`SELECT last_insert_rowid() as id`).first();
         leadId = row?.id;
         imported++;
@@ -352,16 +418,31 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     if (listId) {
-      await db.prepare(
-        `UPDATE outreach_lists
-         SET imported_rows = ?, duplicate_rows = ?,
-             status = CASE WHEN ? = 0 THEN 'duplicate_only' ELSE status END,
-             updated_at = datetime('now')
-         WHERE id = ?`
-      ).bind(imported, duplicateRows, imported, listId).run().catch(() => {});
+      try {
+        await db.prepare(
+          `UPDATE outreach_lists
+           SET imported_rows = ?, duplicate_rows = ?, invalid_rows = ?,
+               status = CASE
+                 WHEN ? = 0 AND ? > 0 AND ? = 0 THEN 'invalid_only'
+                 WHEN ? = 0 THEN 'duplicate_only'
+                 ELSE status
+               END,
+               updated_at = datetime('now')
+           WHERE id = ?`
+        ).bind(imported, duplicateRows, invalidRows, imported, invalidRows, duplicateRows, imported, listId).run();
+      } catch {
+        // Backward compatibility for environments where invalid_rows migration is not applied yet.
+        await db.prepare(
+          `UPDATE outreach_lists
+           SET imported_rows = ?, duplicate_rows = ?,
+               status = CASE WHEN ? = 0 THEN 'duplicate_only' ELSE status END,
+               updated_at = datetime('now')
+           WHERE id = ?`
+        ).bind(imported, duplicateRows, imported, listId).run().catch(() => {});
+      }
     }
 
-    return new Response(JSON.stringify({ success: true, imported, skipped: duplicateRows, list_id: listId }), {
+    return new Response(JSON.stringify({ success: true, imported, duplicate_rows: duplicateRows, invalid_rows: invalidRows, skipped: duplicateRows + invalidRows, list_id: listId }), {
       headers: { 'Content-Type': 'application/json' },
     });
   }
@@ -369,7 +450,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (action === 'call_next') {
     const listId = Number(body.list_id || 0);
 
-    const listJoin = listId > 0 ? `JOIN outreach_list_members m ON m.lead_id = l.id AND m.list_id = ${listId}` : '';
+    const listJoin = listId > 0 ? `JOIN outreach_list_members m ON m.lead_id = l.id AND m.list_id = ${listId} AND m.status = 'active'` : '';
     const baseWhere = `l.do_not_call = 0 AND l.status IN ('new','no_answer','voicemail') AND (l.next_callable_at IS NULL OR l.next_callable_at <= datetime('now'))`;
 
     // 1) First pass: never called leads first
@@ -509,9 +590,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (action === 'update_lead') {
     const { lead_id, notes, status } = body;
     if (!lead_id) return new Response(JSON.stringify({ error: 'lead_id is required' }), { status: 400 });
-    const nextStatus = String(status || '').trim();
-    const doNotCall = ['declined', 'not_interested'].includes(nextStatus) ? 1 : null;
-    const needsRecall = ['no_answer', 'voicemail'].includes(nextStatus) ? 1 : (['declined', 'not_interested', 'interested', 'appointment_set', 'contact_obtained'].includes(nextStatus) ? 0 : null);
+
+    const normalizedStatus = status === undefined || status === null ? null : normalizeLeadStatus(status);
+    if (status !== undefined && status !== null && !normalizedStatus) {
+      return new Response(JSON.stringify({ error: 'Invalid status' }), { status: 400 });
+    }
+
+    const doNotCall = normalizedStatus && ['declined', 'not_interested'].includes(normalizedStatus) ? 1 : null;
+    const needsRecall = normalizedStatus
+      ? (['no_answer', 'voicemail'].includes(normalizedStatus)
+        ? 1
+        : (['declined', 'not_interested', 'interested', 'appointment_set', 'contact_obtained'].includes(normalizedStatus) ? 0 : null))
+      : null;
 
     await db.prepare(`UPDATE outreach_leads
                 SET notes=COALESCE(?,notes),
@@ -520,9 +610,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
                     needs_recall=COALESCE(?, needs_recall),
                     updated_at=datetime('now')
                 WHERE id=?`)
-      .bind(notes ?? null, status ?? null, doNotCall, needsRecall, lead_id)
+      .bind(notes ?? null, normalizedStatus ?? null, doNotCall, needsRecall, lead_id)
       .run();
-    return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: true, status: normalizedStatus }), { headers: { 'Content-Type': 'application/json' } });
+  }
+
+  if (action === 'get_calling_status') {
+    const listId = Number(body.list_id || 0);
+    const listJoin = listId > 0 ? `JOIN outreach_list_members m ON m.lead_id = l.id AND m.list_id = ? AND m.status = 'active'` : '';
+    const query = `SELECT COUNT(1) AS calling_count, MAX(updated_at) AS latest_update
+      FROM outreach_leads l
+      ${listJoin}
+      WHERE l.status = 'calling'`;
+    const row: any = listId > 0
+      ? await db.prepare(query).bind(listId).first()
+      : await db.prepare(query).first();
+    return new Response(JSON.stringify({ success: true, calling_count: Number(row?.calling_count || 0), latest_update: row?.latest_update || null }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
   if (action === 'get_lead_detail') {
