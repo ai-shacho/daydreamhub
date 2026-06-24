@@ -30,7 +30,7 @@ const LEGACY_STATUS_MAP: Record<string, string> = {
   contacted: 'contact_obtained',
 };
 
-const TEST_BYPASS_DEDUPE_ON_IMPORT = false;
+const TEST_BYPASS_DEDUPE_ON_IMPORT = true;
 
 function normalizeLeadStatus(raw: any): string | null {
   const input = String(raw ?? '').trim().toLowerCase();
