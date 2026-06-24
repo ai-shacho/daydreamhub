@@ -485,8 +485,9 @@ document.getElementById('list-cards')?.addEventListener('click', async (e) => {
 });
 
 async function triggerCallNext(manual = false) {
-  if (callActionLocked) return;
-  setCallActionLock(true);
+  const isManual = !!manual;
+  if (isManual && callActionLocked) return;
+  if (isManual) setCallActionLock(true);
   const statusEl = document.getElementById('dialer-status');
   let callPlaced = false;
 
@@ -520,7 +521,7 @@ async function triggerCallNext(manual = false) {
       await loadDashboard();
     }
   } finally {
-    if (!autoCalling) setCallActionLock(false);
+    if (isManual || !autoCalling) setCallActionLock(false);
   }
 }
 
