@@ -358,9 +358,6 @@ function renderTable() {
         <td class="px-4 py-3">
           <div class="flex gap-1 justify-end flex-wrap">
             <button class="btn-call px-2 py-1 bg-teal-600 text-white text-xs rounded hover:bg-teal-700" data-id="${l.id}">Call</button>
-            <button class="btn-flag px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded hover:bg-emerald-100" data-id="${l.id}" data-status="appointment_set">アポ</button>
-            <button class="btn-flag px-2 py-1 bg-cyan-50 text-cyan-700 text-xs rounded hover:bg-cyan-100" data-id="${l.id}" data-status="contact_obtained">連絡先</button>
-            <button class="btn-flag px-2 py-1 bg-rose-50 text-rose-700 text-xs rounded hover:bg-rose-100" data-id="${l.id}" data-status="declined">お断り</button>
             <button class="btn-note px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded hover:bg-slate-200" data-id="${l.id}" data-notes="${esc(l.notes || '')}">Note</button>
             <button class="btn-detail px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded hover:bg-indigo-200" data-id="${l.id}">Detail</button>
           </div>
@@ -398,14 +395,6 @@ function renderTable() {
       await loadDashboard();
       return;
     }
-    await loadDashboard();
-  }));
-
-  tbody.querySelectorAll('.btn-flag').forEach((btn) => btn.addEventListener('click', async (e) => {
-    const id = Number(e.currentTarget.dataset.id);
-    const status = e.currentTarget.dataset.status;
-    const res = await api({ action: 'update_lead', lead_id: id, status });
-    if (res.error) alert(res.error);
     await loadDashboard();
   }));
 
