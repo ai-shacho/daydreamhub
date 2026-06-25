@@ -2,15 +2,30 @@ import type { APIRoute } from 'astro';
 import { sendConciergeResultEmail, type ConciergeResultEmailType } from '../../../lib/email';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
-async function telnyxCmd(apiKey: string, callControlId: string, cmd: string, body: any = {}) {
-  const res = await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/${cmd}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  console.log(`[${cmd}] ${res.status} ${text.slice(0, 150)}`);
-  return res.ok;
+async function telnyxCmd(apiKey: string, callControlId: string, cmd: string, body: any = {}, maxRetries = 2): Promise<boolean> {
+  let lastError = '';
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/${cmd}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const text = await res.text();
+      const reqPreview = JSON.stringify(body || {}).slice(0, 220);
+      console.log(`[telnyxCmd] cmd=${cmd} attempt=${attempt + 1} status=${res.status} req=${reqPreview} res=${text.slice(0, 220)}`);
+      if (res.ok) return true;
+
+      lastError = `status=${res.status} body=${text.slice(0, 300)}`;
+      if (!(res.status >= 500 || res.status === 429 || res.status === 408)) break;
+    } catch (e: any) {
+      lastError = e?.message || 'fetch_failed';
+      console.error(`[telnyxCmd] cmd=${cmd} attempt=${attempt + 1} error=${lastError}`);
+    }
+    if (attempt < maxRetries) await sleep(300 * (attempt + 1));
+  }
+  console.error(`[telnyxCmd] cmd=${cmd} failed ctrl=${(callControlId || '').slice(0, 20)} err=${lastError}`);
+  return false;
 }
 
 function encodeState(obj: any): string {
@@ -448,25 +463,50 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     }
   }
 
-  // Helper (Task #52): 案内読み上げ＋入力収集を一体化（バージイン対応）。
-  // gather_using_speak は再生中でもDTMF押下を受け付け、押下で即 gather.ended になる＝早押し取りこぼしを防止。
-  async function gatherUsingSpeak(stateObj: any, payload: string, isPriceStep = false) {
-    const params: any = {
-      payload,
-      voice: 'Polly.Joanna',
-      language: 'en-US',
-      input: ['dtmf', 'speech'],
-      minimum_digits: 1,
+  function buildGatherParams(stateObj: any, isPriceStep = false) {
+    const gatherParams: any = {
       maximum_digits: isPriceStep ? 6 : 1,
+      minimum_digits: 1,
       timeout_millis: isPriceStep ? 60000 : 45000,
       inter_digit_timeout_millis: isPriceStep ? 7000 : 6000,
       speech_timeout: 'auto',
       speech_end_timeout: 3200,
+      input: ['speech', 'dtmf'],
+      language: 'en-US',
       profanity_filter: false,
-      client_state: encodeState(stateObj),
+      client_state: encodeState({ ...stateObj, booking_id: bookingId, call_log_id: logId }),
     };
-    if (isPriceStep) params.terminating_digit = '#';
-    return telnyxCmd(apiKey, callControlId, 'gather_using_speak', params);
+    if (isPriceStep) gatherParams.terminating_digit = '#';
+    return gatherParams;
+  }
+
+  async function safeHangup(reason: string) {
+    const ok = await telnyxCmd(apiKey, callControlId, 'hangup', {});
+    if (!ok) console.error(`[telnyx-voice] hangup failed reason=${reason} ctrl=${(callControlId || '').slice(0, 16)}`);
+  }
+
+  // Telnyx推奨フロー: speak -> call.speak.ended -> gather
+  async function gatherUsingSpeak(stateObj: any, payload: string, isPriceStep = false) {
+    const nextState = {
+      ...stateObj,
+      booking_id: bookingId,
+      call_log_id: logId,
+      force_gather_after_speak: true,
+      gather_is_price_step: !!isPriceStep,
+    };
+    const okSpeak = await telnyxCmd(apiKey, callControlId, 'speak', {
+      payload,
+      voice: 'Polly.Joanna',
+      language: 'en-US',
+      client_state: encodeState(nextState),
+    });
+
+    if (okSpeak) return true;
+
+    // speak失敗時のフォールバック: 即gatherを試み、失敗時は安全に切断
+    const okGatherFallback = await telnyxCmd(apiKey, callControlId, 'gather', buildGatherParams(nextState, isPriceStep));
+    if (!okGatherFallback) await safeHangup('speak_and_gather_failed');
+    return okGatherFallback;
   }
 
   async function setOutreachAttemptOutcome(outcome: string, rawReason = '') {
@@ -491,6 +531,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   }
 
   console.log(`[${eventType}] ctrl=${callControlId.slice(0, 16)} sid=${callSessionId.slice(0, 16)} bid=${bookingId} lid=${logId} step=${state.step} phase=${state.phase}`);
+  const payloadKeys = Object.keys(payload || {});
+  console.log(`[telnyx-voice] payload keys(${eventType}): ${payloadKeys.slice(0, 40).join(',')}`);
 
   // Record every event in DB
   if (db && logId) {
@@ -548,31 +590,18 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     case 'call.speak.ended': {
       const phase = state.phase || '';
       if (phase === 'ending') {
-        await telnyxCmd(apiKey, callControlId, 'hangup', {});
+        await safeHangup('ending_phase');
         break;
       }
 
-      // gather_using_speak already enters listening mode, so avoid duplicate gather start.
-      // Keep a guarded fallback only for legacy/plain speak flows that explicitly request it.
       if (state?.force_gather_after_speak) {
-        const isPriceStep = state.step === 'ask_price' || state.step === 'confirm_booking';
-        const gatherParams: any = {
-          maximum_digits: isPriceStep ? 6 : 1,
-          minimum_digits: 1,
-          timeout_millis: isPriceStep ? 60000 : 45000,
-          inter_digit_timeout_millis: isPriceStep ? 7000 : 6000,
-          speech_timeout: 'auto',
-          speech_end_timeout: 3200,
-          input: ['dtmf', 'speech'],
-          language: 'en-US',
-          profanity_filter: false,
-          client_state: encodeState({ ...state, booking_id: bookingId, call_log_id: logId }),
-        };
-        if (isPriceStep) gatherParams.terminating_digit = '#';
-        console.log(`[telnyx-voice] legacy gather sent after speak: step=${state.step} isPriceStep=${isPriceStep}`);
-        await telnyxCmd(apiKey, callControlId, 'gather', gatherParams);
+        const isPriceStep = !!state.gather_is_price_step || state.step === 'ask_price' || state.step === 'confirm_booking';
+        const gatherParams = buildGatherParams(state, isPriceStep);
+        console.log(`[telnyx-voice] gather after speak.ended step=${state.step} isPriceStep=${isPriceStep}`);
+        const ok = await telnyxCmd(apiKey, callControlId, 'gather', gatherParams);
+        if (!ok) await safeHangup('gather_after_speak_failed');
       } else {
-        console.log(`[telnyx-voice] skip gather on speak.ended (step=${state.step || '-'}) to avoid gather_using_speak race`);
+        console.log(`[telnyx-voice] speak ended without gather step=${state.step || '-'} phase=${phase || '-'}`);
       }
       break;
     }
@@ -619,7 +648,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const acquisitionFailed = !speech && !digits && audioUrls.length > 0;
       const maxRetryCount = acquisitionFailed || likelyTimeoutNoInput ? 3 : 2;
 
-      console.log(`[gather] step=${step} speech="${speech}" digits=${digits} reason=${reason} src=${speechSource} audioUrls=${audioUrls.length}`);
+      const payloadPreview = JSON.stringify(payload || {}).slice(0, 1200);
+      console.log(`[gather] step=${step} speech="${speech}" digits=${digits} reason=${reason} src=${speechSource} audioUrls=${audioUrls.length} payload=${payloadPreview}`);
 
       try {
 
@@ -687,7 +717,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest', retry_count: retryCount }, followup);
         } else {
           if (retryCount >= maxRetryCount) {
-            await telnyxCmd(apiKey, callControlId, 'hangup', {});
+            await safeHangup('outreach_unclear_max_retry');
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB err:', e));
             }
@@ -755,7 +785,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         } else {
           // Timeout or unclear → retry
           if (retryCount >= maxRetryCount) {
-            await telnyxCmd(apiKey, callControlId, 'hangup', {});
+            await safeHangup('ask_dayuse_max_retry');
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
@@ -898,7 +928,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         if (intentResult.intent !== 'affirm') {
           if (retryCount >= maxRetryCount) {
-            await telnyxCmd(apiKey, callControlId, 'hangup', {});
+            await safeHangup('confirm_booking_max_retry');
             if (db && logId) {
               await db.prepare(`UPDATE call_logs SET status='no_answer' WHERE id=?`).bind(logId).run().catch(e => console.error('[telnyx-voice] DB update failed:', e));
             }
