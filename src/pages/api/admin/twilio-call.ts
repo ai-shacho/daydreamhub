@@ -62,8 +62,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     let callLogId: number | null = null;
     if (db) {
       await db.prepare(`
-        INSERT INTO call_logs (hotel_id, status, note, direction, created_at)
-        VALUES (?1, 'queued', ?2, 'outbound', datetime('now'))
+        INSERT INTO call_logs (hotel_id, status, note, created_at)
+        VALUES (?1, 'queued', ?2, datetime('now'))
       `).bind(hotel_id || null, note || `Twilio test call to ${to_number}`).run();
       const row: any = await db.prepare(`SELECT last_insert_rowid() as id`).first();
       callLogId = row?.id || null;
