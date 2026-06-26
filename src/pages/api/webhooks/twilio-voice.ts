@@ -221,7 +221,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     const form = await readTwilioParams(request);
     const callSid = clampText(form.get('CallSid') || '', 120);
     const digits = clampText(form.get('Digits') || '', 64);
-    const speech = clampText(form.get('SpeechResult') || '', MAX_INPUT_CHARS);
+    const speechPrimary = clampText(form.get('SpeechResult') || '', MAX_INPUT_CHARS);
+    const speechUnstable = clampText(form.get('UnstableSpeechResult') || '', MAX_INPUT_CHARS);
+    const speech = speechPrimary || speechUnstable;
     const callStatusRaw = clampText(form.get('CallStatus') || '', 64).toLowerCase();
 
     console.log('[twilio-voice] webhook_received', {
@@ -262,7 +264,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const gatherAction = makeWebhookUrl(request, url, logId, 'echo', 1, undefined, env?.SITE_URL);
 
       return twiml(
-        `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
+        `<Gather input="speech dtmf" timeout="10" speechTimeout="auto" language="en-US" action="${esc(gatherAction)}" method="POST">` +
         `<Say voice="Polly.Matthew" language="en-US">Hello, this is a Twilio test call. Please say something.</Say>` +
         `</Gather>` +
         `<Say voice="Polly.Matthew" language="en-US">I did not hear anything. Goodbye.</Say><Hangup/>`
@@ -273,11 +275,26 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const recognized = normalizeSpeech(speech, digits);
 
       if (!recognized) {
-        await updateStatus(db, logId, 'no_answer', {
-          note: turn >= MAX_TURN_COUNT ? 'twilio_no_input_max_turns' : 'twilio_no_input_on_echo',
+        if (turn >= MAX_TURN_COUNT) {
+          await updateStatus(db, logId, 'no_answer', {
+            note: 'twilio_no_input_max_turns',
+            sid: callSid ? `twilio:${callSid}` : null,
+          });
+          return twiml(`<Say voice="Polly.Matthew" language="en-US">I did not catch that. Thank you. Goodbye.</Say><Hangup/>`);
+        }
+
+        await updateStatus(db, logId, 'awaiting_response', {
+          note: `twilio_no_input_reprompt_${turn || 1}`,
           sid: callSid ? `twilio:${callSid}` : null,
         });
-        return twiml(`<Say voice="Polly.Matthew" language="en-US">I did not catch that. Thank you. Goodbye.</Say><Hangup/>`);
+
+        const repromptAction = makeWebhookUrl(request, url, logId, 'echo', turn + 1, undefined, env?.SITE_URL);
+        return twiml(
+          `<Gather input="speech dtmf" timeout="10" speechTimeout="auto" language="en-US" action="${esc(repromptAction)}" method="POST">` +
+          `<Say voice="Polly.Matthew" language="en-US">I didn't catch that. Please say it again.</Say>` +
+          `</Gather>` +
+          `<Say voice="Polly.Matthew" language="en-US">No input received. Thank you. Goodbye.</Say><Hangup/>`
+        );
       }
 
       const transcriptLine = clampText(`[Twilio][Hotel]: ${recognized} (sid:${callSid || 'none'})`, MAX_TRANSCRIPT_CHARS);
@@ -308,7 +325,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       const gatherAction = makeWebhookUrl(request, url, logId, 'echo', turn + 1, undefined, env?.SITE_URL);
       return twiml(
-        `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
+        `<Gather input="speech dtmf" timeout="10" speechTimeout="auto" language="en-US" action="${esc(gatherAction)}" method="POST">` +
         `<Say voice="Polly.Matthew" language="en-US">I heard: ${esc(recognized)}. If you want to finish, please say No.</Say>` +
         `</Gather>` +
         `<Say voice="Polly.Matthew" language="en-US">No input received. Thank you. Goodbye.</Say><Hangup/>`
