@@ -1,13 +1,29 @@
 import type { APIRoute } from 'astro';
 
+type DbLike = {
+  prepare: (sql: string) => {
+    bind: (...args: any[]) => { run: () => Promise<any>; first: () => Promise<any> };
+    run?: () => Promise<any>;
+    all?: () => Promise<any>;
+  };
+};
+
+const MAX_TURN_COUNT = 4;
+const MAX_INPUT_CHARS = 512;
+const MAX_NOTE_CHARS = 280;
+const MAX_TRANSCRIPT_CHARS = 700;
+const ALLOWED_STEPS = new Set(['intro', 'echo']);
+
 function twiml(body: string): Response {
-  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`, {
-    headers: { 'Content-Type': 'text/xml; charset=utf-8' },
+  const safeBody = typeof body === 'string' ? body : '<Say voice="alice">Temporary error. Goodbye.</Say><Hangup/>';
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${safeBody}</Response>`, {
+    headers: { 'Content-Type': 'text/xml; charset=utf-8', 'Cache-Control': 'no-store' },
+    status: 200,
   });
 }
 
 function esc(v: string): string {
-  return v
+  return String(v || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -15,25 +31,57 @@ function esc(v: string): string {
     .replace(/'/g, '&apos;');
 }
 
+function clampText(v: unknown, max = MAX_INPUT_CHARS): string {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+function normalizeLogId(raw: string | null): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return String(Math.trunc(n));
+}
+
+function normalizeStep(raw: string | null): 'intro' | 'echo' {
+  const s = String(raw || 'intro').toLowerCase().trim();
+  if (ALLOWED_STEPS.has(s)) return s as 'intro' | 'echo';
+  return 'intro';
+}
+
+function parseTurn(raw: string | null): number {
+  const n = Number(raw || '0');
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(Math.trunc(n), MAX_TURN_COUNT + 5);
+}
+
 function normalizeSpeech(speech: string, digits: string): string {
-  const s = (speech || '').trim();
+  const s = clampText(speech, MAX_INPUT_CHARS);
   if (s) return s;
-  const d = (digits || '').trim();
+  const d = clampText(digits, 64);
   if (!d) return '';
   return `DTMF:${d}`;
 }
 
 function wantsToFinish(speech: string, digits: string): boolean {
-  const d = (digits || '').trim();
+  const d = clampText(digits, 64);
   if (d === '2') return true;
 
-  const s = (speech || '').toLowerCase();
-  return /\b(no|nope|finish|end|stop|goodbye|bye)\b/.test(s);
+  const s = clampText(speech, MAX_INPUT_CHARS).toLowerCase();
+  return /\b(no|nope|finish|end|stop|goodbye|bye|cancel|quit)\b/.test(s);
 }
 
-async function getCallLogColumns(db: any): Promise<Set<string>> {
+async function getCallLogColumns(db: DbLike | null): Promise<Set<string>> {
+  if (!db || typeof db.prepare !== 'function') {
+    return new Set(['id', 'status', 'note', 'telnyx_call_id']);
+  }
+
   try {
-    const rows = await db.prepare(`PRAGMA table_info(call_logs)`).all();
+    const q = db.prepare(`PRAGMA table_info(call_logs)`);
+    const rows = (typeof q.all === 'function') ? await q.all() : await q.bind().run();
     const list = Array.isArray(rows?.results) ? rows.results : [];
     return new Set(list.map((r: any) => String(r?.name || '')));
   } catch {
@@ -41,12 +89,17 @@ async function getCallLogColumns(db: any): Promise<Set<string>> {
   }
 }
 
-async function updateStatus(db: any, logId: string | null, status: string, extra: Record<string, any> = {}) {
-  if (!db || !logId) return;
+async function updateStatus(
+  db: DbLike | null,
+  logId: string | null,
+  status: string,
+  extra: Record<string, any> = {},
+): Promise<void> {
+  if (!db || typeof db.prepare !== 'function' || !logId) return;
 
-  const note = extra.note ? String(extra.note) : null;
-  const transcription = extra.transcription ? String(extra.transcription) : null;
-  const sid = extra.sid ? String(extra.sid) : null;
+  const note = extra.note ? clampText(extra.note, MAX_NOTE_CHARS) : null;
+  const transcription = extra.transcription ? clampText(extra.transcription, MAX_TRANSCRIPT_CHARS) : null;
+  const sid = extra.sid ? clampText(extra.sid, 200) : null;
 
   const cols = await getCallLogColumns(db);
   const hasTranscription = cols.has('transcription');
@@ -55,7 +108,7 @@ async function updateStatus(db: any, logId: string | null, status: string, extra
   const sets: string[] = [];
   const binds: any[] = [];
 
-  // Completed callback should not overwrite final statuses.
+  // Keep final statuses stable if a delayed completed callback arrives.
   sets.push(`status = CASE WHEN ? = 'no_answer' AND status IN ('confirmed','declined','failed','no_answer') THEN status ELSE ? END`);
   binds.push(status, status);
 
@@ -74,8 +127,9 @@ async function updateStatus(db: any, logId: string | null, status: string, extra
     binds.push(sid);
   }
 
-  binds.push(logId);
+  if (!sets.length) return;
 
+  binds.push(logId);
   const sql = `UPDATE call_logs SET ${sets.join(', ')} WHERE id = ?`;
 
   try {
@@ -89,10 +143,11 @@ async function updateStatus(db: any, logId: string | null, status: string, extra
   }
 }
 
-function makeWebhookUrl(base: URL, logId: string | null, step: string, event?: string): string {
+function makeWebhookUrl(base: URL, logId: string | null, step: 'intro' | 'echo', turn = 0, event?: string): string {
   const u = new URL('/api/webhooks/twilio-voice', base.origin);
   if (logId) u.searchParams.set('lid', logId);
   u.searchParams.set('step', step);
+  u.searchParams.set('turn', String(Math.max(0, Math.trunc(turn))));
   if (event) u.searchParams.set('event', event);
   return u.toString();
 }
@@ -101,8 +156,8 @@ async function readTwilioParams(request: Request): Promise<URLSearchParams> {
   const contentType = (request.headers.get('content-type') || '').toLowerCase();
 
   if (contentType.includes('application/x-www-form-urlencoded')) {
-    const raw = await request.text();
-    return new URLSearchParams(raw);
+    const raw = await request.text().catch(() => '');
+    return new URLSearchParams(raw || '');
   }
 
   if (contentType.includes('application/json')) {
@@ -132,102 +187,120 @@ async function readTwilioParams(request: Request): Promise<URLSearchParams> {
 }
 
 export const POST: APIRoute = async ({ request, locals, url }) => {
-  try {
-    const runtime = (locals as any).runtime;
-    const db = runtime?.env?.DB;
+  const safeGoodbye = () => twiml(`<Say voice="alice">Thank you. Goodbye.</Say><Hangup/>`);
 
-    const logId = url.searchParams.get('lid');
-    const event = url.searchParams.get('event') || '';
-    const step = url.searchParams.get('step') || 'intro';
+  try {
+    const runtime = (locals as any)?.runtime;
+    const db: DbLike | null = (runtime?.env?.DB && typeof runtime?.env?.DB?.prepare === 'function') ? runtime.env.DB : null;
+
+    const logId = normalizeLogId(url.searchParams.get('lid'));
+    const event = clampText(url.searchParams.get('event') || '', 40).toLowerCase();
+    const step = normalizeStep(url.searchParams.get('step'));
+    const turn = parseTurn(url.searchParams.get('turn'));
 
     const form = await readTwilioParams(request);
-    const callSid = String(form.get('CallSid') || '');
-    const digits = String(form.get('Digits') || '');
-    const speech = String(form.get('SpeechResult') || '');
+    const callSid = clampText(form.get('CallSid') || '', 120);
+    const digits = clampText(form.get('Digits') || '', 64);
+    const speech = clampText(form.get('SpeechResult') || '', MAX_INPUT_CHARS);
+    const callStatusRaw = clampText(form.get('CallStatus') || '', 64).toLowerCase();
 
     console.log('[twilio-voice] webhook_received', {
       step,
       event,
+      turn,
       logId,
       callSid,
       digits,
       speech,
-      callStatus: String(form.get('CallStatus') || ''),
-      from: String(form.get('From') || ''),
-      to: String(form.get('To') || ''),
+      callStatus: callStatusRaw,
+      from: clampText(form.get('From') || '', 80),
+      to: clampText(form.get('To') || '', 80),
       contentType: request.headers.get('content-type') || '',
     });
 
-  // Status callback flow
-  if (event === 'status') {
-    const callStatus = String(form.get('CallStatus') || '').toLowerCase();
-    let mapped = 'calling';
-    if (callStatus === 'completed') mapped = 'no_answer';
-    if (callStatus === 'busy' || callStatus === 'failed' || callStatus === 'canceled') mapped = 'failed';
-    if (callStatus === 'in-progress' || callStatus === 'answered' || callStatus === 'ringing' || callStatus === 'queued' || callStatus === 'initiated') mapped = 'calling';
+    // Status callback flow
+    if (event === 'status') {
+      let mapped = 'calling';
+      if (callStatusRaw === 'completed') mapped = 'no_answer';
+      if (callStatusRaw === 'busy' || callStatusRaw === 'failed' || callStatusRaw === 'canceled' || callStatusRaw === 'no-answer') mapped = 'failed';
+      if (callStatusRaw === 'in-progress' || callStatusRaw === 'answered' || callStatusRaw === 'ringing' || callStatusRaw === 'queued' || callStatusRaw === 'initiated') mapped = 'calling';
 
-    await updateStatus(db, logId, mapped, {
-      note: `twilio_status:${callStatus}`,
-      sid: callSid ? `twilio:${callSid}` : null,
-    });
-
-    return new Response('ok', { status: 200 });
-  }
-
-  if (step === 'intro') {
-    await updateStatus(db, logId, 'awaiting_response', {
-      note: 'twilio_intro_prompted',
-      sid: callSid ? `twilio:${callSid}` : null,
-    });
-
-    const gatherAction = makeWebhookUrl(url, logId, 'echo');
-
-    return twiml(
-      `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
-      `<Say voice="alice">Hello, this is a Twilio test call. Please say something.</Say>` +
-      `</Gather>` +
-      `<Say voice="alice">I did not hear anything. Goodbye.</Say><Hangup/>`
-    );
-  }
-
-  if (step === 'echo') {
-    const recognized = normalizeSpeech(speech, digits);
-
-    if (!recognized) {
-      await updateStatus(db, logId, 'no_answer', {
-        note: 'twilio_no_input_on_echo',
+      await updateStatus(db, logId, mapped, {
+        note: `twilio_status:${callStatusRaw || 'unknown'}`,
         sid: callSid ? `twilio:${callSid}` : null,
       });
-      return twiml(`<Say voice="alice">I did not catch that. Thank you. Goodbye.</Say><Hangup/>`);
+
+      return new Response('ok', { status: 200 });
     }
 
-    const transcriptLine = `[Twilio][Hotel]: ${recognized} (sid:${callSid || 'none'})`;
+    if (step === 'intro') {
+      await updateStatus(db, logId, 'awaiting_response', {
+        note: 'twilio_intro_prompted',
+        sid: callSid ? `twilio:${callSid}` : null,
+      });
 
-    if (wantsToFinish(speech, digits)) {
-      await updateStatus(db, logId, 'declined', {
-        note: 'twilio_finish_word_detected',
+      const gatherAction = makeWebhookUrl(url, logId, 'echo', 1);
+
+      return twiml(
+        `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
+        `<Say voice="alice">Hello, this is a Twilio test call. Please say something.</Say>` +
+        `</Gather>` +
+        `<Say voice="alice">I did not hear anything. Goodbye.</Say><Hangup/>`
+      );
+    }
+
+    if (step === 'echo') {
+      const recognized = normalizeSpeech(speech, digits);
+
+      if (!recognized) {
+        await updateStatus(db, logId, 'no_answer', {
+          note: turn >= MAX_TURN_COUNT ? 'twilio_no_input_max_turns' : 'twilio_no_input_on_echo',
+          sid: callSid ? `twilio:${callSid}` : null,
+        });
+        return twiml(`<Say voice="alice">I did not catch that. Thank you. Goodbye.</Say><Hangup/>`);
+      }
+
+      const transcriptLine = clampText(`[Twilio][Hotel]: ${recognized} (sid:${callSid || 'none'})`, MAX_TRANSCRIPT_CHARS);
+
+      if (wantsToFinish(speech, digits)) {
+        await updateStatus(db, logId, 'declined', {
+          note: 'twilio_finish_word_detected',
+          transcription: transcriptLine,
+          sid: callSid ? `twilio:${callSid}` : null,
+        });
+        return safeGoodbye();
+      }
+
+      if (turn >= MAX_TURN_COUNT) {
+        await updateStatus(db, logId, 'no_answer', {
+          note: 'twilio_turn_limit_reached',
+          transcription: transcriptLine,
+          sid: callSid ? `twilio:${callSid}` : null,
+        });
+        return twiml(`<Say voice="alice">Thanks for your time. We will end this call now. Goodbye.</Say><Hangup/>`);
+      }
+
+      await updateStatus(db, logId, 'awaiting_response', {
+        note: `twilio_echo_round_${turn || 1}`,
         transcription: transcriptLine,
         sid: callSid ? `twilio:${callSid}` : null,
       });
-      return twiml(`<Say voice="alice">Thank you. Goodbye.</Say><Hangup/>`);
+
+      const gatherAction = makeWebhookUrl(url, logId, 'echo', turn + 1);
+      return twiml(
+        `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
+        `<Say voice="alice">I heard: ${esc(recognized)}. If you want to finish, please say No.</Say>` +
+        `</Gather>` +
+        `<Say voice="alice">No input received. Thank you. Goodbye.</Say><Hangup/>`
+      );
     }
 
+    // Fallback for any unexpected step value
     await updateStatus(db, logId, 'awaiting_response', {
-      note: 'twilio_echo_round',
-      transcription: transcriptLine,
+      note: `twilio_invalid_step_fallback:${step}`,
       sid: callSid ? `twilio:${callSid}` : null,
     });
-
-    const gatherAction = makeWebhookUrl(url, logId, 'echo');
-    return twiml(
-      `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
-      `<Say voice="alice">I heard: ${esc(recognized)}. If you want to finish, please say No.</Say>` +
-      `</Gather>` +
-      `<Say voice="alice">No input received. Thank you. Goodbye.</Say><Hangup/>`
-    );
-  }
-
-    return twiml(`<Say voice="alice">Invalid Twilio webhook step.</Say><Hangup/>`);
+    return twiml(`<Say voice="alice">Invalid state detected. Restarting.</Say><Redirect method="POST">${esc(makeWebhookUrl(url, logId, 'intro', 0))}</Redirect>`);
   } catch (e: any) {
     console.error('[twilio-voice] fatal webhook error', {
       message: e?.message || String(e),
