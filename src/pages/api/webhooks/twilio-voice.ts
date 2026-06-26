@@ -147,28 +147,10 @@ async function updateStatus(
   }
 }
 
-function resolvePublicOrigin(request: Request, fallbackUrl: URL, siteUrl?: string | null): string {
-  const rawSiteUrl = clampText(siteUrl || '', 200);
-  if (rawSiteUrl) {
-    try {
-      const u = new URL(rawSiteUrl);
-      u.protocol = 'https:';
-      return u.origin;
-    } catch {
-      // ignore invalid SITE_URL
-    }
-  }
+const TWILIO_WEBHOOK_BASE_URL = 'https://daydreamhub.com';
 
-  const forwardedHost = clampText(request.headers.get('x-forwarded-host') || '', 255);
-  const host = clampText(request.headers.get('host') || '', 255);
-  const chosenHost = forwardedHost || host;
-  if (chosenHost) {
-    return `https://${chosenHost}`;
-  }
-
-  const u = new URL(fallbackUrl.toString());
-  u.protocol = 'https:';
-  return u.origin;
+function resolvePublicOrigin(_request: Request, _fallbackUrl: URL, _siteUrl?: string | null): string {
+  return TWILIO_WEBHOOK_BASE_URL;
 }
 
 function makeWebhookUrl(

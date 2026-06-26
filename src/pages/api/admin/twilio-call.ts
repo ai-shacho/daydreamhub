@@ -7,19 +7,10 @@ function basicAuthHeader(accountSid: string, authToken: string): string {
   return `Basic ${encoded}`;
 }
 
-function toHttpsOrigin(siteUrl?: string | null): string {
-  const fallback = 'https://daydreamhub.pages.dev';
-  const candidate = String(siteUrl || '').trim() || fallback;
+const TWILIO_WEBHOOK_BASE_URL = 'https://daydreamhub.com';
 
-  try {
-    const u = new URL(candidate);
-    u.protocol = 'https:';
-    return u.origin;
-  } catch {
-    const u = new URL(fallback);
-    u.protocol = 'https:';
-    return u.origin;
-  }
+function toHttpsOrigin(_siteUrl?: string | null): string {
+  return TWILIO_WEBHOOK_BASE_URL;
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
