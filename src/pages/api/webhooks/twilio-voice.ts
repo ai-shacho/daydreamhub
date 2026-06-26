@@ -264,7 +264,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const gatherAction = makeWebhookUrl(request, url, logId, 'echo', 1, undefined, env?.SITE_URL);
 
       return twiml(
-        `<Gather input="speech dtmf" timeout="10" speechTimeout="auto" language="en-US" action="${esc(gatherAction)}" method="POST">` +
+        `<Gather input="speech dtmf" timeout="10" speechTimeout="1.2" language="en-US" action="${esc(gatherAction)}" method="POST">` +
         `<Say voice="Polly.Matthew" language="en-US">Hello, this is a Twilio test call. Please say something.</Say>` +
         `</Gather>` +
         `<Say voice="Polly.Matthew" language="en-US">I did not hear anything. Goodbye.</Say><Hangup/>`
@@ -290,7 +290,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
         const repromptAction = makeWebhookUrl(request, url, logId, 'echo', turn + 1, undefined, env?.SITE_URL);
         return twiml(
-          `<Gather input="speech dtmf" timeout="10" speechTimeout="auto" language="en-US" action="${esc(repromptAction)}" method="POST">` +
+          `<Gather input="speech dtmf" timeout="10" speechTimeout="1.2" language="en-US" action="${esc(repromptAction)}" method="POST">` +
           `<Say voice="Polly.Matthew" language="en-US">I didn't catch that. Please say it again.</Say>` +
           `</Gather>` +
           `<Say voice="Polly.Matthew" language="en-US">No input received. Thank you. Goodbye.</Say><Hangup/>`
@@ -325,7 +325,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       const gatherAction = makeWebhookUrl(request, url, logId, 'echo', turn + 1, undefined, env?.SITE_URL);
       return twiml(
-        `<Gather input="speech dtmf" timeout="10" speechTimeout="auto" language="en-US" action="${esc(gatherAction)}" method="POST">` +
+        `<Gather input="speech dtmf" timeout="10" speechTimeout="1.2" language="en-US" action="${esc(gatherAction)}" method="POST">` +
         `<Say voice="Polly.Matthew" language="en-US">I heard: ${esc(recognized)}. If you want to finish, please say No.</Say>` +
         `</Gather>` +
         `<Say voice="Polly.Matthew" language="en-US">No input received. Thank you. Goodbye.</Say><Hangup/>`
