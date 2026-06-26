@@ -15,34 +15,86 @@ function esc(v: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function classify(speech: string, digits: string): 'yes' | 'no' | 'repeat' | 'unknown' {
+function normalizeSpeech(speech: string, digits: string): string {
+  const s = (speech || '').trim();
+  if (s) return s;
   const d = (digits || '').trim();
-  if (d === '1') return 'yes';
-  if (d === '2') return 'no';
-  if (d === '3') return 'repeat';
+  if (!d) return '';
+  return `DTMF:${d}`;
+}
+
+function wantsToFinish(speech: string, digits: string): boolean {
+  const d = (digits || '').trim();
+  if (d === '2') return true;
 
   const s = (speech || '').toLowerCase();
-  if (/\b(yes|yeah|yep|correct|sure|ok|okay|available)\b/.test(s)) return 'yes';
-  if (/\b(no|nope|not available|unavailable|cannot|can't)\b/.test(s)) return 'no';
-  if (/\b(repeat|again|pardon|sorry)\b/.test(s)) return 'repeat';
-  return 'unknown';
+  return /\b(no|nope|finish|end|stop|goodbye|bye)\b/.test(s);
+}
+
+async function getCallLogColumns(db: any): Promise<Set<string>> {
+  try {
+    const rows = await db.prepare(`PRAGMA table_info(call_logs)`).all();
+    const list = Array.isArray(rows?.results) ? rows.results : [];
+    return new Set(list.map((r: any) => String(r?.name || '')));
+  } catch {
+    return new Set(['id', 'status', 'note', 'telnyx_call_id']);
+  }
 }
 
 async function updateStatus(db: any, logId: string | null, status: string, extra: Record<string, any> = {}) {
   if (!db || !logId) return;
+
   const note = extra.note ? String(extra.note) : null;
   const transcription = extra.transcription ? String(extra.transcription) : null;
   const sid = extra.sid ? String(extra.sid) : null;
 
-  await db.prepare(`
-    UPDATE call_logs
-    SET status = ?1,
-        note = CASE WHEN ?2 IS NOT NULL THEN COALESCE(note || ' | ', '') || ?2 ELSE note END,
-        transcription = CASE WHEN ?3 IS NOT NULL THEN COALESCE(transcription || '\n', '') || ?3 ELSE transcription END,
-        telnyx_call_id = CASE WHEN ?4 IS NOT NULL THEN ?4 ELSE telnyx_call_id END,
-        ended_at = CASE WHEN ?1 IN ('confirmed','declined','no_answer','failed') THEN datetime('now') ELSE ended_at END
-    WHERE id = ?5
-  `).bind(status, note, transcription, sid, logId).run().catch(() => {});
+  const cols = await getCallLogColumns(db);
+  const hasTranscription = cols.has('transcription');
+  const hasCallId = cols.has('telnyx_call_id');
+
+  const sets: string[] = [];
+  const binds: any[] = [];
+
+  // Completed callback should not overwrite final statuses.
+  sets.push(`status = CASE WHEN ? = 'no_answer' AND status IN ('confirmed','declined','failed','no_answer') THEN status ELSE ? END`);
+  binds.push(status, status);
+
+  if (note !== null) {
+    sets.push(`note = COALESCE(note || ' | ', '') || ?`);
+    binds.push(note);
+  }
+
+  if (hasTranscription && transcription !== null) {
+    sets.push(`transcription = COALESCE(transcription || '\n', '') || ?`);
+    binds.push(transcription);
+  }
+
+  if (hasCallId && sid !== null) {
+    sets.push(`telnyx_call_id = ?`);
+    binds.push(sid);
+  }
+
+  binds.push(logId);
+
+  const sql = `UPDATE call_logs SET ${sets.join(', ')} WHERE id = ?`;
+
+  try {
+    await db.prepare(sql).bind(...binds).run();
+  } catch (e: any) {
+    console.error('[twilio-voice] failed to update call_logs', {
+      logId,
+      status,
+      message: e?.message || String(e),
+    });
+  }
+}
+
+function makeWebhookUrl(base: URL, logId: string | null, step: string, event?: string): string {
+  const u = new URL('/api/webhooks/twilio-voice', base.origin);
+  if (logId) u.searchParams.set('lid', logId);
+  u.searchParams.set('step', step);
+  if (event) u.searchParams.set('event', event);
+  return u.toString();
 }
 
 export const POST: APIRoute = async ({ request, locals, url }) => {
@@ -57,8 +109,6 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   const callSid = String(form.get('CallSid') || '');
   const digits = String(form.get('Digits') || '');
   const speech = String(form.get('SpeechResult') || '');
-  const confidenceRaw = String(form.get('Confidence') || '');
-  const confidence = confidenceRaw !== '' ? Number(confidenceRaw) : null;
 
   console.log('[twilio-voice] webhook_received', {
     step,
@@ -67,7 +117,6 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     callSid,
     digits,
     speech,
-    confidence,
     callStatus: String(form.get('CallStatus') || ''),
     from: String(form.get('From') || ''),
     to: String(form.get('To') || ''),
@@ -79,7 +128,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     let mapped = 'calling';
     if (callStatus === 'completed') mapped = 'no_answer';
     if (callStatus === 'busy' || callStatus === 'failed' || callStatus === 'canceled') mapped = 'failed';
-    if (callStatus === 'in-progress' || callStatus === 'answered' || callStatus === 'ringing' || callStatus === 'queued') mapped = 'calling';
+    if (callStatus === 'in-progress' || callStatus === 'answered' || callStatus === 'ringing' || callStatus === 'queued' || callStatus === 'initiated') mapped = 'calling';
 
     await updateStatus(db, logId, mapped, {
       note: `twilio_status:${callStatus}`,
@@ -89,82 +138,63 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     return new Response('ok', { status: 200 });
   }
 
-  // TwiML voice flow
   if (step === 'intro') {
     await updateStatus(db, logId, 'awaiting_response', {
-      note: 'twilio_intro',
+      note: 'twilio_intro_prompted',
       sid: callSid ? `twilio:${callSid}` : null,
     });
 
-    const gatherAction = `/api/webhooks/twilio-voice?lid=${encodeURIComponent(logId || '')}&step=decision`;
-    const message =
-      'Hello, this is DayDreamHub Twilio test call. Please say yes or press 1 if you can hear this clearly. ' +
-      'Say no or press 2 if not. Press 3 to repeat.';
+    const gatherAction = makeWebhookUrl(url, logId, 'echo');
 
     return twiml(
-      `<Gather input="speech dtmf" numDigits="1" timeout="5" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
-      `<Say voice="alice">${esc(message)}</Say>` +
+      `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
+      `<Say voice="alice">Hello, this is a Twilio test call. Please say something.</Say>` +
       `</Gather>` +
-      `<Say voice="alice">No input received. Goodbye.</Say><Hangup/>`
+      `<Say voice="alice">I did not hear anything. Goodbye.</Say><Hangup/>`
     );
   }
 
-  if (step === 'decision') {
-    const result = classify(speech, digits);
-    const confidenceLabel = confidence !== null && Number.isFinite(confidence) ? confidence.toFixed(3) : 'N/A';
-    const transcriptBase = speech || `DTMF:${digits}` || 'no input';
-    const transcriptLine = `[Twilio][Hotel]: ${transcriptBase} (confidence:${confidenceLabel}, sid:${callSid || 'none'})`;
+  if (step === 'echo') {
+    const recognized = normalizeSpeech(speech, digits);
 
-    console.log('[twilio-voice] step=decision', {
-      logId,
-      callSid,
-      digits,
-      speech,
-      confidence,
-      result,
-    });
-
-    if (result === 'yes') {
-      await updateStatus(db, logId, 'confirmed', {
-        note: `twilio_test_success confidence:${confidenceLabel}`,
-        transcription: transcriptLine,
+    if (!recognized) {
+      await updateStatus(db, logId, 'no_answer', {
+        note: 'twilio_no_input_on_echo',
         sid: callSid ? `twilio:${callSid}` : null,
       });
-      return twiml(`<Say voice="alice">Thank you. Twilio voice recognition test succeeded. Goodbye.</Say><Hangup/>`);
+      return twiml(`<Say voice="alice">I did not catch that. Thank you. Goodbye.</Say><Hangup/>`);
     }
 
-    if (result === 'no') {
+    const transcriptLine = `[Twilio][Hotel]: ${recognized} (sid:${callSid || 'none'})`;
+
+    if (wantsToFinish(speech, digits)) {
       await updateStatus(db, logId, 'declined', {
-        note: `twilio_test_declined confidence:${confidenceLabel}`,
+        note: 'twilio_finish_word_detected',
         transcription: transcriptLine,
         sid: callSid ? `twilio:${callSid}` : null,
       });
-      return twiml(`<Say voice="alice">Understood. We will end this test call now. Goodbye.</Say><Hangup/>`);
+      return twiml(`<Say voice="alice">Thank you. Goodbye.</Say><Hangup/>`);
     }
 
-    if (result === 'repeat') {
-      const retryUrl = `/api/webhooks/twilio-voice?lid=${encodeURIComponent(logId || '')}&step=intro`;
-      await updateStatus(db, logId, 'awaiting_response', {
-        note: `twilio_repeat_requested confidence:${confidenceLabel}`,
-        transcription: transcriptLine,
-        sid: callSid ? `twilio:${callSid}` : null,
-      });
-      return twiml(`<Redirect method="POST">${esc(retryUrl)}</Redirect>`);
-    }
-
-    await updateStatus(db, logId, 'no_answer', {
-      note: `twilio_unrecognized_input confidence:${confidenceLabel}`,
+    await updateStatus(db, logId, 'awaiting_response', {
+      note: 'twilio_echo_round',
       transcription: transcriptLine,
       sid: callSid ? `twilio:${callSid}` : null,
     });
-    return twiml(`<Say voice="alice">Sorry, I could not understand that. Ending the test call. Goodbye.</Say><Hangup/>`);
+
+    const gatherAction = makeWebhookUrl(url, logId, 'echo');
+    return twiml(
+      `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
+      `<Say voice="alice">I heard: ${esc(recognized)}. If you want to finish, please say No.</Say>` +
+      `</Gather>` +
+      `<Say voice="alice">No input received. Thank you. Goodbye.</Say><Hangup/>`
+    );
   }
 
   return twiml(`<Say voice="alice">Invalid Twilio webhook step.</Say><Hangup/>`);
 };
 
 export const GET: APIRoute = async ({ url }) => {
-  // quick health check
   return new Response(JSON.stringify({ ok: true, provider: 'twilio', path: url.pathname }), {
     headers: { 'Content-Type': 'application/json' },
   });
