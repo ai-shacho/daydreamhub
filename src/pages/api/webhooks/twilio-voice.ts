@@ -55,6 +55,23 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
   const form = await request.formData();
   const callSid = String(form.get('CallSid') || '');
+  const digits = String(form.get('Digits') || '');
+  const speech = String(form.get('SpeechResult') || '');
+  const confidenceRaw = String(form.get('Confidence') || '');
+  const confidence = confidenceRaw !== '' ? Number(confidenceRaw) : null;
+
+  console.log('[twilio-voice] webhook_received', {
+    step,
+    event,
+    logId,
+    callSid,
+    digits,
+    speech,
+    confidence,
+    callStatus: String(form.get('CallStatus') || ''),
+    from: String(form.get('From') || ''),
+    to: String(form.get('To') || ''),
+  });
 
   // Status callback flow
   if (event === 'status') {
@@ -93,14 +110,24 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
   }
 
   if (step === 'decision') {
-    const digits = String(form.get('Digits') || '');
-    const speech = String(form.get('SpeechResult') || '');
     const result = classify(speech, digits);
+    const confidenceLabel = confidence !== null && Number.isFinite(confidence) ? confidence.toFixed(3) : 'N/A';
+    const transcriptBase = speech || `DTMF:${digits}` || 'no input';
+    const transcriptLine = `[Twilio][Hotel]: ${transcriptBase} (confidence:${confidenceLabel}, sid:${callSid || 'none'})`;
+
+    console.log('[twilio-voice] step=decision', {
+      logId,
+      callSid,
+      digits,
+      speech,
+      confidence,
+      result,
+    });
 
     if (result === 'yes') {
       await updateStatus(db, logId, 'confirmed', {
-        note: 'twilio_test_success',
-        transcription: `[Twilio][Hotel]: ${speech || `DTMF:${digits}`}`,
+        note: `twilio_test_success confidence:${confidenceLabel}`,
+        transcription: transcriptLine,
         sid: callSid ? `twilio:${callSid}` : null,
       });
       return twiml(`<Say voice="alice">Thank you. Twilio voice recognition test succeeded. Goodbye.</Say><Hangup/>`);
@@ -108,8 +135,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
     if (result === 'no') {
       await updateStatus(db, logId, 'declined', {
-        note: 'twilio_test_declined',
-        transcription: `[Twilio][Hotel]: ${speech || `DTMF:${digits}`}`,
+        note: `twilio_test_declined confidence:${confidenceLabel}`,
+        transcription: transcriptLine,
         sid: callSid ? `twilio:${callSid}` : null,
       });
       return twiml(`<Say voice="alice">Understood. We will end this test call now. Goodbye.</Say><Hangup/>`);
@@ -118,15 +145,16 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (result === 'repeat') {
       const retryUrl = `/api/webhooks/twilio-voice?lid=${encodeURIComponent(logId || '')}&step=intro`;
       await updateStatus(db, logId, 'awaiting_response', {
-        note: 'twilio_repeat_requested',
-        transcription: `[Twilio][Hotel]: ${speech || `DTMF:${digits}`}`,
+        note: `twilio_repeat_requested confidence:${confidenceLabel}`,
+        transcription: transcriptLine,
+        sid: callSid ? `twilio:${callSid}` : null,
       });
       return twiml(`<Redirect method="POST">${esc(retryUrl)}</Redirect>`);
     }
 
     await updateStatus(db, logId, 'no_answer', {
-      note: 'twilio_unrecognized_input',
-      transcription: `[Twilio][Hotel]: ${speech || `DTMF:${digits}` || 'no input'}`,
+      note: `twilio_unrecognized_input confidence:${confidenceLabel}`,
+      transcription: transcriptLine,
       sid: callSid ? `twilio:${callSid}` : null,
     });
     return twiml(`<Say voice="alice">Sorry, I could not understand that. Ending the test call. Goodbye.</Say><Hangup/>`);
