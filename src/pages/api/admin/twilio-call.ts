@@ -7,6 +7,21 @@ function basicAuthHeader(accountSid: string, authToken: string): string {
   return `Basic ${encoded}`;
 }
 
+function toHttpsOrigin(siteUrl?: string | null): string {
+  const fallback = 'https://daydreamhub.pages.dev';
+  const candidate = String(siteUrl || '').trim() || fallback;
+
+  try {
+    const u = new URL(candidate);
+    u.protocol = 'https:';
+    return u.origin;
+  } catch {
+    const u = new URL(fallback);
+    u.protocol = 'https:';
+    return u.origin;
+  }
+}
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const env = runtime?.env;
@@ -56,7 +71,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'to_number is required' }), { status: 400 });
   }
 
-  const baseUrl = env?.SITE_URL || 'https://daydreamhub.pages.dev';
+  const baseUrl = toHttpsOrigin(env?.SITE_URL);
 
   try {
     let callLogId: number | null = null;

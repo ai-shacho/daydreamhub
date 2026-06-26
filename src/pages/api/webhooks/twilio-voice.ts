@@ -151,24 +151,24 @@ function resolvePublicOrigin(request: Request, fallbackUrl: URL, siteUrl?: strin
   const rawSiteUrl = clampText(siteUrl || '', 200);
   if (rawSiteUrl) {
     try {
-      return new URL(rawSiteUrl).origin;
+      const u = new URL(rawSiteUrl);
+      u.protocol = 'https:';
+      return u.origin;
     } catch {
       // ignore invalid SITE_URL
     }
   }
 
-  const forwardedProto = clampText(request.headers.get('x-forwarded-proto') || '', 10).toLowerCase();
   const forwardedHost = clampText(request.headers.get('x-forwarded-host') || '', 255);
   const host = clampText(request.headers.get('host') || '', 255);
   const chosenHost = forwardedHost || host;
   if (chosenHost) {
-    const proto = forwardedProto === 'http' || forwardedProto === 'https'
-      ? forwardedProto
-      : (fallbackUrl.protocol === 'http:' ? 'http' : 'https');
-    return `${proto}://${chosenHost}`;
+    return `https://${chosenHost}`;
   }
 
-  return fallbackUrl.origin;
+  const u = new URL(fallbackUrl.toString());
+  u.protocol = 'https:';
+  return u.origin;
 }
 
 function makeWebhookUrl(
