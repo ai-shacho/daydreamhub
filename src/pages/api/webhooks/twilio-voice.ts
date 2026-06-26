@@ -147,8 +147,41 @@ async function updateStatus(
   }
 }
 
-function makeWebhookUrl(base: URL, logId: string | null, step: 'intro' | 'echo', turn = 0, event?: string): string {
-  const u = new URL('/api/webhooks/twilio-voice', base.origin);
+function resolvePublicOrigin(request: Request, fallbackUrl: URL, siteUrl?: string | null): string {
+  const rawSiteUrl = clampText(siteUrl || '', 200);
+  if (rawSiteUrl) {
+    try {
+      return new URL(rawSiteUrl).origin;
+    } catch {
+      // ignore invalid SITE_URL
+    }
+  }
+
+  const forwardedProto = clampText(request.headers.get('x-forwarded-proto') || '', 10).toLowerCase();
+  const forwardedHost = clampText(request.headers.get('x-forwarded-host') || '', 255);
+  const host = clampText(request.headers.get('host') || '', 255);
+  const chosenHost = forwardedHost || host;
+  if (chosenHost) {
+    const proto = forwardedProto === 'http' || forwardedProto === 'https'
+      ? forwardedProto
+      : (fallbackUrl.protocol === 'http:' ? 'http' : 'https');
+    return `${proto}://${chosenHost}`;
+  }
+
+  return fallbackUrl.origin;
+}
+
+function makeWebhookUrl(
+  request: Request,
+  baseUrl: URL,
+  logId: string | null,
+  step: 'intro' | 'echo',
+  turn = 0,
+  event?: string,
+  siteUrl?: string | null,
+): string {
+  const origin = resolvePublicOrigin(request, baseUrl, siteUrl);
+  const u = new URL('/api/webhooks/twilio-voice', origin);
   if (logId) u.searchParams.set('lid', logId);
   u.searchParams.set('step', step);
   u.searchParams.set('turn', String(Math.max(0, Math.trunc(turn))));
@@ -195,7 +228,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
   try {
     const runtime = (locals as any)?.runtime;
-    const db: DbLike | null = (runtime?.env?.DB && typeof runtime?.env?.DB?.prepare === 'function') ? runtime.env.DB : null;
+    const env = runtime?.env;
+    const db: DbLike | null = (env?.DB && typeof env?.DB?.prepare === 'function') ? env.DB : null;
 
     const logId = normalizeLogId(url.searchParams.get('lid'));
     const event = clampText(url.searchParams.get('event') || '', 40).toLowerCase();
@@ -243,7 +277,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         sid: callSid ? `twilio:${callSid}` : null,
       });
 
-      const gatherAction = makeWebhookUrl(url, logId, 'echo', 1);
+      const gatherAction = makeWebhookUrl(request, url, logId, 'echo', 1, undefined, env?.SITE_URL);
 
       return twiml(
         `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
@@ -290,7 +324,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         sid: callSid ? `twilio:${callSid}` : null,
       });
 
-      const gatherAction = makeWebhookUrl(url, logId, 'echo', turn + 1);
+      const gatherAction = makeWebhookUrl(request, url, logId, 'echo', turn + 1, undefined, env?.SITE_URL);
       return twiml(
         `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
         `<Say voice="Polly.Matthew" language="en-US">I heard: ${esc(recognized)}. If you want to finish, please say No.</Say>` +
@@ -304,7 +338,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       note: `twilio_invalid_step_fallback:${step}`,
       sid: callSid ? `twilio:${callSid}` : null,
     });
-    return twiml(`<Say voice="Polly.Matthew" language="en-US">Invalid state detected. Restarting.</Say><Redirect method="POST">${esc(makeWebhookUrl(url, logId, 'intro', 0))}</Redirect>`);
+    return twiml(`<Say voice="Polly.Matthew" language="en-US">Invalid state detected. Restarting.</Say><Redirect method="POST">${esc(makeWebhookUrl(request, url, logId, 'intro', 0, undefined, env?.SITE_URL))}</Redirect>`);
   } catch (e: any) {
     console.error('[twilio-voice] fatal webhook error', {
       message: e?.message || String(e),
