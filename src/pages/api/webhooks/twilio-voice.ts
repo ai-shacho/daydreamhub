@@ -97,30 +97,66 @@ function makeWebhookUrl(base: URL, logId: string | null, step: string, event?: s
   return u.toString();
 }
 
+async function readTwilioParams(request: Request): Promise<URLSearchParams> {
+  const contentType = (request.headers.get('content-type') || '').toLowerCase();
+
+  if (contentType.includes('application/x-www-form-urlencoded')) {
+    const raw = await request.text();
+    return new URLSearchParams(raw);
+  }
+
+  if (contentType.includes('application/json')) {
+    try {
+      const json = await request.json() as Record<string, any>;
+      const p = new URLSearchParams();
+      for (const [k, v] of Object.entries(json || {})) {
+        if (v !== null && v !== undefined) p.set(k, String(v));
+      }
+      return p;
+    } catch {
+      return new URLSearchParams();
+    }
+  }
+
+  try {
+    const form = await request.formData();
+    const p = new URLSearchParams();
+    for (const [k, v] of form.entries()) {
+      p.set(k, typeof v === 'string' ? v : v.name);
+    }
+    return p;
+  } catch {
+    const raw = await request.text().catch(() => '');
+    return new URLSearchParams(raw || '');
+  }
+}
+
 export const POST: APIRoute = async ({ request, locals, url }) => {
-  const runtime = (locals as any).runtime;
-  const db = runtime?.env?.DB;
+  try {
+    const runtime = (locals as any).runtime;
+    const db = runtime?.env?.DB;
 
-  const logId = url.searchParams.get('lid');
-  const event = url.searchParams.get('event') || '';
-  const step = url.searchParams.get('step') || 'intro';
+    const logId = url.searchParams.get('lid');
+    const event = url.searchParams.get('event') || '';
+    const step = url.searchParams.get('step') || 'intro';
 
-  const form = await request.formData();
-  const callSid = String(form.get('CallSid') || '');
-  const digits = String(form.get('Digits') || '');
-  const speech = String(form.get('SpeechResult') || '');
+    const form = await readTwilioParams(request);
+    const callSid = String(form.get('CallSid') || '');
+    const digits = String(form.get('Digits') || '');
+    const speech = String(form.get('SpeechResult') || '');
 
-  console.log('[twilio-voice] webhook_received', {
-    step,
-    event,
-    logId,
-    callSid,
-    digits,
-    speech,
-    callStatus: String(form.get('CallStatus') || ''),
-    from: String(form.get('From') || ''),
-    to: String(form.get('To') || ''),
-  });
+    console.log('[twilio-voice] webhook_received', {
+      step,
+      event,
+      logId,
+      callSid,
+      digits,
+      speech,
+      callStatus: String(form.get('CallStatus') || ''),
+      from: String(form.get('From') || ''),
+      to: String(form.get('To') || ''),
+      contentType: request.headers.get('content-type') || '',
+    });
 
   // Status callback flow
   if (event === 'status') {
@@ -191,7 +227,15 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     );
   }
 
-  return twiml(`<Say voice="alice">Invalid Twilio webhook step.</Say><Hangup/>`);
+    return twiml(`<Say voice="alice">Invalid Twilio webhook step.</Say><Hangup/>`);
+  } catch (e: any) {
+    console.error('[twilio-voice] fatal webhook error', {
+      message: e?.message || String(e),
+      stack: e?.stack || null,
+      url: request.url,
+    });
+    return twiml(`<Say voice="alice">Sorry, a temporary error occurred. Goodbye.</Say><Hangup/>`);
+  }
 };
 
 export const GET: APIRoute = async ({ url }) => {
