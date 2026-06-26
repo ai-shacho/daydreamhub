@@ -15,8 +15,12 @@ const MAX_TRANSCRIPT_CHARS = 700;
 const ALLOWED_STEPS = new Set(['intro', 'echo']);
 
 function twiml(body: string): Response {
-  const safeBody = typeof body === 'string' ? body : '<Say voice="alice">Temporary error. Goodbye.</Say><Hangup/>';
-  return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${safeBody}</Response>`, {
+  const safeBody = typeof body === 'string'
+    ? body
+    : '<Say voice="Polly.Matthew" language="en-US">Temporary error. Goodbye.</Say><Hangup/>';
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><Response>${safeBody}</Response>`;
+  console.log('Generated TwiML:', xml);
+  return new Response(xml, {
     headers: { 'Content-Type': 'text/xml; charset=utf-8', 'Cache-Control': 'no-store' },
     status: 200,
   });
@@ -187,7 +191,7 @@ async function readTwilioParams(request: Request): Promise<URLSearchParams> {
 }
 
 export const POST: APIRoute = async ({ request, locals, url }) => {
-  const safeGoodbye = () => twiml(`<Say voice="alice">Thank you. Goodbye.</Say><Hangup/>`);
+  const safeGoodbye = () => twiml(`<Say voice="Polly.Matthew" language="en-US">Thank you. Goodbye.</Say><Hangup/>`);
 
   try {
     const runtime = (locals as any)?.runtime;
@@ -243,9 +247,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       return twiml(
         `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
-        `<Say voice="alice">Hello, this is a Twilio test call. Please say something.</Say>` +
+        `<Say voice="Polly.Matthew" language="en-US">Hello, this is a Twilio test call. Please say something.</Say>` +
         `</Gather>` +
-        `<Say voice="alice">I did not hear anything. Goodbye.</Say><Hangup/>`
+        `<Say voice="Polly.Matthew" language="en-US">I did not hear anything. Goodbye.</Say><Hangup/>`
       );
     }
 
@@ -257,7 +261,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           note: turn >= MAX_TURN_COUNT ? 'twilio_no_input_max_turns' : 'twilio_no_input_on_echo',
           sid: callSid ? `twilio:${callSid}` : null,
         });
-        return twiml(`<Say voice="alice">I did not catch that. Thank you. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="Polly.Matthew" language="en-US">I did not catch that. Thank you. Goodbye.</Say><Hangup/>`);
       }
 
       const transcriptLine = clampText(`[Twilio][Hotel]: ${recognized} (sid:${callSid || 'none'})`, MAX_TRANSCRIPT_CHARS);
@@ -277,7 +281,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           transcription: transcriptLine,
           sid: callSid ? `twilio:${callSid}` : null,
         });
-        return twiml(`<Say voice="alice">Thanks for your time. We will end this call now. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="Polly.Matthew" language="en-US">Thanks for your time. We will end this call now. Goodbye.</Say><Hangup/>`);
       }
 
       await updateStatus(db, logId, 'awaiting_response', {
@@ -289,9 +293,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const gatherAction = makeWebhookUrl(url, logId, 'echo', turn + 1);
       return twiml(
         `<Gather input="speech dtmf" timeout="6" speechTimeout="auto" action="${esc(gatherAction)}" method="POST">` +
-        `<Say voice="alice">I heard: ${esc(recognized)}. If you want to finish, please say No.</Say>` +
+        `<Say voice="Polly.Matthew" language="en-US">I heard: ${esc(recognized)}. If you want to finish, please say No.</Say>` +
         `</Gather>` +
-        `<Say voice="alice">No input received. Thank you. Goodbye.</Say><Hangup/>`
+        `<Say voice="Polly.Matthew" language="en-US">No input received. Thank you. Goodbye.</Say><Hangup/>`
       );
     }
 
@@ -300,14 +304,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       note: `twilio_invalid_step_fallback:${step}`,
       sid: callSid ? `twilio:${callSid}` : null,
     });
-    return twiml(`<Say voice="alice">Invalid state detected. Restarting.</Say><Redirect method="POST">${esc(makeWebhookUrl(url, logId, 'intro', 0))}</Redirect>`);
+    return twiml(`<Say voice="Polly.Matthew" language="en-US">Invalid state detected. Restarting.</Say><Redirect method="POST">${esc(makeWebhookUrl(url, logId, 'intro', 0))}</Redirect>`);
   } catch (e: any) {
     console.error('[twilio-voice] fatal webhook error', {
       message: e?.message || String(e),
       stack: e?.stack || null,
       url: request.url,
     });
-    return twiml(`<Say voice="alice">Sorry, a temporary error occurred. Goodbye.</Say><Hangup/>`);
+    return twiml(`<Say voice="Polly.Matthew" language="en-US">Sorry, a temporary error occurred. Goodbye.</Say><Hangup/>`);
   }
 };
 
