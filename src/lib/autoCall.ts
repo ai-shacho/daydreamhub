@@ -98,48 +98,78 @@ export async function triggerAutoCall(env: any, booking: any): Promise<number | 
 
 export async function initiateCall(env: any, callLogId: number, booking: any): Promise<void> {
   const db = env.DB;
-  const webhookUrl = (env?.SITE_URL || 'https://daydreamhub-1sv.pages.dev') + '/api/webhooks/telnyx-voice';
+  const baseUrl = 'https://daydreamhub.com';
+  const provider = String(env?.VOICE_PROVIDER || '').toLowerCase() === 'twilio' ? 'twilio' : 'telnyx';
   try {
-    const response = await fetch('https://api.telnyx.com/v2/calls', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.TELNYX_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        connection_id: env.TELNYX_CONNECTION_ID,
-        to: booking.hotel_phone,
-        from: env.TELNYX_FROM_NUMBER,
-        webhook_url: webhookUrl,
-        webhook_url_method: 'POST',
-        client_state: btoa(
-          JSON.stringify({
-            call_log_id: callLogId,
-            booking_id: booking.booking_id,
-            hotel_id: booking.hotel_id,
-            plan_id: booking.plan_id,
-            guest_name: booking.guest_name,
-            check_in_date: booking.check_in_date,
-            check_in_time: booking.check_in_time,
-            check_out_time: booking.check_out_time,
-            guests: booking.guests,
-            plan_name: booking.plan_name,
-            hotel_name: booking.hotel_name,
-          })
-        ),
-      }),
-    });
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Telnyx API error: ${response.status} ${err}`);
+    let callId = '';
+    if (provider === 'twilio') {
+      if (!env?.TWILIO_ACCOUNT_SID || !env?.TWILIO_AUTH_TOKEN || !env?.TWILIO_FROM_NUMBER) {
+        throw new Error('Twilio env not configured');
+      }
+      const auth = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
+      const params = new URLSearchParams();
+      params.set('To', booking.hotel_phone);
+      params.set('From', env.TWILIO_FROM_NUMBER);
+      params.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}`);
+      params.set('Method', 'POST');
+      params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}&event=status`);
+      params.set('StatusCallbackMethod', 'POST');
+      params.set('StatusCallbackEvent', 'initiated');
+      params.append('StatusCallbackEvent', 'ringing');
+      params.append('StatusCallbackEvent', 'answered');
+      params.append('StatusCallbackEvent', 'completed');
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const txt = await res.text();
+      const data: any = txt ? JSON.parse(txt) : {};
+      if (!res.ok) throw new Error(`Twilio API error: ${res.status} ${txt}`);
+      callId = `twilio:${data?.sid || ''}`;
+    } else {
+      const webhookUrl = `${baseUrl}/api/webhooks/telnyx-voice`;
+      const response = await fetch('https://api.telnyx.com/v2/calls', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.TELNYX_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          connection_id: env.TELNYX_CONNECTION_ID,
+          to: booking.hotel_phone,
+          from: env.TELNYX_FROM_NUMBER,
+          webhook_url: webhookUrl,
+          webhook_url_method: 'POST',
+          client_state: btoa(
+            JSON.stringify({
+              call_log_id: callLogId,
+              booking_id: booking.booking_id,
+              hotel_id: booking.hotel_id,
+              plan_id: booking.plan_id,
+              guest_name: booking.guest_name,
+              check_in_date: booking.check_in_date,
+              check_in_time: booking.check_in_time,
+              check_out_time: booking.check_out_time,
+              guests: booking.guests,
+              plan_name: booking.plan_name,
+              hotel_name: booking.hotel_name,
+            })
+          ),
+        }),
+      });
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(`Telnyx API error: ${response.status} ${err}`);
+      }
+      const data: any = await response.json();
+      callId = data.data.call_control_id;
     }
-    const data: any = await response.json();
-    const callControlId = data.data.call_control_id;
     await db
       .prepare(
         `UPDATE call_logs SET telnyx_call_id = ?, status = 'calling', started_at = datetime('now') WHERE id = ?`
       )
-      .bind(callControlId, callLogId)
+      .bind(callId, callLogId)
       .run();
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

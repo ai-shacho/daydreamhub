@@ -500,8 +500,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const { lead_id } = body;
     if (!lead_id) return new Response(JSON.stringify({ error: 'lead_id is required' }), { status: 400 });
 
-    if (!env?.TELNYX_API_KEY || !env?.TELNYX_FROM_NUMBER || !env?.TELNYX_CONNECTION_ID) {
+    const voiceProvider = String(env?.VOICE_PROVIDER || '').toLowerCase() === 'twilio' ? 'twilio' : 'telnyx';
+    if (voiceProvider === 'telnyx' && (!env?.TELNYX_API_KEY || !env?.TELNYX_FROM_NUMBER || !env?.TELNYX_CONNECTION_ID)) {
       return new Response(JSON.stringify({ error: 'Telnyx not configured' }), { status: 503 });
+    }
+    if (voiceProvider === 'twilio' && (!env?.TWILIO_ACCOUNT_SID || !env?.TWILIO_AUTH_TOKEN || !env?.TWILIO_FROM_NUMBER)) {
+      return new Response(JSON.stringify({ error: 'Twilio not configured' }), { status: 503 });
     }
 
     const lead: any = await db.prepare(`SELECT * FROM outreach_leads WHERE id = ?`).bind(lead_id).first();
@@ -525,34 +529,64 @@ export const POST: APIRoute = async ({ request, locals }) => {
       .bind(`Outreach: ${lead.hotel_name} [variant:${variantCode}]`).run();
     const callLogId = (logResult as any)?.meta?.last_row_id || null;
 
-    const baseUrl = env.SITE_URL || 'https://daydreamhub-1sv.pages.dev';
-    const stateObj = { phase: 'outreach', lead_id, call_log_id: callLogId, hotel_name: lead.hotel_name, script_variant: variantCode };
-    const stateBytes = new TextEncoder().encode(JSON.stringify(stateObj));
-    let bin = '';
-    stateBytes.forEach((b) => (bin += String.fromCharCode(b)));
-    const clientState = btoa(bin);
+    const baseUrl = 'https://daydreamhub.com';
 
     try {
-      const res = await fetch('https://api.telnyx.com/v2/calls', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${env.TELNYX_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          connection_id: env.TELNYX_CONNECTION_ID,
-          to: lead.phone,
-          from: env.TELNYX_FROM_NUMBER,
-          from_display_name: 'DayDreamHub',
-          webhook_url: `${baseUrl}/api/webhooks/telnyx-voice?lid=${callLogId || ''}`,
-          webhook_url_method: 'POST',
-          client_state: clientState,
-          timeout_secs: 30,
-        }),
-      });
-      const data: any = await res.json();
-      if (!res.ok) {
-        await db.prepare(`UPDATE call_logs SET status='failed', error_detail=? WHERE id=?`).bind(JSON.stringify(data), callLogId).run().catch(() => {});
-        return new Response(JSON.stringify({ error: 'Telnyx error', details: data }), { status: res.status });
+      let callSid: string | null = null;
+      if (voiceProvider === 'twilio') {
+        const auth = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
+        const form = new URLSearchParams();
+        form.set('To', lead.phone);
+        form.set('From', env.TWILIO_FROM_NUMBER);
+        form.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}`);
+        form.set('Method', 'POST');
+        form.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&event=status`);
+        form.set('StatusCallbackMethod', 'POST');
+        form.set('StatusCallbackEvent', 'initiated');
+        form.append('StatusCallbackEvent', 'ringing');
+        form.append('StatusCallbackEvent', 'answered');
+        form.append('StatusCallbackEvent', 'completed');
+
+        const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
+          method: 'POST',
+          headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString(),
+        });
+        const text = await res.text();
+        const data: any = text ? JSON.parse(text) : {};
+        if (!res.ok) {
+          await db.prepare(`UPDATE call_logs SET status='failed', error_detail=? WHERE id=?`).bind(JSON.stringify(data || text), callLogId).run().catch(() => {});
+          return new Response(JSON.stringify({ error: 'Twilio error', details: data || text }), { status: res.status });
+        }
+        callSid = data?.sid ? `twilio:${data.sid}` : null;
+      } else {
+        const stateObj = { phase: 'outreach', lead_id, call_log_id: callLogId, hotel_name: lead.hotel_name, script_variant: variantCode };
+        const stateBytes = new TextEncoder().encode(JSON.stringify(stateObj));
+        let bin = '';
+        stateBytes.forEach((b) => (bin += String.fromCharCode(b)));
+        const clientState = btoa(bin);
+
+        const res = await fetch('https://api.telnyx.com/v2/calls', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${env.TELNYX_API_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            connection_id: env.TELNYX_CONNECTION_ID,
+            to: lead.phone,
+            from: env.TELNYX_FROM_NUMBER,
+            from_display_name: 'DayDreamHub',
+            webhook_url: `${baseUrl}/api/webhooks/telnyx-voice?lid=${callLogId || ''}`,
+            webhook_url_method: 'POST',
+            client_state: clientState,
+            timeout_secs: 30,
+          }),
+        });
+        const data: any = await res.json();
+        if (!res.ok) {
+          await db.prepare(`UPDATE call_logs SET status='failed', error_detail=? WHERE id=?`).bind(JSON.stringify(data), callLogId).run().catch(() => {});
+          return new Response(JSON.stringify({ error: 'Telnyx error', details: data }), { status: res.status });
+        }
+        callSid = data?.data?.call_session_id || data?.data?.call_control_id || null;
       }
-      const callSid = data?.data?.call_session_id || data?.data?.call_control_id || null;
       if (callLogId && callSid) {
         await db.prepare(`UPDATE call_logs SET telnyx_call_id=? WHERE id=?`).bind(callSid, callLogId).run();
       }
