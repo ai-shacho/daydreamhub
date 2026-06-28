@@ -239,7 +239,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_dayuse_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
         const action = makeWebhookUrl(request, logId, 'ask_price', 0);
-        return gatherTwiml(action, 'What is the final total price in Japanese yen, including all service fees and taxes? You can say the amount, or enter numbers and press the hash key.', { timeout: 10, finishOnKey: '#', preface: 'Thank you. We recognized your answer.' });
+        return gatherTwiml(action, 'What is the final total price in US dollars, including all service fees and taxes? For example, say fifty dollars. You can say the amount, or enter numbers and press the hash key.', { timeout: 10, finishOnKey: '#', preface: 'Thank you.' });
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
@@ -259,20 +259,20 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (step === 'ask_price') {
       if (isRepeat(speech, digits)) {
         const action = makeWebhookUrl(request, logId, 'ask_price', turn + 1);
-        return gatherTwiml(action, 'Please tell me the final total amount in Japanese yen including all taxes and fees. You may also use the keypad and then press the hash key.', { timeout: 10, finishOnKey: '#' });
+        return gatherTwiml(action, 'Please tell me the final total amount in US dollars, including all taxes and fees. You may also use the keypad and then press the hash key.', { timeout: 10, finishOnKey: '#' });
       }
       const amount = parsePrice(speech, digits);
       if (amount != null) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: Confirming price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', 0);
-        return gatherTwiml(action, `To confirm, the final total is ${amount} yen. ${amount}円でよろしいですか？ Press 1 or say yes to confirm. Press 2 or say no. If the amount is different, say the correct amount or enter it by keypad.`, { preface: 'Thank you. We recognized your answer.' });
+        return gatherTwiml(action, `To confirm, the final total amount including taxes and fees is ${amount} dollars. Is ${amount} dollars correct? Press 1 or say yes to confirm. Press 2 or say no. If the amount is different, say the correct amount or enter it by keypad.`, { preface: 'Thank you.' });
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'ask_price', turn + 1);
-      return gatherTwiml(action, 'Sorry, I could not hear the amount clearly. Please say the final total in Japanese yen, or enter digits and press the hash key.');
+      return gatherTwiml(action, 'Could you please repeat the final total amount in US dollars, including taxes and fees? You can also enter digits and press the hash key.');
     }
 
     if (step === 'confirm_booking') {
@@ -280,7 +280,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (amount != null && !isYes(speech, digits) && !isNo(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price_corrected:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', turn + 1);
-        return gatherTwiml(action, `Updated amount is ${amount} yen. ${amount}円でよろしいですか？ Press 1 or say yes to confirm, or press 2 or say no.`, { preface: 'Thank you. We recognized your answer.' });
+        return gatherTwiml(action, `Thank you. The updated amount is ${amount} dollars. Is ${amount} dollars correct? Press 1 or say yes to confirm, or press 2 or say no.`, { preface: 'Thank you.' });
       }
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'confirmed', 'twilio_booking_confirmed', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
