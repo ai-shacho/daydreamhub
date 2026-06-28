@@ -8,7 +8,16 @@ type DbLike = {
   };
 };
 
-type Step = 'intro' | 'outreach_ask_interest' | 'ask_dayuse' | 'ask_price' | 'confirm_booking';
+type Step =
+  | 'intro'
+  | 'outreach_phase_0'
+  | 'outreach_phase_1'
+  | 'outreach_phase_2'
+  | 'outreach_phase_4'
+  | 'outreach_phase_5'
+  | 'ask_dayuse'
+  | 'ask_price'
+  | 'confirm_booking';
 
 const MAX_RETRY = 3;
 const WEBHOOK_BASE = 'https://daydreamhub.com';
@@ -78,7 +87,11 @@ function normalizeLogId(raw: string | null): string | null {
 
 function normalizeStep(raw: string | null): Step {
   const s = String(raw || 'intro').trim().toLowerCase();
-  if (s === 'outreach_ask_interest') return 'outreach_ask_interest';
+  if (s === 'outreach_phase_0' || s === 'outreach_ask_interest') return 'outreach_phase_0';
+  if (s === 'outreach_phase_1') return 'outreach_phase_1';
+  if (s === 'outreach_phase_2') return 'outreach_phase_2';
+  if (s === 'outreach_phase_4') return 'outreach_phase_4';
+  if (s === 'outreach_phase_5') return 'outreach_phase_5';
   if (s === 'ask_dayuse') return 'ask_dayuse';
   if (s === 'ask_price') return 'ask_price';
   if (s === 'confirm_booking') return 'confirm_booking';
@@ -137,6 +150,58 @@ async function updateCallLog(db: DbLike | null, logId: string | null, status: st
   }
 }
 
+async function updateOutreachState(
+  db: DbLike | null,
+  params: {
+    leadId: number | null;
+    logId: string | null;
+    status: string;
+    outcome?: string;
+    personInChargeName?: string | null;
+    needsRecall?: number | null;
+    doNotCall?: number | null;
+    materials?: number | null;
+    explanation?: number | null;
+    retryCount?: number | null;
+  }
+) {
+  if (!db || !params.leadId || !params.logId) return;
+  const outcome = params.outcome || params.status;
+  const personName = params.personInChargeName ? clamp(params.personInChargeName, 80) : null;
+
+  await db.prepare(`UPDATE outreach_call_attempts
+      SET outcome=?,
+          recognized_status=?,
+          person_in_charge_name=COALESCE(?, person_in_charge_name),
+          retry_count=COALESCE(?, retry_count),
+          updated_at=datetime('now')
+      WHERE lead_id=? AND call_log_id=?`)
+    .bind(outcome, params.status, personName, params.retryCount ?? null, params.leadId, params.logId)
+    .run().catch(() => {});
+
+  await db.prepare(`UPDATE outreach_leads
+      SET status=?,
+          last_outreach_status=?,
+          person_in_charge_name=COALESCE(?, person_in_charge_name),
+          needs_recall=COALESCE(?, needs_recall),
+          do_not_call=COALESCE(?, do_not_call),
+          requested_materials=COALESCE(?, requested_materials),
+          requested_explanation=COALESCE(?, requested_explanation),
+          updated_at=datetime('now')
+      WHERE id=?`)
+    .bind(
+      params.status,
+      params.status,
+      personName,
+      params.needsRecall ?? null,
+      params.doNotCall ?? null,
+      params.materials ?? null,
+      params.explanation ?? null,
+      params.leadId
+    )
+    .run().catch(() => {});
+}
+
 function parsePrice(text: string, digits: string): number | null {
   const d = clamp(digits, 32).replace(/[^\d]/g, '');
   if (d) {
@@ -163,11 +228,35 @@ function isRepeat(speech: string, digits: string): boolean {
   if (digits === '3') return true;
   return /\b(repeat|again)\b/i.test(speech);
 }
-function isInterested(speech: string, digits: string): 'materials' | 'callback' | 'reject' | 'unknown' {
+function extractPersonName(speech: string): string | null {
+  const s = clamp(speech, 200);
+  const patterns = [
+    /(?:my name is|this is|i am|i'm|speaking is)\s+([a-z][a-z\s.'-]{1,40})/i,
+    /(?:person in charge is|manager is|owner is)\s+([a-z][a-z\s.'-]{1,40})/i,
+  ];
+  for (const p of patterns) {
+    const m = s.match(p);
+    if (!m?.[1]) continue;
+    const v = m[1].trim().replace(/\s{2,}/g, ' ');
+    if (v.length >= 2 && v.length <= 50) return v;
+  }
+  return null;
+}
+
+function classifyOutreachPhase0(speech: string, digits: string): 'available' | 'absent' | 'reject' | 'unknown' {
+  if (digits === '1') return 'available';
+  if (digits === '2') return 'absent';
+  if (/\b(yes|speaking|available|this is|i am|i'm)\b/i.test(speech)) return 'available';
+  if (/\b(not here|absent|away|out of office|not available|left|later)\b/i.test(speech)) return 'absent';
+  if (/\b(stop|remove|not interested|decline|do not call|dont call)\b/i.test(speech)) return 'reject';
+  return 'unknown';
+}
+
+function classifyOutreachPhase2(speech: string, digits: string): 'materials' | 'meeting' | 'reject' | 'unknown' {
   if (digits === '1') return 'materials';
-  if (digits === '2') return 'callback';
-  if (/\b(material|brochure|send|document)\b/i.test(speech)) return 'materials';
-  if (/\b(call\s?back|callback|follow\s?up|explain|meeting)\b/i.test(speech)) return 'callback';
+  if (digits === '2') return 'meeting';
+  if (/\b(material|brochure|deck|document|send|info)\b/i.test(speech)) return 'materials';
+  if (/\b(meeting|callback|call back|follow up|appointment|schedule|talk)\b/i.test(speech)) return 'meeting';
   if (/\b(not interested|no thanks|stop|remove|decline)\b/i.test(speech)) return 'reject';
   return 'unknown';
 }
@@ -208,15 +297,15 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       if (String(row?.note || '').toLowerCase().includes('outreach')) {
         phase = 'outreach';
-        outreachLead = await db.prepare(`SELECT l.id, l.hotel_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
+        outreachLead = await db.prepare(`SELECT l.id, l.hotel_name, l.person_in_charge_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
       }
     }
 
     if (step === 'intro') {
       if (phase === 'outreach') {
-        await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_intro', callSid ? `twilio:${callSid}` : undefined);
-        const action = makeWebhookUrl(request, logId, 'outreach_ask_interest', 0);
-        return gatherTwiml(action, 'Hello, this is DayDreamHub. Listing is free. Press 1 if you want our materials, or press 2 if you want a follow-up explanation call. You can also answer by voice.');
+        await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0', callSid ? `twilio:${callSid}` : undefined);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_0', 0);
+        return gatherTwiml(action, 'Hello, this is DayDreamHub. May I speak with the person in charge of partnership decisions? Press 1 if available now, or press 2 if not available. You can also answer by voice.');
       }
 
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
@@ -230,31 +319,110 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       return gatherTwiml(action, prompt);
     }
 
-    if (step === 'outreach_ask_interest') {
-      const choice = isInterested(speech, digits);
-      if (choice === 'materials' || choice === 'callback') {
-        const outcome = choice === 'materials' ? 'interested' : 'appointment_set';
-        await updateCallLog(db, logId, 'confirmed', `twilio_outreach_${choice}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `pressed ${digits}`}`);
-        if (db && outreachLead?.id) {
-          await db.prepare(`UPDATE outreach_leads SET status=?, needs_recall=?, updated_at=datetime('now') WHERE id=?`).bind(outcome, choice === 'callback' ? 1 : 0, outreachLead.id).run().catch(() => {});
-          await db.prepare(`UPDATE outreach_call_attempts SET outcome=?, updated_at=datetime('now') WHERE lead_id=? AND call_log_id=?`).bind(outcome, outreachLead.id, logId).run().catch(() => {});
-        }
-        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your response and will follow up shortly. Goodbye.</Say><Hangup/>`);
+    if (step === 'outreach_phase_0') {
+      const decision = classifyOutreachPhase0(speech, digits);
+      if (decision === 'available') {
+        await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0_available', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `pressed ${digits || '1'}`}`);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_2', 0);
+        return gatherTwiml(action, 'Thank you. DayDreamHub offers free listings for hotels. Would you prefer we send materials first, or schedule a short explanation call? Press 1 for materials, or press 2 for a short meeting call.');
       }
-      if (choice === 'reject') {
-        await updateCallLog(db, logId, 'declined', 'twilio_outreach_rejected', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'not interested'}`);
-        if (db && outreachLead?.id) {
-          await db.prepare(`UPDATE outreach_leads SET status='not_interested', do_not_call=1, needs_recall=0, updated_at=datetime('now') WHERE id=?`).bind(outreachLead.id).run().catch(() => {});
-          await db.prepare(`UPDATE outreach_call_attempts SET outcome='not_interested', updated_at=datetime('now') WHERE lead_id=? AND call_log_id=?`).bind(outreachLead.id, logId).run().catch(() => {});
-        }
-        return twiml(`<Say voice="${VOICE}">Thank you. Understood. Goodbye.</Say><Hangup/>`);
+      if (decision === 'absent') {
+        await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0_absent', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `pressed ${digits || '2'}`}`);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_1', 0);
+        return gatherTwiml(action, 'Understood. Could you share the name of the person in charge so we can follow up properly?');
+      }
+      if (decision === 'reject') {
+        await updateCallLog(db, logId, 'declined', 'twilio_outreach_rejected_phase_0', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'not interested'}`);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'not_interested', outcome: 'not_interested', doNotCall: 1, needsRecall: 0, retryCount: turn });
+        return twiml(`<Say voice="${VOICE}">Understood. Thank you for your time. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
-        await updateCallLog(db, logId, 'no_answer', 'twilio_outreach_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        await updateCallLog(db, logId, 'no_answer', 'twilio_outreach_timeout_phase_0', callSid ? `twilio:${callSid}` : undefined);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_ask_interest', turn + 1);
-      return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 for materials, press 2 for a follow-up explanation call, or answer by voice.');
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_0', turn + 1);
+      return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Press 1 if the person in charge is available now, or press 2 if unavailable.');
+    }
+
+    if (step === 'outreach_phase_1') {
+      const personName = extractPersonName(speech);
+      if (personName) {
+        await updateCallLog(db, logId, 'confirmed', `twilio_outreach_absent_name_acquired:${personName}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech}`);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'absent_name_acquired', outcome: 'absent_name_acquired', personInChargeName: personName, needsRecall: 1, retryCount: turn });
+        return twiml(`<Say voice="${VOICE}">Thank you. We will follow up with ${esc(personName)}. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_outreach_timeout_phase_1', callSid ? `twilio:${callSid}` : undefined);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
+        return twiml(`<Say voice="${VOICE}">Sorry, we could not capture the name clearly. We will try again later. Goodbye.</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_1', turn + 1);
+      return gatherTwiml(action, 'Sorry, I did not catch the name. Please say the name of the person in charge once more.');
+    }
+
+    if (step === 'outreach_phase_2') {
+      const intent = classifyOutreachPhase2(speech, digits);
+      if (intent === 'materials') {
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_4', 0);
+        return gatherTwiml(action, 'Great. To confirm, may we send our overview materials? Press 1 or say yes to confirm, or press 2 or say no.');
+      }
+      if (intent === 'meeting') {
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_5', 0);
+        return gatherTwiml(action, 'Great. To confirm, may our team schedule a short follow-up meeting call? Press 1 or say yes to confirm, or press 2 or say no.');
+      }
+      if (intent === 'reject') {
+        await updateCallLog(db, logId, 'declined', 'twilio_outreach_rejected_phase_2', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'not interested'}`);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'not_interested', outcome: 'not_interested', doNotCall: 1, needsRecall: 0, retryCount: turn });
+        return twiml(`<Say voice="${VOICE}">Understood. Thank you for your time. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_outreach_timeout_phase_2', callSid ? `twilio:${callSid}` : undefined);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
+        return twiml(`<Say voice="${VOICE}">We could not confirm your preference after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_2', turn + 1);
+      return gatherTwiml(action, 'Sorry, I did not catch that. Press 1 for materials, or press 2 for a short meeting call.');
+    }
+
+    if (step === 'outreach_phase_4') {
+      if (isYes(speech, digits)) {
+        await updateCallLog(db, logId, 'confirmed', 'twilio_outreach_materials_agreed', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'materials_agreed', outcome: 'materials_agreed', materials: 1, explanation: 0, needsRecall: 0, retryCount: turn });
+        return twiml(`<Say voice="${VOICE}">Thank you. We will send the materials shortly. Goodbye.</Say><Hangup/>`);
+      }
+      if (isNo(speech, digits)) {
+        await updateCallLog(db, logId, 'declined', 'twilio_outreach_materials_declined', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'not_interested', outcome: 'not_interested', doNotCall: 1, needsRecall: 0, retryCount: turn });
+        return twiml(`<Say voice="${VOICE}">Understood. Thank you for your time. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_outreach_timeout_phase_4', callSid ? `twilio:${callSid}` : undefined);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
+        return twiml(`<Say voice="${VOICE}">We could not confirm after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_4', turn + 1);
+      return gatherTwiml(action, 'Sorry, I did not catch that. Press 1 or say yes to receive materials, or press 2 or say no.');
+    }
+
+    if (step === 'outreach_phase_5') {
+      if (isYes(speech, digits)) {
+        await updateCallLog(db, logId, 'confirmed', 'twilio_outreach_meeting_agreed', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'meeting_agreed', outcome: 'meeting_agreed', materials: 0, explanation: 1, needsRecall: 1, retryCount: turn });
+        return twiml(`<Say voice="${VOICE}">Thank you. Our team will arrange a short follow-up meeting call. Goodbye.</Say><Hangup/>`);
+      }
+      if (isNo(speech, digits)) {
+        await updateCallLog(db, logId, 'declined', 'twilio_outreach_meeting_declined', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'not_interested', outcome: 'not_interested', doNotCall: 1, needsRecall: 0, retryCount: turn });
+        return twiml(`<Say voice="${VOICE}">Understood. Thank you for your time. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_outreach_timeout_phase_5', callSid ? `twilio:${callSid}` : undefined);
+        await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
+        return twiml(`<Say voice="${VOICE}">We could not confirm after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_5', turn + 1);
+      return gatherTwiml(action, 'Sorry, I did not catch that. Press 1 or say yes to schedule a follow-up meeting call, or press 2 or say no.');
     }
 
     if (step === 'ask_dayuse') {

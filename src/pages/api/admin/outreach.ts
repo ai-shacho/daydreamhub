@@ -15,6 +15,10 @@ const VALID_LEAD_STATUSES = new Set([
   'interested',
   'appointment_set',
   'contact_obtained',
+  'materials_agreed',
+  'meeting_agreed',
+  'absent_name_acquired',
+  'timeout_or_error',
   'not_interested',
   'declined',
   'no_answer',
@@ -215,10 +219,10 @@ export const GET: APIRoute = async ({ request, locals, url }) => {
   if (listExists) {
     const listRows = await db.prepare(
       `SELECT ol.*,
-              COALESCE(SUM(CASE WHEN l.status IN ('interested','appointment_set') THEN 1 ELSE 0 END),0) AS success_count,
+              COALESCE(SUM(CASE WHEN l.status IN ('interested','appointment_set','materials_agreed','meeting_agreed') THEN 1 ELSE 0 END),0) AS success_count,
               COALESCE(SUM(CASE WHEN l.status IN ('not_interested','declined') THEN 1 ELSE 0 END),0) AS rejected_count,
               COALESCE(SUM(CASE WHEN l.status IN ('calling') THEN 1 ELSE 0 END),0) AS calling_count,
-              COALESCE(SUM(CASE WHEN l.status IN ('new','no_answer','voicemail') OR l.status IS NULL THEN 1 ELSE 0 END),0) AS pending_count
+              COALESCE(SUM(CASE WHEN l.status IN ('new','no_answer','voicemail','absent_name_acquired','timeout_or_error') OR l.status IS NULL THEN 1 ELSE 0 END),0) AS pending_count
        FROM outreach_lists ol
        LEFT JOIN outreach_list_members m ON m.list_id = ol.id AND m.status != 'removed'
        LEFT JOIN outreach_leads l ON l.id = m.lead_id
@@ -604,7 +608,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           lead_timezone, call_started_at_local, call_started_weekday_local, call_started_hour_local,
           script_variant, script_prompt_version,
           created_at, updated_at
-        ) VALUES (?, ?, ?, 'in_progress', datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, 'v1', datetime('now'), datetime('now'))`)
+        ) VALUES (?, ?, ?, 'in_progress', datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, 'v2', datetime('now'), datetime('now'))`)
         .bind(lead_id, callLogId, callSid, jst.dateTime, jst.weekday, jst.hour, localTz, local.dateTime, local.weekday, local.hour, variantCode)
         .run().catch(() => {});
 
@@ -614,7 +618,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     } catch (e: any) {
       await db.prepare(`UPDATE call_logs SET status='failed', error_detail=? WHERE id=?`).bind(e.message, callLogId).run().catch(() => {});
       await db.prepare(`INSERT INTO outreach_call_attempts (lead_id, call_log_id, outcome, raw_hangup_reason, call_started_at_utc, lead_timezone, script_variant, script_prompt_version, created_at, updated_at)
-                  VALUES (?, ?, 'failed', ?, datetime('now'), ?, ?, 'v1', datetime('now'), datetime('now'))`)
+                  VALUES (?, ?, 'failed', ?, datetime('now'), ?, ?, 'v2', datetime('now'), datetime('now'))`)
         .bind(lead_id, callLogId, e.message || 'telnyx_error', localTz, variantCode)
         .run().catch(() => {});
       return new Response(JSON.stringify({ error: e.message }), { status: 500 });
@@ -632,9 +636,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     const doNotCall = normalizedStatus && ['declined', 'not_interested'].includes(normalizedStatus) ? 1 : null;
     const needsRecall = normalizedStatus
-      ? (['no_answer', 'voicemail'].includes(normalizedStatus)
+      ? (['no_answer', 'voicemail', 'absent_name_acquired', 'timeout_or_error', 'meeting_agreed'].includes(normalizedStatus)
         ? 1
-        : (['declined', 'not_interested', 'interested', 'appointment_set', 'contact_obtained'].includes(normalizedStatus) ? 0 : null))
+        : (['declined', 'not_interested', 'interested', 'appointment_set', 'contact_obtained', 'materials_agreed'].includes(normalizedStatus) ? 0 : null))
       : null;
 
     await db.prepare(`UPDATE outreach_leads
