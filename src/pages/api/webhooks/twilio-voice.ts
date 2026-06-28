@@ -10,8 +10,20 @@ type DbLike = {
 
 type Step = 'intro' | 'outreach_ask_interest' | 'ask_dayuse' | 'ask_price' | 'confirm_booking';
 
-const MAX_RETRY = 2;
+const MAX_RETRY = 3;
 const WEBHOOK_BASE = 'https://daydreamhub.com';
+const VOICE = 'Polly.Joanna';
+
+function gatherTwiml(action: string, prompt: string, opts?: { timeout?: number; finishOnKey?: string; preface?: string }): Response {
+  const timeout = opts?.timeout ?? 8;
+  const finishOnKey = opts?.finishOnKey ? ` finishOnKey="${esc(opts.finishOnKey)}"` : '';
+  const preface = opts?.preface ? `<Say voice="${VOICE}">${esc(opts.preface)}</Say>` : '';
+  return twiml(
+    `${preface}<Gather input="speech dtmf" timeout="${timeout}" speechTimeout="auto" actionOnEmptyResult="true" language="en-US" action="${esc(action)}" method="POST"${finishOnKey}>` +
+    `<Say voice="${VOICE}">${esc(prompt)}</Say>` +
+    `</Gather>`
+  );
+}
 
 function twiml(body: string): Response {
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><Response>${body}</Response>`, {
@@ -179,11 +191,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (phase === 'outreach') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_intro', callSid ? `twilio:${callSid}` : undefined);
         const action = makeWebhookUrl(request, logId, 'outreach_ask_interest', 0);
-        return twiml(
-          `<Gather input="speech dtmf" timeout="8" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST">` +
-          `<Say voice="Polly.Joanna">Hello, this is DayDreamHub. Listing is free. Press 1 if you want our materials, or press 2 if you want a follow-up explanation call. You can also answer by voice.</Say>` +
-          `</Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`
-        );
+        return gatherTwiml(action, 'Hello, this is DayDreamHub. Listing is free. Press 1 if you want our materials, or press 2 if you want a follow-up explanation call. You can also answer by voice.');
       }
 
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
@@ -191,11 +199,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const checkIn = booking?.check_in_date || 'the requested date';
       const guests = Number(booking?.guests || 1);
       const prompt = `We have a guest looking for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
-      return twiml(
-        `<Gather input="speech dtmf" timeout="8" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST">` +
-        `<Say voice="Polly.Joanna">${esc(prompt)}</Say>` +
-        `</Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`
-      );
+      return gatherTwiml(action, prompt);
     }
 
     if (step === 'outreach_ask_interest') {
@@ -207,7 +211,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           await db.prepare(`UPDATE outreach_leads SET status=?, needs_recall=?, updated_at=datetime('now') WHERE id=?`).bind(outcome, choice === 'callback' ? 1 : 0, outreachLead.id).run().catch(() => {});
           await db.prepare(`UPDATE outreach_call_attempts SET outcome=?, updated_at=datetime('now') WHERE lead_id=? AND call_log_id=?`).bind(outcome, outreachLead.id, logId).run().catch(() => {});
         }
-        return twiml(`<Say voice="Polly.Joanna">Thank you. We will follow up shortly. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your response and will follow up shortly. Goodbye.</Say><Hangup/>`);
       }
       if (choice === 'reject') {
         await updateCallLog(db, logId, 'declined', 'twilio_outreach_rejected', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'not interested'}`);
@@ -215,14 +219,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           await db.prepare(`UPDATE outreach_leads SET status='not_interested', do_not_call=1, needs_recall=0, updated_at=datetime('now') WHERE id=?`).bind(outreachLead.id).run().catch(() => {});
           await db.prepare(`UPDATE outreach_call_attempts SET outcome='not_interested', updated_at=datetime('now') WHERE lead_id=? AND call_log_id=?`).bind(outreachLead.id, logId).run().catch(() => {});
         }
-        return twiml(`<Say voice="Polly.Joanna">Understood. Thank you for your time. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. Understood. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_outreach_no_answer', callSid ? `twilio:${callSid}` : undefined);
-        return twiml(`<Say voice="Polly.Joanna">Sorry, I could not catch your response. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'outreach_ask_interest', turn + 1);
-      return twiml(`<Gather input="speech dtmf" timeout="8" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">Sorry, I didn't catch that. Press 1 for materials, press 2 for a follow-up explanation call, or answer by voice.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+      return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 for materials, press 2 for a follow-up explanation call, or answer by voice.');
     }
 
     if (step === 'ask_dayuse') {
@@ -230,45 +234,45 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const action = makeWebhookUrl(request, logId, 'ask_dayuse', turn + 1);
         const checkIn = booking?.check_in_date || 'the requested date';
         const guests = Number(booking?.guests || 1);
-        return twiml(`<Gather input="speech dtmf" timeout="8" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">We have a guest looking for a day-use stay on ${esc(checkIn)} for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+        return gatherTwiml(action, `We have a guest looking for a day-use stay on ${checkIn} for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no.`);
       }
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_dayuse_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
         const action = makeWebhookUrl(request, logId, 'ask_price', 0);
-        return twiml(`<Gather input="speech dtmf" timeout="10" finishOnKey="#" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">What is the final total price in US dollars, including all service fees and taxes? You can say the amount, or enter numbers and press the hash key.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+        return gatherTwiml(action, 'What is the final total price in Japanese yen, including all service fees and taxes? You can say the amount, or enter numbers and press the hash key.', { timeout: 10, finishOnKey: '#', preface: 'Thank you. We recognized your answer.' });
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
         if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="Polly.Joanna">Thank you for confirming. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your answer. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_dayuse_no_answer', callSid ? `twilio:${callSid}` : undefined);
-        return twiml(`<Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'ask_dayuse', turn + 1);
-      return twiml(`<Gather input="speech dtmf" timeout="8" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">I'm sorry, I did not receive that. Press 1 or say yes if you offer day-use. Press 2 or say no if you do not.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+      return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes if you offer day-use. Press 2 or say no if you do not.');
     }
 
     if (step === 'ask_price') {
       if (isRepeat(speech, digits)) {
         const action = makeWebhookUrl(request, logId, 'ask_price', turn + 1);
-        return twiml(`<Gather input="speech dtmf" timeout="10" finishOnKey="#" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">Please tell me the final total amount in US dollars including all taxes and fees. You may also use the keypad and then press the hash key.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+        return gatherTwiml(action, 'Please tell me the final total amount in Japanese yen including all taxes and fees. You may also use the keypad and then press the hash key.', { timeout: 10, finishOnKey: '#' });
       }
       const amount = parsePrice(speech, digits);
       if (amount != null) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: Confirming price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', 0);
-        return twiml(`<Gather input="speech dtmf" timeout="8" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">To confirm, the final total is ${amount} US dollars including taxes and fees. Press 1 or say yes to confirm. Press 2 or say no. If the amount is different, say the correct amount or enter it by keypad.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+        return gatherTwiml(action, `To confirm, the final total is ${amount} yen. ${amount}円でよろしいですか？ Press 1 or say yes to confirm. Press 2 or say no. If the amount is different, say the correct amount or enter it by keypad.`, { preface: 'Thank you. We recognized your answer.' });
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
-        return twiml(`<Say voice="Polly.Joanna">I could not capture the rate. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'ask_price', turn + 1);
-      return twiml(`<Gather input="speech dtmf" timeout="10" finishOnKey="#" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">Sorry, I couldn't catch the amount. Please repeat the final total in US dollars, or enter digits and press the hash key.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+      return gatherTwiml(action, 'Sorry, I could not hear the amount clearly. Please say the final total in Japanese yen, or enter digits and press the hash key.');
     }
 
     if (step === 'confirm_booking') {
@@ -276,28 +280,28 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (amount != null && !isYes(speech, digits) && !isNo(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price_corrected:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', turn + 1);
-        return twiml(`<Gather input="speech dtmf" timeout="8" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">Thank you. Updated amount is ${amount} US dollars. Press 1 or say yes to confirm, or press 2 or say no.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+        return gatherTwiml(action, `Updated amount is ${amount} yen. ${amount}円でよろしいですか？ Press 1 or say yes to confirm, or press 2 or say no.`, { preface: 'Thank you. We recognized your answer.' });
       }
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'confirmed', 'twilio_booking_confirmed', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
         if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='confirmed_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="Polly.Joanna">Thank you. The booking request is confirmed. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your answer. The booking request is confirmed. Goodbye.</Say><Hangup/>`);
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_booking_declined', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
         if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="Polly.Joanna">Understood. Thank you for your time. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your answer. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_confirm_no_answer', callSid ? `twilio:${callSid}` : undefined);
-        return twiml(`<Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'confirm_booking', turn + 1);
-      return twiml(`<Gather input="speech dtmf" timeout="8" speechTimeout="auto" language="en-US" action="${esc(action)}" method="POST"><Say voice="Polly.Joanna">Sorry, I did not catch that. Press 1 or say yes to confirm. Press 2 or say no to decline. You can also provide a corrected amount.</Say></Gather><Say voice="Polly.Joanna">No response received. Goodbye.</Say><Hangup/>`);
+      return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes to confirm. Press 2 or say no to decline. You can also provide a corrected amount.');
     }
 
     return twiml(`<Say voice="Polly.Joanna">Invalid state. Goodbye.</Say><Hangup/>`);
