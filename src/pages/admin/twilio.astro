@@ -47,11 +47,11 @@ const statusColor: Record<string, string> = {
 };
 ---
 
-<AdminLayout title="Twilio Phone" activeNav="twilio">
+<AdminLayout title="Concierge Dialer" activeNav="twilio">
   <div class="flex items-center justify-between mb-6">
     <div>
-      <h2 class="text-xl font-semibold text-slate-900">📞 Twilio Test Dialer</h2>
-      <p class="text-sm text-slate-500 mt-1">Twilio専用のテスト発信（Telnyxとは完全分離）</p>
+      <h2 class="text-xl font-semibold text-slate-900">🛎️ Concierge Dialer</h2>
+      <p class="text-sm text-slate-500 mt-1">コンシェルジュ架電（booking phase）専用のTwilioテスト画面</p>
     </div>
   </div>
 
@@ -74,7 +74,7 @@ const statusColor: Record<string, string> = {
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <div class="bg-white rounded-xl border border-slate-200 p-5">
-      <h3 class="font-semibold text-slate-800 mb-4">📲 Twilioテスト発信</h3>
+      <h3 class="font-semibold text-slate-800 mb-4">📲 Concierge テスト発信</h3>
       <form id="dial-form" class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">ホテル選択（任意）</label>
@@ -92,14 +92,39 @@ const statusColor: Record<string, string> = {
           <input id="to-number" type="tel" placeholder="+81312345678" required
             class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
         </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">ゲスト名</label>
+            <input id="guest-name" type="text" value="Taro Yamada" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">人数</label>
+            <input id="guest-count" type="number" min="1" value="2" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">チェックイン日</label>
+            <input id="check-in-date" type="date" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">開始時刻</label>
+            <input id="check-in-time" type="time" value="14:00" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">終了時刻</label>
+            <input id="check-out-time" type="time" value="19:00" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          </div>
+        </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">メモ（任意）</label>
-          <input id="call-note" type="text" placeholder="Twilio test call"
+          <input id="call-note" type="text" placeholder="Concierge booking test"
             class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
         </div>
+
         <button type="submit" id="dial-btn"
           class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-medium py-2.5 rounded-lg transition-colors">
-          Twilioテスト発信
+          Conciergeテスト発信（phase=booking）
         </button>
       </form>
       <div id="dial-result" class="hidden mt-4 p-3 rounded-lg text-sm"></div>
@@ -127,6 +152,15 @@ const statusColor: Record<string, string> = {
 </AdminLayout>
 
 <script is:inline>
+(() => {
+  const dateEl = document.getElementById('check-in-date');
+  if (dateEl && !dateEl.value) {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    dateEl.value = d.toISOString().slice(0, 10);
+  }
+})();
+
 document.getElementById('hotel-select')?.addEventListener('change', function() {
   const opt = this.options[this.selectedIndex];
   const phone = opt?.getAttribute('data-phone') || '';
@@ -141,6 +175,11 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
   const hotelId = hotelSelect?.value || null;
   const toNumber = document.getElementById('to-number').value.trim();
   const note = document.getElementById('call-note').value.trim();
+  const guestName = document.getElementById('guest-name').value.trim();
+  const guestCount = Number(document.getElementById('guest-count').value || 1);
+  const checkInDate = document.getElementById('check-in-date').value;
+  const checkInTime = document.getElementById('check-in-time').value;
+  const checkOutTime = document.getElementById('check-out-time').value;
 
   if (!toNumber) return;
 
@@ -152,12 +191,23 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
     const res = await fetch('/api/admin/twilio-call', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'dial', to_number: toNumber, hotel_id: hotelId ? parseInt(hotelId) : null, note }),
+      body: JSON.stringify({
+        action: 'dial',
+        phase: 'booking',
+        to_number: toNumber,
+        hotel_id: hotelId ? parseInt(hotelId) : null,
+        guest_name: guestName || 'Test Guest',
+        guest_count: Number.isFinite(guestCount) ? Math.max(1, guestCount) : 1,
+        check_in_date: checkInDate,
+        check_in_time: checkInTime,
+        check_out_time: checkOutTime,
+        note,
+      }),
     });
     const data = await res.json();
     if (res.ok && data.success) {
       result.className = 'block mt-4 p-3 rounded-lg text-sm bg-green-50 text-green-700 border border-green-200';
-      result.textContent = `✅ Twilio発信成功！Call SID: ${data.call_sid || '—'}`;
+      result.textContent = `✅ Concierge発信成功！Call SID: ${data.call_sid || '—'} (phase=${data.phase || 'booking'})`;
       setTimeout(() => location.reload(), 3000);
     } else {
       result.className = 'block mt-4 p-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200';
@@ -168,7 +218,7 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
     result.textContent = `❌ 通信エラー: ${e.message}`;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Twilioテスト発信';
+    btn.textContent = 'Conciergeテスト発信（phase=booking）';
   }
 });
 </script>

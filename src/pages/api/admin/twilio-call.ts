@@ -13,6 +13,11 @@ function toHttpsOrigin(_siteUrl?: string | null): string {
   return TWILIO_WEBHOOK_BASE_URL;
 }
 
+function toPositiveInt(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const env = runtime?.env;
@@ -57,31 +62,60 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Unknown action' }), { status: 400 });
   }
 
-  const { to_number, hotel_id, note } = body;
-  if (!to_number) {
+  const toNumber = String(body?.to_number || '').trim();
+  const phase = String(body?.phase || 'booking').trim().toLowerCase() === 'outreach' ? 'outreach' : 'booking';
+  const hotelId = toPositiveInt(body?.hotel_id);
+  const outreachLeadId = toPositiveInt(body?.lead_id);
+  const note = String(body?.note || '').trim();
+
+  if (!toNumber) {
     return new Response(JSON.stringify({ error: 'to_number is required' }), { status: 400 });
   }
+
+  const conciergeMeta = {
+    guest_name: String(body?.guest_name || 'Test Guest').trim() || 'Test Guest',
+    guest_count: Math.max(1, Number(body?.guest_count || body?.guests || 1) || 1),
+    check_in_date: String(body?.check_in_date || '').trim(),
+    check_in_time: String(body?.check_in_time || '').trim(),
+    check_out_time: String(body?.check_out_time || '').trim(),
+  };
 
   const baseUrl = toHttpsOrigin(env?.SITE_URL);
 
   try {
     let callLogId: number | null = null;
+    let logNote = note || `Twilio test call to ${toNumber}`;
+
+    if (phase === 'outreach') {
+      logNote = note || `Twilio outreach test call to ${toNumber}`;
+    } else {
+      const packed = JSON.stringify(conciergeMeta);
+      logNote = `${note || 'Twilio concierge test call'} [booking-test:${packed}]`;
+    }
+
     if (db) {
       await db.prepare(`
         INSERT INTO call_logs (hotel_id, status, note, created_at)
         VALUES (?1, 'queued', ?2, datetime('now'))
-      `).bind(hotel_id || null, note || `Twilio test call to ${to_number}`).run();
+      `).bind(hotelId, logNote).run();
       const row: any = await db.prepare(`SELECT last_insert_rowid() as id`).first();
       callLogId = row?.id || null;
+
+      if (phase === 'outreach' && callLogId && outreachLeadId) {
+        await db.prepare(`UPDATE outreach_leads SET call_log_id=?, status='calling', updated_at=datetime('now') WHERE id=?`)
+          .bind(callLogId, outreachLeadId)
+          .run()
+          .catch(() => {});
+      }
     }
 
-    const twimlUrl = `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}`;
+    const twimlUrl = `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&phase=${phase}`;
     const params = new URLSearchParams();
-    params.set('To', to_number);
+    params.set('To', toNumber);
     params.set('From', fromNumber);
     params.set('Url', twimlUrl);
     params.set('Method', 'POST');
-    params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&event=status`);
+    params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&event=status&phase=${phase}`);
     params.set('StatusCallbackMethod', 'POST');
     params.set('StatusCallbackEvent', 'initiated');
     params.append('StatusCallbackEvent', 'ringing');
@@ -117,6 +151,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({
       success: true,
       provider: 'twilio',
+      phase,
       call_sid: callSid,
       log_id: callLogId,
     }), { headers: { 'Content-Type': 'application/json' } });

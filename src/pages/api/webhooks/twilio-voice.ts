@@ -78,6 +78,24 @@ function readQuotedAmountFromNote(note: unknown): number | null {
   return Math.round(v * 100) / 100;
 }
 
+function readBookingTestMetaFromNote(note: unknown): { guest_name?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null {
+  const text = String(note ?? '');
+  const m = text.match(/\[booking-test:(\{.*\})\]/);
+  if (!m?.[1]) return null;
+  try {
+    const parsed = JSON.parse(m[1]);
+    return {
+      guest_name: String(parsed?.guest_name || '').trim() || undefined,
+      guest_count: Number(parsed?.guest_count || parsed?.guests || 0) || undefined,
+      check_in_date: String(parsed?.check_in_date || '').trim() || undefined,
+      check_in_time: String(parsed?.check_in_time || '').trim() || undefined,
+      check_out_time: String(parsed?.check_out_time || '').trim() || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function normalizeLogId(raw: string | null): string | null {
   if (!raw || !/^\d+$/.test(raw)) return null;
   const n = Number(raw);
@@ -285,13 +303,15 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       return new Response('ok', { status: 200 });
     }
 
-    let phase = 'booking';
+    let phase = String(url.searchParams.get('phase') || 'booking').toLowerCase() === 'outreach' ? 'outreach' : 'booking';
     let booking: any = null;
     let outreachLead: any = null;
+    let bookingTestMeta: { guest_name?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null = null;
     let quotedAmountFromNote: number | null = null;
     if (db && logId) {
       const row: any = await db.prepare(`SELECT id, booking_id, note FROM call_logs WHERE id = ?`).bind(logId).first().catch(() => null);
       quotedAmountFromNote = readQuotedAmountFromNote(row?.note);
+      bookingTestMeta = readBookingTestMetaFromNote(row?.note);
       if (row?.booking_id) {
         booking = await db.prepare(`SELECT b.id, b.guest_name, b.check_in_date, COALESCE(b.check_in_time, p.check_in_time) AS check_in_time, COALESCE(b.check_out_time, p.check_out_time) AS check_out_time, (COALESCE(b.adults,0) + COALESCE(b.children,0)) AS guests, h.name AS hotel_name FROM bookings b LEFT JOIN hotels h ON h.id = b.hotel_id LEFT JOIN plans p ON p.id = b.plan_id WHERE b.id = ?`).bind(row.booking_id).first().catch(() => null);
       }
@@ -300,6 +320,14 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         outreachLead = await db.prepare(`SELECT l.id, l.hotel_name, l.person_in_charge_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
       }
     }
+
+    const bookingCheckInDate = booking?.check_in_date || bookingTestMeta?.check_in_date || 'the requested date';
+    const bookingCheckInTimeRaw = booking?.check_in_time || bookingTestMeta?.check_in_time || 'the requested start time';
+    const bookingCheckOutTimeRaw = booking?.check_out_time || bookingTestMeta?.check_out_time || 'the requested end time';
+    const bookingCheckInTime = toAmPm(bookingCheckInTimeRaw);
+    const bookingCheckOutTime = toAmPm(bookingCheckOutTimeRaw);
+    const bookingGuests = Number(booking?.guests || bookingTestMeta?.guest_count || 1);
+    const bookingGuestName = booking?.guest_name || bookingTestMeta?.guest_name || 'the guest';
 
     if (step === 'intro') {
       if (phase === 'outreach') {
@@ -310,12 +338,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
       const action = makeWebhookUrl(request, logId, 'ask_dayuse', 0);
-      const checkIn = booking?.check_in_date || 'the requested date';
-      const checkInTime = booking?.check_in_time ? toAmPm(booking.check_in_time) : null;
-      const checkOutTime = booking?.check_out_time ? toAmPm(booking.check_out_time) : null;
-      const timeInfo = checkInTime && checkOutTime ? ` from ${checkInTime} to ${checkOutTime}` : '';
-      const guests = Number(booking?.guests || 1);
-      const prompt = `We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
+      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+      const prompt = `We have a guest looking to book a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
       return gatherTwiml(action, prompt);
     }
 
@@ -428,12 +452,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (step === 'ask_dayuse') {
       if (isRepeat(speech, digits)) {
         const action = makeWebhookUrl(request, logId, 'ask_dayuse', turn + 1);
-        const checkIn = booking?.check_in_date || 'the requested date';
-        const checkInTime = booking?.check_in_time ? toAmPm(booking.check_in_time) : null;
-        const checkOutTime = booking?.check_out_time ? toAmPm(booking.check_out_time) : null;
-        const timeInfo = checkInTime && checkOutTime ? ` from ${checkInTime} to ${checkOutTime}` : '';
-        const guests = Number(booking?.guests || 1);
-        return gatherTwiml(action, `We have a guest looking to book a day-use stay on ${checkIn}${timeInfo}, for ${guests} ${guests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no.`);
+        const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+        return gatherTwiml(action, `We have a guest looking to book a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no.`);
       }
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_dayuse_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
@@ -464,11 +484,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (amount != null) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: Confirming price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', 0);
-        const checkIn = booking?.check_in_date || 'the requested date';
-        const checkInTime = toAmPm(booking?.check_in_time || 'the requested start time');
-        const checkOutTime = toAmPm(booking?.check_out_time || 'the requested end time');
-        const guests = Number(booking?.guests || 1);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${checkIn}, time is ${checkInTime} to ${checkOutTime}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
+        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
@@ -483,15 +499,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (amount != null && !isYes(speech, digits) && !isNo(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price_corrected:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', turn + 1);
-        const checkIn = booking?.check_in_date || 'the requested date';
-        const checkInTime = toAmPm(booking?.check_in_time || 'the requested start time');
-        const checkOutTime = toAmPm(booking?.check_out_time || 'the requested end time');
-        const guests = Number(booking?.guests || 1);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${checkIn}, time is ${checkInTime} to ${checkOutTime}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
+        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
       }
       if (isYes(speech, digits)) {
         const finalAmount = quotedAmountFromNote;
-        const guestName = booking?.guest_name || 'the guest';
+        const guestName = bookingGuestName;
         await updateCallLog(db, logId, 'confirmed', 'twilio_booking_confirmed', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
         if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='confirmed_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
@@ -511,11 +523,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       const action = makeWebhookUrl(request, logId, 'confirm_booking', turn + 1);
       if (quotedAmountFromNote != null) {
-        const checkIn = booking?.check_in_date || 'the requested date';
-        const checkInTime = toAmPm(booking?.check_in_time || 'the requested start time');
-        const checkOutTime = toAmPm(booking?.check_out_time || 'the requested end time');
-        const guests = Number(booking?.guests || 1);
-        return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${checkIn}, time is ${checkInTime} to ${checkOutTime}, for ${guests} ${guests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
+        return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
       }
       return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes to confirm. Press 2 or say no to decline. You can also provide a corrected amount.');
     }

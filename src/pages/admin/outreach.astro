@@ -41,7 +41,7 @@ if (!admin) return Astro.redirect('/admin/login');
           <button id="btn-call-next" class="px-3 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-700">Call Next</button>
         </div>
       </div>
-      <p id="dialer-status" class="text-xs text-slate-500">待機中</p>
+      <p id="dialer-status" class="text-xs text-slate-500">待機中（営業架電テストは「Twilio Test」ボタンで phase=outreach を送信）</p>
     </section>
 
     <section class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
@@ -180,6 +180,22 @@ async function api(body) {
   return r.json();
 }
 
+async function twilioOutreachDial(lead) {
+  const r = await fetch('/api/admin/twilio-call', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      action: 'dial',
+      phase: 'outreach',
+      lead_id: Number(lead?.id || 0) || null,
+      to_number: String(lead?.phone || '').trim(),
+      note: `Twilio outreach test: ${String(lead?.hotel_name || '').trim() || 'unknown lead'}`,
+    }),
+  });
+  return r.json();
+}
+
 function statusLabel(status) {
   return String(status || 'new').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -192,7 +208,7 @@ function setCallActionLock(locked) {
   const startBtn = document.getElementById('btn-start-auto');
   if (startBtn && autoCalling) startBtn.disabled = true;
 
-  document.querySelectorAll('.btn-call').forEach((btn) => {
+  document.querySelectorAll('.btn-call, .btn-twilio-outreach').forEach((btn) => {
     btn.disabled = !!locked;
     btn.classList.toggle('opacity-60', !!locked);
     btn.classList.toggle('cursor-not-allowed', !!locked);
@@ -358,6 +374,7 @@ function renderTable() {
         <td class="px-4 py-3">
           <div class="flex gap-1 justify-end flex-wrap">
             <button class="btn-call px-2 py-1 bg-teal-600 text-white text-xs rounded hover:bg-teal-700" data-id="${l.id}">Call</button>
+            <button class="btn-twilio-outreach px-2 py-1 bg-fuchsia-600 text-white text-xs rounded hover:bg-fuchsia-700" data-id="${l.id}">Twilio Test</button>
             <button class="btn-note px-2 py-1 bg-slate-100 text-slate-600 text-xs rounded hover:bg-slate-200" data-id="${l.id}" data-notes="${esc(l.notes || '')}">Note</button>
             <button class="btn-detail px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded hover:bg-indigo-200" data-id="${l.id}">Detail</button>
           </div>
@@ -380,6 +397,29 @@ function renderTable() {
       await loadDashboard();
       await waitUntilNoCalling();
       document.getElementById('dialer-status').textContent = 'Call ended';
+      await loadDashboard();
+    } finally {
+      setCallActionLock(false);
+    }
+  }));
+
+  tbody.querySelectorAll('.btn-twilio-outreach').forEach((btn) => btn.addEventListener('click', async (e) => {
+    if (callActionLocked) return;
+    const id = Number(e.currentTarget.dataset.id);
+    const lead = leads.find((x) => Number(x?.id) === id);
+    if (!lead?.phone) {
+      alert('電話番号が未設定のためTwilioテスト発信できません');
+      return;
+    }
+
+    setCallActionLock(true);
+    try {
+      const res = await twilioOutreachDial(lead);
+      if (res?.error) {
+        alert(res.error);
+        return;
+      }
+      document.getElementById('dialer-status').textContent = `Twilio outreach test started for lead #${id} (phase=outreach)`;
       await loadDashboard();
     } finally {
       setCallActionLock(false);
