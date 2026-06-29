@@ -286,7 +286,7 @@ function getOutreachScript(variant: string | undefined) {
     };
   }
   return {
-    opening: 'Hello! This is Sarah calling from DayDreamHub, a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays, and listing is completely free. If you would like our materials, press 1. If you would like a follow-up explanation call, press 2. You can also answer by voice.',
+    opening: 'Hello! This is Sarah calling from DayDreamHub, a day-use hotel booking platform. We connect travelers with hotels that offer short daytime stays. Listing is completely free — we only charge a 10% commission per booking. If you would like our materials, press 1. If you would like a follow-up explanation call, press 2. You can also answer by voice.',
     followup: 'Thank you. To help us route correctly, press 1 for materials or press 2 for a follow-up explanation call.',
   };
 }
