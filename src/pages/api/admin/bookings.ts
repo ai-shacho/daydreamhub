@@ -156,9 +156,9 @@ const updateBookingStatus: APIRoute = async ({ request, locals }) => {
           await triggerAutoCall(
             {
               DB: db,
-              TELNYX_API_KEY: runtime?.env?.TELNYX_API_KEY || '',
-              TELNYX_CONNECTION_ID: runtime?.env?.TELNYX_CONNECTION_ID || '',
-              TELNYX_FROM_NUMBER: runtime?.env?.TELNYX_FROM_NUMBER || '',
+              TWILIO_ACCOUNT_SID: runtime?.env?.TWILIO_ACCOUNT_SID || '',
+              TWILIO_AUTH_TOKEN: runtime?.env?.TWILIO_AUTH_TOKEN || '',
+              TWILIO_FROM_NUMBER: runtime?.env?.TWILIO_FROM_NUMBER || '',
             },
             bookingInfo
           );
@@ -284,9 +284,9 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
           await triggerAutoCall(
             {
               DB: db,
-              TELNYX_API_KEY: runtime?.env?.TELNYX_API_KEY || '',
-              TELNYX_CONNECTION_ID: runtime?.env?.TELNYX_CONNECTION_ID || '',
-              TELNYX_FROM_NUMBER: runtime?.env?.TELNYX_FROM_NUMBER || '',
+              TWILIO_ACCOUNT_SID: runtime?.env?.TWILIO_ACCOUNT_SID || '',
+              TWILIO_AUTH_TOKEN: runtime?.env?.TWILIO_AUTH_TOKEN || '',
+              TWILIO_FROM_NUMBER: runtime?.env?.TWILIO_FROM_NUMBER || '',
             },
             bookingInfo
           );

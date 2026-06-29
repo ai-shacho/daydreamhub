@@ -11,10 +11,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
 
-  const voiceProvider = String(env?.VOICE_PROVIDER || '').toLowerCase() === 'twilio' ? 'twilio' : 'telnyx';
-
-  if (voiceProvider === 'telnyx' && !env?.TELNYX_API_KEY) {
-    return new Response(JSON.stringify({ error: 'TELNYX_API_KEY not configured' }), { status: 503 });
+  if (!env?.TWILIO_ACCOUNT_SID || !env?.TWILIO_AUTH_TOKEN || !env?.TWILIO_FROM_NUMBER) {
+    return new Response(JSON.stringify({ error: 'Twilio not configured' }), { status: 503 });
   }
 
   let body: any;
@@ -44,61 +42,32 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
 
       let callSid: string | null = null;
+      const auth = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
+      const params = new URLSearchParams();
+      params.set('To', to_number);
+      params.set('From', env.TWILIO_FROM_NUMBER);
+      params.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}`);
+      params.set('Method', 'POST');
+      params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&event=status`);
+      params.set('StatusCallbackMethod', 'POST');
+      params.set('StatusCallbackEvent', 'initiated');
+      params.append('StatusCallbackEvent', 'ringing');
+      params.append('StatusCallbackEvent', 'answered');
+      params.append('StatusCallbackEvent', 'completed');
 
-      if (voiceProvider === 'twilio') {
-        if (!env?.TWILIO_ACCOUNT_SID || !env?.TWILIO_AUTH_TOKEN || !env?.TWILIO_FROM_NUMBER) {
-          return new Response(JSON.stringify({ error: 'Twilio not configured' }), { status: 503 });
-        }
-        const auth = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
-        const params = new URLSearchParams();
-        params.set('To', to_number);
-        params.set('From', env.TWILIO_FROM_NUMBER);
-        params.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}`);
-        params.set('Method', 'POST');
-        params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&event=status`);
-        params.set('StatusCallbackMethod', 'POST');
-        params.set('StatusCallbackEvent', 'initiated');
-        params.append('StatusCallbackEvent', 'ringing');
-        params.append('StatusCallbackEvent', 'answered');
-        params.append('StatusCallbackEvent', 'completed');
-
-        const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
-          method: 'POST',
-          headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
-        });
-        const text = await res.text();
-        const data: any = text ? JSON.parse(text) : {};
-        if (!res.ok) return new Response(JSON.stringify({ error: 'Twilio error', details: data || text }), { status: res.status });
-        callSid = data?.sid || null;
-      } else {
-        const stateJson = JSON.stringify({ call_log_id: callLogId, hotel_id: hotel_id || null, phase: 'ivr' });
-        const bytes = new TextEncoder().encode(stateJson);
-        let binary = '';
-        bytes.forEach(b => binary += String.fromCharCode(b));
-        const clientState = btoa(binary);
-        const res = await fetch('https://api.telnyx.com/v2/calls', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${env.TELNYX_API_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            connection_id: env.TELNYX_CONNECTION_ID,
-            to: to_number,
-            from: env.TELNYX_FROM_NUMBER,
-            from_display_name: 'DayDreamHub',
-            webhook_url: `${baseUrl}/api/webhooks/telnyx-voice?lid=${callLogId || ''}`,
-            webhook_url_method: 'POST',
-            client_state: clientState,
-            timeout_secs: 30,
-          }),
-        });
-        const data: any = await res.json();
-        if (!res.ok) return new Response(JSON.stringify({ error: 'Telnyx error', details: data }), { status: res.status });
-        callSid = data?.data?.call_session_id || data?.data?.call_control_id || null;
-      }
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const text = await res.text();
+      const data: any = text ? JSON.parse(text) : {};
+      if (!res.ok) return new Response(JSON.stringify({ error: 'Twilio error', details: data || text }), { status: res.status });
+      callSid = data?.sid || null;
 
       if (db && callSid && callLogId) {
         await db.prepare(`UPDATE call_logs SET telnyx_call_id = ? WHERE id = ?`)
-          .bind(voiceProvider === 'twilio' ? `twilio:${callSid}` : callSid, callLogId).run();
+          .bind(`twilio:${callSid}`, callLogId).run();
       }
 
       return new Response(JSON.stringify({
@@ -129,12 +98,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
   }
 
-  // Check Telnyx config status
+  // Check Twilio config status
   if (action === 'status') {
     const cfg = {
-      TELNYX_API_KEY: env?.TELNYX_API_KEY ? '✅ Set' : '❌ Not set',
-      TELNYX_FROM_NUMBER: env?.TELNYX_FROM_NUMBER || '❌ Not set',
-      TELNYX_CONNECTION_ID: env?.TELNYX_CONNECTION_ID || '❌ Not set',
+      TWILIO_ACCOUNT_SID: env?.TWILIO_ACCOUNT_SID ? '✅ Set' : '❌ Not set',
+      TWILIO_AUTH_TOKEN: env?.TWILIO_AUTH_TOKEN ? '✅ Set' : '❌ Not set',
+      TWILIO_FROM_NUMBER: env?.TWILIO_FROM_NUMBER || '❌ Not set',
     };
     return new Response(JSON.stringify(cfg), { headers: { 'Content-Type': 'application/json' } });
   }

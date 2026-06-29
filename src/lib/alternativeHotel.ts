@@ -4,9 +4,9 @@ import { sendAltChoiceEmail } from './email';
 
 interface AltHotelEnv {
   DB: D1Database;
-  TELNYX_API_KEY: string;
-  TELNYX_CONNECTION_ID: string;
-  TELNYX_FROM_NUMBER: string;
+  TWILIO_ACCOUNT_SID: string;
+  TWILIO_AUTH_TOKEN: string;
+  TWILIO_FROM_NUMBER: string;
   PAYPAL_CLIENT_ID: string;
   PAYPAL_SECRET: string;
   PAYPAL_MODE?: string;
@@ -128,9 +128,9 @@ async function findAndCallNextHotel(env: AltHotelEnv, bookingId: number): Promis
     await triggerAutoCall(
       {
         DB: db,
-        TELNYX_API_KEY: env.TELNYX_API_KEY,
-        TELNYX_CONNECTION_ID: env.TELNYX_CONNECTION_ID,
-        TELNYX_FROM_NUMBER: env.TELNYX_FROM_NUMBER,
+        TWILIO_ACCOUNT_SID: env.TWILIO_ACCOUNT_SID,
+        TWILIO_AUTH_TOKEN: env.TWILIO_AUTH_TOKEN,
+        TWILIO_FROM_NUMBER: env.TWILIO_FROM_NUMBER,
       },
       bookingInfo
     );

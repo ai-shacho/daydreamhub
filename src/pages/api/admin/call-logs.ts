@@ -70,10 +70,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
-  const TELNYX_API_KEY = runtime?.env?.TELNYX_API_KEY;
-  const TELNYX_CONNECTION_ID = runtime?.env?.TELNYX_CONNECTION_ID;
-  const TELNYX_FROM_NUMBER = runtime?.env?.TELNYX_FROM_NUMBER;
-  if (!db || !TELNYX_API_KEY || !TELNYX_CONNECTION_ID || !TELNYX_FROM_NUMBER) {
+  const TWILIO_ACCOUNT_SID = runtime?.env?.TWILIO_ACCOUNT_SID;
+  const TWILIO_AUTH_TOKEN = runtime?.env?.TWILIO_AUTH_TOKEN;
+  const TWILIO_FROM_NUMBER = runtime?.env?.TWILIO_FROM_NUMBER;
+  if (!db || !TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -112,9 +112,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const callLogId = await triggerAutoCall(
       {
         DB: db,
-        TELNYX_API_KEY,
-        TELNYX_CONNECTION_ID,
-        TELNYX_FROM_NUMBER,
+        TWILIO_ACCOUNT_SID,
+        TWILIO_AUTH_TOKEN,
+        TWILIO_FROM_NUMBER,
       },
       bookingInfo
     );
