@@ -96,10 +96,16 @@ export async function triggerAutoCall(env: any, booking: any): Promise<number | 
   return callLogId;
 }
 
+function resolveVoiceProvider(env: any): 'twilio' | 'telnyx' {
+  const useTwilio = String(env?.USE_TWILIO || '').toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(useTwilio)) return 'twilio';
+  return String(env?.VOICE_PROVIDER || '').toLowerCase() === 'twilio' ? 'twilio' : 'telnyx';
+}
+
 export async function initiateCall(env: any, callLogId: number, booking: any): Promise<void> {
   const db = env.DB;
   const baseUrl = 'https://daydreamhub.com';
-  const provider = String(env?.VOICE_PROVIDER || '').toLowerCase() === 'twilio' ? 'twilio' : 'telnyx';
+  const provider = resolveVoiceProvider(env);
   try {
     let callId = '';
     if (provider === 'twilio') {
@@ -110,9 +116,9 @@ export async function initiateCall(env: any, callLogId: number, booking: any): P
       const params = new URLSearchParams();
       params.set('To', booking.hotel_phone);
       params.set('From', env.TWILIO_FROM_NUMBER);
-      params.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}`);
+      params.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}&phase=booking`);
       params.set('Method', 'POST');
-      params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}&event=status`);
+      params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}&event=status&phase=booking`);
       params.set('StatusCallbackMethod', 'POST');
       params.set('StatusCallbackEvent', 'initiated');
       params.append('StatusCallbackEvent', 'ringing');

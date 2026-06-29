@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
 type DbLike = {
   prepare: (sql: string) => {
@@ -279,6 +280,39 @@ function classifyOutreachPhase2(speech: string, digits: string): 'materials' | '
   return 'unknown';
 }
 
+async function updateConciergeCallStatus(db: DbLike | null, conciergeCallId: string | null, status: string, extra: Record<string, any> = {}) {
+  if (!db || !conciergeCallId) return;
+  const fields = Object.entries({ status, ...extra }).map(([k]) => `${k} = ?`).join(', ');
+  const values = [...Object.values({ status, ...extra }), conciergeCallId];
+  await db.prepare(`UPDATE concierge_calls SET ${fields}, updated_at = datetime('now') WHERE id = ?`).bind(...values).run().catch((e) => {
+    console.error('[twilio-voice] concierge update failed', e);
+  });
+}
+
+async function advanceConciergeGroup(env: any, db: DbLike | null, conciergeCallId: string | null, outcome: 'booked' | 'available' | 'unavailable' | 'no_answer') {
+  if (!db || !conciergeCallId) return;
+  const call: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id = ?`).bind(conciergeCallId).first().catch(() => null);
+  const groupId = Number(call?.call_group_id || 0) || null;
+  if (!groupId) return;
+
+  if (outcome === 'booked' || outcome === 'available') {
+    await db.prepare("UPDATE concierge_call_groups SET status = 'success', updated_at = datetime('now') WHERE id = ? AND status != 'success'")
+      .bind(groupId).run().catch(() => {});
+    return;
+  }
+
+  const next = await initiateNextGroupCall(env, db, groupId).catch((e) => {
+    console.error('[twilio-voice] initiateNextGroupCall failed', e);
+    return null;
+  });
+
+  if (next?.status === 'all_failed') {
+    await processGroupRefund(env, db, groupId).catch((e) => {
+      console.error('[twilio-voice] processGroupRefund failed', e);
+    });
+  }
+}
+
 export const POST: APIRoute = async ({ request, locals, url }) => {
   try {
     const env = (locals as any)?.runtime?.env;
@@ -295,7 +329,37 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     const speech = clamp(form.get('SpeechResult') || form.get('UnstableSpeechResult') || '', 500);
     const callStatus = clamp(form.get('CallStatus') || '', 40).toLowerCase();
 
+    const phaseParam = String(url.searchParams.get('phase') || '').toLowerCase();
+
     if (event === 'status') {
+      const conciergeRow: any = (db && logId && (phaseParam === 'concierge' || phaseParam === ''))
+        ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(logId).first().catch(() => null)
+        : null;
+
+      if (conciergeRow) {
+        let conciergeStatus = 'calling';
+        let outcome: 'unavailable' | 'no_answer' | null = null;
+
+        if (['busy', 'failed', 'canceled'].includes(callStatus)) {
+          conciergeStatus = 'completed';
+          outcome = 'unavailable';
+        } else if (['no-answer', 'completed'].includes(callStatus)) {
+          conciergeStatus = 'completed';
+          outcome = 'no_answer';
+        }
+
+        await updateConciergeCallStatus(db, String(conciergeRow.id), conciergeStatus, {
+          telnyx_call_id: callSid ? `twilio:${callSid}` : undefined,
+          outcome: outcome || undefined,
+          ai_summary: outcome ? `twilio_status:${callStatus || 'unknown'}` : undefined,
+        });
+
+        if (outcome && !['booked', 'available'].includes(String(conciergeRow.outcome || ''))) {
+          await advanceConciergeGroup(env, db, String(conciergeRow.id), outcome);
+        }
+        return new Response('ok', { status: 200 });
+      }
+
       let mapped = 'calling';
       if (['busy', 'failed', 'canceled', 'no-answer'].includes(callStatus)) mapped = 'failed';
       if (callStatus === 'completed') mapped = 'no_answer';
@@ -303,12 +367,15 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       return new Response('ok', { status: 200 });
     }
 
-    let phase = String(url.searchParams.get('phase') || 'booking').toLowerCase() === 'outreach' ? 'outreach' : 'booking';
+    let phase: 'booking' | 'outreach' | 'concierge' = 'booking';
+    if (phaseParam === 'outreach') phase = 'outreach';
+    if (phaseParam === 'concierge') phase = 'concierge';
+
     let booking: any = null;
     let outreachLead: any = null;
     let bookingTestMeta: { guest_name?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null = null;
     let quotedAmountFromNote: number | null = null;
-    if (db && logId) {
+    if (db && logId && phase !== 'concierge') {
       const row: any = await db.prepare(`SELECT id, booking_id, note FROM call_logs WHERE id = ?`).bind(logId).first().catch(() => null);
       quotedAmountFromNote = readQuotedAmountFromNote(row?.note);
       bookingTestMeta = readBookingTestMetaFromNote(row?.note);

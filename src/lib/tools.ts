@@ -550,6 +550,12 @@ export async function processGroupRefund(env: any, db: any, groupId: number) {
     .run();
 }
 
+function resolveVoiceProvider(env: any): 'twilio' | 'telnyx' {
+  const useTwilio = String(env?.USE_TWILIO || '').toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(useTwilio)) return 'twilio';
+  return String(env?.VOICE_PROVIDER || '').toLowerCase() === 'twilio' ? 'twilio' : 'telnyx';
+}
+
 export async function initiateCall(env: any, db: any, sessionId: string, callId: number, params?: any) {
   if (!params) {
     const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details FROM concierge_calls WHERE id = ?").bind(callId).first();
@@ -585,7 +591,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
 
   try {
     const baseUrl = 'https://daydreamhub.com';
-    const provider = String(env?.VOICE_PROVIDER || '').toLowerCase() === 'twilio' ? 'twilio' : 'telnyx';
+    const provider = resolveVoiceProvider(env);
     let callProviderId = '';
 
     if (provider === 'twilio') {
@@ -596,9 +602,9 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       const paramsForm = new URLSearchParams();
       paramsForm.set('To', params.hotel_phone);
       paramsForm.set('From', env.TWILIO_FROM_NUMBER);
-      paramsForm.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}`);
+      paramsForm.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&phase=concierge`);
       paramsForm.set('Method', 'POST');
-      paramsForm.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&event=status`);
+      paramsForm.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&event=status&phase=concierge`);
       paramsForm.set('StatusCallbackMethod', 'POST');
       paramsForm.set('StatusCallbackEvent', 'initiated');
       paramsForm.append('StatusCallbackEvent', 'ringing');
