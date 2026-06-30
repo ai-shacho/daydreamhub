@@ -95,11 +95,23 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     if (db) {
       await db.prepare(`
-        INSERT INTO call_logs (hotel_id, status, note, created_at)
-        VALUES (?1, 'queued', ?2, datetime('now'))
-      `).bind(hotelId, logNote).run();
+        INSERT INTO call_logs (hotel_id, status, note, provider, phase, from_number, to_number, created_at, updated_at)
+        VALUES (?1, 'queued', ?2, 'twilio', ?3, ?4, ?5, datetime('now'), datetime('now'))
+      `).bind(hotelId, logNote, phase, fromNumber, toNumber).run();
       const row: any = await db.prepare(`SELECT last_insert_rowid() as id`).first();
       callLogId = row?.id || null;
+
+      if (callLogId) {
+        await db.prepare(`
+          INSERT INTO call_log_events (call_log_id, provider, event_type, phase, note, payload_json, created_at)
+          VALUES (?1, 'twilio', 'dial_requested', ?2, ?3, ?4, datetime('now'))
+        `).bind(
+          callLogId,
+          phase,
+          `Admin dial request to ${toNumber}`,
+          JSON.stringify({ to_number: toNumber, from_number: fromNumber, note, hotel_id: hotelId, lead_id: outreachLeadId })
+        ).run().catch(() => {});
+      }
 
       if (phase === 'outreach' && callLogId && outreachLeadId) {
         await db.prepare(`UPDATE outreach_leads SET call_log_id=?, status='calling', updated_at=datetime('now') WHERE id=?`)
@@ -144,8 +156,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     const callSid = data?.sid || null;
     if (db && callSid && callLogId) {
-      await db.prepare(`UPDATE call_logs SET telnyx_call_id=? WHERE id=?`)
+      await db.prepare(`UPDATE call_logs SET telnyx_call_id=?, last_event_type='dial_accepted', updated_at=datetime('now') WHERE id=?`)
         .bind(`twilio:${callSid}`, callLogId).run();
+      await db.prepare(`
+        INSERT INTO call_log_events (call_log_id, provider, event_type, phase, call_sid, note, payload_json, created_at)
+        VALUES (?1, 'twilio', 'dial_accepted', ?2, ?3, ?4, ?5, datetime('now'))
+      `).bind(
+        callLogId,
+        phase,
+        callSid,
+        'Twilio accepted outbound call request',
+        JSON.stringify({ sid: callSid, to_number: toNumber, from_number: fromNumber })
+      ).run().catch(() => {});
     }
 
     return new Response(JSON.stringify({

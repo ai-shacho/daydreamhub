@@ -34,11 +34,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
       let callLogId: number | null = null;
       if (db) {
         await db.prepare(`
-          INSERT INTO call_logs (hotel_id, status, note, created_at)
-          VALUES (?1, 'queued', ?2, datetime('now'))
-        `).bind(hotel_id || null, note || `Call to ${to_number}`).run();
+          INSERT INTO call_logs (hotel_id, status, note, provider, phase, from_number, to_number, created_at, updated_at)
+          VALUES (?1, 'queued', ?2, 'twilio', 'booking', ?3, ?4, datetime('now'), datetime('now'))
+        `).bind(hotel_id || null, note || `Call to ${to_number}`, env.TWILIO_FROM_NUMBER, to_number).run();
         const row: any = await db.prepare(`SELECT last_insert_rowid() as id`).first();
         callLogId = row?.id || null;
+        if (callLogId) {
+          await db.prepare(`
+            INSERT INTO call_log_events (call_log_id, provider, event_type, phase, note, payload_json, created_at)
+            VALUES (?1, 'twilio', 'dial_requested', 'booking', ?2, ?3, datetime('now'))
+          `).bind(callLogId, `Admin dial request to ${to_number}`, JSON.stringify({ to_number, hotel_id, note: note || null })).run().catch(() => {});
+        }
       }
 
       let callSid: string | null = null;
@@ -66,8 +72,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
       callSid = data?.sid || null;
 
       if (db && callSid && callLogId) {
-        await db.prepare(`UPDATE call_logs SET telnyx_call_id = ? WHERE id = ?`)
+        await db.prepare(`UPDATE call_logs SET telnyx_call_id = ?, last_event_type='dial_accepted', updated_at=datetime('now') WHERE id = ?`)
           .bind(`twilio:${callSid}`, callLogId).run();
+        await db.prepare(`
+          INSERT INTO call_log_events (call_log_id, provider, event_type, phase, call_sid, note, payload_json, created_at)
+          VALUES (?1, 'twilio', 'dial_accepted', 'booking', ?2, ?3, ?4, datetime('now'))
+        `).bind(callLogId, callSid, 'Twilio accepted outbound call request', JSON.stringify({ sid: callSid, to_number })).run().catch(() => {});
       }
 
       return new Response(JSON.stringify({

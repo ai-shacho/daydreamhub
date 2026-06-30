@@ -18,16 +18,34 @@ const cfg = {
 
 let callLogs: any[] = [];
 let hotels: any[] = [];
+const eventsByLogId: Record<string, any[]> = {};
 if (db) {
   try {
     const logsResult = await db.prepare(`
       SELECT cl.*, h.name as hotel_name, h.phone as hotel_phone
       FROM call_logs cl
       LEFT JOIN hotels h ON h.id = cl.hotel_id
-      WHERE cl.telnyx_call_id LIKE 'twilio:%' OR cl.note LIKE '%twilio%'
+      WHERE cl.provider = 'twilio' OR cl.telnyx_call_id LIKE 'twilio:%' OR cl.note LIKE '%twilio%'
       ORDER BY cl.created_at DESC LIMIT 30
     `).all();
     callLogs = logsResult?.results || [];
+
+    const ids = callLogs.map((l: any) => Number(l.id)).filter((n: number) => Number.isFinite(n) && n > 0);
+    if (ids.length > 0) {
+      const placeholders = ids.map(() => '?').join(',');
+      const evResult = await db.prepare(`
+        SELECT *
+        FROM call_log_events
+        WHERE call_log_id IN (${placeholders})
+        ORDER BY created_at ASC, id ASC
+      `).bind(...ids).all();
+      const events = evResult?.results || [];
+      for (const ev of events) {
+        const key = String(ev.call_log_id);
+        if (!eventsByLogId[key]) eventsByLogId[key] = [];
+        eventsByLogId[key].push(ev);
+      }
+    }
 
     const hotelsResult = await db.prepare(
       `SELECT id, name, phone, city, country FROM hotels WHERE is_active = 1 AND phone IS NOT NULL AND phone != '' ORDER BY name LIMIT 200`
@@ -136,16 +154,42 @@ const statusColor: Record<string, string> = {
         {callLogs.length === 0 ? (
           <p class="text-center text-slate-400 text-sm py-8">Twilioログなし</p>
         ) : callLogs.map(log => (
-          <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
-            <div class="min-w-0">
-              <p class="text-sm font-medium text-slate-800 truncate">{log.hotel_name || log.to_number || '—'}</p>
-              <p class="text-xs text-slate-400">{log.to_number || '—'} · {formatDisplayDate(log.created_at)}</p>
+          <div class="py-2 border-b border-slate-100 last:border-0">
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-slate-800 truncate">{log.hotel_name || log.to_number || '—'}</p>
+                <p class="text-xs text-slate-400">{log.to_number || '—'} · {formatDisplayDate(log.created_at)}</p>
+              </div>
+              <span class={`ml-2 flex-shrink-0 inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[log.status] || 'bg-slate-100 text-slate-600'}`}>
+                {log.status}
+              </span>
             </div>
-            <span class={`ml-2 flex-shrink-0 inline-block px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[log.status] || 'bg-slate-100 text-slate-600'}`}>
-              {log.status}
-            </span>
+            <div class="mt-1 flex items-center justify-between">
+              <p class="text-[11px] text-slate-500 truncate">{log.last_event_type || '—'} {log.last_step ? `· ${log.last_step}` : ''}</p>
+              <button
+                class="twilio-log-detail text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                data-log={JSON.stringify(log)}
+                data-events={JSON.stringify(eventsByLogId[String(log.id)] || [])}
+              >詳細</button>
+            </div>
           </div>
         ))}
+      </div>
+    </div>
+  </div>
+
+  <div id="twilio-detail-modal" class="hidden fixed inset-0 z-50 bg-black/40 px-4 py-8 overflow-y-auto">
+    <div class="max-w-2xl mx-auto bg-white rounded-xl border border-slate-200 shadow-xl">
+      <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <h4 class="font-semibold text-slate-900">Twilio通話詳細</h4>
+        <button id="twilio-detail-close" class="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div id="twilio-detail-summary" class="text-sm text-slate-700"></div>
+        <div>
+          <h5 class="text-sm font-semibold text-slate-800 mb-2">イベントタイムライン</h5>
+          <div id="twilio-detail-timeline" class="space-y-2 max-h-[420px] overflow-y-auto"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -221,4 +265,53 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
     btn.textContent = 'Conciergeテスト発信（phase=booking）';
   }
 });
+
+const detailModal = document.getElementById('twilio-detail-modal');
+const detailClose = document.getElementById('twilio-detail-close');
+const detailSummary = document.getElementById('twilio-detail-summary');
+const detailTimeline = document.getElementById('twilio-detail-timeline');
+
+function escHtml(v) {
+  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
+}
+
+function renderTimeline(events = []) {
+  if (!events.length) {
+    detailTimeline.innerHTML = '<p class="text-sm text-slate-400">イベント履歴なし</p>';
+    return;
+  }
+  detailTimeline.innerHTML = events.map((ev) => {
+    const at = escHtml(ev.created_at || '');
+    const main = escHtml(ev.event_type || 'event');
+    const sub = [ev.step, ev.call_status, ev.digits ? `digits:${ev.digits}` : ''].filter(Boolean).map(escHtml).join(' · ');
+    const speech = ev.speech_result ? `<div class="mt-1 text-xs text-slate-600">speech: ${escHtml(ev.speech_result)}</div>` : '';
+    const note = ev.note ? `<div class="mt-1 text-xs text-slate-600">${escHtml(ev.note)}</div>` : '';
+    return `<div class="border border-slate-200 rounded-lg p-2.5 bg-slate-50">
+      <div class="text-[11px] text-slate-500">${at}</div>
+      <div class="text-sm font-medium text-slate-800">${main}</div>
+      ${sub ? `<div class="text-xs text-slate-500">${sub}</div>` : ''}
+      ${speech}
+      ${note}
+    </div>`;
+  }).join('');
+}
+
+document.querySelectorAll('.twilio-log-detail').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const log = JSON.parse(btn.getAttribute('data-log') || '{}');
+    const events = JSON.parse(btn.getAttribute('data-events') || '[]');
+    detailSummary.innerHTML = `
+      <div><span class="text-slate-500">Log ID:</span> <span class="font-mono">${escHtml(log.id)}</span></div>
+      <div><span class="text-slate-500">ホテル/宛先:</span> ${escHtml(log.hotel_name || log.to_number || '—')}</div>
+      <div><span class="text-slate-500">ステータス:</span> ${escHtml(log.status || '—')} ${log.last_step ? `· ${escHtml(log.last_step)}` : ''}</div>
+      <div><span class="text-slate-500">作成:</span> ${escHtml(log.created_at || '—')}</div>
+      <div><span class="text-slate-500">Call SID:</span> ${escHtml(log.telnyx_call_id || '—')}</div>
+    `;
+    renderTimeline(events);
+    detailModal.classList.remove('hidden');
+  });
+});
+
+detailClose?.addEventListener('click', () => detailModal?.classList.add('hidden'));
+detailModal?.addEventListener('click', (e) => { if (e.target === detailModal) detailModal.classList.add('hidden'); });
 </script>

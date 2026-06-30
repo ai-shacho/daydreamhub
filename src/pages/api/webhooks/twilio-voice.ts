@@ -148,7 +148,60 @@ async function readTwilioParams(request: Request): Promise<URLSearchParams> {
   return new URLSearchParams(raw || '');
 }
 
-async function updateCallLog(db: DbLike | null, logId: string | null, status: string, note?: string, sid?: string, transcript?: string) {
+function safeJson(value: any): string {
+  try { return JSON.stringify(value); } catch { return '{}'; }
+}
+
+async function insertCallLogEvent(
+  db: DbLike | null,
+  logId: string | null,
+  event: {
+    eventType: string;
+    phase?: string;
+    step?: string;
+    turn?: number;
+    callSid?: string;
+    callStatus?: string;
+    digits?: string;
+    speech?: string;
+    note?: string;
+    payload?: any;
+  }
+) {
+  if (!db || !logId) return;
+  try {
+    await db.prepare(`
+      INSERT INTO call_log_events (
+        call_log_id, provider, event_type, phase, step, turn, call_sid, call_status,
+        digits, speech_result, note, payload_json, created_at
+      ) VALUES (?1, 'twilio', ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, datetime('now'))
+    `).bind(
+      Number(logId),
+      clamp(event.eventType, 80),
+      event.phase ? clamp(event.phase, 40) : null,
+      event.step ? clamp(event.step, 60) : null,
+      Number.isFinite(event.turn as number) ? Math.max(0, Math.trunc(Number(event.turn))) : null,
+      event.callSid ? clamp(event.callSid, 120) : null,
+      event.callStatus ? clamp(event.callStatus, 40) : null,
+      event.digits ? clamp(event.digits, 40) : null,
+      event.speech ? clamp(event.speech, 1000) : null,
+      event.note ? clamp(event.note, 500) : null,
+      safeJson(event.payload || null),
+    ).run();
+  } catch (e) {
+    console.error('[twilio-voice] insertCallLogEvent failed', e);
+  }
+}
+
+async function updateCallLog(
+  db: DbLike | null,
+  logId: string | null,
+  status: string,
+  note?: string,
+  sid?: string,
+  transcript?: string,
+  extra?: { phase?: string; step?: string; eventType?: string; callStatus?: string; answeredAt?: boolean; endedAt?: boolean }
+) {
   if (!db || !logId) return;
   try {
     const colsQ = db.prepare(`PRAGMA table_info(call_logs)`);
@@ -161,6 +214,14 @@ async function updateCallLog(db: DbLike | null, logId: string | null, status: st
     if (note) { sets.push(`note = COALESCE(note || ' | ', '') || ?`); binds.push(clamp(note, 280)); }
     if (sid && cols.has('telnyx_call_id')) { sets.push(`telnyx_call_id = ?`); binds.push(clamp(sid, 180)); }
     if (transcript && cols.has('transcription')) { sets.push(`transcription = COALESCE(transcription || '\n', '') || ?`); binds.push(clamp(transcript, 1000)); }
+    if (cols.has('provider')) { sets.push(`provider = COALESCE(provider, 'twilio')`); }
+    if (extra?.phase && cols.has('phase')) { sets.push(`phase = ?`); binds.push(clamp(extra.phase, 40)); }
+    if (extra?.step && cols.has('last_step')) { sets.push(`last_step = ?`); binds.push(clamp(extra.step, 60)); }
+    if (extra?.eventType && cols.has('last_event_type')) { sets.push(`last_event_type = ?`); binds.push(clamp(extra.eventType, 80)); }
+    if (extra?.callStatus && cols.has('last_call_status')) { sets.push(`last_call_status = ?`); binds.push(clamp(extra.callStatus, 40)); }
+    if (extra?.answeredAt && cols.has('answered_at')) { sets.push(`answered_at = COALESCE(answered_at, datetime('now'))`); }
+    if (extra?.endedAt && cols.has('ended_at')) { sets.push(`ended_at = COALESCE(ended_at, datetime('now'))`); }
+    if (cols.has('updated_at')) { sets.push(`updated_at = datetime('now')`); }
 
     binds.push(logId);
     await db.prepare(`UPDATE call_logs SET ${sets.join(', ')} WHERE id = ?`).bind(...binds).run();
@@ -331,6 +392,18 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
     const phaseParam = String(url.searchParams.get('phase') || '').toLowerCase();
 
+    await insertCallLogEvent(db, logId, {
+      eventType: event === 'status' ? 'status_callback' : 'gather_webhook',
+      phase: phaseParam || undefined,
+      step,
+      turn,
+      callSid: callSid || undefined,
+      callStatus: callStatus || undefined,
+      digits: digits || undefined,
+      speech: speech || undefined,
+      payload: Object.fromEntries(form.entries()),
+    });
+
     if (event === 'status') {
       const conciergeRow: any = (db && logId && (phaseParam === 'concierge' || phaseParam === ''))
         ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(logId).first().catch(() => null)
@@ -363,7 +436,22 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       let mapped = 'calling';
       if (['busy', 'failed', 'canceled', 'no-answer'].includes(callStatus)) mapped = 'failed';
       if (callStatus === 'completed') mapped = 'no_answer';
-      await updateCallLog(db, logId, mapped, `twilio_status:${callStatus || 'unknown'}`, callSid ? `twilio:${callSid}` : undefined);
+      await updateCallLog(
+        db,
+        logId,
+        mapped,
+        `twilio_status:${callStatus || 'unknown'}`,
+        callSid ? `twilio:${callSid}` : undefined,
+        undefined,
+        {
+          phase: phaseParam || undefined,
+          step,
+          eventType: 'status_callback',
+          callStatus: callStatus || undefined,
+          answeredAt: callStatus === 'answered',
+          endedAt: ['completed', 'busy', 'failed', 'canceled', 'no-answer'].includes(callStatus),
+        }
+      );
       return new Response('ok', { status: 200 });
     }
 
