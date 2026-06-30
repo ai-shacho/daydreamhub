@@ -586,7 +586,7 @@ export async function processGroupRefund(env: any, db: any, groupId: number) {
 
 export async function initiateCall(env: any, db: any, sessionId: string, callId: number, params?: any) {
   if (!params) {
-    const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details, status, outcome FROM concierge_calls WHERE id = ?").bind(callId).first();
+    const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details, status, outcome, guest_name, guest_email, guest_phone FROM concierge_calls WHERE id = ?").bind(callId).first();
     if (!callRow) return { call_id: callId, status: "failed", message: "Call record not found" };
     if (callRow.status !== 'pending') {
       return {
@@ -600,7 +600,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
     // 旧キー（date / check_in / check_out）にもフォールバック（Task #54）
     params = {
       hotel_name: callRow.hotel_name, hotel_phone: callRow.hotel_phone,
-      hotel_source: callRow.hotel_source, guest_name: details.guest_name || "Guest",
+      hotel_source: callRow.hotel_source, guest_name: callRow.guest_name || details.guest_name || "Guest",
       date: details.check_in_date || details.date,
       check_in_time: details.check_in_time || details.check_in,
       check_out_time: details.check_out_time || details.check_out,
@@ -609,7 +609,8 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       max_price: details.max_price || "",
       call_mode: details.call_mode || "initial",
       confirmed_price: details.confirmed_price || "",
-      guest_phone: details.guest_phone || ""
+      guest_phone: callRow.guest_phone || details.guest_phone || "",
+      guest_email: callRow.guest_email || details.guest_email || ""
     };
     if (details.budget && !details.max_price) {
       try {

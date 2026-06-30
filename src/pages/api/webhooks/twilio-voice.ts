@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { sendConciergeResultEmail, type ConciergeResultEmailType } from '../../../lib/email';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
 type DbLike = {
@@ -388,16 +389,147 @@ async function updateConciergeCallStatus(db: DbLike | null, conciergeCallId: str
   });
 }
 
-async function advanceConciergeGroup(env: any, db: DbLike | null, conciergeCallId: string | null, outcome: 'booked' | 'available' | 'unavailable' | 'no_answer') {
-  if (!db || !conciergeCallId) return;
+async function sendResultEmailOnce(env: any, db: DbLike | null, conciergeCallId: string | null, resultType: ConciergeResultEmailType) {
+  if (!db || !conciergeCallId || !env?.RESEND_API_KEY) return;
+  const call: any = await db.prepare(
+    `SELECT id, call_group_id, guest_name, guest_email, hotel_name, hotel_phone, request_details, ai_summary, price_quoted
+       FROM concierge_calls WHERE id = ?`
+  ).bind(conciergeCallId).first().catch(() => null);
+  if (!call?.guest_email) return;
+
+  if (resultType === 'all_failed' && call.call_group_id) {
+    const claim: any = await db.prepare(
+      `UPDATE concierge_calls SET result_email_sent = 1, updated_at = datetime('now') WHERE call_group_id = ? AND result_email_sent = 0`
+    ).bind(call.call_group_id).run().catch(() => null);
+    if (Number(claim?.meta?.changes || 0) === 0) return;
+
+    const attemptedRows: any[] = await db.prepare(
+      `SELECT hotel_name FROM concierge_calls WHERE call_group_id = ? ORDER BY call_order ASC, id ASC`
+    ).bind(call.call_group_id).all().then((r: any) => r?.results || []).catch(() => []);
+
+    let details: any = {};
+    try { details = JSON.parse(call.request_details || '{}'); } catch {}
+
+    await sendConciergeResultEmail(env.RESEND_API_KEY, {
+      guestName: call.guest_name || 'Guest',
+      guestEmail: call.guest_email,
+      resultType: 'all_failed',
+      date: details.check_in_date || details.date || '',
+      checkIn: details.check_in_time || details.check_in || '',
+      checkOut: details.check_out_time || details.check_out || '',
+      guests: details.guests || 1,
+      aiSummary: call.ai_summary || undefined,
+      attemptedHotels: attemptedRows.map((r: any) => r.hotel_name).filter(Boolean),
+    }).catch((e: any) => console.error('[twilio-voice] result email failed', e));
+    return;
+  }
+
+  const claim: any = await db.prepare(
+    `UPDATE concierge_calls SET result_email_sent = 1, updated_at = datetime('now') WHERE id = ? AND result_email_sent = 0`
+  ).bind(conciergeCallId).run().catch(() => null);
+  if (Number(claim?.meta?.changes || 0) === 0) return;
+
+  let details: any = {};
+  try { details = JSON.parse(call.request_details || '{}'); } catch {}
+
+  await sendConciergeResultEmail(env.RESEND_API_KEY, {
+    guestName: call.guest_name || 'Guest',
+    guestEmail: call.guest_email,
+    resultType,
+    hotelName: call.hotel_name || undefined,
+    hotelPhone: call.hotel_phone || undefined,
+    date: details.check_in_date || details.date || '',
+    checkIn: details.check_in_time || details.check_in || '',
+    checkOut: details.check_out_time || details.check_out || '',
+    guests: details.guests || 1,
+    priceQuoted: call.price_quoted || undefined,
+    aiSummary: call.ai_summary || undefined,
+  }).catch((e: any) => console.error('[twilio-voice] result email failed', e));
+}
+
+async function sendAdminConciergeBookedEmail(env: any, db: DbLike | null, conciergeCallId: string | null) {
+  if (!db || !conciergeCallId || !env?.RESEND_API_KEY || !env?.ADMIN_EMAIL) return;
+  const call: any = await db.prepare(
+    `SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, ai_summary, price_quoted
+     FROM concierge_calls WHERE id = ?`
+  ).bind(conciergeCallId).first().catch(() => null);
+  if (!call) return;
+
+  let details: any = {};
+  try { details = JSON.parse(call.request_details || '{}'); } catch {}
+
+  const payload = {
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: [env.ADMIN_EMAIL],
+    subject: `[AI Concierge] Booking confirmed - ${call.hotel_name || 'Unknown hotel'}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#111827">
+        <h2 style="margin:0 0 16px">AI Concierge Booking Confirmed (Twilio)</h2>
+        <table style="border-collapse:collapse;width:100%">
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Guest Name</td><td style="padding:8px;border:1px solid #e5e7eb">${call.guest_name || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Guest Email</td><td style="padding:8px;border:1px solid #e5e7eb">${call.guest_email || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Guest Phone</td><td style="padding:8px;border:1px solid #e5e7eb">${call.guest_phone || details.guest_phone || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Hotel</td><td style="padding:8px;border:1px solid #e5e7eb">${call.hotel_name || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Hotel Phone</td><td style="padding:8px;border:1px solid #e5e7eb">${call.hotel_phone || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Date</td><td style="padding:8px;border:1px solid #e5e7eb">${details.check_in_date || details.date || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Check-in / Check-out</td><td style="padding:8px;border:1px solid #e5e7eb">${details.check_in_time || details.check_in || '-'} / ${details.check_out_time || details.check_out || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Guests</td><td style="padding:8px;border:1px solid #e5e7eb">${details.guests || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">Price Quoted</td><td style="padding:8px;border:1px solid #e5e7eb">${call.price_quoted || '-'}</td></tr>
+          <tr><td style="padding:8px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600">AI Summary</td><td style="padding:8px;border:1px solid #e5e7eb">${call.ai_summary || '-'}</td></tr>
+        </table>
+      </div>
+    `,
+  };
+
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  }).catch((e: any) => console.error('[twilio-voice] admin concierge email failed', e));
+}
+
+async function finalizeConciergeOutcome(
+  env: any,
+  db: DbLike | null,
+  conciergeCallId: string | null,
+  outcome: 'booked' | 'available' | 'unavailable' | 'no_answer',
+  aiSummary: string,
+  opts: { priceQuoted?: number | null; sendAdminBooked?: boolean } = {}
+): Promise<boolean> {
+  if (!db || !conciergeCallId) return false;
+  const claim: any = await db.prepare(
+    `UPDATE concierge_calls
+       SET status = 'completed',
+           outcome = ?,
+           ai_summary = ?,
+           price_quoted = COALESCE(?, price_quoted),
+           updated_at = datetime('now')
+     WHERE id = ?
+       AND COALESCE(outcome, '') NOT IN ('booked','available','unavailable','no_answer')`
+  ).bind(outcome, clamp(aiSummary, 500), opts.priceQuoted ?? null, conciergeCallId).run().catch(() => null);
+
+  if (Number(claim?.meta?.changes || 0) === 0) return false;
+
+  if (outcome === 'booked') {
+    await sendResultEmailOnce(env, db, conciergeCallId, 'success');
+    if (opts.sendAdminBooked) await sendAdminConciergeBookedEmail(env, db, conciergeCallId);
+  } else if (outcome === 'unavailable') {
+    await sendResultEmailOnce(env, db, conciergeCallId, 'declined');
+  } else if (outcome === 'no_answer') {
+    await sendResultEmailOnce(env, db, conciergeCallId, 'no_answer');
+  }
+
   const call: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id = ?`).bind(conciergeCallId).first().catch(() => null);
   const groupId = Number(call?.call_group_id || 0) || null;
-  if (!groupId) return;
+  if (!groupId) return true;
 
   if (outcome === 'booked' || outcome === 'available') {
     await db.prepare("UPDATE concierge_call_groups SET status = 'success', updated_at = datetime('now') WHERE id = ? AND status != 'success'")
       .bind(groupId).run().catch(() => {});
-    return;
+    return true;
   }
 
   const next = await initiateNextGroupCall(env, db, groupId).catch((e) => {
@@ -409,7 +541,9 @@ async function advanceConciergeGroup(env: any, db: DbLike | null, conciergeCallI
     await processGroupRefund(env, db, groupId).catch((e) => {
       console.error('[twilio-voice] processGroupRefund failed', e);
     });
+    await sendResultEmailOnce(env, db, conciergeCallId, 'all_failed');
   }
+  return true;
 }
 
 export const POST: APIRoute = async ({ request, locals, url }) => {
@@ -429,10 +563,20 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     const callStatus = clamp(form.get('CallStatus') || '', 40).toLowerCase();
 
     const phaseParam = String(url.searchParams.get('phase') || '').toLowerCase();
+    const logRow: any = (db && logId)
+      ? await db.prepare(`SELECT id, booking_id, note, phase FROM call_logs WHERE id = ?`).bind(logId).first().catch(() => null)
+      : null;
+    const inferredPhase = (() => {
+      if (phaseParam === 'outreach' || phaseParam === 'concierge' || phaseParam === 'booking') return phaseParam;
+      const p = String(logRow?.phase || '').toLowerCase();
+      if (p === 'outreach' || p === 'concierge' || p === 'booking') return p;
+      if (String(logRow?.note || '').toLowerCase().includes('outreach')) return 'outreach';
+      return 'booking';
+    })();
 
     await insertCallLogEvent(db, logId, {
       eventType: event === 'status' ? 'status_callback' : 'gather_webhook',
-      phase: phaseParam || undefined,
+      phase: inferredPhase || undefined,
       step,
       turn,
       callSid: callSid || undefined,
@@ -443,39 +587,23 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     });
 
     if (event === 'status') {
-      const conciergeRow: any = (db && logId && (phaseParam === 'concierge' || phaseParam === ''))
+      const conciergeRow: any = (db && logId && inferredPhase === 'concierge')
         ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(logId).first().catch(() => null)
         : null;
 
       if (conciergeRow) {
         const alreadyTerminal = ['booked', 'available', 'unavailable', 'no_answer'].includes(String(conciergeRow.outcome || ''));
-        if (alreadyTerminal) {
-          // 重複Webhookによる多重フォールバック防止
-          return new Response('ok', { status: 200 });
-        }
-
-        let conciergeStatus = 'calling';
-        let outcome: 'unavailable' | 'no_answer' | null = null;
+        if (alreadyTerminal) return new Response('ok', { status: 200 });
 
         if (['busy', 'failed', 'canceled'].includes(callStatus)) {
-          conciergeStatus = 'completed';
-          outcome = 'unavailable';
+          await finalizeConciergeOutcome(env, db, String(conciergeRow.id), 'unavailable', `twilio_status:${callStatus || 'unknown'}`);
         } else if (callStatus === 'no-answer') {
-          conciergeStatus = 'completed';
-          outcome = 'no_answer';
-        } else if (callStatus === 'completed') {
-          // completed は answered 後にも飛ぶため、ここで no_answer 扱いにしない
-          conciergeStatus = 'completed';
-        }
-
-        await updateConciergeCallStatus(db, String(conciergeRow.id), conciergeStatus, {
-          telnyx_call_id: callSid ? `twilio:${callSid}` : undefined,
-          outcome: outcome || undefined,
-          ai_summary: outcome ? `twilio_status:${callStatus || 'unknown'}` : undefined,
-        });
-
-        if (outcome && !['booked', 'available'].includes(String(conciergeRow.outcome || ''))) {
-          await advanceConciergeGroup(env, db, String(conciergeRow.id), outcome);
+          await finalizeConciergeOutcome(env, db, String(conciergeRow.id), 'no_answer', `twilio_status:${callStatus || 'unknown'}`);
+        } else {
+          await updateConciergeCallStatus(db, String(conciergeRow.id), callStatus === 'completed' ? 'completed' : 'calling', {
+            telnyx_call_id: callSid ? `twilio:${callSid}` : undefined,
+            ai_summary: `twilio_status:${callStatus || 'unknown'}`,
+          });
         }
         return new Response('ok', { status: 200 });
       }
@@ -491,7 +619,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         callSid ? `twilio:${callSid}` : undefined,
         undefined,
         {
-          phase: phaseParam || undefined,
+          phase: inferredPhase || undefined,
           step,
           eventType: 'status_callback',
           callStatus: callStatus || undefined,
@@ -502,34 +630,64 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       return new Response('ok', { status: 200 });
     }
 
-    let phase: 'booking' | 'outreach' | 'concierge' = 'booking';
-    if (phaseParam === 'outreach') phase = 'outreach';
-    if (phaseParam === 'concierge') phase = 'concierge';
+    let phase: 'booking' | 'outreach' | 'concierge' = inferredPhase === 'outreach' || inferredPhase === 'concierge'
+      ? inferredPhase
+      : 'booking';
 
     let booking: any = null;
     let outreachLead: any = null;
+    let conciergeCall: any = null;
+    let conciergeDetails: any = {};
     let bookingTestMeta: { guest_name?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null = null;
-    let quotedAmountFromNote: number | null = null;
-    if (db && logId && phase !== 'concierge') {
-      const row: any = await db.prepare(`SELECT id, booking_id, note FROM call_logs WHERE id = ?`).bind(logId).first().catch(() => null);
-      quotedAmountFromNote = readQuotedAmountFromNote(row?.note);
-      bookingTestMeta = readBookingTestMetaFromNote(row?.note);
-      if (row?.booking_id) {
-        booking = await db.prepare(`SELECT b.id, b.guest_name, b.check_in_date, COALESCE(b.check_in_time, p.check_in_time) AS check_in_time, COALESCE(b.check_out_time, p.check_out_time) AS check_out_time, (COALESCE(b.adults,0) + COALESCE(b.children,0)) AS guests, h.name AS hotel_name FROM bookings b LEFT JOIN hotels h ON h.id = b.hotel_id LEFT JOIN plans p ON p.id = b.plan_id WHERE b.id = ?`).bind(row.booking_id).first().catch(() => null);
-      }
-      if (String(row?.note || '').toLowerCase().includes('outreach')) {
-        phase = 'outreach';
-        outreachLead = await db.prepare(`SELECT l.id, l.hotel_name, l.person_in_charge_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
+    let quotedAmountFromNote: number | null = readQuotedAmountFromNote(logRow?.note);
+
+    if (db && logId) {
+      if (phase !== 'concierge') {
+        bookingTestMeta = readBookingTestMetaFromNote(logRow?.note);
+        if (logRow?.booking_id) {
+          booking = await db.prepare(`SELECT b.id, b.guest_name, b.guest_email, b.guest_phone, b.check_in_date, COALESCE(b.check_in_time, p.check_in_time) AS check_in_time, COALESCE(b.check_out_time, p.check_out_time) AS check_out_time, (COALESCE(b.adults,0) + COALESCE(b.children,0)) AS guests, h.name AS hotel_name FROM bookings b LEFT JOIN hotels h ON h.id = b.hotel_id LEFT JOIN plans p ON p.id = b.plan_id WHERE b.id = ?`).bind(logRow.booking_id).first().catch(() => null);
+        }
+        if (String(logRow?.note || '').toLowerCase().includes('outreach')) {
+          phase = 'outreach';
+          outreachLead = await db.prepare(`SELECT l.id, l.hotel_name, l.person_in_charge_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
+        }
+      } else {
+        conciergeCall = await db.prepare(`SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?`).bind(logId).first().catch(() => null);
+        if (conciergeCall?.request_details) {
+          try { conciergeDetails = JSON.parse(conciergeCall.request_details); } catch { conciergeDetails = {}; }
+        }
       }
     }
 
-    const bookingCheckInDate = booking?.check_in_date || bookingTestMeta?.check_in_date || 'the requested date';
-    const bookingCheckInTimeRaw = booking?.check_in_time || bookingTestMeta?.check_in_time || 'the requested start time';
-    const bookingCheckOutTimeRaw = booking?.check_out_time || bookingTestMeta?.check_out_time || 'the requested end time';
+    const bookingCheckInDate = phase === 'concierge'
+      ? (conciergeDetails.check_in_date || conciergeDetails.date || 'the requested date')
+      : (booking?.check_in_date || bookingTestMeta?.check_in_date || 'the requested date');
+    const bookingCheckInTimeRaw = phase === 'concierge'
+      ? (conciergeDetails.check_in_time || conciergeDetails.check_in || 'the requested start time')
+      : (booking?.check_in_time || bookingTestMeta?.check_in_time || 'the requested start time');
+    const bookingCheckOutTimeRaw = phase === 'concierge'
+      ? (conciergeDetails.check_out_time || conciergeDetails.check_out || 'the requested end time')
+      : (booking?.check_out_time || bookingTestMeta?.check_out_time || 'the requested end time');
     const bookingCheckInTime = toAmPm(bookingCheckInTimeRaw);
     const bookingCheckOutTime = toAmPm(bookingCheckOutTimeRaw);
-    const bookingGuests = Number(booking?.guests || bookingTestMeta?.guest_count || 1);
-    const bookingGuestName = booking?.guest_name || bookingTestMeta?.guest_name || 'the guest';
+    const bookingGuests = Number(
+      phase === 'concierge'
+        ? (conciergeDetails.guests ?? ((conciergeDetails.adults || 1) + (conciergeDetails.children || 0)) ?? 1)
+        : (booking?.guests || bookingTestMeta?.guest_count || 1)
+    );
+    const bookingGuestName = phase === 'concierge'
+      ? (conciergeCall?.guest_name || conciergeDetails.guest_name || 'the guest')
+      : (booking?.guest_name || bookingTestMeta?.guest_name || 'the guest');
+    const bookingGuestEmail = phase === 'concierge'
+      ? (conciergeCall?.guest_email || conciergeDetails.guest_email || '')
+      : (booking?.guest_email || '');
+    const bookingGuestPhone = phase === 'concierge'
+      ? (conciergeCall?.guest_phone || conciergeDetails.guest_phone || '')
+      : (booking?.guest_phone || '');
+    if (phase === 'concierge' && quotedAmountFromNote == null) {
+      const q = Number(conciergeCall?.price_quoted || 0);
+      if (Number.isFinite(q) && q > 0) quotedAmountFromNote = q;
+    }
 
     if (step === 'intro') {
       if (phase === 'outreach') {
@@ -762,6 +920,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, logId, 'unavailable', 'hotel_declined_dayuse');
+          return twiml(`<Say voice="${VOICE}">Understood. Thank you for confirming. Goodbye.</Say><Hangup/>`);
+        }
         if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
@@ -769,6 +931,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_dayuse_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, logId, 'no_answer', 'no_response_dayuse_question');
+        }
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'ask_dayuse', turn + 1);
@@ -788,6 +953,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, logId, 'no_answer', 'no_price_captured');
+        }
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'ask_price', turn + 1);
@@ -805,20 +973,34 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const finalAmount = quotedAmountFromNote;
         const guestName = bookingGuestName;
         await updateCallLog(db, logId, 'confirmed', 'twilio_booking_confirmed', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
-        if (db && booking?.id) {
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(
+            env,
+            db,
+            logId,
+            'booked',
+            `confirmed_by_hotel;guest=${bookingGuestName};guest_email=${bookingGuestEmail || 'n/a'};guest_phone=${bookingGuestPhone || 'n/a'}`,
+            { priceQuoted: finalAmount, sendAdminBooked: true }
+          );
+        } else if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='confirmed_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="${VOICE}">Thank you! All consent checks are complete. The reservation is confirmed at a final total of ${esc(finalAmount != null ? finalAmount : 'the agreed')} dollars, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details. For your immediate records, the guest's name is ${esc(guestName)}. Have a wonderful day!</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you! All consent checks are complete. The reservation is confirmed at a final total of ${esc(finalAmount != null ? finalAmount : 'the agreed')} dollars, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details. For your immediate records, the guest's name is ${esc(guestName)}, guest phone is ${esc(bookingGuestPhone || 'not provided')}, and guest email is ${esc(bookingGuestEmail || 'not provided')}. Have a wonderful day!</Say><Hangup/>`);
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_booking_declined', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
-        if (db && booking?.id) {
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, logId, 'unavailable', 'declined_at_confirmation');
+        } else if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
         return twiml(`<Say voice="${VOICE}">Thank you. We recognized your answer. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_confirm_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, logId, 'no_answer', 'no_response_confirmation');
+        }
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'confirm_booking', turn + 1);
