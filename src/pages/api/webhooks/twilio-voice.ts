@@ -488,7 +488,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (phase === 'outreach') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0', callSid ? `twilio:${callSid}` : undefined);
         const action = makeWebhookUrl(request, logId, 'outreach_phase_0', 0);
-        return gatherTwiml(action, 'Hello, this is DayDreamHub. May I speak with the person in charge of partnership decisions? Press 1 if available now, or press 2 if not available. You can also answer by voice.');
+        return gatherTwiml(action, 'お世話になっております。こちらはホテルとデイユースの利用者をマッチングするプラットフォーム、デイドリームハブと申します。本日は貴施設の掲載についてご案内でお電話いたしました。ご担当者様はいらっしゃいますでしょうか？ Press 1 if available now, or press 2 if not available. You can also answer by voice.');
       }
 
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
