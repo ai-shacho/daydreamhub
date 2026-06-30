@@ -1,7 +1,36 @@
 import type { APIRoute } from 'astro';
 import { getAccessToken, createOrder, captureOrder } from '../../../lib/paypal';
+import { initiateNextGroupCall } from '../../../lib/tools';
 
 const CALL_FEE_USD = 7;
+
+async function triggerInitialGroupCallIfNeeded(env: any, db: any, groupId: number) {
+  const group: any = await db
+    .prepare('SELECT id, current_order, status FROM concierge_call_groups WHERE id = ?')
+    .bind(groupId)
+    .first();
+
+  if (!group) {
+    return { skipped: true, reason: 'group_not_found' };
+  }
+
+  // 決済APIの重複呼び出しで2件目以降へ勝手に進まないよう、初回（current_order=0）のみキック。
+  if (Number(group.current_order || 0) !== 0) {
+    return {
+      skipped: true,
+      reason: 'already_started',
+      current_order: group.current_order,
+      status: group.status,
+    };
+  }
+
+  if (String(group.status || '') === 'success' || String(group.status || '') === 'all_failed') {
+    return { skipped: true, reason: 'terminal_group_status', status: group.status };
+  }
+
+  const trigger = await initiateNextGroupCall(env, db, Number(groupId));
+  return { skipped: false, trigger };
+}
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
@@ -72,20 +101,37 @@ export const POST: APIRoute = async ({ request, locals }) => {
         const captureId =
           captureResult.purchase_units?.[0]?.payments?.captures?.[0]?.id || null;
         if (group_id && session_id) {
-          await db
+          const updateResult = await db
             .prepare(
               `UPDATE concierge_call_groups SET paypal_order_id = ?, paypal_capture_id = ?, payment_status = 'paid', guest_name = ?, guest_email = ?, updated_at = datetime('now') WHERE id = ? AND session_id = ?`
             )
             .bind(order_id, captureId, guest_name || null, guest_email || null, group_id, session_id)
             .run();
+
+          if (!updateResult?.meta?.changes) {
+            return new Response(JSON.stringify({ error: 'Group not found for session' }), {
+              status: 404,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+
           await db
             .prepare(
-              `UPDATE concierge_calls SET guest_name = ?, guest_email = ?, updated_at = datetime('now') WHERE call_group_id = ?`
+              `UPDATE concierge_calls SET guest_name = ?, guest_email = ?, payment_status = 'paid', updated_at = datetime('now') WHERE call_group_id = ?`
             )
             .bind(guest_name || null, guest_email || null, group_id)
             .run();
+
+          const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
           return new Response(
-            JSON.stringify({ status: 'paid', order_id, capture_id: captureId, group_id }),
+            JSON.stringify({
+              status: 'paid',
+              order_id,
+              capture_id: captureId,
+              group_id,
+              call_triggered: !kickoff.skipped,
+              trigger_result: kickoff,
+            }),
             { headers: { 'Content-Type': 'application/json' } }
           );
         }
