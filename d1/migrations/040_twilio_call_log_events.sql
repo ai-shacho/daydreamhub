@@ -10,7 +10,9 @@ ALTER TABLE call_logs ADD COLUMN last_step TEXT;
 ALTER TABLE call_logs ADD COLUMN last_event_type TEXT;
 ALTER TABLE call_logs ADD COLUMN last_call_status TEXT;
 ALTER TABLE call_logs ADD COLUMN answered_at TEXT;
-ALTER TABLE call_logs ADD COLUMN ended_at TEXT;
+-- NOTE: `ended_at` already exists in production DBs; re-adding caused
+-- `duplicate column name: ended_at` during CI migration apply.
+-- Keep this migration forward-safe by not re-adding it here.
 ALTER TABLE call_logs ADD COLUMN duration_seconds INTEGER;
 ALTER TABLE call_logs ADD COLUMN metadata_json TEXT;
 
