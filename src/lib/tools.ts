@@ -536,7 +536,11 @@ export async function initiateNextGroupCall(env: any, db: any, groupId: number) 
   const nextCall: any = await db.prepare(
     `SELECT id
        FROM concierge_calls
-      WHERE call_group_id = ? AND call_order = ? AND status = 'pending'
+      WHERE call_group_id = ?
+        AND call_order = ?
+        AND telnyx_call_id IS NULL
+        AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer')
+        AND COALESCE(status, 'pending') IN ('pending', 'calling')
       ORDER BY COALESCE(attempt, 1) DESC, id DESC
       LIMIT 1`
   ).bind(groupId, nextOrder).first();
@@ -585,16 +589,48 @@ export async function processGroupRefund(env: any, db: any, groupId: number) {
 }
 
 export async function initiateCall(env: any, db: any, sessionId: string, callId: number, params?: any) {
+  let callLockToken = '';
+
   if (!params) {
-    const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details, status, outcome, guest_name, guest_email, guest_phone FROM concierge_calls WHERE id = ?").bind(callId).first();
+    const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details, status, outcome, telnyx_call_id, guest_name, guest_email, guest_phone FROM concierge_calls WHERE id = ?").bind(callId).first();
     if (!callRow) return { call_id: callId, status: "failed", message: "Call record not found" };
-    if (callRow.status !== 'pending') {
+
+    const terminalOutcomes = new Set(['booked', 'available', 'unavailable', 'no_answer']);
+    if (callRow.telnyx_call_id) {
+      return {
+        call_id: callId,
+        status: 'skipped',
+        message: `Skip duplicate trigger for call ${callId}: already has provider id`,
+      };
+    }
+    if (terminalOutcomes.has(String(callRow.outcome || ''))) {
       return {
         call_id: callId,
         status: 'skipped',
         message: `Skip redial for call ${callId}: status=${callRow.status || 'unknown'} outcome=${callRow.outcome || 'none'}`,
       };
     }
+
+    // 初回発信トリガーを確実化するため、status='pending' 固定ではなく
+    // 「未発信（telnyx_call_id IS NULL）」を基準にアトミックに発信権を取得する。
+    callLockToken = `lock:${callId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const lockResult = await db.prepare(
+      `UPDATE concierge_calls
+          SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now')
+        WHERE id = ?
+          AND telnyx_call_id IS NULL
+          AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer')
+          AND COALESCE(status, 'pending') IN ('pending', 'calling')`
+    ).bind(callLockToken, callId).run();
+
+    if (!lockResult?.meta?.changes) {
+      return {
+        call_id: callId,
+        status: 'skipped',
+        message: `Skip duplicate trigger for call ${callId}: lock not acquired`,
+      };
+    }
+
     const details = JSON.parse(callRow.request_details);
     // 正準キー（check_in_date / check_in_time / check_out_time / guests）を最優先で参照。
     // 旧キー（date / check_in / check_out）にもフォールバック（Task #54）
@@ -654,12 +690,28 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
     if (!response.ok) throw new Error(`Twilio API error: ${response.status} ${txt}`);
     const callProviderId = `twilio:${resData?.sid || ''}`;
 
-    await db.prepare(`UPDATE concierge_calls SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now') WHERE id = ?`).bind(callProviderId, callId).run();
+    if (callLockToken) {
+      await db.prepare(
+        `UPDATE concierge_calls
+            SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now')
+          WHERE id = ? AND telnyx_call_id = ?`
+      ).bind(callProviderId, callId, callLockToken).run();
+    } else {
+      await db.prepare(`UPDATE concierge_calls SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now') WHERE id = ?`).bind(callProviderId, callId).run();
+    }
 
     return { call_id: callId, status: "calling", message: `Calling ${params.hotel_name}...` };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    await db.prepare(`UPDATE concierge_calls SET status = 'failed', ai_summary = ?, updated_at = datetime('now') WHERE id = ?`).bind(message, callId).run();
+    if (callLockToken) {
+      await db.prepare(
+        `UPDATE concierge_calls
+            SET telnyx_call_id = NULL, status = 'failed', ai_summary = ?, updated_at = datetime('now')
+          WHERE id = ? AND telnyx_call_id = ?`
+      ).bind(message, callId, callLockToken).run();
+    } else {
+      await db.prepare(`UPDATE concierge_calls SET status = 'failed', ai_summary = ?, updated_at = datetime('now') WHERE id = ?`).bind(message, callId).run();
+    }
     return { call_id: callId, status: "failed", message: `Failed to call: ${message}` };
   }
 }
