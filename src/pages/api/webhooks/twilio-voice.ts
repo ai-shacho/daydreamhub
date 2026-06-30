@@ -448,15 +448,24 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         : null;
 
       if (conciergeRow) {
+        const alreadyTerminal = ['booked', 'available', 'unavailable', 'no_answer'].includes(String(conciergeRow.outcome || ''));
+        if (alreadyTerminal) {
+          // 重複Webhookによる多重フォールバック防止
+          return new Response('ok', { status: 200 });
+        }
+
         let conciergeStatus = 'calling';
         let outcome: 'unavailable' | 'no_answer' | null = null;
 
         if (['busy', 'failed', 'canceled'].includes(callStatus)) {
           conciergeStatus = 'completed';
           outcome = 'unavailable';
-        } else if (['no-answer', 'completed'].includes(callStatus)) {
+        } else if (callStatus === 'no-answer') {
           conciergeStatus = 'completed';
           outcome = 'no_answer';
+        } else if (callStatus === 'completed') {
+          // completed は answered 後にも飛ぶため、ここで no_answer 扱いにしない
+          conciergeStatus = 'completed';
         }
 
         await updateConciergeCallStatus(db, String(conciergeRow.id), conciergeStatus, {

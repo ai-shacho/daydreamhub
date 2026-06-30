@@ -454,30 +454,58 @@ export async function initiateNextGroupCall(env: any, db: any, groupId: number) 
   const group: any = await db.prepare("SELECT id, session_id, current_order, total_calls, status FROM concierge_call_groups WHERE id = ?").bind(groupId).first();
   if (!group) return { error: "Group not found" };
   if (group.status === "success") return { status: "success", message: "Already booked" };
+  if (group.status === "all_failed") return { status: "all_failed", group_id: groupId };
 
   // ── リトライロジック: 出なかった場合は同じホテルにもう1回 ──
+  // 同一 call_order に複数行（retry）があるため、必ず最新 attempt を見る。
   const currentCall: any = await db.prepare(
-    "SELECT id, attempt, max_attempts, hotel_name, hotel_phone, outcome FROM concierge_calls WHERE call_group_id = ? AND call_order = ?"
+    `SELECT id, attempt, max_attempts, hotel_name, hotel_phone, outcome, status
+       FROM concierge_calls
+      WHERE call_group_id = ? AND call_order = ?
+      ORDER BY COALESCE(attempt, 1) DESC, id DESC
+      LIMIT 1`
   ).bind(groupId, group.current_order).first();
 
   const MAX_ATTEMPTS = 2; // ホテル1件につき最大2回
-  const attempt = currentCall?.attempt || 1;
+  const attempt = Number(currentCall?.attempt || 1);
   const isRetryableOutcome = currentCall?.outcome === 'no_answer' || currentCall?.outcome === 'voicemail';
 
   if (currentCall && isRetryableOutcome && attempt < MAX_ATTEMPTS) {
-    // 同じホテルにリトライ（新しいconcierge_callsレコードを追加）
-    await db.prepare(
-      `INSERT INTO concierge_calls
-         (session_id, hotel_name, hotel_phone, hotel_source, request_details, status, payment_status,
-          call_group_id, call_order, attempt, max_attempts, guest_name, guest_email, created_at)
-         SELECT session_id, hotel_name, hotel_phone, hotel_source, request_details, 'pending', payment_status,
-                call_group_id, call_order, ?, ?, guest_name, guest_email, datetime('now')
-         FROM concierge_calls WHERE id = ?`
-    ).bind(attempt + 1, MAX_ATTEMPTS, currentCall.id).run();
-    // INSERTしたばかりの行のIDを取得
+    // 重複Webhook等で二重にretry行を作らないよう既存行を先に確認
+    const existingRetry: any = await db.prepare(
+      `SELECT id, status FROM concierge_calls
+        WHERE call_group_id = ? AND call_order = ? AND attempt = ?
+        ORDER BY id DESC LIMIT 1`
+    ).bind(groupId, group.current_order, attempt + 1).first();
+
+    if (existingRetry?.id) {
+      return {
+        status: existingRetry.status === 'pending' || existingRetry.status === 'calling' ? 'retry_in_progress' : 'retry_already_exists',
+        group_id: groupId,
+        call_id: existingRetry.id,
+        is_retry: true,
+        attempt: attempt + 1,
+        hotel_name: currentCall.hotel_name,
+        message: `Retry already exists for ${currentCall.hotel_name}`,
+      };
+    } else {
+      // 同じホテルにリトライ（新しいconcierge_callsレコードを追加）
+      await db.prepare(
+        `INSERT INTO concierge_calls
+           (session_id, hotel_name, hotel_phone, hotel_source, request_details, status, payment_status,
+            call_group_id, call_order, attempt, max_attempts, guest_name, guest_email, created_at)
+           SELECT session_id, hotel_name, hotel_phone, hotel_source, request_details, 'pending', payment_status,
+                  call_group_id, call_order, ?, ?, guest_name, guest_email, datetime('now')
+           FROM concierge_calls WHERE id = ?`
+      ).bind(attempt + 1, MAX_ATTEMPTS, currentCall.id).run();
+    }
+
+    // INSERTしたばかり（または既存）のretry行のIDを取得
     const newRow: any = await db.prepare(
-      `SELECT id FROM concierge_calls WHERE call_group_id = ? AND attempt = ? ORDER BY id DESC LIMIT 1`
-    ).bind(groupId, attempt + 1).first();
+      `SELECT id FROM concierge_calls
+        WHERE call_group_id = ? AND call_order = ? AND attempt = ?
+        ORDER BY id DESC LIMIT 1`
+    ).bind(groupId, group.current_order, attempt + 1).first();
     const retryCallId = newRow?.id;
     if (!retryCallId) {
       console.error(`[retry] Failed to get retry call ID for group ${groupId}`);
@@ -505,7 +533,13 @@ export async function initiateNextGroupCall(env: any, db: any, groupId: number) 
     return { status: "all_failed", group_id: groupId };
   }
 
-  const nextCall: any = await db.prepare("SELECT id FROM concierge_calls WHERE call_group_id = ? AND call_order = ?").bind(groupId, nextOrder).first();
+  const nextCall: any = await db.prepare(
+    `SELECT id
+       FROM concierge_calls
+      WHERE call_group_id = ? AND call_order = ? AND status = 'pending'
+      ORDER BY COALESCE(attempt, 1) DESC, id DESC
+      LIMIT 1`
+  ).bind(groupId, nextOrder).first();
   if (!nextCall) {
     await db.prepare("UPDATE concierge_call_groups SET status = 'all_failed', updated_at = datetime('now') WHERE id = ?").bind(groupId).run();
     return { status: "all_failed", group_id: groupId };
@@ -552,8 +586,15 @@ export async function processGroupRefund(env: any, db: any, groupId: number) {
 
 export async function initiateCall(env: any, db: any, sessionId: string, callId: number, params?: any) {
   if (!params) {
-    const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details FROM concierge_calls WHERE id = ?").bind(callId).first();
+    const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details, status, outcome FROM concierge_calls WHERE id = ?").bind(callId).first();
     if (!callRow) return { call_id: callId, status: "failed", message: "Call record not found" };
+    if (callRow.status !== 'pending') {
+      return {
+        call_id: callId,
+        status: 'skipped',
+        message: `Skip redial for call ${callId}: status=${callRow.status || 'unknown'} outcome=${callRow.outcome || 'none'}`,
+      };
+    }
     const details = JSON.parse(callRow.request_details);
     // 正準キー（check_in_date / check_in_time / check_out_time / guests）を最優先で参照。
     // 旧キー（date / check_in / check_out）にもフォールバック（Task #54）
