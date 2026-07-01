@@ -1199,11 +1199,11 @@ function escHtml(s) {
         : extractExternalHotels(text);
 
       var internalCards = internalHotels.map(function(h) {
-        var label = escHtml((h.name || '').slice(0, 40));
+        var label = escHtml(h.name || '');
         var price = (h.min_price != null && h.min_price !== '') ? ('$' + h.min_price + '〜') : '';
         return '<a href="/hotel/' + h.slug + '" class="flex items-center justify-between gap-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-2 transition-colors">' +
-          '<div class="min-w-0">' +
-            '<p class="text-white text-xs font-bold truncate">' + label + '</p>' +
+          '<div class="min-w-0 flex-1">' +
+            '<p class="text-white text-xs font-bold break-words">' + label + '</p>' +
             (price ? '<p class="text-amber-300 text-xs font-semibold mt-0.5">From ' + escHtml(price) + '</p>' : '') +
           '</div>' +
           '<span class="shrink-0 bg-amber-500 hover:bg-amber-400 text-gray-900 text-[11px] font-bold px-2.5 py-1 rounded-md">Details</span>' +

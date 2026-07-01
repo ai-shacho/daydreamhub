@@ -207,8 +207,8 @@
           cardsHtml += internal.map(h => {
             const price = h.min_price ? ` · $${h.min_price}〜` : '';
             return `<a href="/hotel/${h.slug}" class="flex items-center justify-between bg-white border border-teal-100 rounded-xl px-3 py-2 mt-2 hover:bg-teal-50 transition-colors">
-              <span class="font-semibold text-teal-700 text-xs">${h.name}</span>
-              <span class="text-teal-500 text-xs font-bold">${price} 予約 →</span>
+              <span class="font-semibold text-teal-700 text-xs flex-1 pr-2 break-words">${h.name}</span>
+              <span class="text-teal-500 text-xs font-bold shrink-0">${price} 予約 →</span>
             </a>`;
           }).join('');
         }
