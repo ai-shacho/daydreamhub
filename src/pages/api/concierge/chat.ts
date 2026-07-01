@@ -82,7 +82,7 @@ async function cfAiChat(env: any, messages: any[], systemPrompt: string): Promis
   return 'I apologize, the AI service is temporarily unavailable. Please try again in a moment.';
 }
 
-// Anthropic fallback when Telnyx is unavailable
+// Primary AI chat provider (Anthropic)
 async function anthropicChat(env: any, messages: any[], systemPrompt: string): Promise<string> {
   const apiKey = env?.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
@@ -458,7 +458,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const env = runtime?.env;
   const db = env?.DB;
-  if (!db || (!env?.TELNYX_API_KEY && !env?.ANTHROPIC_API_KEY && !env?.AI)) {
+  if (!db || (!env?.ANTHROPIC_API_KEY && !env?.AI)) {
     return new Response(JSON.stringify({ error: 'Service not available' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
@@ -1211,46 +1211,42 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    let result: { text: string; messageType: string; metadata?: any };
-    if (env?.TELNYX_API_KEY) {
-      result = await telnyxOrchestrate(env, claudeMessages, locale, db, session_id);
-    } else {
-      // Anthropic / Cloudflare AI fallback
-      const isJa = String(locale || '').toLowerCase().startsWith('ja');
-      const systemPrompt = isJa ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
-      const lastMsg = claudeMessages.filter((m: any) => m.role === 'user').pop()?.content || '';
-      let hotelCtx = '';
-      try {
-        const cityMatch = lastMsg.match(/\b(tokyo|bangkok|dubai|singapore|london|paris|osaka|kyoto|bali|jakarta|kuala lumpur|seoul|taipei|hong kong|sydney|new york|berlin|rome|istanbul|cairo|mumbai|delhi|hanoi|cebu|phuket|nairobi|birmingham|belgrade|tbilisi|manama|doha)\b/i);
-        if (cityMatch) {
-          const city = cityMatch[1];
-          const hotels = await db.prepare(
-            `SELECT h.name, h.slug, h.city, h.country, h.property_type, MIN(p.price_usd) as min_price
-             FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-             WHERE h.status = 'active' AND (LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?)
-             GROUP BY h.id
-             ORDER BY
-               CASE WHEN LOWER(h.property_type) LIKE '%clinic%' OR LOWER(h.name) LIKE '%clinic%' THEN 1 ELSE 0 END ASC,
-               h.rating DESC
-             LIMIT 6`
-          ).bind(`%${city.toLowerCase()}%`, `%${city.toLowerCase()}%`).all();
-          const rs = hotels?.results || [];
-          if (rs.length > 0) {
-            hotelCtx = '\n\nAvailable DayDreamHub hotels for "' + city + '":\n' +
-              rs.map((h: any) => `- ${h.name} (${h.city}, ${h.country}) from $${h.min_price || '?'} → /hotel/${h.slug}`).join('\n');
-          }
+    // Telnyx is intentionally disabled for concierge chat.
+    // Use Anthropic first, then Cloudflare Workers AI fallback.
+    const isJa = String(locale || '').toLowerCase().startsWith('ja');
+    const systemPrompt = isJa ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
+    const lastMsg = claudeMessages.filter((m: any) => m.role === 'user').pop()?.content || '';
+    let hotelCtx = '';
+    try {
+      const cityMatch = lastMsg.match(/\b(tokyo|bangkok|dubai|singapore|london|paris|osaka|kyoto|bali|jakarta|kuala lumpur|seoul|taipei|hong kong|sydney|new york|berlin|rome|istanbul|cairo|mumbai|delhi|hanoi|cebu|phuket|nairobi|birmingham|belgrade|tbilisi|manama|doha)\b/i);
+      if (cityMatch) {
+        const city = cityMatch[1];
+        const hotels = await db.prepare(
+          `SELECT h.name, h.slug, h.city, h.country, h.property_type, MIN(p.price_usd) as min_price
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+           WHERE h.status = 'active' AND (LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?)
+           GROUP BY h.id
+           ORDER BY
+             CASE WHEN LOWER(h.property_type) LIKE '%clinic%' OR LOWER(h.name) LIKE '%clinic%' THEN 1 ELSE 0 END ASC,
+             h.rating DESC
+           LIMIT 6`
+        ).bind(`%${city.toLowerCase()}%`, `%${city.toLowerCase()}%`).all();
+        const rs = hotels?.results || [];
+        if (rs.length > 0) {
+          hotelCtx = '\n\nAvailable DayDreamHub hotels for "' + city + '":\n' +
+            rs.map((h: any) => `- ${h.name} (${h.city}, ${h.country}) from $${h.min_price || '?'} → /hotel/${h.slug}`).join('\n');
         }
-      } catch {}
-      const fullPrompt = systemPrompt + hotelCtx + '\n\nIMPORTANT: Respond in plain text only. No XML, no HTML tags, no function call tags. Use only Markdown.';
-      let text: string;
-      if (env?.ANTHROPIC_API_KEY) {
-        text = await anthropicChat(env, claudeMessages, fullPrompt);
-      } else {
-        text = await cfAiChat(env, claudeMessages, fullPrompt);
       }
-      text = sanitizeAIText(text);
-      result = { text, messageType: 'text' };
+    } catch {}
+    const fullPrompt = systemPrompt + hotelCtx + '\n\nIMPORTANT: Respond in plain text only. No XML, no HTML tags, no function call tags. Use only Markdown.';
+    let text: string;
+    if (env?.ANTHROPIC_API_KEY) {
+      text = await anthropicChat(env, claudeMessages, fullPrompt);
+    } else {
+      text = await cfAiChat(env, claudeMessages, fullPrompt);
     }
+    text = sanitizeAIText(text);
+    const result: { text: string; messageType: string; metadata?: any } = { text, messageType: 'text' };
 
     if (result.text) {
       await db
