@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { initiateCall, createCallGroup, initiateNextGroupCall } from '../../../lib/tools';
+import { initiateCall, createCallGroup, initiateNextGroupCall, searchHotelsInternal, searchHotelsExternal, searchHotelsBrave } from '../../../lib/tools';
 import { CONCIERGE_SYSTEM_PROMPT_EN, CONCIERGE_SYSTEM_PROMPT_JA } from '../../../lib/claude';
 import { filterExternalHotels } from '../../../lib/filterExternalHotels';
 import { sendConciergeCallStartedEmail } from '../../../lib/email';
@@ -74,6 +74,146 @@ export function sanitizeAIText(text: string): string {
   text = text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
   return text.trim();
+}
+
+type HotelSearchBundle = {
+  city: string;
+  hotels: any[];
+};
+
+async function buildStructuredHotelResults(
+  env: any,
+  db: any,
+  locale: string,
+  lastUserMsg: string
+): Promise<HotelSearchBundle> {
+  if (!db || !lastUserMsg || lastUserMsg.length < 2) return { city: '', hotels: [] };
+
+  const MAJOR_CITIES = [
+    'tokyo','osaka','kyoto','sapporo','fukuoka','nagoya','hiroshima','kobe','yokohama',
+    'bangkok','phuket','chiang mai','pattaya','hua hin','singapore','kuala lumpur','penang',
+    'bali','jakarta','manila','cebu','ho chi minh','hanoi','dubai','abu dhabi','doha',
+    'london','paris','berlin','madrid','rome','amsterdam','barcelona','vienna','prague',
+    'new york','los angeles','san francisco','seattle','toronto','vancouver','seoul','taipei',
+    'hong kong','beijing','shanghai','mumbai','delhi','sydney','melbourne','auckland',
+    'cairo','casablanca','marrakech','cape town','nairobi','buenos aires','sao paulo',
+    'rio de janeiro','santiago','lima','bogota','tbilisi','baku','calgary','giza','nara',
+  ];
+  const JA_TO_EN_CITIES: Record<string, string> = {
+    '東京': 'Tokyo', '大阪': 'Osaka', '京都': 'Kyoto', '札幌': 'Sapporo', '福岡': 'Fukuoka', '名古屋': 'Nagoya',
+    'バンコク': 'Bangkok', 'ドバイ': 'Dubai', 'シンガポール': 'Singapore', 'ロンドン': 'London', 'パリ': 'Paris',
+    'バリ': 'Bali', 'ジャカルタ': 'Jakarta', 'ソウル': 'Seoul', '台北': 'Taipei', '香港': 'Hong Kong',
+    'シドニー': 'Sydney', 'メルボルン': 'Melbourne', 'カイロ': 'Cairo', 'ナイロビ': 'Nairobi',
+    'ティビリシ': 'Tbilisi', 'トビリシ': 'Tbilisi', 'バクー': 'Baku', 'カルガリー': 'Calgary', 'ギザ': 'Giza', '奈良': 'Nara',
+  };
+
+  const lowerMsg = String(lastUserMsg || '').toLowerCase();
+  let city = '';
+
+  for (const [ja, en] of Object.entries(JA_TO_EN_CITIES)) {
+    if (lastUserMsg.includes(ja)) {
+      city = en;
+      break;
+    }
+  }
+
+  if (!city) {
+    try {
+      const dbCityRows = await db.prepare(`SELECT DISTINCT city FROM hotels WHERE status = 'active' ORDER BY city`).all();
+      for (const row of (dbCityRows?.results || []) as any[]) {
+        if (row.city && lowerMsg.includes(String(row.city).toLowerCase())) {
+          city = row.city;
+          break;
+        }
+      }
+    } catch {}
+  }
+
+  if (!city) {
+    for (const c of MAJOR_CITIES) {
+      if (lowerMsg.includes(c)) {
+        city = c;
+        break;
+      }
+    }
+  }
+
+  if (!city) {
+    const capMatch = lastUserMsg.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+){0,2})\b/);
+    if (capMatch) city = capMatch[1];
+  }
+  if (!city) {
+    const jpMatch = lastUserMsg.match(/[\u3040-\u9FFF]{2,8}(?:市|区|町|村|県|都|府|島|港|駅)?/);
+    if (jpMatch) city = jpMatch[0];
+  }
+  if (!city) return { city: '', hotels: [] };
+
+  const wantsClinic = /(clinic|wellness|medical|iv\s*drip|health\s*check|check[- ]?up|クリニック|ウェルネス|医療|健康診断|人間ドック|点滴|検査)/i.test(
+    lowerMsg
+  );
+
+  let internalHotels: any[] = [];
+  let externalHotels: any[] = [];
+
+  try {
+    const internal = await searchHotelsInternal(env, { city });
+    internalHotels = ((internal?.hotels || []) as any[])
+      .filter((h: any) => {
+        if (wantsClinic) return true;
+        const name = String(h?.name || '').toLowerCase();
+        const type = String(h?.property_type || '').toLowerCase();
+        return !/(clinic|medical|wellness)/i.test(name) && !/(clinic|medical|wellness)/i.test(type);
+      })
+      .slice(0, 6);
+  } catch {}
+
+  try {
+    const queries = [`day use hotel ${city}`, `hourly hotel ${city}`, `hotel ${city}`];
+    const allCandidates: any[] = [];
+    for (const q of queries) {
+      if (allCandidates.length >= 15) break;
+      const ext = await searchHotelsExternal(env, { query: q, location: city, language: locale });
+      allCandidates.push(...((ext?.hotels || []) as any[]));
+    }
+    externalHotels = filterExternalHotels(allCandidates, internalHotels, 3) as any[];
+    if (externalHotels.length === 0) {
+      externalHotels = filterExternalHotels(await searchHotelsBrave(env, city, locale), internalHotels, 3) as any[];
+    }
+  } catch {}
+
+  const dedupedInternal = (() => {
+    const seen = new Set<string>();
+    return internalHotels.filter((h: any) => {
+      const key = String(h?.name || '').split('–')[0].split('-')[0].trim().toLowerCase().slice(0, 30);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, 3);
+  })();
+
+  const structured = [
+    ...dedupedInternal.map((h: any) => ({
+      id: h.id,
+      name: h.name,
+      slug: h.slug,
+      city: h.city,
+      country: h.country,
+      source: 'internal',
+      min_price: h.plans && h.plans.length > 0
+        ? Math.min(...h.plans.map((p: any) => Number(p.price_usd) || 9999))
+        : null,
+      plans: h.plans || [],
+    })),
+    ...externalHotels.map((h: any) => ({
+      name: h.hotel_name || h.name || '',
+      address: h.address || city,
+      phone: h.hotel_phone || h.phone || '',
+      rating: h.rating || null,
+      source: 'external',
+    })),
+  ];
+
+  return { city, hotels: structured };
 }
 
 // Cloudflare Workers AI fallback
@@ -1232,39 +1372,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const isJa = String(locale || '').toLowerCase().startsWith('ja');
     const systemPrompt = isJa ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
     const lastMsg = claudeMessages.filter((m: any) => m.role === 'user').pop()?.content || '';
-    let hotelCtx = '';
-    let structuredHotels: any[] = [];
-    try {
-      const cityMatch = lastMsg.match(/\b(tokyo|bangkok|dubai|singapore|london|paris|osaka|kyoto|bali|jakarta|kuala lumpur|seoul|taipei|hong kong|sydney|new york|berlin|rome|istanbul|cairo|mumbai|delhi|hanoi|cebu|phuket|nairobi|birmingham|belgrade|tbilisi|manama|doha)\b/i);
-      if (cityMatch) {
-        const city = cityMatch[1];
-        const hotels = await db.prepare(
-          `SELECT h.name, h.slug, h.city, h.country, h.property_type, MIN(p.price_usd) as min_price
-           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
-           WHERE h.status = 'active' AND (LOWER(h.city) LIKE ? OR LOWER(h.country) LIKE ?)
-           GROUP BY h.id
-           ORDER BY
-             CASE WHEN LOWER(h.property_type) LIKE '%clinic%' OR LOWER(h.name) LIKE '%clinic%' THEN 1 ELSE 0 END ASC,
-             h.rating DESC
-           LIMIT 6`
-        ).bind(`%${city.toLowerCase()}%`, `%${city.toLowerCase()}%`).all();
-        const rs = hotels?.results || [];
-        if (rs.length > 0) {
-          hotelCtx = '\n\nAvailable DayDreamHub hotels for "' + city + '":\n' +
-            rs.map((h: any) => `- ${h.name} (${h.city}, ${h.country}) from $${h.min_price || '?'} → /hotel/${h.slug}`).join('\n');
-
-          structuredHotels = rs.map((h: any) => ({
-            name: h.name,
-            slug: h.slug,
-            city: h.city,
-            country: h.country,
-            source: 'internal',
-            min_price: h.min_price ?? null,
-          }));
-        }
-      }
-    } catch {}
-    const fullPrompt = systemPrompt + hotelCtx + '\n\nIMPORTANT: Respond in plain text only. No XML, no HTML tags, no function call tags. Use only Markdown.';
+    const searched = await buildStructuredHotelResults(env, db, locale, String(lastMsg));
+    const structuredHotels = searched.hotels;
+    const conciseGuide = structuredHotels.length > 0
+      ? (isJa
+          ? `\n\n検索済み都市: ${searched.city}\nホテルカード描画用データは別送されています。本文ではホテル名やリンクを列挙せず、1〜2文の短い案内のみを返してください。`
+          : `\n\nSearched city: ${searched.city}\nHotel card data is provided separately. Do NOT enumerate hotel names, links, or prices in text. Return only a short 1-2 sentence guidance line.`)
+      : (isJa
+          ? `\n\nホテル候補データが空の場合は、短く「該当ホテルが見つからなかったので別エリア提案をする」旨だけ回答してください。`
+          : `\n\nIf hotel data is empty, respond briefly that no matching hotels were found and suggest trying a nearby area.`);
+    const fullPrompt = systemPrompt + conciseGuide + '\n\nIMPORTANT: Respond in plain text only. No XML, no HTML tags, no function call tags. Use only Markdown.';
     let text: string;
     if (env?.ANTHROPIC_API_KEY) {
       text = await anthropicChat(env, claudeMessages, fullPrompt);
