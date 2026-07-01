@@ -1529,8 +1529,9 @@ function escHtml(s) {
           addMsg('PayPal popup could not be loaded on this device. Opened secure PayPal checkout in a new tab. We will auto-confirm payment and start AI calls.', 'assistant');
 
           var paidInFallback = false;
+          var fallbackHardError = null;
           var startedAtFallback = Date.now();
-          while (!paidInFallback && Date.now() - startedAtFallback < 180000) {
+          while (!paidInFallback && !fallbackHardError && Date.now() - startedAtFallback < 300000) {
             await new Promise(function(resolve){ setTimeout(resolve, 5000); });
             try {
               var capResFallback = await fetch('/api/concierge/pay', {
@@ -1546,7 +1547,10 @@ function escHtml(s) {
                 })
               });
               var capDataFallback = await capResFallback.json();
-              if (capDataFallback.status === 'paid') {
+              var fbStatus = String(capDataFallback?.status || '').toLowerCase();
+              var fbDetail = capDataFallback?.detail || capDataFallback?.error || '';
+              var fbPending = capResFallback.status === 202 || fbStatus === 'pending' || fbStatus === 'processing';
+              if (fbStatus === 'paid') {
                 paidInFallback = true;
                 var callResFallback = await fetch('/api/concierge/chat', {
                   method: 'POST',
@@ -1571,6 +1575,8 @@ function escHtml(s) {
                   window._startCallPolling(firstCallFallback, sessionId, document.documentElement.lang || 'en');
                 }
                 addMsg('✅ Payment confirmed! AI has started calling hotels now. We will email you the result.', 'assistant');
+              } else if (!fbPending && (capResFallback.status >= 400 || fbStatus === 'failed' || fbStatus === 'error' || fbStatus === 'cancelled')) {
+                fallbackHardError = fbDetail || ('HTTP ' + capResFallback.status);
               }
             } catch (_fallbackErr) {
               // keep polling
@@ -1578,7 +1584,7 @@ function escHtml(s) {
           }
 
           if (!paidInFallback) {
-            addMsg('Payment confirmation is taking longer than expected. It will be processed automatically after checkout.', 'assistant');
+            addMsg('Payment confirmation is taking longer than expected (your payment may already be captured). Please recheck shortly or contact support.' + (fallbackHardError ? ('\n\nDetail: ' + fallbackHardError) : ''), 'assistant');
           }
           if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = 'Complete payment in new tab'; }
           return;
@@ -1604,7 +1610,9 @@ function escHtml(s) {
             })
           });
           var capData = await capRes.json();
-          if (capData.status === 'paid') {
+          var capStatus = String(capData?.status || '').toLowerCase();
+          var capDetail = capData?.detail || capData?.error || '';
+          if (capStatus === 'paid') {
             paypalContainer.innerHTML = '';
             // Step 4: 電話発信
             var callRes = await fetch('/api/concierge/chat', {
@@ -1627,15 +1635,63 @@ function escHtml(s) {
             var callData = await callRes.json();
             var hotelListText = selectedHotels.map(function(h, i){ return (i+1) + '. ' + h.name; }).join('\n');
             addMsg('✅ Payment confirmed! Our AI will call the following hotel' + (selectedHotels.length > 1 ? 's in order' : '') + ':\n\n' + hotelListText + '\n\n👤 ' + name + '\n📅 ' + date + ' ' + checkinTime + '–' + checkoutTime, 'assistant');
-            // 発信開始 → 1件目の通話状態ポーリングを開始
             var firstCallId = callData?.metadata?.call_id;
             if (firstCallId) {
               window._startCallPolling(firstCallId, sessionId, document.documentElement.lang || 'en');
             }
           } else {
+            var pollPaid = false;
+            var pollHardError = null;
+            var pollStart = Date.now();
+            while (!pollPaid && !pollHardError && Date.now() - pollStart < 300000) {
+              await new Promise(function(resolve){ setTimeout(resolve, 5000); });
+              try {
+                var pollRes = await fetch('/api/concierge/pay', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'capture',
+                    order_id: ppData.orderID,
+                    group_id: groupId,
+                    session_id: sessionId,
+                    guest_name: name,
+                    guest_email: email
+                  })
+                });
+                var pollData = await pollRes.json();
+                var pollStatus = String(pollData?.status || '').toLowerCase();
+                var pollDetail = pollData?.detail || pollData?.error || '';
+                var isPending = pollRes.status === 202 || pollStatus === 'pending' || pollStatus === 'processing';
+                if (pollStatus === 'paid') {
+                  pollPaid = true;
+                  paypalContainer.innerHTML = '';
+                  var callRes2 = await fetch('/api/concierge/chat', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      session_id: sessionId,
+                      message: '__confirm_group_payment:' + groupId,
+                      locale: document.documentElement.lang || 'en',
+                      guest_name: name,
+                      guest_email: email,
+                      guest_phone: phone,
+                      guests: parseInt(guests, 10),
+                      details: { guest_phone: phone, guests: parseInt(guests, 10) }
+                    })
+                  });
+                  var callData2 = await callRes2.json();
+                  var firstCallId2 = callData2?.metadata?.call_id;
+                  if (firstCallId2) window._startCallPolling(firstCallId2, sessionId, document.documentElement.lang || 'en');
+                  addMsg('✅ Payment confirmed! AI calling has started.', 'assistant');
+                } else if (!isPending && (pollRes.status >= 400 || pollStatus === 'failed' || pollStatus === 'error' || pollStatus === 'cancelled')) {
+                  pollHardError = pollDetail || ('HTTP ' + pollRes.status);
+                }
+              } catch (_pollErr) {}
+            }
             paypalContainer.innerHTML = '';
-            addMsg('❌ Payment failed. Please try again.', 'assistant');
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+            if (!pollPaid) {
+              addMsg('Payment confirmation is taking longer than expected (your payment may already be captured). Please recheck shortly or contact support.' + (pollHardError ? ('\n\nDetail: ' + pollHardError) : ''), 'assistant');
+              if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+            }
           }
         },
         onCancel: function() {

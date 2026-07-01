@@ -326,8 +326,9 @@
         );
 
         let paid = false;
+        let hardError = null;
         const startedAt = Date.now();
-        while (!paid && Date.now() - startedAt < 3 * 60 * 1000) {
+        while (!paid && !hardError && Date.now() - startedAt < 5 * 60 * 1000) {
           await new Promise((r) => setTimeout(r, 5000));
           try {
             const capRes = await fetch('/api/concierge/pay', {
@@ -343,7 +344,11 @@
               }),
             });
             const capData = await capRes.json();
-            if (capData.status === 'paid') {
+            const status = String(capData?.status || '').toLowerCase();
+            const detail = capData?.detail || capData?.error || '';
+            const isPending = capRes.status === 202 || status === 'pending' || status === 'processing';
+
+            if (status === 'paid') {
               paid = true;
               const callRes = await fetch('/api/concierge/chat', {
                 method: 'POST',
@@ -364,6 +369,8 @@
                 ? '✅ 決済を確認しました。AIがホテルへの架電を開始します。結果はメールでお知らせします。'
                 : '✅ Payment confirmed. AI calling has started. We will email you the result.');
               addMessage(replyText, 'assistant', callData?.metadata);
+            } else if (!isPending && (capRes.status >= 400 || status === 'failed' || status === 'error' || status === 'cancelled')) {
+              hardError = detail || ('HTTP ' + capRes.status);
             }
           } catch (_err) {
             // keep polling until timeout
@@ -371,10 +378,11 @@
         }
 
         if (!paid) {
+          const detailText = hardError ? '\n\nDetail: ' + hardError : '';
           addMessage(
             pageLocale === 'ja'
-              ? '決済確認に時間がかかっています。決済完了後に自動で処理されます。数分後に再度お試しください。'
-              : 'Payment confirmation is taking longer than expected. It will be processed automatically after checkout. Please check again in a few minutes.',
+              ? '決済の確認に時間がかかっています（お金は引き落とされている可能性があります）。しばらくして再確認するか、サポートへお問い合わせください。' + detailText
+              : 'Payment confirmation is taking longer than expected (your payment may already be captured). Please recheck shortly or contact support.' + detailText,
             'assistant'
           );
         }

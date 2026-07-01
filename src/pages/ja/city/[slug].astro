@@ -391,32 +391,67 @@ const resultsText = t('city.hotels_found', locale).replace('{count}', String(tot
                 style: { layout: 'vertical', color: 'blue', shape: 'rect', label: 'pay' },
                 createOrder: function() { return paypalOrderId; },
                 onApprove: async function(data) {
-                  paypalContainer.innerHTML = '<p class="text-center text-sm text-blue-600 py-2">決済処理中...</p>';
+                  paypalContainer.innerHTML = '<p class="text-center text-sm text-blue-600 py-2">決済確認中です...</p>';
                   try {
-                    var captureRes = await fetch('/api/concierge/pay', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        action: 'capture',
-                        order_id: data.orderID,
-                        group_id: groupId,
-                        session_id: sessionId,
-                        guest_name: name,
-                        guest_email: email
-                      })
-                    });
-                    var captureData = await captureRes.json();
-                    if (captureData.status === 'paid') {
+                    var paid = false;
+                    var hardError = null;
+                    var startedAt = Date.now();
+                    while (!paid && !hardError && Date.now() - startedAt < 300000) {
+                      var captureRes = await fetch('/api/concierge/pay', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          action: 'capture',
+                          order_id: data.orderID,
+                          group_id: groupId,
+                          session_id: sessionId,
+                          guest_name: name,
+                          guest_email: email
+                        })
+                      });
+                      var captureData = await captureRes.json();
+                      var status = String(captureData?.status || '').toLowerCase();
+                      var detail = captureData?.detail || captureData?.error || '';
+                      var isPending = captureRes.status === 202 || status === 'pending' || status === 'processing';
+
+                      if (status === 'paid') {
+                        paid = true;
+                        paypalContainer.innerHTML = '';
+                        await fetch('/api/concierge/chat', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            session_id: sessionId,
+                            message: '__confirm_group_payment:' + groupId,
+                            locale: 'ja',
+                            guest_name: name,
+                            guest_email: email,
+                            details: {
+                              check_in_date: date,
+                              check_in_time: ckin,
+                              check_out_time: ckout
+                            }
+                          })
+                        });
+                        setStatus('✅ 支払い完了！AIが ' + (_targetHotel.name_ja || _targetHotel.name) + ' への架電を開始しました。結果はメールでお知らせします。');
+                      } else if (!isPending && (captureRes.status >= 400 || status === 'failed' || status === 'error' || status === 'cancelled')) {
+                        hardError = detail || ('HTTP ' + captureRes.status);
+                      } else {
+                        await new Promise(function(resolve){ setTimeout(resolve, 5000); });
+                      }
+                    }
+
+                    if (!paid) {
                       paypalContainer.innerHTML = '';
-                      setStatus('✅ 支払い完了！AIが ' + (_targetHotel.name_ja || _targetHotel.name) + ' に電話をかけます。結果はメールでお知らせします。');
-                    } else {
-                      setError('決済処理に失敗しました: ' + (captureData.error || ''));
-                      paypalContainer.innerHTML = '';
+                      setError('決済の確認に時間がかかっています（お金は引き落とされている可能性があります）。しばらくして再確認するか、お問い合わせください。' + (hardError ? (' 詳細: ' + hardError) : ''));
                       submitBtn.style.display = '';
                       submitBtn.disabled = false;
                       submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信';
                     }
-                  } catch(e) { setError('決済処理中にエラーが発生しました。'); paypalContainer.innerHTML = ''; }
+                  } catch(e) {
+                    setError('決済の確認に時間がかかっています（お金は引き落とされている可能性があります）。しばらくして再確認するか、お問い合わせください。');
+                    paypalContainer.innerHTML = '';
+                  }
                 },
                 onError: function(err) { setError('PayPalエラー: ' + (err.message || '不明なエラー')); paypalContainer.innerHTML = ''; submitBtn.style.display = ''; submitBtn.disabled = false; submitBtn.textContent = '💳 PayPal で $7 支払い → AI電話発信'; }
               }).render('#ai-paypal-container');

@@ -1503,8 +1503,9 @@ function escHtml(s) {
         addMsg('✅ PayPalページを開きました。支払い完了後、AIが以下のホテルに順番に電話します。\n\n' + hotelListText + '\n\n👤 ' + name + '\n📞 ' + phone + '\n📅 ' + date + ' ' + checkinTime + '〜' + checkoutTime + '（' + guests + '名）', 'assistant');
 
         var paid = false;
+        var hardError = null;
         var startedAt = Date.now();
-        while (!paid && Date.now() - startedAt < 180000) {
+        while (!paid && !hardError && Date.now() - startedAt < 300000) {
           await new Promise(function(resolve){ setTimeout(resolve, 5000); });
           try {
             var captureRes = await fetch('/api/concierge/pay', {
@@ -1520,7 +1521,11 @@ function escHtml(s) {
               })
             });
             var captureData = await captureRes.json();
-            if (captureData.status === 'paid') {
+            var status = String(captureData?.status || '').toLowerCase();
+            var detail = captureData?.detail || captureData?.error || '';
+            var isPending = captureRes.status === 202 || status === 'pending' || status === 'processing';
+
+            if (status === 'paid') {
               paid = true;
               var confirmRes = await fetch('/api/concierge/chat', {
                 method: 'POST',
@@ -1541,6 +1546,8 @@ function escHtml(s) {
               });
               var confirmData = await confirmRes.json();
               if (confirmData?.response) addMsg(confirmData.response, 'assistant', confirmData.metadata);
+            } else if (!isPending && (captureRes.status >= 400 || status === 'failed' || status === 'error' || status === 'cancelled')) {
+              hardError = detail || ('HTTP ' + captureRes.status);
             }
           } catch (_e) {
             // retry until timeout
@@ -1548,7 +1555,10 @@ function escHtml(s) {
         }
 
         if (!paid) {
-          addMsg('決済確認に時間がかかっています。決済完了後に自動で処理されます。数分後に再確認してください。', 'assistant');
+          addMsg(
+            '決済の確認に時間がかかっています（お金は引き落とされている可能性があります）。しばらくして再確認するか、お問い合わせください。' + (hardError ? ('\n\n詳細: ' + hardError) : ''),
+            'assistant'
+          );
         }
       } else {
         addMsg(data.response || '予約リクエストを受け付けました。', 'assistant');
