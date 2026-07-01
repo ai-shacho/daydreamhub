@@ -741,6 +741,20 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
     } else {
       await db.prepare(`UPDATE concierge_calls SET status = 'failed', ai_summary = ?, updated_at = datetime('now') WHERE id = ?`).bind(message, callId).run();
     }
+
+    // Twilio発信APIエラー等でWebhookが来ないケースでも、グループ処理を停止させず次へ進める
+    try {
+      const groupRow: any = await db.prepare(
+        'SELECT call_group_id FROM concierge_calls WHERE id = ?'
+      ).bind(callId).first();
+      const groupId = Number(groupRow?.call_group_id || 0);
+      if (groupId > 0) {
+        await initiateNextGroupCall(env, db, groupId);
+      }
+    } catch (advanceError) {
+      console.error('[initiateCall] failed to auto-advance group after call failure:', advanceError);
+    }
+
     return { call_id: callId, status: "failed", message: `Failed to call: ${message}` };
   }
 }

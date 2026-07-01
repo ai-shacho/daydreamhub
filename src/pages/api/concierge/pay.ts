@@ -138,13 +138,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
           });
         }
         if (existingGroup.payment_status === 'paid' && existingGroup.paypal_order_id === order_id) {
-          let emailResult: any = { skipped: true, reason: 'not_attempted' };
-          try {
-            emailResult = await sendCallStartedEmailIfPossible(env, db, Number(group_id));
-          } catch (e) {
-            console.error('[concierge/pay] call started email failed:', e);
-            emailResult = { skipped: true, reason: 'email_failed' };
-          }
+          // 既にpaid済みの再リクエストでは「Calling Hotels Now」メールを再送しない
+          const emailResult: any = { skipped: true, reason: 'already_paid_idempotent' };
 
           const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
           return new Response(
@@ -169,6 +164,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
         const captureId =
           captureResult.purchase_units?.[0]?.payments?.captures?.[0]?.id || null;
         if (group_id && session_id) {
+          const preGroupState: any = await db
+            .prepare('SELECT payment_status FROM concierge_call_groups WHERE id = ? AND session_id = ?')
+            .bind(group_id, session_id)
+            .first();
+          const wasAlreadyPaid = String(preGroupState?.payment_status || '') === 'paid';
+
           const updateResult = await db
             .prepare(
               `UPDATE concierge_call_groups SET paypal_order_id = ?, paypal_capture_id = ?, payment_status = 'paid', guest_name = ?, guest_email = ?, updated_at = datetime('now') WHERE id = ? AND session_id = ?`
@@ -190,12 +191,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
             .bind(guest_name || null, guest_email || null, group_id)
             .run();
 
-          let emailResult: any = { skipped: true, reason: 'not_attempted' };
-          try {
-            emailResult = await sendCallStartedEmailIfPossible(env, db, Number(group_id));
-          } catch (e) {
-            console.error('[concierge/pay] call started email failed:', e);
-            emailResult = { skipped: true, reason: 'email_failed' };
+          let emailResult: any = { skipped: true, reason: 'already_paid_before_capture' };
+          if (!wasAlreadyPaid) {
+            emailResult = { skipped: true, reason: 'not_attempted' };
+            try {
+              emailResult = await sendCallStartedEmailIfPossible(env, db, Number(group_id));
+            } catch (e) {
+              console.error('[concierge/pay] call started email failed:', e);
+              emailResult = { skipped: true, reason: 'email_failed' };
+            }
           }
 
           const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
