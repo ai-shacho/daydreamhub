@@ -1184,34 +1184,37 @@ function escHtml(s) {
     var wrap = document.createElement('div');
     wrap.className = 'flex gap-2' + (role === 'user' ? ' flex-row-reverse' : '');
     if (role === 'assistant') {
-      // Task #47: prefer structured hotel data; fall back to text parsing
       var _metaHotels = (metadata && Array.isArray(metadata.hotels) && metadata.hotels.length > 0) ? metadata.hotels : null;
       var _internalMeta = _metaHotels ? _metaHotels.filter(function(h){ return h.source === 'internal'; }) : null;
       var _externalMeta = _metaHotels ? _metaHotels.filter(function(h){ return h.source === 'external'; }) : null;
 
-      var slugs = (_internalMeta && _internalMeta.length > 0)
-        ? _internalMeta.map(function(h){ return h.slug; }).filter(Boolean)
-        : extractHotelSlugs(text);
+      var internalHotels = (_internalMeta && _internalMeta.length > 0)
+        ? _internalMeta.map(function(h){ return { slug: h.slug, name: h.name, min_price: h.min_price }; }).filter(function(h){ return h.slug; })
+        : extractHotelSlugs(text).map(function(slug){
+            return { slug: slug, name: slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }), min_price: null };
+          });
 
       var externalHotels = (_externalMeta && _externalMeta.length > 0)
         ? _externalMeta.map(function(h){ return { name: h.name || '', phone: h.phone || '' }; })
         : extractExternalHotels(text);
 
-      // 自社ホテル: Book Now ボタン（無料）
-      var bookBtns = slugs.map(function(slug) {
-        return '<button onclick="window._heroBookNow(\'' + slug + '\', this)" ' +
-          'class="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-gray-900 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">' +
-          '🏨 Book Now — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30) +
-          '</button>';
+      var internalCards = internalHotels.map(function(h) {
+        var label = escHtml((h.name || '').slice(0, 40));
+        var price = (h.min_price != null && h.min_price !== '') ? ('$' + h.min_price + '〜') : '';
+        return '<a href="/hotel/' + h.slug + '" class="flex items-center justify-between gap-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-2 transition-colors">' +
+          '<div class="min-w-0">' +
+            '<p class="text-white text-xs font-bold truncate">' + label + '</p>' +
+            (price ? '<p class="text-amber-300 text-xs font-semibold mt-0.5">From ' + escHtml(price) + '</p>' : '') +
+          '</div>' +
+          '<span class="shrink-0 bg-amber-500 hover:bg-amber-400 text-gray-900 text-[11px] font-bold px-2.5 py-1 rounded-md">Details</span>' +
+        '</a>';
       }).join('');
 
-      // 外部ホテル: 複数選択チェックボックス + まとめて電話ボタン（最大3件、合計$7）
       var callBtns = '';
-      // ホテル名が取れていない候補は除外
       var validExternal = externalHotels.filter(function(h){ return h.name && h.name.length >= 2; });
       if (validExternal.length > 0) {
         var top3 = validExternal.slice(0, 3);
-        window._heroExternalHotels = top3; // 後で _heroCallBook が参照
+        window._heroExternalHotels = top3;
         var items = top3.map(function(h, i) {
           var safeName = (h.name || '').replace(/"/g, '&quot;').slice(0, 60);
           var safePhone = (h.phone || '').replace(/"/g, '');
@@ -1233,13 +1236,18 @@ function escHtml(s) {
           '</div>';
       }
 
-      var allBtns = bookBtns ? '<div class="flex flex-wrap gap-2 mt-2.5">' + bookBtns + '</div>' : '';
-      allBtns += callBtns;
+      var hasStructuredHotels = !!(_metaHotels && _metaHotels.length > 0);
+      var assistantBody = hasStructuredHotels
+        ? ''
+        : '<div class="whitespace-pre-wrap leading-relaxed">' + renderMsgContent(text) + '</div>';
+      var hotelCards = internalCards ? '<div class="grid gap-2 mt-2">' + internalCards + '</div>' : '';
+
       wrap.innerHTML =
         '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
         '<div class="bg-white/20 text-white rounded-xl rounded-tl-none px-3 py-2.5 text-sm max-w-[85%] shadow border border-white/10">' +
-          '<div class="whitespace-pre-wrap leading-relaxed">' + renderMsgContent(text) + '</div>' +
-          allBtns +
+          assistantBody +
+          hotelCards +
+          callBtns +
         '</div>';
     } else {
       wrap.innerHTML =
@@ -1714,145 +1722,6 @@ function escHtml(s) {
     }
   };
 
-  // ===== Inline Booking Flow =====
-  window._heroBookNow = async function(slug, btn) {
-    btn.disabled = true;
-    btn.textContent = 'Loading...';
-
-    try {
-      var res = await fetch('/api/hotels/' + slug + '/plans');
-      var data = await res.json();
-      if (!data.hotel || !data.plans || data.plans.length === 0) {
-        btn.disabled = false;
-        btn.textContent = '🏨 Book Now — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30);
-        addMsg('❌ No plans available for this hotel right now.', 'assistant');
-        return;
-      }
-      showBookingForm(data.hotel, data.plans, btn);
-    } catch(e) {
-      btn.disabled = false;
-      btn.textContent = '🏨 Book Now — ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }).slice(0,30);
-      addMsg('❌ Error loading plans. Please try again.', 'assistant');
-    }
-  };
-
-  function showBookingForm(hotel, plans, btn) {
-    // Remove any existing form
-    var existing = document.getElementById('hero-booking-form');
-    if (existing) existing.remove();
-
-    var planOptions = plans.map(function(p) {
-      return '<option value="' + p.id + '">' +
-        p.name + ' — $' + p.price_usd +
-        (p.check_in_time ? ' (' + p.check_in_time + '–' + p.check_out_time + ')' : '') +
-        '</option>';
-    }).join('');
-
-    var formEl = document.createElement('div');
-    formEl.id = 'hero-booking-form';
-    formEl.className = 'flex gap-2 mt-2';
-    formEl.innerHTML =
-      '<div class="w-6 h-6 flex-shrink-0"></div>' +
-      '<div class="bg-white rounded-xl p-4 text-gray-800 text-sm max-w-[90%] w-full shadow-lg">' +
-        '<div class="flex items-center justify-between mb-3">' +
-          '<p class="font-bold text-gray-900 text-sm">📋 ' + escHtml(hotel.name) + '</p>' +
-          '<button onclick="document.getElementById(\'hero-booking-form\').remove()" class="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>' +
-        '</div>' +
-        '<div class="space-y-2">' +
-          '<div>' +
-            '<label class="text-xs text-gray-500 font-medium">Plan *</label>' +
-            '<select id="hbf-plan" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500">' +
-            planOptions +
-            '</select>' +
-          '</div>' +
-          '<div class="grid grid-cols-2 gap-2">' +
-            '<div>' +
-              '<label class="text-xs text-gray-500 font-medium">Name *</label>' +
-              '<input id="hbf-name" type="text" placeholder="John Doe" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
-            '</div>' +
-            '<div>' +
-              '<label class="text-xs text-gray-500 font-medium">Email *</label>' +
-              '<input id="hbf-email" type="email" placeholder="you@email.com" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
-            '</div>' +
-          '</div>' +
-          '<div class="grid grid-cols-3 gap-2">' +
-            '<div>' +
-              '<label class="text-xs text-gray-500 font-medium">Check-in Date *</label>' +
-              '<input id="hbf-date" type="text" readonly placeholder="YYYY-MM-DD" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
-            '</div>' +
-            '<div>' +
-              '<label class="text-xs text-gray-500 font-medium">Adults</label>' +
-              '<input id="hbf-adults" type="number" value="1" min="1" max="10" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
-            '</div>' +
-            '<div>' +
-              '<label class="text-xs text-gray-500 font-medium">Children</label>' +
-              '<input id="hbf-children" type="number" value="0" min="0" max="10" class="w-full mt-0.5 border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-500" />' +
-            '</div>' +
-          '</div>' +
-          '<div id="hbf-error" class="hidden text-xs text-red-500 font-medium"></div>' +
-          '<button id="hbf-submit" onclick="window._heroSubmitBooking()" ' +
-            'class="w-full mt-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 rounded-lg text-xs transition-colors">' +
-            'Confirm Booking' +
-          '</button>' +
-        '</div>' +
-      '</div>';
-
-    messagesEl.appendChild(formEl);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-    btn.textContent = '✅ Form opened below';
-    // Init flatpickr for hbf-date (English locale)
-    if (window.flatpickr) {
-      var todayHbf = new Date(); todayHbf.setHours(0,0,0,0);
-      window.flatpickr('#hbf-date', {
-        locale: 'en', dateFormat: 'Y-m-d', altInput: true, altFormat: 'Y-m-d',
-        minDate: todayHbf, disableMobile: true
-      });
-    }
-  }
-
-  window._heroSubmitBooking = async function() {
-    var planId   = document.getElementById('hbf-plan')?.value;
-    var name     = document.getElementById('hbf-name')?.value.trim();
-    var email    = document.getElementById('hbf-email')?.value.trim();
-    var date     = document.getElementById('hbf-date')?.value;
-    var adults   = parseInt(document.getElementById('hbf-adults')?.value || '1');
-    var children = parseInt(document.getElementById('hbf-children')?.value || '0');
-    var errEl    = document.getElementById('hbf-error');
-    var submitBtn = document.getElementById('hbf-submit');
-
-    if (!planId || !name || !email || !date) {
-      errEl.textContent = '⚠️ Please fill in all required fields.';
-      errEl.classList.remove('hidden');
-      return;
-    }
-    errEl.classList.add('hidden');
-    submitBtn.textContent = 'Processing...';
-    submitBtn.disabled = true;
-
-    try {
-      var res = await fetch('/api/bookings/direct', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan_id: parseInt(planId), guest_name: name, guest_email: email, check_in_date: date, adults: adults, children: children }),
-      });
-      var data = await res.json();
-      if (data.success) {
-        // Remove form, show success message
-        document.getElementById('hero-booking-form')?.remove();
-        addMsg('✅ Booking confirmed!\n\n🏨 ' + data.hotel_name + '\n📋 ' + data.plan_name + '\n📅 ' + date + '\n💰 $' + data.total + ' USD\n\nConfirmation has been sent to ' + email + '.', 'assistant');
-      } else {
-        errEl.textContent = '❌ ' + (data.error || 'Booking failed. Please try again.');
-        errEl.classList.remove('hidden');
-        submitBtn.textContent = 'Confirm Booking';
-        submitBtn.disabled = false;
-      }
-    } catch(e) {
-      errEl.textContent = '❌ Connection error. Please try again.';
-      errEl.classList.remove('hidden');
-      submitBtn.textContent = 'Confirm Booking';
-      submitBtn.disabled = false;
-    }
-  };
 
   function addTyping() {
     var el = document.createElement('div');
