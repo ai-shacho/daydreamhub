@@ -352,11 +352,12 @@ const resultsText = t('city.hotels_found', locale).replace('{count}', String(tot
 
             try {
               // Step 1: call_group 作成
+              var sessionId = 'city-test-' + Date.now();
               var groupRes = await fetch('/api/concierge/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  session_id: 'city-test-' + Date.now(),
+                  session_id: sessionId,
                   message: '__create_call_group_direct',
                   locale: 'ja',
                   _call_group: {
@@ -395,10 +396,17 @@ const resultsText = t('city.hotels_found', locale).replace('{count}', String(tot
                     var captureRes = await fetch('/api/concierge/pay', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action: 'capture', order_id: data.orderID, group_id: groupId })
+                      body: JSON.stringify({
+                        action: 'capture',
+                        order_id: data.orderID,
+                        group_id: groupId,
+                        session_id: sessionId,
+                        guest_name: name,
+                        guest_email: email
+                      })
                     });
                     var captureData = await captureRes.json();
-                    if (captureData.success) {
+                    if (captureData.status === 'paid') {
                       paypalContainer.innerHTML = '';
                       setStatus('✅ 支払い完了！AIが ' + (_targetHotel.name_ja || _targetHotel.name) + ' に電話をかけます。結果はメールでお知らせします。');
                     } else {

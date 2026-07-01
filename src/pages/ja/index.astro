@@ -1496,60 +1496,62 @@ function escHtml(s) {
       }
 
       if (data.paypal_url) {
+        var groupId = data.group_id;
+        var paypalOrderId = data.paypal_order_id;
         window.open(data.paypal_url, '_blank');
         var hotelListText = selectedHotels.map(function(h, i){ return (i+1) + '. ' + h.name; }).join('\n');
         addMsg('✅ PayPalページを開きました。支払い完了後、AIが以下のホテルに順番に電話します。\n\n' + hotelListText + '\n\n👤 ' + name + '\n📞 ' + phone + '\n📅 ' + date + ' ' + checkinTime + '〜' + checkoutTime + '（' + guests + '名）', 'assistant');
 
-        if (data.group_id) {
-          var start = Date.now();
-          var pollTimer = setInterval(async function() {
-            if (Date.now() - start > 180000) {
-              clearInterval(pollTimer);
-              return;
-            }
-            try {
-              var statusRes = await fetch('/api/concierge/chat', {
+        var paid = false;
+        var startedAt = Date.now();
+        while (!paid && Date.now() - startedAt < 180000) {
+          await new Promise(function(resolve){ setTimeout(resolve, 5000); });
+          try {
+            var captureRes = await fetch('/api/concierge/pay', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'capture',
+                order_id: paypalOrderId,
+                group_id: groupId,
+                session_id: sessionId,
+                guest_name: name,
+                guest_email: email
+              })
+            });
+            var captureData = await captureRes.json();
+            if (captureData.status === 'paid') {
+              paid = true;
+              var confirmRes = await fetch('/api/concierge/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessionId, locale: 'ja', message: '__check_call_status:' + data.group_id })
+                body: JSON.stringify({
+                  session_id: sessionId,
+                  message: '__confirm_group_payment:' + groupId,
+                  locale: 'ja',
+                  guest_name: name,
+                  guest_email: email,
+                  guest_phone: phone,
+                  guests: parseInt(guests, 10),
+                  details: {
+                    guest_phone: phone,
+                    guests: parseInt(guests, 10)
+                  }
+                })
               });
-              var statusData = await statusRes.json();
-              if (statusData.response) {
-                addMsg(statusData.response, 'assistant', statusData.metadata);
-              }
-              var status = statusData.metadata?.call_status || statusData.metadata?.status;
-              if (status && status !== 'calling' && status !== 'pending') {
-                clearInterval(pollTimer);
-              }
-            } catch (pollErr) {
-              // continue polling
+              var confirmData = await confirmRes.json();
+              if (confirmData?.response) addMsg(confirmData.response, 'assistant', confirmData.metadata);
             }
-          }, 30000);
+          } catch (_e) {
+            // retry until timeout
+          }
+        }
+
+        if (!paid) {
+          addMsg('決済確認に時間がかかっています。決済完了後に自動で処理されます。数分後に再確認してください。', 'assistant');
         }
       } else {
         addMsg(data.response || '予約リクエストを受け付けました。', 'assistant');
-      }
-
-      if (data.group_id) {
-        var confirmRes = await fetch('/api/concierge/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            session_id: sessionId,
-            message: '__confirm_group_payment:' + data.group_id,
-            locale: 'ja',
-            guest_name: name,
-            guest_email: email,
-            guest_phone: phone,
-            guests: parseInt(guests, 10),
-            details: {
-              guest_phone: phone,
-              guests: parseInt(guests, 10)
-            }
-          })
-        });
-        var confirmData = await confirmRes.json();
-        if (confirmData?.response) addMsg(confirmData.response, 'assistant', confirmData.metadata);
       }
     } catch(e) {
       addMsg('❌ 通信エラーが発生しました。もう一度お試しください。', 'assistant');

@@ -310,8 +310,74 @@
       const data = await res.json();
       hideCallOverlay();
       if (data.paypal_url) {
-        addMessage(pageLocale === 'ja' ? 'PayPal決済ページを開きます。決済後にAIがホテルへ電話します。' : 'Opening PayPal. After payment, AI will start calling the hotel.', 'assistant');
-        window.open(data.paypal_url, '_blank', 'noopener,noreferrer');
+        const groupId = data.group_id;
+        const paypalOrderId = data.paypal_order_id;
+        const win = window.open(data.paypal_url, '_blank', 'noopener,noreferrer');
+        if (!win) {
+          addMessage(pageLocale === 'ja' ? 'ポップアップを許可してPayPal決済を完了してください。' : 'Please allow popups and complete PayPal payment.', 'assistant');
+          return;
+        }
+
+        addMessage(
+          pageLocale === 'ja'
+            ? 'PayPal決済ページを開きました。決済完了を自動確認し、確認後にAIがホテルへ電話します。'
+            : 'Opened PayPal checkout. We will auto-detect payment completion and start AI calling right away.',
+          'assistant'
+        );
+
+        let paid = false;
+        const startedAt = Date.now();
+        while (!paid && Date.now() - startedAt < 3 * 60 * 1000) {
+          await new Promise((r) => setTimeout(r, 5000));
+          try {
+            const capRes = await fetch('/api/concierge/pay', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'capture',
+                order_id: paypalOrderId,
+                group_id: groupId,
+                session_id: sessionId,
+                guest_name: guestName,
+                guest_email: guestEmail,
+              }),
+            });
+            const capData = await capRes.json();
+            if (capData.status === 'paid') {
+              paid = true;
+              const callRes = await fetch('/api/concierge/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  session_id: sessionId,
+                  message: '__confirm_group_payment:' + groupId,
+                  locale: pageLocale,
+                  guest_name: guestName,
+                  guest_email: guestEmail,
+                  guest_phone: guestPhone,
+                  guests,
+                  details: { guest_phone: guestPhone, guests },
+                }),
+              });
+              const callData = await callRes.json();
+              const replyText = callData?.response || (pageLocale === 'ja'
+                ? '✅ 決済を確認しました。AIがホテルへの架電を開始します。結果はメールでお知らせします。'
+                : '✅ Payment confirmed. AI calling has started. We will email you the result.');
+              addMessage(replyText, 'assistant', callData?.metadata);
+            }
+          } catch (_err) {
+            // keep polling until timeout
+          }
+        }
+
+        if (!paid) {
+          addMessage(
+            pageLocale === 'ja'
+              ? '決済確認に時間がかかっています。決済完了後に自動で処理されます。数分後に再度お試しください。'
+              : 'Payment confirmation is taking longer than expected. It will be processed automatically after checkout. Please check again in a few minutes.',
+            'assistant'
+          );
+        }
       } else {
         const replyText = data.response || (pageLocale === 'ja' ? 'AI電話予約を開始しました。' : 'AI phone booking started.');
         addMessage(replyText, 'assistant');

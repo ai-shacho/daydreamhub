@@ -95,6 +95,35 @@ export const POST: APIRoute = async ({ request, locals }) => {
           headers: { 'Content-Type': 'application/json' },
         });
       }
+
+      if (group_id && session_id) {
+        const existingGroup: any = await db
+          .prepare('SELECT id, paypal_order_id, paypal_capture_id, payment_status FROM concierge_call_groups WHERE id = ? AND session_id = ?')
+          .bind(group_id, session_id)
+          .first();
+        if (!existingGroup) {
+          return new Response(JSON.stringify({ error: 'Group not found for session' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        if (existingGroup.payment_status === 'paid' && existingGroup.paypal_order_id === order_id) {
+          const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
+          return new Response(
+            JSON.stringify({
+              status: 'paid',
+              order_id,
+              capture_id: existingGroup.paypal_capture_id || null,
+              group_id,
+              call_triggered: !kickoff.skipped,
+              trigger_result: kickoff,
+              idempotent: true,
+            }),
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       const accessToken = await getAccessToken(env.PAYPAL_CLIENT_ID, env.PAYPAL_SECRET, mode);
       const captureResult = await captureOrder(accessToken, order_id, mode);
       if (captureResult.status === 'COMPLETED') {
@@ -149,8 +178,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         );
       }
       return new Response(
-        JSON.stringify({ status: 'failed', detail: 'Payment not completed' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ status: 'pending', detail: 'Payment not completed yet' }),
+        { status: 202, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -159,9 +188,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (e: any) {
+    const message = e?.message || 'Payment processing failed';
+    const transient = /PAYER_ACTION_REQUIRED|ORDER_NOT_APPROVED|UNPROCESSABLE_ENTITY|INSTRUMENT_DECLINED|not approved/i.test(message);
+    if (transient) {
+      return new Response(
+        JSON.stringify({ status: 'pending', detail: message }),
+        { status: 202, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
     console.error('Payment error:', e);
     return new Response(
-      JSON.stringify({ error: 'Payment processing failed', detail: e?.message }),
+      JSON.stringify({ error: 'Payment processing failed', detail: message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

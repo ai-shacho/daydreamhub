@@ -1526,7 +1526,60 @@ function escHtml(s) {
       } catch (sdkErr) {
         if (data.paypal_url) {
           window.open(data.paypal_url, '_blank');
-          addMsg('PayPal popup could not be loaded on this device. Opened secure PayPal checkout in a new tab.', 'assistant');
+          addMsg('PayPal popup could not be loaded on this device. Opened secure PayPal checkout in a new tab. We will auto-confirm payment and start AI calls.', 'assistant');
+
+          var paidInFallback = false;
+          var startedAtFallback = Date.now();
+          while (!paidInFallback && Date.now() - startedAtFallback < 180000) {
+            await new Promise(function(resolve){ setTimeout(resolve, 5000); });
+            try {
+              var capResFallback = await fetch('/api/concierge/pay', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'capture',
+                  order_id: paypalOrderId,
+                  group_id: groupId,
+                  session_id: sessionId,
+                  guest_name: name,
+                  guest_email: email
+                })
+              });
+              var capDataFallback = await capResFallback.json();
+              if (capDataFallback.status === 'paid') {
+                paidInFallback = true;
+                var callResFallback = await fetch('/api/concierge/chat', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    session_id: sessionId,
+                    message: '__confirm_group_payment:' + groupId,
+                    locale: document.documentElement.lang || 'en',
+                    guest_name: name,
+                    guest_email: email,
+                    guest_phone: phone,
+                    guests: parseInt(guests, 10),
+                    details: {
+                      guest_phone: phone,
+                      guests: parseInt(guests, 10)
+                    }
+                  })
+                });
+                var callDataFallback = await callResFallback.json();
+                var firstCallFallback = callDataFallback?.metadata?.call_id;
+                if (firstCallFallback) {
+                  window._startCallPolling(firstCallFallback, sessionId, document.documentElement.lang || 'en');
+                }
+                addMsg('✅ Payment confirmed! AI has started calling hotels now. We will email you the result.', 'assistant');
+              }
+            } catch (_fallbackErr) {
+              // keep polling
+            }
+          }
+
+          if (!paidInFallback) {
+            addMsg('Payment confirmation is taking longer than expected. It will be processed automatically after checkout.', 'assistant');
+          }
           if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = 'Complete payment in new tab'; }
           return;
         }
