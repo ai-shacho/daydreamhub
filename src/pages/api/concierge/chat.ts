@@ -5,6 +5,24 @@ import { filterExternalHotels } from '../../../lib/filterExternalHotels';
 import { sendConciergeCallStartedEmail } from '../../../lib/email';
 
 // Shared text sanitizer — strips raw HTML from AI output, converts <a> to Markdown
+function stripInternalModelBlocks(text: string): string {
+  if (!text) return text;
+
+  // Remove XML-like internal blocks emitted by some model/tooling routes
+  text = text.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, '');
+  text = text.replace(/<function_call>[\s\S]*?<\/function_call>/gi, '');
+  text = text.replace(/<tool_use>[\s\S]*?<\/tool_use>/gi, '');
+  text = text.replace(/<tool_uses>[\s\S]*?<\/tool_uses>/gi, '');
+  text = text.replace(/<tool_result>[\s\S]*?<\/tool_result>/gi, '');
+  text = text.replace(/<tool_results>[\s\S]*?<\/tool_results>/gi, '');
+
+  // Also remove common JSON-ish leaked tool invocation payloads
+  text = text.replace(/\[?\{[\s\S]*?"tool_name"[\s\S]*?\}\]?/g, '');
+  text = text.replace(/\[?\{[\s\S]*?"tool_use_id"[\s\S]*?\}\]?/g, '');
+
+  return text.trim();
+}
+
 export function sanitizeAIText(text: string): string {
   if (!text) return text;
 
@@ -418,10 +436,8 @@ async function telnyxOrchestrate(
   const data: any = await res.json();
   let text = data?.choices?.[0]?.message?.content || 'Sorry, I could not process your request.';
 
-  // Strip function_call / tool XML tags first
-  text = text.replace(/<function_calls>[\s\S]*?<\/function_calls>/g, '').trim();
-  text = text.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, '').trim();
-  text = text.replace(/\[?\{[\s\S]*?"tool_name"[\s\S]*?\}\]?/g, '').trim();
+  // Strip internal tool/function-call payloads first
+  text = stripInternalModelBlocks(text);
   // Sanitize all remaining HTML using the updated logic
   text = sanitizeAIText(text);
   if (!text) text = 'Let me help you find a day-use hotel. Could you tell me your destination city and preferred date?';
@@ -1217,6 +1233,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const systemPrompt = isJa ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
     const lastMsg = claudeMessages.filter((m: any) => m.role === 'user').pop()?.content || '';
     let hotelCtx = '';
+    let structuredHotels: any[] = [];
     try {
       const cityMatch = lastMsg.match(/\b(tokyo|bangkok|dubai|singapore|london|paris|osaka|kyoto|bali|jakarta|kuala lumpur|seoul|taipei|hong kong|sydney|new york|berlin|rome|istanbul|cairo|mumbai|delhi|hanoi|cebu|phuket|nairobi|birmingham|belgrade|tbilisi|manama|doha)\b/i);
       if (cityMatch) {
@@ -1235,6 +1252,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
         if (rs.length > 0) {
           hotelCtx = '\n\nAvailable DayDreamHub hotels for "' + city + '":\n' +
             rs.map((h: any) => `- ${h.name} (${h.city}, ${h.country}) from $${h.min_price || '?'} → /hotel/${h.slug}`).join('\n');
+
+          structuredHotels = rs.map((h: any) => ({
+            name: h.name,
+            slug: h.slug,
+            city: h.city,
+            country: h.country,
+            source: 'internal',
+            min_price: h.min_price ?? null,
+          }));
         }
       }
     } catch {}
@@ -1245,8 +1271,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     } else {
       text = await cfAiChat(env, claudeMessages, fullPrompt);
     }
-    text = sanitizeAIText(text);
-    const result: { text: string; messageType: string; metadata?: any } = { text, messageType: 'text' };
+    text = sanitizeAIText(stripInternalModelBlocks(text));
+    const result: { text: string; messageType: string; metadata?: any } =
+      structuredHotels.length > 0
+        ? { text, messageType: 'hotel_results', metadata: { hotels: structuredHotels } }
+        : { text, messageType: 'text' };
 
     if (result.text) {
       await db
