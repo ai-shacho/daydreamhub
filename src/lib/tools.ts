@@ -596,13 +596,33 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
     if (!callRow) return { call_id: callId, status: "failed", message: "Call record not found" };
 
     const terminalOutcomes = new Set(['booked', 'available', 'unavailable', 'no_answer']);
-    if (callRow.telnyx_call_id) {
-      return {
-        call_id: callId,
-        status: 'skipped',
-        message: `Skip duplicate trigger for call ${callId}: already has provider id`,
-      };
+    const existingProviderOrLock = String(callRow.telnyx_call_id || '');
+    const lockPrefix = `lock:${callId}:`;
+    const lockTtlMs = 3 * 60 * 1000;
+
+    let staleLockToken: string | null = null;
+    if (existingProviderOrLock) {
+      if (existingProviderOrLock.startsWith(lockPrefix)) {
+        const parts = existingProviderOrLock.split(':');
+        const lockTs = Number(parts[2] || 0);
+        const lockAge = Date.now() - lockTs;
+        if (Number.isFinite(lockTs) && lockTs > 0 && lockAge <= lockTtlMs) {
+          return {
+            call_id: callId,
+            status: 'skipped',
+            message: `Skip duplicate trigger for call ${callId}: lock is active`,
+          };
+        }
+        staleLockToken = existingProviderOrLock;
+      } else {
+        return {
+          call_id: callId,
+          status: 'skipped',
+          message: `Skip duplicate trigger for call ${callId}: already has provider id`,
+        };
+      }
     }
+
     if (terminalOutcomes.has(String(callRow.outcome || ''))) {
       return {
         call_id: callId,
@@ -611,17 +631,26 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       };
     }
 
-    // 初回発信トリガーを確実化するため、status='pending' 固定ではなく
-    // 「未発信（telnyx_call_id IS NULL）」を基準にアトミックに発信権を取得する。
+    // DBロックは Twilio SID カラムとは別概念として lock: トークンを運用。
+    // stale lock が残っていても再取得できるようにし、自己ブロックを防ぐ。
     callLockToken = `lock:${callId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
-    const lockResult = await db.prepare(
-      `UPDATE concierge_calls
-          SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now')
-        WHERE id = ?
-          AND telnyx_call_id IS NULL
-          AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer')
-          AND COALESCE(status, 'pending') IN ('pending', 'calling')`
-    ).bind(callLockToken, callId).run();
+    const lockSql = staleLockToken
+      ? `UPDATE concierge_calls
+           SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now')
+         WHERE id = ?
+           AND telnyx_call_id = ?
+           AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer')
+           AND COALESCE(status, 'pending') IN ('pending', 'calling')`
+      : `UPDATE concierge_calls
+           SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now')
+         WHERE id = ?
+           AND telnyx_call_id IS NULL
+           AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer')
+           AND COALESCE(status, 'pending') IN ('pending', 'calling')`;
+
+    const lockResult = staleLockToken
+      ? await db.prepare(lockSql).bind(callLockToken, callId, staleLockToken).run()
+      : await db.prepare(lockSql).bind(callLockToken, callId).run();
 
     if (!lockResult?.meta?.changes) {
       return {

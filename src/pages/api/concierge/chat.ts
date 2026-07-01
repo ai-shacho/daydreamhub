@@ -845,10 +845,33 @@ export const POST: APIRoute = async ({ request, locals }) => {
             .run();
         }
       }
-      // Send "calling now" notification email to guest before dialing
-      const resendKey = env?.RESEND_API_KEY;
-      if (resendKey) {
-        try {
+      if (groupPaymentStatus === 'paid') {
+        // paid グループの初回発信トリガーは /api/concierge/pay(capture) に一本化。
+        // ここでは二重発火を避けるため「状態確認のみ」を返す。
+        const groupState: any = await db
+          .prepare('SELECT status, current_order, total_calls FROM concierge_call_groups WHERE id = ?')
+          .bind(groupId)
+          .first();
+        return new Response(
+          JSON.stringify({
+            response: '',
+            message_type: 'call_group_status',
+            metadata: {
+              group_id: groupId,
+              call_status: groupState?.status || 'pending',
+              current: Number(groupState?.current_order || 0),
+              total: Number(groupState?.total_calls || 0),
+              trigger_source: 'pay_api_only',
+            },
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // free グループはここから初回発信
+      try {
+        const resendKey = env?.RESEND_API_KEY;
+        if (resendKey) {
           const groupRow: any = await db.prepare(
             'SELECT guest_name, guest_email FROM concierge_call_groups WHERE id = ?'
           ).bind(groupId).first();
@@ -866,12 +889,35 @@ export const POST: APIRoute = async ({ request, locals }) => {
               date: firstDetails.check_in_date,
               checkIn: firstDetails.check_in_time,
               checkOut: firstDetails.check_out_time,
-              guests: (firstDetails.adults || 1) + (firstDetails.children || 0),
+              guests: Number(firstDetails.guests || ((firstDetails.adults || 1) + (firstDetails.children || 0))),
             });
           }
-        } catch (e) {
-          console.error('[concierge] call started email failed:', e);
         }
+      } catch (e) {
+        console.error('[concierge] call started email failed:', e);
+      }
+
+      const freeGroupState: any = await db
+        .prepare('SELECT status, current_order, total_calls FROM concierge_call_groups WHERE id = ?')
+        .bind(groupId)
+        .first();
+
+      if (Number(freeGroupState?.current_order || 0) !== 0) {
+        return new Response(
+          JSON.stringify({
+            response: '',
+            message_type: 'call_group_status',
+            metadata: {
+              group_id: groupId,
+              call_status: freeGroupState?.status || 'pending',
+              current: Number(freeGroupState?.current_order || 0),
+              total: Number(freeGroupState?.total_calls || 0),
+              trigger_source: 'chat_api_free_only',
+              skipped_reason: 'already_started',
+            },
+          }),
+          { headers: { 'Content-Type': 'application/json' } }
+        );
       }
 
       const result = await initiateNextGroupCall(env, db, groupId);
@@ -885,6 +931,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             current: result.current || 1,
             total: result.total || 3,
             call_id: result.call_id,
+            trigger_source: 'chat_api_free_only',
           },
         }),
         { headers: { 'Content-Type': 'application/json' } }

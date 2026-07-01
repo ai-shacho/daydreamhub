@@ -1,8 +1,38 @@
 import type { APIRoute } from 'astro';
 import { getAccessToken, createOrder, captureOrder } from '../../../lib/paypal';
 import { initiateNextGroupCall } from '../../../lib/tools';
+import { sendConciergeCallStartedEmail } from '../../../lib/email';
 
 const CALL_FEE_USD = 7;
+
+async function sendCallStartedEmailIfPossible(env: any, db: any, groupId: number) {
+  const resendKey = env?.RESEND_API_KEY;
+  if (!resendKey) return { skipped: true, reason: 'resend_not_configured' };
+
+  const groupRow: any = await db.prepare(
+    'SELECT guest_name, guest_email FROM concierge_call_groups WHERE id = ?'
+  ).bind(groupId).first();
+  const guestEmail = groupRow?.guest_email;
+  if (!guestEmail) return { skipped: true, reason: 'guest_email_missing' };
+
+  const callRows = await db.prepare(
+    'SELECT hotel_name, request_details FROM concierge_calls WHERE call_group_id = ? ORDER BY call_order ASC'
+  ).bind(groupId).all();
+  const hotelNames: string[] = ((callRows?.results as any[]) || []).map((r: any) => r.hotel_name || 'Hotel');
+  const firstDetails = (() => { try { return JSON.parse((callRows?.results as any[])?.[0]?.request_details || '{}'); } catch { return {}; } })();
+
+  await sendConciergeCallStartedEmail(resendKey, {
+    guestName: groupRow?.guest_name || 'Guest',
+    guestEmail,
+    hotelNames,
+    date: firstDetails.check_in_date,
+    checkIn: firstDetails.check_in_time,
+    checkOut: firstDetails.check_out_time,
+    guests: Number(firstDetails.guests || ((firstDetails.adults || 1) + (firstDetails.children || 0))),
+  });
+
+  return { skipped: false };
+}
 
 async function triggerInitialGroupCallIfNeeded(env: any, db: any, groupId: number) {
   const group: any = await db
@@ -108,6 +138,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
           });
         }
         if (existingGroup.payment_status === 'paid' && existingGroup.paypal_order_id === order_id) {
+          let emailResult: any = { skipped: true, reason: 'not_attempted' };
+          try {
+            emailResult = await sendCallStartedEmailIfPossible(env, db, Number(group_id));
+          } catch (e) {
+            console.error('[concierge/pay] call started email failed:', e);
+            emailResult = { skipped: true, reason: 'email_failed' };
+          }
+
           const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
           return new Response(
             JSON.stringify({
@@ -117,6 +155,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
               group_id,
               call_triggered: !kickoff.skipped,
               trigger_result: kickoff,
+              email_result: emailResult,
               idempotent: true,
             }),
             { headers: { 'Content-Type': 'application/json' } }
@@ -151,6 +190,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
             .bind(guest_name || null, guest_email || null, group_id)
             .run();
 
+          let emailResult: any = { skipped: true, reason: 'not_attempted' };
+          try {
+            emailResult = await sendCallStartedEmailIfPossible(env, db, Number(group_id));
+          } catch (e) {
+            console.error('[concierge/pay] call started email failed:', e);
+            emailResult = { skipped: true, reason: 'email_failed' };
+          }
+
           const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
           return new Response(
             JSON.stringify({
@@ -160,6 +207,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
               group_id,
               call_triggered: !kickoff.skipped,
               trigger_result: kickoff,
+              email_result: emailResult,
             }),
             { headers: { 'Content-Type': 'application/json' } }
           );
