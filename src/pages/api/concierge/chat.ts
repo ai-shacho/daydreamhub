@@ -1023,22 +1023,35 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }
       }
       if (groupPaymentStatus === 'paid') {
-        // paid グループの初回発信トリガーは /api/concierge/pay(capture) に一本化。
-        // ここでは二重発火を避けるため「状態確認のみ」を返す。
+        // 通常は /api/concierge/pay(capture) で初回発信される。
+        // ただし pending のまま取りこぼしたケース向けに、ここでフォールバック再試行する。
         const groupState: any = await db
           .prepare('SELECT status, current_order, total_calls FROM concierge_call_groups WHERE id = ?')
           .bind(groupId)
           .first();
+
+        let fallbackTriggered = false;
+        let fallbackResult: any = null;
+        if (
+          String(groupState?.status || '') === 'pending' &&
+          Number(groupState?.current_order || 0) === 0
+        ) {
+          fallbackTriggered = true;
+          fallbackResult = await initiateNextGroupCall(env, db, groupId);
+        }
+
         return new Response(
           JSON.stringify({
             response: '',
             message_type: 'call_group_status',
             metadata: {
               group_id: groupId,
-              call_status: groupState?.status || 'pending',
-              current: Number(groupState?.current_order || 0),
-              total: Number(groupState?.total_calls || 0),
-              trigger_source: 'pay_api_only',
+              call_status: fallbackResult?.status || groupState?.status || 'pending',
+              current: Number(fallbackResult?.current ?? groupState?.current_order ?? 0),
+              total: Number(fallbackResult?.total ?? groupState?.total_calls ?? 0),
+              call_id: fallbackResult?.call_id,
+              trigger_source: fallbackTriggered ? 'chat_api_fallback_retry' : 'pay_api_only',
+              fallback_triggered: fallbackTriggered,
             },
           }),
           { headers: { 'Content-Type': 'application/json' } }

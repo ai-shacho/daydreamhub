@@ -126,12 +126,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
         });
       }
 
-      if (group_id && session_id) {
+      if (group_id) {
         const existingGroup: any = await db
-          .prepare('SELECT id, paypal_order_id, paypal_capture_id, payment_status FROM concierge_call_groups WHERE id = ? AND session_id = ?')
-          .bind(group_id, session_id)
+          .prepare('SELECT id, session_id, paypal_order_id, paypal_capture_id, payment_status FROM concierge_call_groups WHERE id = ?')
+          .bind(group_id)
           .first();
-        if (!existingGroup) {
+        if (!existingGroup || (session_id && String(existingGroup.session_id || '') !== String(session_id))) {
           return new Response(JSON.stringify({ error: 'Group not found for session' }), {
             status: 404,
             headers: { 'Content-Type': 'application/json' },
@@ -163,18 +163,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (captureResult.status === 'COMPLETED') {
         const captureId =
           captureResult.purchase_units?.[0]?.payments?.captures?.[0]?.id || null;
-        if (group_id && session_id) {
+        if (group_id) {
           const preGroupState: any = await db
-            .prepare('SELECT payment_status FROM concierge_call_groups WHERE id = ? AND session_id = ?')
-            .bind(group_id, session_id)
+            .prepare('SELECT payment_status, session_id FROM concierge_call_groups WHERE id = ?')
+            .bind(group_id)
             .first();
+          if (!preGroupState || (session_id && String(preGroupState.session_id || '') !== String(session_id))) {
+            return new Response(JSON.stringify({ error: 'Group not found for session' }), {
+              status: 404,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
           const wasAlreadyPaid = String(preGroupState?.payment_status || '') === 'paid';
 
           const updateResult = await db
             .prepare(
-              `UPDATE concierge_call_groups SET paypal_order_id = ?, paypal_capture_id = ?, payment_status = 'paid', guest_name = ?, guest_email = ?, updated_at = datetime('now') WHERE id = ? AND session_id = ?`
+              `UPDATE concierge_call_groups SET paypal_order_id = ?, paypal_capture_id = ?, payment_status = 'paid', guest_name = ?, guest_email = ?, updated_at = datetime('now') WHERE id = ?`
             )
-            .bind(order_id, captureId, guest_name || null, guest_email || null, group_id, session_id)
+            .bind(order_id, captureId, guest_name || null, guest_email || null, group_id)
             .run();
 
           if (!updateResult?.meta?.changes) {
