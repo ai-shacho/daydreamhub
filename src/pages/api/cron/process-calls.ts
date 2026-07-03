@@ -56,6 +56,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
           TWILIO_ACCOUNT_SID,
           TWILIO_AUTH_TOKEN,
           TWILIO_FROM_NUMBER,
+          PUBLIC_BASE_URL: runtime?.env?.PUBLIC_BASE_URL,
+          SITE_URL: runtime?.env?.SITE_URL,
         },
         callLogId,
         bookingInfo

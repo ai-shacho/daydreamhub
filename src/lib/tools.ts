@@ -706,7 +706,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
   }
 
   try {
-    const baseUrl = 'https://daydreamhub.com';
+    const baseUrl = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || 'https://daydreamhub.com').replace(/\/$/, '');
 
     if (!env?.TWILIO_ACCOUNT_SID || !env?.TWILIO_AUTH_TOKEN || !env?.TWILIO_FROM_NUMBER) {
       throw new Error('Twilio env not configured');
