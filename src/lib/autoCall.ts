@@ -96,9 +96,16 @@ export async function triggerAutoCall(env: any, booking: any): Promise<number | 
   return callLogId;
 }
 
+function getPublicBaseUrl(env: any): string {
+  const fallback = 'https://daydreamhub.com';
+  const raw = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || fallback).trim();
+  if (!raw) return fallback;
+  return raw.replace(/\/$/, '');
+}
+
 export async function initiateCall(env: any, callLogId: number, booking: any): Promise<void> {
   const db = env.DB;
-  const baseUrl = 'https://daydreamhub.com';
+  const baseUrl = getPublicBaseUrl(env);
   try {
     if (!env?.TWILIO_ACCOUNT_SID || !env?.TWILIO_AUTH_TOKEN || !env?.TWILIO_FROM_NUMBER) {
       throw new Error('Twilio env not configured');

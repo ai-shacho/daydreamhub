@@ -529,7 +529,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       .bind(`Outreach: ${lead.hotel_name} [variant:${variantCode}]`).run();
     const callLogId = (logResult as any)?.meta?.last_row_id || null;
 
-    const baseUrl = 'https://daydreamhub.com';
+    const baseUrl = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || 'https://daydreamhub.com').replace(/\/$/, '');
 
     try {
       let callSid: string | null = null;

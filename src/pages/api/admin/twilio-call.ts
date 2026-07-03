@@ -9,8 +9,10 @@ function basicAuthHeader(accountSid: string, authToken: string): string {
 
 const TWILIO_WEBHOOK_BASE_URL = 'https://daydreamhub.com';
 
-function toHttpsOrigin(_siteUrl?: string | null): string {
-  return TWILIO_WEBHOOK_BASE_URL;
+function toHttpsOrigin(publicBaseUrl?: string | null, siteUrl?: string | null): string {
+  const raw = String(publicBaseUrl || siteUrl || TWILIO_WEBHOOK_BASE_URL).trim();
+  if (!raw) return TWILIO_WEBHOOK_BASE_URL;
+  return raw.replace(/\/$/, '');
 }
 
 function toPositiveInt(value: unknown): number | null {
@@ -80,7 +82,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     check_out_time: String(body?.check_out_time || '').trim(),
   };
 
-  const baseUrl = toHttpsOrigin(env?.SITE_URL);
+  const baseUrl = toHttpsOrigin(env?.PUBLIC_BASE_URL, env?.SITE_URL);
 
   try {
     let callLogId: number | null = null;

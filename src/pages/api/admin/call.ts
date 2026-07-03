@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     if (!to_number) {
       return new Response(JSON.stringify({ error: 'to_number is required' }), { status: 400 });
     }
-    const baseUrl = 'https://daydreamhub.com';
+    const baseUrl = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || 'https://daydreamhub.com').replace(/\/$/, '');
 
     try {
       let callLogId: number | null = null;

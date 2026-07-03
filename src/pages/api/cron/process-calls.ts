@@ -8,7 +8,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const TWILIO_ACCOUNT_SID = runtime?.env?.TWILIO_ACCOUNT_SID;
   const TWILIO_AUTH_TOKEN = runtime?.env?.TWILIO_AUTH_TOKEN;
   const TWILIO_FROM_NUMBER = runtime?.env?.TWILIO_FROM_NUMBER;
-  const PUBLIC_BASE_URL = runtime?.env?.PUBLIC_BASE_URL;
   const CRON_SECRET = runtime?.env?.CRON_SECRET;
 
   const authHeader = request.headers.get('Authorization');
@@ -18,7 +17,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  if (!db || !TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER || !PUBLIC_BASE_URL) {
+  if (!db || !TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -57,7 +56,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
           TWILIO_ACCOUNT_SID,
           TWILIO_AUTH_TOKEN,
           TWILIO_FROM_NUMBER,
-          PUBLIC_BASE_URL,
         },
         callLogId,
         bookingInfo

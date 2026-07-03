@@ -30,6 +30,14 @@ const MAX_RETRY = 3;
 const WEBHOOK_BASE = 'https://daydreamhub.com';
 const VOICE = 'Polly.Joanna';
 
+function getWebhookBase(request: Request): string {
+  const reqUrl = new URL(request.url);
+  const env = (globalThis as any)?.process?.env;
+  const base = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || reqUrl.origin || WEBHOOK_BASE).trim();
+  if (!base) return WEBHOOK_BASE;
+  return base.replace(/\/$/, '');
+}
+
 function gatherTwiml(action: string, prompt: string, opts?: { timeout?: number; finishOnKey?: string; preface?: string }): Response {
   const timeout = opts?.timeout ?? 8;
   const finishOnKey = opts?.finishOnKey ? ` finishOnKey="${esc(opts.finishOnKey)}"` : '';
@@ -135,8 +143,7 @@ function parseTurn(raw: string | null): number {
 }
 
 function makeWebhookUrl(request: Request, logId: string | null, step: Step, turn = 0, event?: string): string {
-  const _u = new URL(request.url);
-  const u = new URL('/api/webhooks/twilio-voice', WEBHOOK_BASE);
+  const u = new URL('/api/webhooks/twilio-voice', getWebhookBase(request));
   if (logId) u.searchParams.set('lid', logId);
   u.searchParams.set('step', step);
   u.searchParams.set('turn', String(turn));
