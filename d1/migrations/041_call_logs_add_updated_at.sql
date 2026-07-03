@@ -1,7 +1,5 @@
--- Add updated_at column to call_logs for explicit update tracking
-ALTER TABLE call_logs ADD COLUMN updated_at TEXT;
-
--- Backfill existing rows to avoid NULLs for historical data
+-- call_logs.updated_at already exists in the base schema (001).
+-- Keep this migration as a safe backfill/no-op to preserve migration order.
 UPDATE call_logs
 SET updated_at = COALESCE(updated_at, created_at, datetime('now'))
 WHERE updated_at IS NULL;
