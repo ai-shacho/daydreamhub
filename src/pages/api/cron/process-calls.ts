@@ -7,7 +7,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const db = runtime?.env?.DB;
   const TWILIO_ACCOUNT_SID = runtime?.env?.TWILIO_ACCOUNT_SID;
   const TWILIO_AUTH_TOKEN = runtime?.env?.TWILIO_AUTH_TOKEN;
-  const TWILIO_PHONE_NUMBER = runtime?.env?.TWILIO_PHONE_NUMBER;
+  const TWILIO_FROM_NUMBER = runtime?.env?.TWILIO_FROM_NUMBER;
   const PUBLIC_BASE_URL = runtime?.env?.PUBLIC_BASE_URL;
   const CRON_SECRET = runtime?.env?.CRON_SECRET;
 
@@ -18,7 +18,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  if (!db || !TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER || !PUBLIC_BASE_URL) {
+  if (!db || !TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER || !PUBLIC_BASE_URL) {
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -56,7 +56,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           DB: db,
           TWILIO_ACCOUNT_SID,
           TWILIO_AUTH_TOKEN,
-          TWILIO_PHONE_NUMBER,
+          TWILIO_FROM_NUMBER,
           PUBLIC_BASE_URL,
         },
         callLogId,

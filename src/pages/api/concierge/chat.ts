@@ -80,6 +80,57 @@ type HotelSearchBundle = {
   city: string;
   hotels: any[];
 };
+type ActiveCityCache = {
+  value: string[];
+  expiresAt: number;
+};
+
+const ACTIVE_CITY_CACHE_TTL_MS = 10 * 60 * 1000;
+let activeCityCache: ActiveCityCache | null = null;
+
+const HOTEL_SEARCH_INTENT_RE = /(hotel|day\s*use|hourly|stay|room|book|booking|availability|vacancy|check[- ]?in|check[- ]?out|price|budget|near|closest|where to stay|おすすめ|ホテル|宿|予約|空き|料金|滞在|デイユース|休憩|チェックイン|チェックアウト)/i;
+const CHAT_ONLY_RE = /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|lol|haha|good morning|good night|こんにちは|こんばんは|ありがとう|サンキュー|了解|OK|おはよう|おやすみ)[!！。\s]*$/i;
+
+function shouldSkipHeavyHotelSearch(lastUserMsg: string): boolean {
+  const normalized = String(lastUserMsg || '').trim();
+  if (!normalized) return true;
+  if (normalized.length <= 2) return true;
+  if (CHAT_ONLY_RE.test(normalized)) return true;
+  return !HOTEL_SEARCH_INTENT_RE.test(normalized);
+}
+
+async function getActiveCities(db: any): Promise<string[]> {
+  const now = Date.now();
+  if (activeCityCache && activeCityCache.expiresAt > now) {
+    return activeCityCache.value;
+  }
+  const dbCityRows = await db
+    .prepare(`SELECT DISTINCT city FROM hotels WHERE status = 'active' AND city IS NOT NULL AND city != '' ORDER BY city`)
+    .all();
+  const cities = ((dbCityRows?.results || []) as any[])
+    .map((row: any) => String(row.city || '').trim())
+    .filter(Boolean);
+  activeCityCache = { value: cities, expiresAt: now + ACTIVE_CITY_CACHE_TTL_MS };
+  return cities;
+}
+
+async function fetchExternalHotelsProgressive(env: any, city: string, locale: string, internalHotels: any[]): Promise<any[]> {
+  const primaryQuery = `day use hotel ${city}`;
+  const firstBatch = await searchHotelsExternal(env, { query: primaryQuery, location: city, language: locale, maxPages: 1 });
+  let externalHotels = filterExternalHotels((firstBatch?.hotels || []) as any[], internalHotels, 3) as any[];
+
+  if (externalHotels.length < 2) {
+    const secondBatch = await searchHotelsExternal(env, { query: `hourly hotel ${city}`, location: city, language: locale, maxPages: 1 });
+    const merged = [...((firstBatch?.hotels || []) as any[]), ...((secondBatch?.hotels || []) as any[])];
+    externalHotels = filterExternalHotels(merged, internalHotels, 3) as any[];
+  }
+
+  if (externalHotels.length === 0) {
+    externalHotels = filterExternalHotels(await searchHotelsBrave(env, city, locale), internalHotels, 3) as any[];
+  }
+
+  return externalHotels;
+}
 
 async function buildStructuredHotelResults(
   env: any,
@@ -88,6 +139,7 @@ async function buildStructuredHotelResults(
   lastUserMsg: string
 ): Promise<HotelSearchBundle> {
   if (!db || !lastUserMsg || lastUserMsg.length < 2) return { city: '', hotels: [] };
+  if (shouldSkipHeavyHotelSearch(lastUserMsg)) return { city: '', hotels: [] };
 
   const MAJOR_CITIES = [
     'tokyo','osaka','kyoto','sapporo','fukuoka','nagoya','hiroshima','kobe','yokohama',
@@ -119,10 +171,10 @@ async function buildStructuredHotelResults(
 
   if (!city) {
     try {
-      const dbCityRows = await db.prepare(`SELECT DISTINCT city FROM hotels WHERE status = 'active' ORDER BY city`).all();
-      for (const row of (dbCityRows?.results || []) as any[]) {
-        if (row.city && lowerMsg.includes(String(row.city).toLowerCase())) {
-          city = row.city;
+      const activeCities = await getActiveCities(db);
+      for (const dbCity of activeCities) {
+        if (dbCity && lowerMsg.includes(String(dbCity).toLowerCase())) {
+          city = dbCity;
           break;
         }
       }
@@ -168,17 +220,7 @@ async function buildStructuredHotelResults(
   } catch {}
 
   try {
-    const queries = [`day use hotel ${city}`, `hourly hotel ${city}`, `hotel ${city}`];
-    const allCandidates: any[] = [];
-    for (const q of queries) {
-      if (allCandidates.length >= 15) break;
-      const ext = await searchHotelsExternal(env, { query: q, location: city, language: locale });
-      allCandidates.push(...((ext?.hotels || []) as any[]));
-    }
-    externalHotels = filterExternalHotels(allCandidates, internalHotels, 3) as any[];
-    if (externalHotels.length === 0) {
-      externalHotels = filterExternalHotels(await searchHotelsBrave(env, city, locale), internalHotels, 3) as any[];
-    }
+    externalHotels = await fetchExternalHotelsProgressive(env, city, locale, internalHotels);
   } catch {}
 
   const dedupedInternal = (() => {
@@ -361,14 +403,12 @@ async function telnyxOrchestrate(
         }
       }
 
-      // 1. DB登録都市と照合
+      // 1. DB登録都市と照合（キャッシュ利用）
       if (!city) {
-        const dbCityRows = await db.prepare(
-          `SELECT DISTINCT city FROM hotels WHERE status = 'active' ORDER BY city`
-        ).all();
-        for (const row of (dbCityRows?.results || []) as any[]) {
-          if (row.city && lowerMsg.includes(row.city.toLowerCase())) {
-            city = row.city; break;
+        const activeCities = await getActiveCities(db);
+        for (const dbCity of activeCities) {
+          if (dbCity && lowerMsg.includes(dbCity.toLowerCase())) {
+            city = dbCity; break;
           }
         }
       }
@@ -469,26 +509,7 @@ async function telnyxOrchestrate(
         try {
           const { searchHotelsExternal, searchHotelsBrave } = await import('../../../lib/tools');
           let extHotels: any[] = [];
-          // 複数クエリで検索して候補を増やす
-          const queries = [
-            `day use hotel ${city}`,
-            `hourly hotel ${city}`,
-            `hotel ${city}`
-          ];
-          const allCandidates: any[] = [];
-          for (const q of queries) {
-            if (allCandidates.length >= 15) break;
-            const gResult = await searchHotelsExternal(env, { query: q, location: city, language: locale });
-            allCandidates.push(...(gResult?.hotels || []));
-          }
-          extHotels = filterExternalHotels(allCandidates, results, 3);
-          if (extHotels.length === 0) {
-            extHotels = filterExternalHotels(
-              await searchHotelsBrave(env, city, locale),
-              results,
-              3
-            );
-          }
+          extHotels = await fetchExternalHotelsProgressive(env, city, locale, results);
           // Task #47: save external hotels for structured response
           _structExternalHotels = extHotels;
 

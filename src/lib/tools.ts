@@ -274,7 +274,7 @@ export async function searchHotelsExternal(env: any, params: any) {
   const fieldMask = [
     "places.displayName", "places.formattedAddress", "places.nationalPhoneNumber",
     "places.internationalPhoneNumber", "places.rating", "places.userRatingCount",
-    "places.websiteUri", "places.types", "places.location"
+    "places.websiteUri", "places.types", "places.location", "nextPageToken"
   ].join(",");
 
   const lang = params.language || "en";
@@ -282,6 +282,7 @@ export async function searchHotelsExternal(env: any, params: any) {
   // Only bias by region for non-English locales; for English leave unset so international results aren't biased toward US
   const regionMap: Record<string, string> = { ja: "JP", th: "TH", ko: "KR" };
   const regionCode = regionMap[lang] || undefined;
+  const maxPages = Math.max(1, Math.min(Number(params.maxPages || 1), 3));
 
   const baseBody: any = {
     textQuery: enrichedQuery,
@@ -290,35 +291,49 @@ export async function searchHotelsExternal(env: any, params: any) {
   };
   if (regionCode) baseBody.regionCode = regionCode;
 
-  let response = await fetch("https://places.googleapis.com/v1/places:searchText", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": fieldMask
-    },
-    body: JSON.stringify({ ...baseBody, includedType: "lodging" })
-  });
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Goog-Api-Key": apiKey,
+    "X-Goog-FieldMask": fieldMask
+  };
 
-  if (!response.ok) {
-    response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+  async function searchOnce(body: any, includeLodging: boolean) {
+    const payload = includeLodging ? { ...body, includedType: "lodging" } : body;
+    return fetch("https://places.googleapis.com/v1/places:searchText", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": fieldMask
-      },
-      body: JSON.stringify(baseBody)
+      headers,
+      body: JSON.stringify(payload)
     });
   }
 
+  let response = await searchOnce(baseBody, true);
+  if (!response.ok) {
+    response = await searchOnce(baseBody, false);
+  }
   if (!response.ok) {
     const errText = await response.text();
-    return { count: 0, source: "external", hotels: [], error: `Places API error ${response.status}` };
+    return { count: 0, source: "external", hotels: [], error: `Places API error ${response.status}: ${errText}` };
   }
 
-  const data: any = await response.json();
-  return processPlacesResults(data);
+  let data: any = await response.json();
+  let aggregated = processPlacesResults(data).hotels || [];
+  let nextPageToken = data?.nextPageToken;
+
+  for (let page = 2; page <= maxPages && nextPageToken; page++) {
+    const nextRes = await searchOnce({ ...baseBody, pageToken: nextPageToken }, false);
+    if (!nextRes.ok) break;
+    data = await nextRes.json();
+    aggregated.push(...(processPlacesResults(data).hotels || []));
+    nextPageToken = data?.nextPageToken;
+  }
+
+  const deduped = aggregated.filter((hotel: any, index: number, arr: any[]) => {
+    const name = String(hotel?.name || '').toLowerCase();
+    const phone = String(hotel?.phone || '').toLowerCase();
+    return arr.findIndex((h: any) => String(h?.name || '').toLowerCase() === name && String(h?.phone || '').toLowerCase() === phone) === index;
+  });
+
+  return { count: deduped.length, source: "external", hotels: deduped };
 }
 
 function processPlacesResults(data: any) {
