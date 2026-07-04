@@ -5,6 +5,10 @@ import { sendConciergeCallStartedEmail } from '../../../lib/email';
 
 const CALL_FEE_USD = 7;
 
+function isAlreadyCapturedErrorMessage(message: string): boolean {
+  return /ORDER_ALREADY_CAPTURED|DUPLICATE_INVOICE_ID|ORDER_COMPLETED|already captured/i.test(message || '');
+}
+
 async function sendCallStartedEmailIfPossible(env: any, db: any, groupId: number) {
   const resendKey = env?.RESEND_API_KEY;
   if (!resendKey) return { skipped: true, reason: 'resend_not_configured' };
@@ -174,7 +178,40 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
 
       const accessToken = await getAccessToken(env.PAYPAL_CLIENT_ID, env.PAYPAL_SECRET, mode);
-      const captureResult = await captureOrder(accessToken, order_id, mode);
+      let captureResult: any;
+      try {
+        captureResult = await captureOrder(accessToken, order_id, mode);
+      } catch (captureError: any) {
+        const captureMessage = captureError?.message || '';
+        const alreadyCaptured = isAlreadyCapturedErrorMessage(captureMessage);
+
+        if (alreadyCaptured && group_id) {
+          const paidGroup: any = await db
+            .prepare('SELECT id, session_id, paypal_capture_id, payment_status FROM concierge_call_groups WHERE id = ?')
+            .bind(group_id)
+            .first();
+
+          if (paidGroup && (!session_id || String(paidGroup.session_id || '') === String(session_id)) && String(paidGroup.payment_status || '') === 'paid') {
+            const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
+            return new Response(
+              JSON.stringify({
+                status: 'paid',
+                order_id,
+                capture_id: paidGroup.paypal_capture_id || null,
+                group_id,
+                call_triggered: !kickoff.skipped,
+                trigger_result: kickoff,
+                email_result: { skipped: true, reason: 'already_paid_after_duplicate_capture' },
+                idempotent: true,
+                paypal_duplicate_capture: true,
+              }),
+              { headers: { 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+
+        throw captureError;
+      }
       if (captureResult.status === 'COMPLETED') {
         const captureId =
           captureResult.purchase_units?.[0]?.payments?.captures?.[0]?.id || null;

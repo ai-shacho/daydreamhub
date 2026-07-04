@@ -35,6 +35,8 @@
         const statusEl = document.getElementById('status');
         const titleEl = document.getElementById('title');
         const backEl = document.getElementById('back');
+        const MAX_RETRIES = 20;
+        const RETRY_INTERVAL_MS = 3000;
 
         if (!orderId || !groupId) {
           titleEl.textContent = '決済情報が不足しています';
@@ -44,23 +46,43 @@
           return;
         }
 
-        try {
-          const res = await fetch('/api/concierge/pay', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'capture',
-              order_id: orderId,
-              group_id: Number(groupId),
-              ...(sessionId ? { session_id: sessionId } : {}),
-              ...(guestName ? { guest_name: guestName } : {}),
-              ...(guestEmail ? { guest_email: guestEmail } : {}),
-            }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || data?.status !== 'paid') {
-            throw new Error(data?.error || data?.detail || '決済確定に失敗しました');
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        async function captureWithRetry() {
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+            const res = await fetch('/api/concierge/pay', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'capture',
+                order_id: orderId,
+                group_id: Number(groupId),
+                ...(sessionId ? { session_id: sessionId } : {}),
+                ...(guestName ? { guest_name: guestName } : {}),
+                ...(guestEmail ? { guest_email: guestEmail } : {}),
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data?.status === 'paid') {
+              return data;
+            }
+
+            const isPending = data?.status === 'pending' || res.status === 202;
+            if (!isPending) {
+              throw new Error(data?.error || data?.detail || '決済確定に失敗しました');
+            }
+
+            if (attempt < MAX_RETRIES) {
+              statusEl.className = 'muted';
+              statusEl.textContent = `PayPalの処理を確認中です（${attempt}/${MAX_RETRIES}）。数秒後に再確認します...`;
+              await sleep(RETRY_INTERVAL_MS);
+            }
           }
+          throw new Error('決済確認に時間がかかっています。少し時間をおいて再度ご確認ください。');
+        }
+
+        try {
+          await captureWithRetry();
 
           titleEl.textContent = '支払いが完了しました';
           statusEl.className = 'ok';

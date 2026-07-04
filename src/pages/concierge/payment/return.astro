@@ -35,6 +35,8 @@
         const statusEl = document.getElementById('status');
         const titleEl = document.getElementById('title');
         const backEl = document.getElementById('back');
+        const MAX_RETRIES = 20;
+        const RETRY_INTERVAL_MS = 3000;
 
         if (!orderId || !groupId) {
           titleEl.textContent = 'Missing payment context';
@@ -44,23 +46,43 @@
           return;
         }
 
-        try {
-          const res = await fetch('/api/concierge/pay', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'capture',
-              order_id: orderId,
-              group_id: Number(groupId),
-              ...(sessionId ? { session_id: sessionId } : {}),
-              ...(guestName ? { guest_name: guestName } : {}),
-              ...(guestEmail ? { guest_email: guestEmail } : {}),
-            }),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || data?.status !== 'paid') {
-            throw new Error(data?.error || data?.detail || 'Failed to finalize payment');
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        async function captureWithRetry() {
+          for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+            const res = await fetch('/api/concierge/pay', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'capture',
+                order_id: orderId,
+                group_id: Number(groupId),
+                ...(sessionId ? { session_id: sessionId } : {}),
+                ...(guestName ? { guest_name: guestName } : {}),
+                ...(guestEmail ? { guest_email: guestEmail } : {}),
+              }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data?.status === 'paid') {
+              return data;
+            }
+
+            const isPending = data?.status === 'pending' || res.status === 202;
+            if (!isPending) {
+              throw new Error(data?.error || data?.detail || 'Failed to finalize payment');
+            }
+
+            if (attempt < MAX_RETRIES) {
+              statusEl.className = 'muted';
+              statusEl.textContent = `Payment is still pending (${attempt}/${MAX_RETRIES}). Retrying in a few seconds...`;
+              await sleep(RETRY_INTERVAL_MS);
+            }
           }
+          throw new Error('Payment confirmation is taking longer than expected. Please try again shortly.');
+        }
+
+        try {
+          await captureWithRetry();
 
           titleEl.textContent = 'Payment confirmed';
           statusEl.className = 'ok';
