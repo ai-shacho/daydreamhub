@@ -25,12 +25,31 @@ export async function getAccessToken(clientId: string, secret: string, mode: str
   return data.access_token;
 }
 
-export async function createOrder(accessToken: string, amount: number, mode: string = 'sandbox', description?: string, idempotencyKey?: string): Promise<string> {
+type CreateOrderOptions = {
+  returnUrl?: string;
+  cancelUrl?: string;
+};
+
+export async function createOrder(
+  accessToken: string,
+  amount: number,
+  mode: string = 'sandbox',
+  description?: string,
+  idempotencyKey?: string,
+  options?: CreateOrderOptions,
+): Promise<string> {
   const base = getBaseUrl(mode);
   // [追加] 二重決済防止: PayPal-Request-Id ヘッダーで同一リクエストの重複処理を防ぐ
   const extraHeaders: Record<string, string> = idempotencyKey
     ? { 'PayPal-Request-Id': idempotencyKey }
     : {};
+  const applicationContext = (options?.returnUrl && options?.cancelUrl)
+    ? {
+        return_url: options.returnUrl,
+        cancel_url: options.cancelUrl,
+        user_action: 'PAY_NOW',
+      }
+    : undefined;
   const res = await fetch(`${base}/v2/checkout/orders`, {
     method: 'POST',
     headers: {
@@ -49,6 +68,7 @@ export async function createOrder(accessToken: string, amount: number, mode: str
           ...(description ? { description } : {}),
         },
       ],
+      ...(applicationContext ? { application_context: applicationContext } : {}),
     }),
   });
   if (!res.ok) {

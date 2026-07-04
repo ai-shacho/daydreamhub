@@ -1,0 +1,84 @@
+---
+---
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>決済処理中...</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+      .wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+      .card { width: min(640px, 100%); background: #111827; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
+      .muted { color: #94a3b8; font-size: 14px; }
+      .ok { color: #4ade80; }
+      .err { color: #f87171; }
+      .btn { display: inline-block; margin-top: 12px; color: #0f172a; background: #67e8f9; padding: 10px 14px; border-radius: 8px; text-decoration: none; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <h1 id="title">決済確定中です…</h1>
+        <p id="status" class="muted">PayPalの支払いを確認しています。画面を閉じずにお待ちください。</p>
+        <a id="back" class="btn" href="/ja/concierge" style="display:none">コンシェルジュ画面へ戻る</a>
+      </section>
+    </main>
+
+    <script>
+      (async function () {
+        const qp = new URLSearchParams(window.location.search);
+        const orderId = qp.get('token') || qp.get('order_id');
+        const groupId = qp.get('group_id');
+        const sessionId = qp.get('session_id');
+        const guestName = qp.get('guest_name');
+        const guestEmail = qp.get('guest_email');
+        const statusEl = document.getElementById('status');
+        const titleEl = document.getElementById('title');
+        const backEl = document.getElementById('back');
+
+        if (!orderId || !groupId) {
+          titleEl.textContent = '決済情報が不足しています';
+          statusEl.className = 'err';
+          statusEl.textContent = 'order_id または group_id が見つかりません。';
+          backEl.style.display = 'inline-block';
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/concierge/pay', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'capture',
+              order_id: orderId,
+              group_id: Number(groupId),
+              ...(sessionId ? { session_id: sessionId } : {}),
+              ...(guestName ? { guest_name: guestName } : {}),
+              ...(guestEmail ? { guest_email: guestEmail } : {}),
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data?.status !== 'paid') {
+            throw new Error(data?.error || data?.detail || '決済確定に失敗しました');
+          }
+
+          titleEl.textContent = '支払いが完了しました';
+          statusEl.className = 'ok';
+          statusEl.textContent = 'ホテルへの発信を開始しました。このタブは閉じても問題ありません。';
+          try {
+            if (window.opener && !window.opener.closed) {
+              window.opener.postMessage({ type: 'ddh_concierge_payment_captured', ok: true, group_id: Number(groupId), order_id: orderId }, window.location.origin);
+            }
+          } catch {}
+          backEl.style.display = 'inline-block';
+          setTimeout(() => { if (window.opener && !window.opener.closed) window.close(); }, 1200);
+        } catch (e) {
+          titleEl.textContent = '決済確認エラー';
+          statusEl.className = 'err';
+          statusEl.textContent = (e && e.message) ? e.message : '決済処理中にエラーが発生しました。';
+          backEl.style.display = 'inline-block';
+        }
+      })();
+    </script>
+  </body>
+</html>

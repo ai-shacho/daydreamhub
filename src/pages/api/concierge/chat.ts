@@ -905,8 +905,28 @@ export const POST: APIRoute = async ({ request, locals }) => {
       // 外部ホテルあり → PayPal決済 (pay.ts の create アクションと同じ処理)
       const { getAccessToken, createOrder } = await import('../../../lib/paypal');
       const mode = env.PAYPAL_MODE || 'live';
+      const baseUrl = new URL(request.url).origin;
+      const returnQuery = new URLSearchParams({
+        group_id: String(group.group_id),
+        session_id: String(session_id),
+        ...(callGroupData.guest_name ? { guest_name: String(callGroupData.guest_name) } : {}),
+        ...(callGroupData.guest_email ? { guest_email: String(callGroupData.guest_email) } : {}),
+      }).toString();
+      const lang = String(locale || '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
+      const returnPath = lang === 'ja' ? '/ja/concierge/payment/return' : '/concierge/payment/return';
+      const cancelPath = lang === 'ja' ? '/ja/concierge/payment/cancel' : '/concierge/payment/cancel';
       const accessToken = await getAccessToken(env.PAYPAL_CLIENT_ID, env.PAYPAL_SECRET, mode);
-      const paypalOrderId = await createOrder(accessToken, 7, mode, 'DaydreamHub AI Phone Booking Service');
+      const paypalOrderId = await createOrder(
+        accessToken,
+        7,
+        mode,
+        'DaydreamHub AI Phone Booking Service',
+        undefined,
+        {
+          returnUrl: `${baseUrl}${returnPath}?${returnQuery}`,
+          cancelUrl: `${baseUrl}${cancelPath}?${returnQuery}`,
+        },
+      );
       await db.prepare(
         `UPDATE concierge_call_groups SET paypal_order_id = ?, updated_at = datetime('now') WHERE id = ?`
       ).bind(paypalOrderId, group.group_id).run();

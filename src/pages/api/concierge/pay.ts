@@ -81,8 +81,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  const { action, session_id, call_id, group_id, order_id, guest_name, guest_email } = body;
+  const { action, session_id, call_id, group_id, order_id, guest_name, guest_email, locale } = body;
   const mode = env.PAYPAL_MODE || 'live';
+  const baseUrl = new URL(request.url).origin;
+  const resolvedLocale = String(locale || '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
 
   try {
     if (action === 'config') {
@@ -100,11 +102,24 @@ export const POST: APIRoute = async ({ request, locals }) => {
         });
       }
       const accessToken = await getAccessToken(env.PAYPAL_CLIENT_ID, env.PAYPAL_SECRET, mode);
+      const returnQuery = new URLSearchParams({
+        ...(group_id ? { group_id: String(group_id) } : {}),
+        ...(session_id ? { session_id: String(session_id) } : {}),
+        ...(guest_name ? { guest_name: String(guest_name) } : {}),
+        ...(guest_email ? { guest_email: String(guest_email) } : {}),
+      }).toString();
+      const returnPath = resolvedLocale === 'ja' ? '/ja/concierge/payment/return' : '/concierge/payment/return';
+      const cancelPath = resolvedLocale === 'ja' ? '/ja/concierge/payment/cancel' : '/concierge/payment/cancel';
       const orderId = await createOrder(
         accessToken,
         CALL_FEE_USD,
         mode,
-        'DaydreamHub AI Phone Booking Service'
+        'DaydreamHub AI Phone Booking Service',
+        undefined,
+        {
+          returnUrl: `${baseUrl}${returnPath}${returnQuery ? `?${returnQuery}` : ''}`,
+          cancelUrl: `${baseUrl}${cancelPath}${returnQuery ? `?${returnQuery}` : ''}`,
+        },
       );
       return new Response(
         JSON.stringify({ order_id: orderId, amount: CALL_FEE_USD }),
