@@ -603,6 +603,40 @@ export async function processGroupRefund(env: any, db: any, groupId: number) {
     .run();
 }
 
+function normalizePhoneNumber(rawPhone: string) {
+  const original = String(rawPhone || '').trim();
+  if (!original) return { original, normalized: '', isValid: false, reason: 'Phone number is empty' };
+
+  let normalized = original
+    .replace(/[\u00A0\s().-]/g, '')
+    .replace(/(?!^)\+/g, '');
+
+  if (normalized.startsWith('00')) {
+    normalized = `+${normalized.slice(2)}`;
+  }
+
+  if (!normalized.startsWith('+')) {
+    return { original, normalized, isValid: false, reason: 'Phone must include country code (+...)' };
+  }
+
+  if (!/^\+[1-9]\d{7,14}$/.test(normalized)) {
+    return { original, normalized, isValid: false, reason: 'Phone must be E.164 format (+XXXXXXXX...)' };
+  }
+
+  return { original, normalized, isValid: true, reason: '' };
+}
+
+function formatCallProviderError(provider: 'Twilio' | 'Telnyx', status: number, responseBody: any, rawText: string) {
+  if (provider === 'Twilio') {
+    const code = responseBody?.code ? ` code=${responseBody.code}` : '';
+    const message = responseBody?.message || rawText || 'Unknown Twilio error';
+    const moreInfo = responseBody?.more_info ? ` more_info=${responseBody.more_info}` : '';
+    return `${provider} API error: status=${status}${code} message=${message}${moreInfo}`;
+  }
+  const message = responseBody?.errors?.[0]?.detail || responseBody?.error || rawText || 'Unknown Telnyx error';
+  return `${provider} API error: status=${status} message=${message}`;
+}
+
 export async function initiateCall(env: any, db: any, sessionId: string, callId: number, params?: any) {
   let callLockToken = '';
 
@@ -710,12 +744,22 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
 
     let callProviderId = '';
 
+    const toPhone = normalizePhoneNumber(params?.hotel_phone || '');
+    if (!toPhone.isValid) {
+      throw new Error(`Invalid destination phone for ${params?.hotel_name || 'hotel'}: ${toPhone.reason}. raw="${toPhone.original}" normalized="${toPhone.normalized}"`);
+    }
+
     // Primary: Twilio
     if (env?.TWILIO_ACCOUNT_SID && env?.TWILIO_AUTH_TOKEN && env?.TWILIO_FROM_NUMBER) {
+      const fromPhone = normalizePhoneNumber(env.TWILIO_FROM_NUMBER);
+      if (!fromPhone.isValid) {
+        throw new Error(`Invalid TWILIO_FROM_NUMBER: ${fromPhone.reason}. raw="${fromPhone.original}" normalized="${fromPhone.normalized}"`);
+      }
+
       const auth = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
       const paramsForm = new URLSearchParams();
-      paramsForm.set('To', params.hotel_phone);
-      paramsForm.set('From', env.TWILIO_FROM_NUMBER);
+      paramsForm.set('To', toPhone.normalized);
+      paramsForm.set('From', fromPhone.normalized);
       paramsForm.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&phase=concierge`);
       paramsForm.set('Method', 'POST');
       paramsForm.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&event=status&phase=concierge`);
@@ -731,13 +775,21 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
         body: paramsForm.toString(),
       });
       const txt = await response.text();
-      const resData: any = txt ? JSON.parse(txt) : {};
-      if (!response.ok) throw new Error(`Twilio API error: ${response.status} ${txt}`);
+      let resData: any = {};
+      try {
+        resData = txt ? JSON.parse(txt) : {};
+      } catch {
+        resData = { raw: txt };
+      }
+      if (!response.ok) {
+        throw new Error(formatCallProviderError('Twilio', response.status, resData, txt));
+      }
       callProviderId = `twilio:${resData?.sid || ''}`;
+      console.info(`[initiateCall] Twilio call created: callId=${callId} sid=${resData?.sid || 'unknown'} hotel=${params?.hotel_name || 'unknown'} to=${toPhone.normalized}`);
     } else if (env?.TELNYX_API_KEY && (env?.TELNYX_CONNECTION_ID || env?.TELNYX_FROM_NUMBER)) {
       // Fallback: Telnyx (for environments that still only have Telnyx credentials)
       const payload: any = {
-        to: params.hotel_phone,
+        to: toPhone.normalized,
         from: env.TELNYX_FROM_NUMBER,
         webhook_url: `${baseUrl}/api/webhooks/telnyx-voice?lid=${callId}&phase=concierge`,
         answering_machine_detection: 'disabled',
@@ -753,8 +805,13 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
         body: JSON.stringify(payload),
       });
       const txt = await response.text();
-      const resData: any = txt ? JSON.parse(txt) : {};
-      if (!response.ok) throw new Error(`Telnyx API error: ${response.status} ${txt}`);
+      let resData: any = {};
+      try {
+        resData = txt ? JSON.parse(txt) : {};
+      } catch {
+        resData = { raw: txt };
+      }
+      if (!response.ok) throw new Error(formatCallProviderError('Telnyx', response.status, resData, txt));
       const telnyxId = resData?.data?.call_control_id || resData?.data?.call_session_id || resData?.data?.call_leg_id || '';
       callProviderId = telnyxId ? `telnyx:${telnyxId}` : 'telnyx:started';
     } else {

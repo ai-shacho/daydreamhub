@@ -172,6 +172,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
           const emailResult: any = { skipped: true, reason: 'already_paid_idempotent' };
 
           const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
+          if (!kickoff?.started) {
+            console.error('[concierge/pay] paid-but-call-not-started (already_paid path):', { group_id, order_id, kickoff });
+          }
           return new Response(
             JSON.stringify({
               status: 'paid',
@@ -204,6 +207,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
           if (paidGroup && (!session_id || String(paidGroup.session_id || '') === String(session_id)) && String(paidGroup.payment_status || '') === 'paid') {
             const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
+            if (!kickoff?.started) {
+              console.error('[concierge/pay] paid-but-call-not-started (duplicate_capture path):', { group_id, order_id, kickoff });
+            }
             return new Response(
               JSON.stringify({
                 status: 'paid',
@@ -272,6 +278,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
           }
 
           const kickoff = await triggerInitialGroupCallIfNeeded(env, db, Number(group_id));
+          if (!kickoff?.started) {
+            console.error('[concierge/pay] paid-but-call-not-started (fresh_capture path):', { group_id, order_id, kickoff });
+          }
           return new Response(
             JSON.stringify({
               status: 'paid',
