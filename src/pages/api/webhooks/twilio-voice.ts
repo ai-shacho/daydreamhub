@@ -171,6 +171,59 @@ function safeJson(value: any): string {
   try { return JSON.stringify(value); } catch { return '{}'; }
 }
 
+function parseJsonWithGuard(raw: unknown, context: string): any {
+  if (raw == null) return {};
+  if (typeof raw === 'object') return raw;
+
+  const text = String(raw).trim();
+  if (!text) return {};
+
+  try {
+    const first = JSON.parse(text);
+    if (typeof first === 'string') {
+      const nested = first.trim();
+      if (!nested) return {};
+      try {
+        return JSON.parse(nested);
+      } catch (nestedErr) {
+        console.error(`[twilio-voice] ${context} double-JSON parse failed`, {
+          error: nestedErr,
+          sample: clamp(nested, 300),
+        });
+        return {};
+      }
+    }
+    if (first && typeof first === 'object') return first;
+    return {};
+  } catch (err) {
+    console.error(`[twilio-voice] ${context} JSON.parse failed`, {
+      error: err,
+      sample: clamp(text, 300),
+    });
+    return {};
+  }
+}
+
+async function findConciergeCallIdFromLog(db: DbLike | null, logId: string | null): Promise<string | null> {
+  if (!db || !logId) return null;
+  try {
+    const colsQ = db.prepare(`PRAGMA table_info(call_logs)`);
+    const colsR = (typeof colsQ.all === 'function') ? await colsQ.all() : await colsQ.bind().run();
+    const cols = new Set((colsR?.results || []).map((r: any) => String(r?.name || '')));
+
+    const candidates = ['concierge_call_id', 'concierge_id', 'related_concierge_call_id'].filter((c) => cols.has(c));
+    for (const col of candidates) {
+      const row: any = await db.prepare(`SELECT ${col} AS concierge_call_id FROM call_logs WHERE id = ? LIMIT 1`).bind(logId).first().catch(() => null);
+      const v = String(row?.concierge_call_id || '').trim();
+      if (v && /^\d+$/.test(v)) return v;
+    }
+    return null;
+  } catch (e) {
+    console.error('[twilio-voice] findConciergeCallIdFromLog failed', e);
+    return null;
+  }
+}
+
 async function insertCallLogEvent(
   db: DbLike | null,
   logId: string | null,
@@ -415,8 +468,7 @@ async function sendResultEmailOnce(env: any, db: DbLike | null, conciergeCallId:
       `SELECT hotel_name FROM concierge_calls WHERE call_group_id = ? ORDER BY call_order ASC, id ASC`
     ).bind(call.call_group_id).all().then((r: any) => r?.results || []).catch(() => []);
 
-    let details: any = {};
-    try { details = JSON.parse(call.request_details || '{}'); } catch {}
+    const details: any = parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(all_failed_email)');
 
     await sendConciergeResultEmail(env.RESEND_API_KEY, {
       guestName: call.guest_name || 'Guest',
@@ -437,8 +489,7 @@ async function sendResultEmailOnce(env: any, db: DbLike | null, conciergeCallId:
   ).bind(conciergeCallId).run().catch(() => null);
   if (Number(claim?.meta?.changes || 0) === 0) return;
 
-  let details: any = {};
-  try { details = JSON.parse(call.request_details || '{}'); } catch {}
+  const details: any = parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(result_email)');
 
   await sendConciergeResultEmail(env.RESEND_API_KEY, {
     guestName: call.guest_name || 'Guest',
@@ -463,8 +514,7 @@ async function sendAdminConciergeBookedEmail(env: any, db: DbLike | null, concie
   ).bind(conciergeCallId).first().catch(() => null);
   if (!call) return;
 
-  let details: any = {};
-  try { details = JSON.parse(call.request_details || '{}'); } catch {}
+  const details: any = parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(admin_email)');
 
   const payload = {
     from: 'DaydreamHub <noreply@daydreamhub.com>',
@@ -574,15 +624,23 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     const logRow: any = (db && logId)
       ? await db.prepare(`SELECT id, booking_id, note, phase FROM call_logs WHERE id = ?`).bind(logId).first().catch(() => null)
       : null;
+
+    const linkedConciergeCallIdFromLog = (!phaseParam && db && logId)
+      ? await findConciergeCallIdFromLog(db, logId)
+      : null;
+    const hasConciergeCallByLinkedId = (!phaseParam && db && linkedConciergeCallIdFromLog)
+      ? await db.prepare(`SELECT id FROM concierge_calls WHERE id = ? LIMIT 1`).bind(linkedConciergeCallIdFromLog).first().then((r: any) => !!r?.id).catch(() => false)
+      : false;
     const hasConciergeCallByLogId = (!phaseParam && db && logId)
       ? await db.prepare(`SELECT id FROM concierge_calls WHERE id = ? LIMIT 1`).bind(logId).first().then((r: any) => !!r?.id).catch(() => false)
       : false;
+
     const inferredPhase = (() => {
       if (phaseParam === 'outreach' || phaseParam === 'concierge' || phaseParam === 'booking') return phaseParam;
+      if (hasConciergeCallByLinkedId || hasConciergeCallByLogId) return 'concierge';
       const p = String(logRow?.phase || '').toLowerCase();
       if (p === 'outreach' || p === 'concierge' || p === 'booking') return p;
       if (String(logRow?.note || '').toLowerCase().includes('outreach')) return 'outreach';
-      if (hasConciergeCallByLogId) return 'concierge';
       return 'booking';
     })();
 
@@ -600,7 +658,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
 
     if (event === 'status') {
       const conciergeRow: any = (db && logId && inferredPhase === 'concierge')
-        ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(logId).first().catch(() => null)
+        ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(linkedConciergeCallIdFromLog || logId).first().catch(() => null)
         : null;
 
       if (conciergeRow) {
@@ -650,6 +708,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     let outreachLead: any = null;
     let conciergeCall: any = null;
     let conciergeDetails: any = {};
+    let resolvedConciergeCallId: string | null = linkedConciergeCallIdFromLog;
     let bookingTestMeta: { guest_name?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null = null;
     let quotedAmountFromNote: number | null = readQuotedAmountFromNote(logRow?.note);
 
@@ -664,9 +723,16 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           outreachLead = await db.prepare(`SELECT l.id, l.hotel_name, l.person_in_charge_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
         }
       } else {
-        conciergeCall = await db.prepare(`SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?`).bind(logId).first().catch(() => null);
+        const candidateIds = [resolvedConciergeCallId, logId].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx) as string[];
+        for (const candidateId of candidateIds) {
+          conciergeCall = await db.prepare(`SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?`).bind(candidateId).first().catch(() => null);
+          if (conciergeCall?.id) {
+            resolvedConciergeCallId = String(conciergeCall.id);
+            break;
+          }
+        }
         if (conciergeCall?.request_details) {
-          try { conciergeDetails = JSON.parse(conciergeCall.request_details); } catch { conciergeDetails = {}; }
+          conciergeDetails = parseJsonWithGuard(conciergeCall.request_details, 'concierge_calls.request_details');
         }
       }
     }
@@ -933,7 +999,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
         if (phase === 'concierge') {
-          await finalizeConciergeOutcome(env, db, logId, 'unavailable', 'hotel_declined_dayuse');
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'unavailable', 'hotel_declined_dayuse');
           return twiml(`<Say voice="${VOICE}">Understood. Thank you for confirming. Goodbye.</Say><Hangup/>`);
         }
         if (db && booking?.id) {
@@ -944,7 +1010,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_dayuse_no_answer', callSid ? `twilio:${callSid}` : undefined);
         if (phase === 'concierge') {
-          await finalizeConciergeOutcome(env, db, logId, 'no_answer', 'no_response_dayuse_question');
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_response_dayuse_question');
         }
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
@@ -966,7 +1032,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
         if (phase === 'concierge') {
-          await finalizeConciergeOutcome(env, db, logId, 'no_answer', 'no_price_captured');
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_price_captured');
         }
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
@@ -989,7 +1055,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           await finalizeConciergeOutcome(
             env,
             db,
-            logId,
+            resolvedConciergeCallId || logId,
             'booked',
             `confirmed_by_hotel;guest=${bookingGuestName};guest_email=${bookingGuestEmail || 'n/a'};guest_phone=${bookingGuestPhone || 'n/a'}`,
             { priceQuoted: finalAmount, sendAdminBooked: true }
@@ -1002,7 +1068,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_booking_declined', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
         if (phase === 'concierge') {
-          await finalizeConciergeOutcome(env, db, logId, 'unavailable', 'declined_at_confirmation');
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'unavailable', 'declined_at_confirmation');
         } else if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
@@ -1011,7 +1077,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_confirm_no_answer', callSid ? `twilio:${callSid}` : undefined);
         if (phase === 'concierge') {
-          await finalizeConciergeOutcome(env, db, logId, 'no_answer', 'no_response_confirmation');
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_response_confirmation');
         }
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
