@@ -724,8 +724,39 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             break;
           }
         }
+
+        if (!conciergeCall?.id) {
+          console.error('[Twilio Webhook Error] Failed to find concierge_calls record.', {
+            phaseParam,
+            logId,
+            resolvedConciergeCallId,
+            candidateIds,
+            query: 'SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?'
+          });
+        }
+
         if (conciergeCall?.request_details) {
           conciergeDetails = parseJsonWithGuard(conciergeCall.request_details, 'concierge_calls.request_details');
+          if (Object.keys(conciergeDetails || {}).length === 0) {
+            console.error('[Twilio Webhook Error] concierge_calls.request_details parsed to empty object.', {
+              phaseParam,
+              logId,
+              resolvedConciergeCallId,
+              requestDetailsSample: clamp(conciergeCall.request_details, 300),
+            });
+          }
+        }
+
+        const requiredConciergeDetailKeys = ['check_in_date', 'check_in_time', 'check_out_time'];
+        const missingRequiredConciergeKeys = requiredConciergeDetailKeys.filter((k) => conciergeDetails?.[k] == null || String(conciergeDetails[k]).trim() === '');
+        if (missingRequiredConciergeKeys.length > 0) {
+          console.warn('[Twilio Webhook Warn] conciergeDetails missing required keys.', {
+            phaseParam,
+            logId,
+            resolvedConciergeCallId,
+            missingKeys: missingRequiredConciergeKeys,
+            availableKeys: Object.keys(conciergeDetails || {}),
+          });
         }
       }
     }
