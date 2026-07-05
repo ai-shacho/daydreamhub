@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getAccessToken, createOrder, captureOrder } from '../../../lib/paypal';
-import { initiateNextGroupCall } from '../../../lib/tools';
+import { initiateCall, initiateNextGroupCall } from '../../../lib/tools';
 import { sendConciergeCallStartedEmail } from '../../../lib/email';
 
 const CALL_FEE_USD = 7;
@@ -40,7 +40,7 @@ async function sendCallStartedEmailIfPossible(env: any, db: any, groupId: number
 
 async function triggerInitialGroupCallIfNeeded(env: any, db: any, groupId: number) {
   const group: any = await db
-    .prepare('SELECT id, current_order, status FROM concierge_call_groups WHERE id = ?')
+    .prepare('SELECT id, session_id, current_order, status FROM concierge_call_groups WHERE id = ?')
     .bind(groupId)
     .first();
 
@@ -48,8 +48,35 @@ async function triggerInitialGroupCallIfNeeded(env: any, db: any, groupId: numbe
     return { skipped: true, reason: 'group_not_found', started: false };
   }
 
-  // 決済APIの重複呼び出しで2件目以降へ勝手に進まないよう、初回（current_order=0）のみキック。
+  // 通常は初回（current_order=0）のみキック。
+  // ただし自己回復: 進行中(current_order!=0)でも、対象コールが pending かつ provider ID 未設定なら再発信する。
   if (Number(group.current_order || 0) !== 0) {
+    const currentCall: any = await db.prepare(
+      `SELECT id, status, telnyx_call_id
+         FROM concierge_calls
+        WHERE call_group_id = ?
+          AND call_order = ?
+        ORDER BY COALESCE(attempt, 1) DESC, id DESC
+        LIMIT 1`
+    ).bind(groupId, Number(group.current_order)).first();
+
+    const isPendingWithoutProvider =
+      currentCall &&
+      String(currentCall.status || 'pending') === 'pending' &&
+      !String(currentCall.telnyx_call_id || '');
+
+    if (isPendingWithoutProvider) {
+      const retrigger = await initiateCall(env, db, String(group.session_id || ''), Number(currentCall.id));
+      return {
+        skipped: false,
+        reason: 'retrigger_pending_call',
+        current_order: group.current_order,
+        status: group.status,
+        started: String(retrigger?.status || '') === 'calling',
+        trigger: retrigger,
+      };
+    }
+
     return {
       skipped: true,
       reason: 'already_started',

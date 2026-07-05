@@ -569,6 +569,41 @@ export async function initiateNextGroupCall(env: any, db: any, groupId: number) 
   ).bind(nextOrder, groupId, group.current_order).run();
 
   if (!updateResult.meta.changes || updateResult.meta.changes === 0) {
+    const latestGroup: any = await db
+      .prepare("SELECT session_id, current_order, total_calls FROM concierge_call_groups WHERE id = ?")
+      .bind(groupId)
+      .first();
+
+    const recoverOrder = Number(latestGroup?.current_order || 0);
+    if (recoverOrder > 0) {
+      const recoverCall: any = await db.prepare(
+        `SELECT id, status, telnyx_call_id
+           FROM concierge_calls
+          WHERE call_group_id = ?
+            AND call_order = ?
+          ORDER BY COALESCE(attempt, 1) DESC, id DESC
+          LIMIT 1`
+      ).bind(groupId, recoverOrder).first();
+
+      const shouldRecover =
+        recoverCall &&
+        String(recoverCall.status || 'pending') === 'pending' &&
+        !String(recoverCall.telnyx_call_id || '');
+
+      if (shouldRecover) {
+        const recovered = await initiateCall(env, db, String(latestGroup?.session_id || group.session_id || ''), Number(recoverCall.id));
+        return {
+          status: recovered.status,
+          group_id: groupId,
+          call_id: recoverCall.id,
+          current: recoverOrder,
+          total: Number(latestGroup?.total_calls || group.total_calls || 0),
+          message: recovered.message,
+          recovered_from: 'already_advanced',
+        };
+      }
+    }
+
     return { status: "already_advanced", group_id: groupId };
   }
 
