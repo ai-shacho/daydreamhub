@@ -625,19 +625,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       ? await db.prepare(`SELECT id, booking_id, note, phase FROM call_logs WHERE id = ?`).bind(logId).first().catch(() => null)
       : null;
 
-    const linkedConciergeCallIdFromLog = (!phaseParam && db && logId)
-      ? await findConciergeCallIdFromLog(db, logId)
-      : null;
-    const hasConciergeCallByLinkedId = (!phaseParam && db && linkedConciergeCallIdFromLog)
-      ? await db.prepare(`SELECT id FROM concierge_calls WHERE id = ? LIMIT 1`).bind(linkedConciergeCallIdFromLog).first().then((r: any) => !!r?.id).catch(() => false)
-      : false;
-    const hasConciergeCallByLogId = (!phaseParam && db && logId)
-      ? await db.prepare(`SELECT id FROM concierge_calls WHERE id = ? LIMIT 1`).bind(logId).first().then((r: any) => !!r?.id).catch(() => false)
-      : false;
-
     const inferredPhase = (() => {
       if (phaseParam === 'outreach' || phaseParam === 'concierge' || phaseParam === 'booking') return phaseParam;
-      if (hasConciergeCallByLinkedId || hasConciergeCallByLogId) return 'concierge';
       const p = String(logRow?.phase || '').toLowerCase();
       if (p === 'outreach' || p === 'concierge' || p === 'booking') return p;
       if (String(logRow?.note || '').toLowerCase().includes('outreach')) return 'outreach';
@@ -657,6 +646,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     });
 
     if (event === 'status') {
+      const linkedConciergeCallIdFromLog = (db && logId && inferredPhase === 'concierge')
+        ? await findConciergeCallIdFromLog(db, logId)
+        : null;
       const conciergeRow: any = (db && logId && inferredPhase === 'concierge')
         ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(linkedConciergeCallIdFromLog || logId).first().catch(() => null)
         : null;
@@ -708,7 +700,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     let outreachLead: any = null;
     let conciergeCall: any = null;
     let conciergeDetails: any = {};
-    let resolvedConciergeCallId: string | null = linkedConciergeCallIdFromLog;
+    let resolvedConciergeCallId: string | null = null;
     let bookingTestMeta: { guest_name?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null = null;
     let quotedAmountFromNote: number | null = readQuotedAmountFromNote(logRow?.note);
 
@@ -723,6 +715,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           outreachLead = await db.prepare(`SELECT l.id, l.hotel_name, l.person_in_charge_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
         }
       } else {
+        resolvedConciergeCallId = await findConciergeCallIdFromLog(db, logId);
         const candidateIds = [resolvedConciergeCallId, logId].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx) as string[];
         for (const candidateId of candidateIds) {
           conciergeCall = await db.prepare(`SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?`).bind(candidateId).first().catch(() => null);
