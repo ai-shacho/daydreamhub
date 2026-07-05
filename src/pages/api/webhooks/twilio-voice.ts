@@ -649,8 +649,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const linkedConciergeCallIdFromLog = (db && logId && inferredPhase === 'concierge')
         ? await findConciergeCallIdFromLog(db, logId)
         : null;
-      const conciergeRow: any = (db && logId && inferredPhase === 'concierge')
-        ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(linkedConciergeCallIdFromLog || logId).first().catch(() => null)
+      const statusTargetConciergeCallId = logId || linkedConciergeCallIdFromLog;
+      const conciergeRow: any = (db && statusTargetConciergeCallId && inferredPhase === 'concierge')
+        ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(statusTargetConciergeCallId).first().catch(() => null)
         : null;
 
       if (conciergeRow) {
@@ -716,7 +717,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
       } else {
         resolvedConciergeCallId = await findConciergeCallIdFromLog(db, logId);
-        const candidateIds = [resolvedConciergeCallId, logId].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx) as string[];
+        const candidateIds = [logId, resolvedConciergeCallId].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx) as string[];
         for (const candidateId of candidateIds) {
           conciergeCall = await db.prepare(`SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?`).bind(candidateId).first().catch(() => null);
           if (conciergeCall?.id) {
