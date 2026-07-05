@@ -676,7 +676,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
   let callLockToken = '';
 
   if (!params) {
-    const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details, status, outcome, telnyx_call_id, guest_name, guest_email, guest_phone FROM concierge_calls WHERE id = ?").bind(callId).first();
+    const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details, status, outcome, telnyx_call_id, guest_name, guest_email FROM concierge_calls WHERE id = ?").bind(callId).first();
     if (!callRow) return { call_id: callId, status: "failed", message: "Call record not found" };
 
     const terminalOutcomes = new Set(['booked', 'available', 'unavailable', 'no_answer']);
@@ -758,7 +758,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       max_price: details.max_price || "",
       call_mode: details.call_mode || "initial",
       confirmed_price: details.confirmed_price || "",
-      guest_phone: callRow.guest_phone || details.guest_phone || "",
+      guest_phone: details.guest_phone || details.phone || details.contact_phone || details.contact?.phone || "",
       guest_email: callRow.guest_email || details.guest_email || ""
     };
     if (details.budget && !details.max_price) {
