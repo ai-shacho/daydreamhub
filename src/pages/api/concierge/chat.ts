@@ -1479,9 +1479,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
   } catch (e: any) {
     const detail = String(e?.message || '');
     const isPayPalConfigError = /PayPal configuration missing/i.test(detail);
-    console.error('Concierge chat error:', e);
+    const stack = typeof e?.stack === 'string' ? e.stack : undefined;
+    const debugEnabled = String(env?.DEBUG_API_ERRORS || '').toLowerCase() === '1' || String(env?.DEBUG_API_ERRORS || '').toLowerCase() === 'true';
+    const errorId = `chat_${Date.now().toString(36)}`;
+    console.error(`[concierge/chat] ${errorId}:`, e);
     return new Response(
-      JSON.stringify({ error: isPayPalConfigError ? 'Payment service not available' : 'Internal server error', detail: detail || undefined }),
+      JSON.stringify({
+        error: isPayPalConfigError ? 'Payment service not available' : 'Internal server error',
+        detail: detail || undefined,
+        error_id: errorId,
+        ...(debugEnabled && stack ? { stack } : {}),
+      }),
       { status: isPayPalConfigError ? 503 : 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

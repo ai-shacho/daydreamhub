@@ -68,7 +68,7 @@ jobs:
           for secret_name in "${secrets[@]}"; do
             secret_value="${!secret_name}"
             if [ -n "$secret_value" ]; then
-              echo "$secret_value" | wrangler pages secret put "$secret_name" --project-name=daydreamhub --log-level debug
+              echo "$secret_value" | wrangler pages secret put "$secret_name" --project-name=daydreamhub
             fi
           done
 

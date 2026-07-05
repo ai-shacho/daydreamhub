@@ -315,9 +315,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
         { status: 202, headers: { 'Content-Type': 'application/json' } }
       );
     }
-    console.error('Payment error:', e);
+
+    const stack = typeof e?.stack === 'string' ? e.stack : undefined;
+    const debugEnabled = String(env?.DEBUG_API_ERRORS || '').toLowerCase() === '1' || String(env?.DEBUG_API_ERRORS || '').toLowerCase() === 'true';
+    const errorId = `pay_${Date.now().toString(36)}`;
+    console.error(`[concierge/pay] ${errorId}:`, e);
+
     return new Response(
-      JSON.stringify({ error: 'Payment processing failed', detail: message }),
+      JSON.stringify({
+        error: 'Payment processing failed',
+        detail: message,
+        error_id: errorId,
+        ...(debugEnabled && stack ? { stack } : {}),
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
