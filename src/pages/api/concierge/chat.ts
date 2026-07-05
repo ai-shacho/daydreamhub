@@ -915,7 +915,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const lang = String(locale || '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
       const returnPath = lang === 'ja' ? '/ja/concierge/payment/return' : '/concierge/payment/return';
       const cancelPath = lang === 'ja' ? '/ja/concierge/payment/cancel' : '/concierge/payment/cancel';
-      const accessToken = await getAccessToken((env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID), (env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET), mode);
+      const paypalClientId = env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID;
+      const paypalSecret = env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET || env.SECRET;
+      if (!paypalClientId || !paypalSecret) {
+        throw new Error('PayPal configuration missing: PAYPAL_SANDBOX_CLIENT_ID|PAYPAL_CLIENT_ID or PAYPAL_SANDBOX_SECRET|PAYPAL_SECRET|SECRET');
+      }
+      const accessToken = await getAccessToken(paypalClientId, paypalSecret, mode);
       const paypalOrderId = await createOrder(
         accessToken,
         7,

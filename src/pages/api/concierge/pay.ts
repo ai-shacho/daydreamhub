@@ -70,7 +70,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const env = runtime?.env;
   const db = env?.DB;
-  if (!db || !(env?.PAYPAL_SANDBOX_CLIENT_ID || env?.PAYPAL_CLIENT_ID) || !(env?.PAYPAL_SANDBOX_SECRET || env?.PAYPAL_SECRET)) {
+  const paypalClientId = env?.PAYPAL_SANDBOX_CLIENT_ID || env?.PAYPAL_CLIENT_ID;
+  // Backward compatibility: some deployments stored sandbox secret as generic SECRET
+  const paypalSecret = env?.PAYPAL_SANDBOX_SECRET || env?.PAYPAL_SECRET || env?.SECRET;
+  if (!db || !paypalClientId || !paypalSecret) {
+    const missing = [
+      !db ? 'DB' : null,
+      !paypalClientId ? 'PAYPAL_SANDBOX_CLIENT_ID|PAYPAL_CLIENT_ID' : null,
+      !paypalSecret ? 'PAYPAL_SANDBOX_SECRET|PAYPAL_SECRET|SECRET' : null,
+    ].filter(Boolean);
+    console.error('[concierge/pay] Payment service not available. Missing:', missing.join(', '));
     return new Response(JSON.stringify({ error: 'Payment service not available' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
@@ -93,7 +102,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   try {
     if (action === 'config') {
       return new Response(
-        JSON.stringify({ client_id: (env?.PAYPAL_SANDBOX_CLIENT_ID || env?.PAYPAL_CLIENT_ID) || '' }),
+        JSON.stringify({ client_id: paypalClientId || '' }),
         { headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -105,7 +114,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           headers: { 'Content-Type': 'application/json' },
         });
       }
-      const accessToken = await getAccessToken((env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID), (env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET), mode);
+      const accessToken = await getAccessToken(paypalClientId, paypalSecret, mode);
       const returnQuery = new URLSearchParams({
         ...(group_id ? { group_id: String(group_id) } : {}),
         ...(session_id ? { session_id: String(session_id) } : {}),
@@ -177,7 +186,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }
       }
 
-      const accessToken = await getAccessToken((env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID), (env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET), mode);
+      const accessToken = await getAccessToken(paypalClientId, paypalSecret, mode);
       let captureResult: any;
       try {
         captureResult = await captureOrder(accessToken, order_id, mode);
