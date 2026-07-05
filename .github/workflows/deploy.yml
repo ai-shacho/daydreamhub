@@ -30,16 +30,14 @@ jobs:
         run: npm run build
         # Tests skipped (no unit test step in deploy workflow; npm test removed/commented to resolve deployment errors)
 
-      - name: Ensure Cloudflare Pages secrets exist
-        # Non-blocking: `wrangler pages secret put` fails config validation against the
-        # Workers-style wrangler.toml. Secrets are already set in Cloudflare, so a sync
-        # failure must not skip the Deploy step below.
-        continue-on-error: true
+      - name: Sync Cloudflare Pages secrets (authoritative)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_SANDBOX_CLIENT_ID != '' && secrets.PAYPAL_SANDBOX_CLIENT_ID || secrets.PAYPAL_CLIENT_ID }}
+          PAYPAL_SANDBOX_CLIENT_ID: ${{ secrets.PAYPAL_SANDBOX_CLIENT_ID != '' && secrets.PAYPAL_SANDBOX_CLIENT_ID || secrets.PAYPAL_CLIENT_ID }}
           PAYPAL_SECRET: ${{ secrets.PAYPAL_SANDBOX_SECRET != '' && secrets.PAYPAL_SANDBOX_SECRET || secrets.PAYPAL_SECRET != '' && secrets.PAYPAL_SECRET || secrets.SECRET }}
+          PAYPAL_SANDBOX_SECRET: ${{ secrets.PAYPAL_SANDBOX_SECRET != '' && secrets.PAYPAL_SANDBOX_SECRET || secrets.PAYPAL_SECRET != '' && secrets.PAYPAL_SECRET || secrets.SECRET }}
           PAYPAL_MODE: sandbox
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
@@ -49,10 +47,15 @@ jobs:
           TELNYX_FROM_NUMBER: ${{ secrets.TELNYX_FROM_NUMBER }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
         run: |
+          # Run from outside repository so wrangler.toml validation cannot block secret sync.
+          cd /tmp
+
           # Sync GitHub secrets → Cloudflare Pages secrets on every deployment
           secrets=(
             "PAYPAL_CLIENT_ID"
+            "PAYPAL_SANDBOX_CLIENT_ID"
             "PAYPAL_SECRET"
+            "PAYPAL_SANDBOX_SECRET"
             "PAYPAL_MODE"
             "RESEND_API_KEY"
             "ADMIN_EMAIL"

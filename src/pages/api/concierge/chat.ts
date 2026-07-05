@@ -1477,10 +1477,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
       { headers: { 'Content-Type': 'application/json' } }
     );
   } catch (e: any) {
+    const detail = String(e?.message || '');
+    const isPayPalConfigError = /PayPal configuration missing/i.test(detail);
     console.error('Concierge chat error:', e);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', detail: e?.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: isPayPalConfigError ? 'Payment service not available' : 'Internal server error', detail: detail || undefined }),
+      { status: isPayPalConfigError ? 503 : 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 };
