@@ -45,7 +45,7 @@ async function triggerInitialGroupCallIfNeeded(env: any, db: any, groupId: numbe
     .first();
 
   if (!group) {
-    return { skipped: true, reason: 'group_not_found' };
+    return { skipped: true, reason: 'group_not_found', started: false };
   }
 
   // 決済APIの重複呼び出しで2件目以降へ勝手に進まないよう、初回（current_order=0）のみキック。
@@ -55,15 +55,17 @@ async function triggerInitialGroupCallIfNeeded(env: any, db: any, groupId: numbe
       reason: 'already_started',
       current_order: group.current_order,
       status: group.status,
+      started: true,
     };
   }
 
   if (String(group.status || '') === 'success' || String(group.status || '') === 'all_failed') {
-    return { skipped: true, reason: 'terminal_group_status', status: group.status };
+    return { skipped: true, reason: 'terminal_group_status', status: group.status, started: false };
   }
 
   const trigger = await initiateNextGroupCall(env, db, Number(groupId));
-  return { skipped: false, trigger };
+  const started = String(trigger?.status || '') === 'calling';
+  return { skipped: false, started, trigger };
 }
 
 export const POST: APIRoute = async ({ request, locals }) => {
@@ -176,7 +178,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
               order_id,
               capture_id: existingGroup.paypal_capture_id || null,
               group_id,
-              call_triggered: !kickoff.skipped,
+              call_triggered: Boolean(kickoff.started),
               trigger_result: kickoff,
               email_result: emailResult,
               idempotent: true,
@@ -208,7 +210,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 order_id,
                 capture_id: paidGroup.paypal_capture_id || null,
                 group_id,
-                call_triggered: !kickoff.skipped,
+                call_triggered: Boolean(kickoff.started),
                 trigger_result: kickoff,
                 email_result: { skipped: true, reason: 'already_paid_after_duplicate_capture' },
                 idempotent: true,
@@ -276,7 +278,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
               order_id,
               capture_id: captureId,
               group_id,
-              call_triggered: !kickoff.skipped,
+              call_triggered: Boolean(kickoff.started),
               trigger_result: kickoff,
               email_result: emailResult,
             }),

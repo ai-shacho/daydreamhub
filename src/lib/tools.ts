@@ -708,31 +708,58 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
   try {
     const baseUrl = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || 'https://daydreamhub.com').replace(/\/$/, '');
 
-    if (!env?.TWILIO_ACCOUNT_SID || !env?.TWILIO_AUTH_TOKEN || !env?.TWILIO_FROM_NUMBER) {
-      throw new Error('Twilio env not configured');
-    }
-    const auth = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
-    const paramsForm = new URLSearchParams();
-    paramsForm.set('To', params.hotel_phone);
-    paramsForm.set('From', env.TWILIO_FROM_NUMBER);
-    paramsForm.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&phase=concierge`);
-    paramsForm.set('Method', 'POST');
-    paramsForm.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&event=status&phase=concierge`);
-    paramsForm.set('StatusCallbackMethod', 'POST');
-    paramsForm.set('StatusCallbackEvent', 'initiated');
-    paramsForm.append('StatusCallbackEvent', 'ringing');
-    paramsForm.append('StatusCallbackEvent', 'answered');
-    paramsForm.append('StatusCallbackEvent', 'completed');
+    let callProviderId = '';
 
-    const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
-      method: 'POST',
-      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: paramsForm.toString(),
-    });
-    const txt = await response.text();
-    const resData: any = txt ? JSON.parse(txt) : {};
-    if (!response.ok) throw new Error(`Twilio API error: ${response.status} ${txt}`);
-    const callProviderId = `twilio:${resData?.sid || ''}`;
+    // Primary: Twilio
+    if (env?.TWILIO_ACCOUNT_SID && env?.TWILIO_AUTH_TOKEN && env?.TWILIO_FROM_NUMBER) {
+      const auth = btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`);
+      const paramsForm = new URLSearchParams();
+      paramsForm.set('To', params.hotel_phone);
+      paramsForm.set('From', env.TWILIO_FROM_NUMBER);
+      paramsForm.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&phase=concierge`);
+      paramsForm.set('Method', 'POST');
+      paramsForm.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&event=status&phase=concierge`);
+      paramsForm.set('StatusCallbackMethod', 'POST');
+      paramsForm.set('StatusCallbackEvent', 'initiated');
+      paramsForm.append('StatusCallbackEvent', 'ringing');
+      paramsForm.append('StatusCallbackEvent', 'answered');
+      paramsForm.append('StatusCallbackEvent', 'completed');
+
+      const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: paramsForm.toString(),
+      });
+      const txt = await response.text();
+      const resData: any = txt ? JSON.parse(txt) : {};
+      if (!response.ok) throw new Error(`Twilio API error: ${response.status} ${txt}`);
+      callProviderId = `twilio:${resData?.sid || ''}`;
+    } else if (env?.TELNYX_API_KEY && (env?.TELNYX_CONNECTION_ID || env?.TELNYX_FROM_NUMBER)) {
+      // Fallback: Telnyx (for environments that still only have Telnyx credentials)
+      const payload: any = {
+        to: params.hotel_phone,
+        from: env.TELNYX_FROM_NUMBER,
+        webhook_url: `${baseUrl}/api/webhooks/telnyx-voice?lid=${callId}&phase=concierge`,
+        answering_machine_detection: 'disabled',
+      };
+      if (env.TELNYX_CONNECTION_ID) payload.connection_id = env.TELNYX_CONNECTION_ID;
+
+      const response = await fetch('https://api.telnyx.com/v2/calls', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${env.TELNYX_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const txt = await response.text();
+      const resData: any = txt ? JSON.parse(txt) : {};
+      if (!response.ok) throw new Error(`Telnyx API error: ${response.status} ${txt}`);
+      const telnyxId = resData?.data?.call_control_id || resData?.data?.call_session_id || resData?.data?.call_leg_id || '';
+      callProviderId = telnyxId ? `telnyx:${telnyxId}` : 'telnyx:started';
+    } else {
+      throw new Error('No call provider configured. Set Twilio (TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER) or Telnyx (TELNYX_API_KEY + TELNYX_CONNECTION_ID/TELNYX_FROM_NUMBER).');
+    }
 
     if (callLockToken) {
       await db.prepare(
