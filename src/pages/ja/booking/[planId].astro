@@ -56,7 +56,7 @@ let paypalClientId = '';
 try {
   const runtime = (Astro.locals as any).runtime;
   const db = runtime?.env?.DB;
-  paypalClientId = (runtime?.env?.PAYPAL_CLIENT_ID || import.meta.env.PUBLIC_PAYPAL_CLIENT_ID || '').trim();
+  paypalClientId = (runtime?.env?.PAYPAL_SANDBOX_CLIENT_ID || runtime?.env?.PAYPAL_CLIENT_ID || import.meta.env.PUBLIC_PAYPAL_CLIENT_ID || '').trim();
   if (db) {
     dbAvailable = true;
     plan = await db.prepare(

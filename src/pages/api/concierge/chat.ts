@@ -904,7 +904,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
       // 外部ホテルあり → PayPal決済 (pay.ts の create アクションと同じ処理)
       const { getAccessToken, createOrder } = await import('../../../lib/paypal');
-      const mode = env.PAYPAL_MODE || 'live';
+      const mode = 'sandbox';
       const baseUrl = new URL(request.url).origin;
       const returnQuery = new URLSearchParams({
         group_id: String(group.group_id),
@@ -915,7 +915,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const lang = String(locale || '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
       const returnPath = lang === 'ja' ? '/ja/concierge/payment/return' : '/concierge/payment/return';
       const cancelPath = lang === 'ja' ? '/ja/concierge/payment/cancel' : '/concierge/payment/cancel';
-      const accessToken = await getAccessToken(env.PAYPAL_CLIENT_ID, env.PAYPAL_SECRET, mode);
+      const accessToken = await getAccessToken((env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID), (env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET), mode);
       const paypalOrderId = await createOrder(
         accessToken,
         7,

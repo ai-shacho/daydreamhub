@@ -165,9 +165,9 @@ async function processRefund(env: any, db: any, callId: number) {
     .first();
   if (!call || call.payment_status !== 'paid' || call.refund_status === 'refunded') return;
   if (!call.paypal_capture_id) return;
-  if (!env?.PAYPAL_CLIENT_ID || !env?.PAYPAL_SECRET) return;
-  const mode = env.PAYPAL_MODE || 'live';
-  const accessToken = await getAccessToken(env.PAYPAL_CLIENT_ID, env.PAYPAL_SECRET, mode);
+  if (!(env?.PAYPAL_SANDBOX_CLIENT_ID || env?.PAYPAL_CLIENT_ID) || !(env?.PAYPAL_SANDBOX_SECRET || env?.PAYPAL_SECRET)) return;
+  const mode = 'sandbox';
+  const accessToken = await getAccessToken((env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID), (env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET), mode);
   const result = await refundCapture(accessToken, call.paypal_capture_id, mode);
   await db
     .prepare(
@@ -186,9 +186,9 @@ async function processGroupRefund(env: any, db: any, groupId: number) {
     .first();
   if (!group || group.payment_status !== 'paid' || group.refund_status === 'refunded') return;
   if (!group.paypal_capture_id) return;
-  if (!env?.PAYPAL_CLIENT_ID || !env?.PAYPAL_SECRET) return;
-  const mode = env.PAYPAL_MODE || 'live';
-  const accessToken = await getAccessToken(env.PAYPAL_CLIENT_ID, env.PAYPAL_SECRET, mode);
+  if (!(env?.PAYPAL_SANDBOX_CLIENT_ID || env?.PAYPAL_CLIENT_ID) || !(env?.PAYPAL_SANDBOX_SECRET || env?.PAYPAL_SECRET)) return;
+  const mode = 'sandbox';
+  const accessToken = await getAccessToken((env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID), (env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET), mode);
   const result = await refundCapture(accessToken, group.paypal_capture_id, mode);
   await db
     .prepare(

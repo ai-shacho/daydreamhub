@@ -4,9 +4,9 @@ import { getAccessToken, createOrder } from '../../../lib/paypal';
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
-  const PAYPAL_CLIENT_ID = runtime?.env?.PAYPAL_CLIENT_ID;
-  const PAYPAL_SECRET = runtime?.env?.PAYPAL_SECRET;
-  const PAYPAL_MODE = runtime?.env?.PAYPAL_MODE || 'live';
+  const PAYPAL_CLIENT_ID = runtime?.env?.PAYPAL_SANDBOX_CLIENT_ID || runtime?.env?.PAYPAL_CLIENT_ID;
+  const PAYPAL_SECRET = runtime?.env?.PAYPAL_SANDBOX_SECRET || runtime?.env?.PAYPAL_SECRET;
+  const PAYPAL_MODE = 'sandbox';
 
   if (!db || !PAYPAL_CLIENT_ID || !PAYPAL_SECRET) {
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {
