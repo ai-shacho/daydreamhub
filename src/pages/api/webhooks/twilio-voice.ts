@@ -142,11 +142,12 @@ function parseTurn(raw: string | null): number {
   return Math.min(Math.trunc(n), 8);
 }
 
-function makeWebhookUrl(request: Request, logId: string | null, step: Step, turn = 0, event?: string): string {
+function makeWebhookUrl(request: Request, logId: string | null, step: Step, phase: 'booking' | 'outreach' | 'concierge', turn = 0, event?: string): string {
   const u = new URL('/api/webhooks/twilio-voice', getWebhookBase(request));
   if (logId) u.searchParams.set('lid', logId);
   u.searchParams.set('step', step);
   u.searchParams.set('turn', String(turn));
+  u.searchParams.set('phase', phase);
   if (event) u.searchParams.set('event', event);
   return u.toString();
 }
@@ -573,11 +574,15 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     const logRow: any = (db && logId)
       ? await db.prepare(`SELECT id, booking_id, note, phase FROM call_logs WHERE id = ?`).bind(logId).first().catch(() => null)
       : null;
+    const hasConciergeCallByLogId = (!phaseParam && db && logId)
+      ? await db.prepare(`SELECT id FROM concierge_calls WHERE id = ? LIMIT 1`).bind(logId).first().then((r: any) => !!r?.id).catch(() => false)
+      : false;
     const inferredPhase = (() => {
       if (phaseParam === 'outreach' || phaseParam === 'concierge' || phaseParam === 'booking') return phaseParam;
       const p = String(logRow?.phase || '').toLowerCase();
       if (p === 'outreach' || p === 'concierge' || p === 'booking') return p;
       if (String(logRow?.note || '').toLowerCase().includes('outreach')) return 'outreach';
+      if (hasConciergeCallByLogId) return 'concierge';
       return 'booking';
     })();
 
@@ -699,12 +704,12 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (step === 'intro') {
       if (phase === 'outreach') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0', callSid ? `twilio:${callSid}` : undefined);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_0', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_0', inferredPhase, 0);
         return gatherTwiml(action, 'Hello. We are DayDreamHub, a platform that matches guests with hotel day-use rooms. We are calling today to invite your property to be listed on our site. Is the manager or person in charge available? Press 1 if available now, or press 2 if not available. You can also answer by voice.');
       }
 
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
-      const action = makeWebhookUrl(request, logId, 'ask_dayuse', 0);
+      const action = makeWebhookUrl(request, logId, 'ask_dayuse', inferredPhase, 0);
       const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
       const prompt = `We have a guest looking to book a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
       return gatherTwiml(action, prompt);
@@ -714,22 +719,22 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const decision = classifyOutreachPhase0(speech, digits);
       if (decision === 'available') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0_available', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `pressed ${digits || '1'}`}`);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_2', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_2', inferredPhase, 0);
         return gatherTwiml(action, 'Thank you. DayDreamHub offers free listings for hotels. Would you prefer we send materials first, or schedule a short explanation call? Press 1 for materials, or press 2 for a short meeting call.');
       }
       if (decision === 'transfer') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0_transfer_detected', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'transfer indicated'}`);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_0_5', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_0_5', inferredPhase, 0);
         return gatherTwiml(action, 'Thank you. I will hold. Hello, this is DayDreamHub. If the person in charge is now on the line, please say hello.', { timeout: 12 });
       }
       if (decision === 'callback') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_callback_requested_phase_0', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech}`);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_time', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_time', inferredPhase, 0);
         return gatherTwiml(action, 'Certainly. What date and time should we call back?', { timeout: 10 });
       }
       if (decision === 'absent') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0_absent', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `pressed ${digits || '2'}`}`);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_1', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_1', inferredPhase, 0);
         return gatherTwiml(action, 'Understood. Could you share the name of the person in charge so we can follow up properly?');
       }
       if (decision === 'reject') {
@@ -742,7 +747,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_0', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_0', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Press 1 if the person in charge is available now, or press 2 if unavailable.');
     }
 
@@ -750,17 +755,17 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const heardSomeone = /\b(hello|yes|speaking|this is|i am|i'm|person in charge|manager|owner)\b/i.test(speech) || digits === '1';
       if (heardSomeone) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0_5_connected', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'connected via transfer hold'}`);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_2_verify', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_2_verify', inferredPhase, 0);
         return gatherTwiml(action, 'Thank you for taking the transfer. Are you the person in charge of decisions about hotel partnership listings? Please say yes or no.');
       }
 
       if (turn < 1) {
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_0_5', turn + 1);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_0_5', inferredPhase, turn + 1);
         return gatherTwiml(action, 'I will continue to hold briefly. Hello, this is DayDreamHub checking in again. If the person in charge is on the line, please say hello.', { timeout: 12 });
       }
 
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0_5_timeout', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: hold timeout`);
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_1', 0);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_1', inferredPhase, 0);
       return gatherTwiml(action, 'I could not connect with the person in charge while holding. Before we hang up, may I have the person in charge name for follow-up?');
     }
 
@@ -776,42 +781,42 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
         return twiml(`<Say voice="${VOICE}">Sorry, we could not capture the name clearly. We will try again later. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_1', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_1', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I did not catch the name. Please say the name of the person in charge once more.');
     }
 
     if (step === 'outreach_phase_2_verify') {
       if (isYes(speech, digits)) {
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_2', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_2', inferredPhase, 0);
         return gatherTwiml(action, 'Great, thank you. DayDreamHub offers free listings for hotels. Would you prefer we send materials first, or schedule a short explanation call? Press 1 for materials, or press 2 for a short meeting call.');
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_2_verify_not_pic', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'not person in charge'}`);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_1', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_1', inferredPhase, 0);
         return gatherTwiml(action, 'Understood. Before we end, may I have the name of the person in charge so we can follow up correctly?');
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_outreach_timeout_phase_2_verify', callSid ? `twilio:${callSid}` : undefined);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_1', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_1', inferredPhase, 0);
         return gatherTwiml(action, 'Sorry, I could not confirm. Before we end, may I have the name of the person in charge for follow-up?');
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_2_verify', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_2_verify', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I did not catch that. Are you the person in charge of partnership listing decisions? Please say yes or no.');
     }
 
     if (step === 'outreach_phase_2') {
       const intent = classifyOutreachPhase2(speech, digits);
       if (intent === 'materials') {
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_4', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_4', inferredPhase, 0);
         return gatherTwiml(action, 'Great. To confirm, may we send our overview materials? Press 1 or say yes to confirm, or press 2 or say no.');
       }
       if (intent === 'meeting') {
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_5', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_5', inferredPhase, 0);
         return gatherTwiml(action, 'Great. To confirm, may our team schedule a short follow-up meeting call? Press 1 or say yes to confirm, or press 2 or say no.');
       }
       if (intent === 'callback') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_callback_requested_phase_2', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech}`);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_time', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_time', inferredPhase, 0);
         return gatherTwiml(action, 'Certainly. What date and time should we call back?', { timeout: 10 });
       }
       if (intent === 'reject') {
@@ -824,7 +829,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
         return twiml(`<Say voice="${VOICE}">We could not confirm your preference after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_2', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_2', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I did not catch that. Press 1 for materials, or press 2 for a short meeting call.');
     }
 
@@ -835,10 +840,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         return twiml(`<Say voice="${VOICE}">Perfect. We will call back at ${esc(clamp(speech, 120))}. Thank you and goodbye.</Say><Hangup/>`);
       }
       if (turn >= 1) {
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_name', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_name', inferredPhase, 0);
         return gatherTwiml(action, 'Understood. To make sure we follow up properly, may I have your name?');
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_time', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_time', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I did not catch the callback date and time. Please tell me a specific day and time for our callback.', { timeout: 10 });
     }
 
@@ -846,7 +851,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const personName = extractPersonName(speech) || (speech ? clamp(speech, 80) : null);
       if (personName) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_outreach_callback_name:${personName}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech}`);
-        const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_email', 0);
+        const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_email', inferredPhase, 0);
         return gatherTwiml(action, 'Thank you. Could you also share your email address for callback coordination?');
       }
       if (turn >= 1) {
@@ -854,7 +859,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'callback_pending_contact', outcome: 'callback_pending_contact', needsRecall: 1, retryCount: turn + 1 });
         return twiml(`<Say voice="${VOICE}">No problem. We will have our team follow up through our existing channels. Thank you and goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_name', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_name', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I did not catch your name. Please tell me your name once more.');
     }
 
@@ -870,7 +875,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'callback_pending_contact', outcome: 'callback_pending_contact', needsRecall: 1, retryCount: turn + 1 });
         return twiml(`<Say voice="${VOICE}">Understood. Thank you. We will arrange a callback through our existing contact record. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_email', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_callback_email', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I could not capture the email clearly. Please say it again, for example name at hotel dot com.');
     }
 
@@ -890,7 +895,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
         return twiml(`<Say voice="${VOICE}">We could not confirm after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_4', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_4', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I did not catch that. Press 1 or say yes to receive materials, or press 2 or say no.');
     }
 
@@ -910,19 +915,19 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateOutreachState(db, { leadId: Number(outreachLead?.id || 0) || null, logId, status: 'timeout_or_error', outcome: 'timeout_or_error', needsRecall: 1, retryCount: turn + 1 });
         return twiml(`<Say voice="${VOICE}">We could not confirm after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'outreach_phase_5', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'outreach_phase_5', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I did not catch that. Press 1 or say yes to schedule a follow-up meeting call, or press 2 or say no.');
     }
 
     if (step === 'ask_dayuse') {
       if (isRepeat(speech, digits)) {
-        const action = makeWebhookUrl(request, logId, 'ask_dayuse', turn + 1);
+        const action = makeWebhookUrl(request, logId, 'ask_dayuse', inferredPhase, turn + 1);
         const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
         return gatherTwiml(action, `We have a guest looking to book a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no.`);
       }
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_dayuse_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
-        const action = makeWebhookUrl(request, logId, 'ask_price', 0);
+        const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0);
         return gatherTwiml(action, 'What is the final total price in US dollars, including all service fees and taxes? The guest will pay the hotel directly on-site. For example, say fifty dollars, or enter the amount and press the hash key.', { timeout: 10, finishOnKey: '#', preface: 'Thank you.' });
       }
       if (isNo(speech, digits)) {
@@ -943,19 +948,19 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'ask_dayuse', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'ask_dayuse', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes if you offer day-use. Press 2 or say no if you do not.');
     }
 
     if (step === 'ask_price') {
       if (isRepeat(speech, digits)) {
-        const action = makeWebhookUrl(request, logId, 'ask_price', turn + 1);
+        const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
         return gatherTwiml(action, 'What is the final total price in US dollars, including all service fees and taxes? The guest will pay the hotel directly on-site. For example, say fifty dollars, or enter the amount and press the hash key.', { timeout: 10, finishOnKey: '#' });
       }
       const amount = parsePrice(speech, digits);
       if (amount != null) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: Confirming price ${amount}`);
-        const action = makeWebhookUrl(request, logId, 'confirm_booking', 0);
+        const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, 0);
         return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
       }
       if (turn >= MAX_RETRY) {
@@ -965,7 +970,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'ask_price', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
       return gatherTwiml(action, 'Could you please repeat the final total price in US dollars, including all service fees and taxes? The guest will pay the hotel directly on-site. You can also enter digits and press the hash key.');
     }
 
@@ -973,7 +978,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const amount = parsePrice(speech, digits);
       if (amount != null && !isYes(speech, digits) && !isNo(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price_corrected:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount}`);
-        const action = makeWebhookUrl(request, logId, 'confirm_booking', turn + 1);
+        const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
         return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
       }
       if (isYes(speech, digits)) {
@@ -1010,7 +1015,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'confirm_booking', turn + 1);
+      const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
       if (quotedAmountFromNote != null) {
         return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
       }
