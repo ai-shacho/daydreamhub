@@ -1,0 +1,228 @@
+---
+interface Props {
+  currentPath: string;
+  isJa: boolean;
+  enPath: string;
+  jaPath: string;
+  currentUser: { id: string; name: string; email: string; role: string } | null;
+  getPath: (path: string) => string;
+}
+
+const { currentPath, isJa, enPath, jaPath, currentUser, getPath } = Astro.props;
+---
+  <!-- Header -->
+  <header class="bg-white text-gray-800 sticky top-0 z-[1100] shadow-sm border-b border-gray-100">
+    <div class="max-w-7xl mx-auto px-4">
+      <!-- Top bar -->
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo -->
+        <a href={getPath('/')} class="flex items-center">
+          <img src="/logo-transparent.png" alt="DayDreamHub" class="h-10 w-auto" />
+        </a>
+
+        <!-- Nav links (desktop) -->
+        <nav class="hidden md:flex items-center gap-1">
+          <a href={getPath('/search')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/search') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+            <span class="inline-flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              Search
+            </span>
+          </a>
+          <a href={getPath('/wishlist')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/wishlist') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+            <span class="inline-flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
+              Wishlist
+            </span>
+          </a>
+          <a href={getPath('/map')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/map') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+            <span class="inline-flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+              Map
+            </span>
+          </a>
+          <a href={getPath('/blog')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", (currentPath.startsWith('/blog') || currentPath.startsWith('/ja/blog')) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+            <span class="inline-flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+              Blog
+            </span>
+          </a>
+          <a href={getPath('/how-it-works')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/how-it-works') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+            <span class="inline-flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              How it Works
+            </span>
+          </a>
+          <!-- SERVICES_NAV_REMOVED -->
+          <!-- More dropdown -->
+          <div class="relative" id="more-menu-wrapper">
+            <button id="more-menu-btn" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5", ['/about','/faq','/for-hotel-owner'].includes(currentPath) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+              More
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div id="more-dropdown" class="hidden absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-[1200]">
+              <a href={getPath('/about')} class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === getPath('/about') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>About Us</a>
+              <a href={getPath('/faq')} class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === getPath('/faq') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>FAQ</a>
+              <a href={getPath('/contact')} class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === getPath('/contact') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>Contact Us</a>
+              <div class="border-t border-gray-100 my-1"></div>
+              <a href={getPath('/for-hotel-owner')} class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === getPath('/for-hotel-owner') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>For Property Owner</a>
+              <a href={getPath('/owner')} class:list={["flex items-center gap-2 px-4 py-2.5 text-sm transition-colors", currentPath.startsWith(getPath('/owner')) ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3.75h.75m-.75 3.75h.75m3-7.5h.75m-.75 3.75h.75m-.75 3.75h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
+                </svg>
+                Owner Login
+              </a>
+              <!-- FOR_AI_AGENTS_REMOVED -->
+            </div>
+          </div>
+        </nav>
+
+        <!-- Right side controls -->
+        <div class="flex items-center gap-2">
+          <!-- Currency selector (custom dropdown) -->
+          <div class="hidden sm:flex items-center relative">
+            <button id="currency-btn" class="flex items-center gap-1 text-gray-600 hover:text-gray-900 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors text-xs font-medium">
+              <span id="currency-btn-label">USD $</span>
+              <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div id="currency-dropdown" class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50 w-28 hidden max-h-72 overflow-y-auto">
+              {[
+                {v:'USD',l:'USD $'},{v:'EUR',l:'EUR €'},{v:'JPY',l:'JPY ¥'},
+                {v:'THB',l:'THB ฿'},{v:'GBP',l:'GBP £'},{v:'AUD',l:'AUD $'},
+                {v:'MYR',l:'MYR RM'},{v:'SGD',l:'SGD $'},{v:'IDR',l:'IDR Rp'},
+                {v:'VND',l:'VND ₫'},{v:'PHP',l:'PHP ₱'},{v:'KRW',l:'KRW ₩'},
+                {v:'AED',l:'AED د.إ'},{v:'INR',l:'INR ₹'}
+              ].map(c => (
+                <button data-currency={c.v} class="currency-option w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center justify-between">
+                  {c.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <!-- Language toggle -->
+          <div class="hidden sm:flex items-center relative">
+            <button id="lang-toggle-btn" class="flex items-center gap-1 text-gray-600 hover:text-gray-900 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors text-xs font-medium">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+              {isJa ? 'JP' : 'EN'}
+            </button>
+            <div id="lang-dropdown" class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50 w-28 hidden">
+              <a href={enPath} class={`flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 ${!isJa ? 'text-teal-600 font-semibold' : 'text-gray-700'}`}>🇺🇸 English</a>
+              <a href={jaPath} class={`flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 ${isJa ? 'text-teal-600 font-semibold' : 'text-gray-700'}`}>🇯🇵 日本語</a>
+            </div>
+          </div>
+
+          <!-- Owner Portal / Admin Panel CTA -->
+          {currentUser?.role === 'admin' ? (
+            <a href="/admin" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-700 border border-purple-400/50 hover:border-purple-500 px-3 py-1.5 rounded-md transition-colors">
+              ⚙️ Admin Panel
+            </a>
+          ) : (currentUser && (currentUser.role === 'owner' || currentUser.role === 'staff')) ? (
+            <a href="/owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
+              🏨 Owner Portal
+            </a>
+          ) : (
+            <a href="/for-hotel-owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
+              🏨 List Your Property
+            </a>
+          )}
+
+          <!-- Auth buttons -->
+          <div class="hidden sm:flex items-center gap-2 ml-2" id="auth-area">
+            {currentUser ? (
+              <div class="relative" id="user-menu-wrap">
+                <button id="user-menu-btn" class="flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                  <span class="max-w-[80px] truncate">{currentUser.name}</span>
+                  <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <div id="user-dropdown" class="hidden absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 text-left">
+                  <div class="px-3 py-2 border-b border-gray-100">
+                    <p class="text-xs font-semibold text-gray-800 truncate">{currentUser.name}</p>
+                    <p class="text-xs text-gray-400 truncate">{currentUser.email}</p>
+                  </div>
+                  <a href="/mypage" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                    📋 My Bookings
+                  </a>
+                  {(currentUser.role === 'admin' || currentUser.role === 'owner' || currentUser.role === 'staff') && (
+                    <a href="/owner" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                      🏨 Owner Portal
+                    </a>
+                  )}
+                  {currentUser.role === 'admin' && (
+                    <a href="/admin" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                      ⚙️ Admin Panel
+                    </a>
+                  )}
+                  <button id="logout-btn" class="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50">
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <a href="/login" class="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">Login</a>
+                <a href="/register" class="text-xs font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 px-3 py-1.5 rounded-md transition-colors">Register</a>
+              </>
+            )}
+          </div>
+
+          <!-- Mobile menu button -->
+          <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-800" aria-label="Menu">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile menu -->
+    <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 bg-white">
+      <div class="px-4 py-3 space-y-1">
+        <a href={getPath('/search')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Search</a>
+        <a href={getPath('/wishlist')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Wishlist</a>
+        <a href={getPath('/map')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Map</a>
+        <a href={getPath('/blog')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? 'ブログ' : 'Blog'}</a>
+        <a href={getPath('/how-it-works')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">How it Works</a>
+        <!-- SERVICES_MOBILE_REMOVED -->
+        <div class="pt-1 pb-0.5">
+          <p class="px-3 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">More</p>
+          <a href={getPath('/about')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">About Us</a>
+          <a href={getPath('/faq')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">FAQ</a>
+          <a href={getPath('/contact')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Contact Us</a>
+          {currentUser?.role === 'admin' ? (
+            <a href="/admin" class="block px-3 py-2 rounded-lg text-sm font-medium text-purple-600 hover:bg-gray-100">⚙️ Admin Panel</a>
+          ) : (currentUser && (currentUser.role === 'owner' || currentUser.role === 'staff')) ? (
+            <a href={getPath('/owner')} class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-600 hover:bg-gray-100">🏨 Owner Portal</a>
+          ) : (
+            <a href={getPath('/for-hotel-owner')} class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-600 hover:bg-gray-100">🏨 List Your Property</a>
+          )}
+          <!-- FOR_AI_AGENTS_MOBILE_REMOVED -->
+        </div>
+        <hr class="border-gray-200" />
+        {currentUser ? (
+          <div class="pt-1">
+            <div class="px-3 py-2">
+              <p class="text-sm font-medium text-gray-800">{currentUser.name}</p>
+              <p class="text-xs text-gray-500">{currentUser.email}</p>
+            </div>
+            <a href="/mypage" class="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900">📋 My Bookings</a>
+            {(currentUser.role === 'admin' || currentUser.role === 'owner' || currentUser.role === 'staff') && (
+              <a href="/owner" class="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900">🏨 Owner Portal</a>
+            )}
+            <button id="logout-btn-mobile" class="w-full text-left px-3 py-2 text-sm text-red-400 hover:text-red-300">Sign Out</button>
+          </div>
+        ) : (
+          <div class="flex items-center gap-2 pt-1">
+            <a href="/login" class="text-sm text-gray-600 hover:text-gray-900 px-3 py-2">Login</a>
+            <a href="/register" class="text-sm bg-amber-500 text-gray-900 px-3 py-2 rounded-md">Register</a>
+          </div>
+        )}
+        <!-- Language toggle (mobile) -->
+        <div class="flex items-center gap-2 px-3 py-2 border-t border-gray-200 mt-1">
+          <span class="text-xs text-gray-400 font-medium">Language:</span>
+          <a href={enPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${!isJa ? 'bg-teal-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>EN</a>
+          <a href={jaPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${isJa ? 'bg-teal-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>JP</a>
+        </div>
+      </div>
+    </div>
+  </header>
+

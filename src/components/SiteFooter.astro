@@ -1,0 +1,102 @@
+---
+interface Props {
+  isJa: boolean;
+  footerBlogs: any[];
+  footerCities: any[];
+  defaultCities: string[];
+}
+
+const { isJa, footerBlogs, footerCities, defaultCities } = Astro.props;
+---
+  <!-- Footer -->
+  <footer class="bg-gray-900 text-gray-300 mt-auto">
+    <div class="max-w-7xl mx-auto px-4 py-12">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+        <!-- Blog Categories (dynamic cities) -->
+        <div>
+          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'ブログカテゴリ' : 'Blog Categories'}</h3>
+          <ul class="space-y-2 text-sm">
+            {(footerCities.length > 0 ? footerCities.map((c: any) => c.city) : defaultCities).map((city: string) => (
+              <li>
+                <a href={`/blog?city=${encodeURIComponent(city)}`} class="hover:text-white transition-colors">{city}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <!-- What's New (dynamic blog posts) -->
+        <div>
+          <a href={isJa ? '/ja/news' : '/news'} class="text-white font-semibold text-sm uppercase tracking-wider mb-4 block hover:text-teal-300 transition-colors">{isJa ? '最新情報' : "What's New"}</a>
+          <ul class="space-y-3 text-sm">
+            {footerBlogs.length > 0 ? footerBlogs.map((post: any) => (
+              <li>
+                <a href={`/${isJa ? 'ja/' : ''}blog/${post.slug}`} class="hover:text-white transition-colors line-clamp-2 leading-snug">{post.title}</a>
+              </li>
+            )) : (
+              <>
+                <li><a href={isJa ? '/ja/concierge' : '/concierge'} class="hover:text-white transition-colors">{isJa ? 'AIコンシェルジュ' : 'AI Concierge'}</a></li>
+                <li><a href="/map" class="hover:text-white transition-colors">{isJa ? 'マップ表示' : 'Map View'}</a></li>
+                <li><a href={isJa ? '/ja/search' : '/search'} class="hover:text-white transition-colors">{isJa ? '詳細検索' : 'Advanced Search'}</a></li>
+              </>
+            )}
+          </ul>
+          <a href={isJa ? '/ja/blog' : '/blog'} class="inline-block mt-3 text-xs text-teal-400 hover:text-teal-300 transition-colors">{isJa ? 'もっと見る →' : 'View More →'}</a>
+        </div>
+
+        <!-- Contact -->
+        <div>
+          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'お問い合わせ' : 'Contact'}</h3>
+          <ul class="space-y-2.5 text-sm">
+            <li class="flex items-start gap-2 text-gray-400">
+              <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+              <span>DayDreamHub</span>
+            </li>
+            <li class="flex items-start gap-2 text-gray-400">
+              <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <span>Georgia</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <a href="mailto:customer@daydreamhub.com" class="hover:text-white transition-colors break-all">customer@daydreamhub.com</a>
+            </li>
+          </ul>
+          <div class="mt-4 space-y-1.5 text-sm">
+            <a href="/contact" class="block text-teal-400 hover:text-white transition-colors font-medium">{isJa ? '📧 お問い合わせフォーム' : '📧 Contact Form'}</a>
+            <a href="/mypage" class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'マイページ（予約確認）' : 'My Bookings'}</a>
+            <a href="/terms" class="block text-gray-500 hover:text-white transition-colors">{isJa ? '利用規約' : 'Terms of Service'}</a>
+            <a href={isJa ? '/ja/privacy-policy' : '/privacy-policy'} class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'プライバシーポリシー' : 'Privacy Policy'}</a>
+          </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div>
+          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'クイックリンク' : 'Quick Links'}</h3>
+          <ul class="space-y-2 text-sm">
+            <li><a href={isJa ? '/ja/about' : '/about'} class="hover:text-white transition-colors">{isJa ? '私たちについて' : 'About Us'}</a></li>
+            <li><a href={isJa ? '/ja/faq' : '/faq'} class="hover:text-white transition-colors">FAQ</a></li>
+            <li><a href={isJa ? '/ja/how-it-works' : '/how-it-works'} class="hover:text-white transition-colors">{isJa ? '使い方' : 'How it Works'}</a></li>
+            <!-- SERVICES_FOOTER_REMOVED: <li><a href="/services">Services</a></li> -->
+            <li><a href={isJa ? '/ja/for-hotel-owner' : '/for-hotel-owner'} class="hover:text-white transition-colors">{isJa ? '施設オーナー様へ' : 'For Property Owner'}</a></li>
+            <!-- FOR_AI_AGENTS_FOOTER_REMOVED -->
+            <li><a href="/map" class="hover:text-white transition-colors">{isJa ? 'マップ表示' : 'Map View'}</a></li>
+            <li><a href="/wishlist" class="hover:text-white transition-colors">{isJa ? 'ウィッシュリスト' : 'Wishlist'}</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="border-t border-gray-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
+        <span>&copy; {new Date().getFullYear()} Day Dream Hub.com LLC All Rights Reserved.</span>
+        <div class="flex gap-4">
+          <a href="https://x.com/daydreamhubllc" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-white transition-colors" aria-label="X (formerly Twitter)">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          </a>
+          <a href="https://www.instagram.com/daydreamhub.official/" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-white transition-colors" aria-label="Instagram">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.45 2.525c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"/></svg>
+          </a>
+          <a href="https://www.facebook.com/profile.php?id=61553403023868" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-white transition-colors" aria-label="Facebook">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>

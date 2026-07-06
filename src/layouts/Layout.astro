@@ -1,6 +1,8 @@
 ---
 import '../styles/global.css';
 import CookieBanner from '../components/CookieBanner.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
 
 interface Props {
   title: string;
@@ -151,221 +153,14 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
 </head>
 <body class="min-h-screen flex flex-col bg-gray-50">
 
-  <!-- Header -->
-  <header class="bg-white text-gray-800 sticky top-0 z-[1100] shadow-sm border-b border-gray-100">
-    <div class="max-w-7xl mx-auto px-4">
-      <!-- Top bar -->
-      <div class="flex items-center justify-between h-16">
-        <!-- Logo -->
-        <a href={getPath('/')} class="flex items-center">
-          <img src="/logo-transparent.png" alt="DayDreamHub" class="h-10 w-auto" />
-        </a>
-
-        <!-- Nav links (desktop) -->
-        <nav class="hidden md:flex items-center gap-1">
-          <a href={getPath('/search')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/search') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
-            <span class="inline-flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-              Search
-            </span>
-          </a>
-          <a href={getPath('/wishlist')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/wishlist') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
-            <span class="inline-flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-              Wishlist
-            </span>
-          </a>
-          <a href={getPath('/map')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/map') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
-            <span class="inline-flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
-              Map
-            </span>
-          </a>
-          <a href={getPath('/blog')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", (currentPath.startsWith('/blog') || currentPath.startsWith('/ja/blog')) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
-            <span class="inline-flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
-              Blog
-            </span>
-          </a>
-          <a href={getPath('/how-it-works')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/how-it-works') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
-            <span class="inline-flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-              How it Works
-            </span>
-          </a>
-          <!-- SERVICES_NAV_REMOVED -->
-          <!-- More dropdown -->
-          <div class="relative" id="more-menu-wrapper">
-            <button id="more-menu-btn" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5", ['/about','/faq','/for-hotel-owner'].includes(currentPath) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
-              More
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div id="more-dropdown" class="hidden absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-[1200]">
-              <a href={getPath('/about')} class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === getPath('/about') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>About Us</a>
-              <a href={getPath('/faq')} class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === getPath('/faq') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>FAQ</a>
-              <a href={getPath('/contact')} class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === getPath('/contact') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>Contact Us</a>
-              <div class="border-t border-gray-100 my-1"></div>
-              <a href={getPath('/for-hotel-owner')} class:list={["block px-4 py-2.5 text-sm transition-colors", currentPath === getPath('/for-hotel-owner') ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>For Property Owner</a>
-              <a href={getPath('/owner')} class:list={["flex items-center gap-2 px-4 py-2.5 text-sm transition-colors", currentPath.startsWith(getPath('/owner')) ? 'text-teal-700 font-semibold bg-teal-50' : 'text-gray-700 hover:bg-gray-50']}>
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3.75h.75m-.75 3.75h.75m3-7.5h.75m-.75 3.75h.75m-.75 3.75h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
-                </svg>
-                Owner Login
-              </a>
-              <!-- FOR_AI_AGENTS_REMOVED -->
-            </div>
-          </div>
-        </nav>
-
-        <!-- Right side controls -->
-        <div class="flex items-center gap-2">
-          <!-- Currency selector (custom dropdown) -->
-          <div class="hidden sm:flex items-center relative">
-            <button id="currency-btn" class="flex items-center gap-1 text-gray-600 hover:text-gray-900 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors text-xs font-medium">
-              <span id="currency-btn-label">USD $</span>
-              <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div id="currency-dropdown" class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50 w-28 hidden max-h-72 overflow-y-auto">
-              {[
-                {v:'USD',l:'USD $'},{v:'EUR',l:'EUR €'},{v:'JPY',l:'JPY ¥'},
-                {v:'THB',l:'THB ฿'},{v:'GBP',l:'GBP £'},{v:'AUD',l:'AUD $'},
-                {v:'MYR',l:'MYR RM'},{v:'SGD',l:'SGD $'},{v:'IDR',l:'IDR Rp'},
-                {v:'VND',l:'VND ₫'},{v:'PHP',l:'PHP ₱'},{v:'KRW',l:'KRW ₩'},
-                {v:'AED',l:'AED د.إ'},{v:'INR',l:'INR ₹'}
-              ].map(c => (
-                <button data-currency={c.v} class="currency-option w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center justify-between">
-                  {c.l}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <!-- Language toggle -->
-          <div class="hidden sm:flex items-center relative">
-            <button id="lang-toggle-btn" class="flex items-center gap-1 text-gray-600 hover:text-gray-900 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors text-xs font-medium">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
-              {isJa ? 'JP' : 'EN'}
-            </button>
-            <div id="lang-dropdown" class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50 w-28 hidden">
-              <a href={enPath} class={`flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 ${!isJa ? 'text-teal-600 font-semibold' : 'text-gray-700'}`}>🇺🇸 English</a>
-              <a href={jaPath} class={`flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-50 ${isJa ? 'text-teal-600 font-semibold' : 'text-gray-700'}`}>🇯🇵 日本語</a>
-            </div>
-          </div>
-
-          <!-- Owner Portal / Admin Panel CTA -->
-          {currentUser?.role === 'admin' ? (
-            <a href="/admin" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-700 border border-purple-400/50 hover:border-purple-500 px-3 py-1.5 rounded-md transition-colors">
-              ⚙️ Admin Panel
-            </a>
-          ) : (currentUser && (currentUser.role === 'owner' || currentUser.role === 'staff')) ? (
-            <a href="/owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
-              🏨 Owner Portal
-            </a>
-          ) : (
-            <a href="/for-hotel-owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
-              🏨 List Your Property
-            </a>
-          )}
-
-          <!-- Auth buttons -->
-          <div class="hidden sm:flex items-center gap-2 ml-2" id="auth-area">
-            {currentUser ? (
-              <div class="relative" id="user-menu-wrap">
-                <button id="user-menu-btn" class="flex items-center gap-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-md hover:bg-gray-100 transition-colors">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                  <span class="max-w-[80px] truncate">{currentUser.name}</span>
-                  <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                </button>
-                <div id="user-dropdown" class="hidden absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 text-left">
-                  <div class="px-3 py-2 border-b border-gray-100">
-                    <p class="text-xs font-semibold text-gray-800 truncate">{currentUser.name}</p>
-                    <p class="text-xs text-gray-400 truncate">{currentUser.email}</p>
-                  </div>
-                  <a href="/mypage" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
-                    📋 My Bookings
-                  </a>
-                  {(currentUser.role === 'admin' || currentUser.role === 'owner' || currentUser.role === 'staff') && (
-                    <a href="/owner" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
-                      🏨 Owner Portal
-                    </a>
-                  )}
-                  {currentUser.role === 'admin' && (
-                    <a href="/admin" class="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
-                      ⚙️ Admin Panel
-                    </a>
-                  )}
-                  <button id="logout-btn" class="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50">
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <a href="/login" class="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">Login</a>
-                <a href="/register" class="text-xs font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 px-3 py-1.5 rounded-md transition-colors">Register</a>
-              </>
-            )}
-          </div>
-
-          <!-- Mobile menu button -->
-          <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-800" aria-label="Menu">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Mobile menu -->
-    <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 bg-white">
-      <div class="px-4 py-3 space-y-1">
-        <a href={getPath('/search')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Search</a>
-        <a href={getPath('/wishlist')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Wishlist</a>
-        <a href={getPath('/map')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Map</a>
-        <a href={getPath('/blog')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? 'ブログ' : 'Blog'}</a>
-        <a href={getPath('/how-it-works')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">How it Works</a>
-        <!-- SERVICES_MOBILE_REMOVED -->
-        <div class="pt-1 pb-0.5">
-          <p class="px-3 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">More</p>
-          <a href={getPath('/about')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">About Us</a>
-          <a href={getPath('/faq')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">FAQ</a>
-          <a href={getPath('/contact')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Contact Us</a>
-          {currentUser?.role === 'admin' ? (
-            <a href="/admin" class="block px-3 py-2 rounded-lg text-sm font-medium text-purple-600 hover:bg-gray-100">⚙️ Admin Panel</a>
-          ) : (currentUser && (currentUser.role === 'owner' || currentUser.role === 'staff')) ? (
-            <a href={getPath('/owner')} class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-600 hover:bg-gray-100">🏨 Owner Portal</a>
-          ) : (
-            <a href={getPath('/for-hotel-owner')} class="block px-3 py-2 rounded-lg text-sm font-medium text-teal-600 hover:bg-gray-100">🏨 List Your Property</a>
-          )}
-          <!-- FOR_AI_AGENTS_MOBILE_REMOVED -->
-        </div>
-        <hr class="border-gray-200" />
-        {currentUser ? (
-          <div class="pt-1">
-            <div class="px-3 py-2">
-              <p class="text-sm font-medium text-gray-800">{currentUser.name}</p>
-              <p class="text-xs text-gray-500">{currentUser.email}</p>
-            </div>
-            <a href="/mypage" class="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900">📋 My Bookings</a>
-            {(currentUser.role === 'admin' || currentUser.role === 'owner' || currentUser.role === 'staff') && (
-              <a href="/owner" class="block px-3 py-2 text-sm text-gray-600 hover:text-gray-900">🏨 Owner Portal</a>
-            )}
-            <button id="logout-btn-mobile" class="w-full text-left px-3 py-2 text-sm text-red-400 hover:text-red-300">Sign Out</button>
-          </div>
-        ) : (
-          <div class="flex items-center gap-2 pt-1">
-            <a href="/login" class="text-sm text-gray-600 hover:text-gray-900 px-3 py-2">Login</a>
-            <a href="/register" class="text-sm bg-amber-500 text-gray-900 px-3 py-2 rounded-md">Register</a>
-          </div>
-        )}
-        <!-- Language toggle (mobile) -->
-        <div class="flex items-center gap-2 px-3 py-2 border-t border-gray-200 mt-1">
-          <span class="text-xs text-gray-400 font-medium">Language:</span>
-          <a href={enPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${!isJa ? 'bg-teal-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>EN</a>
-          <a href={jaPath} class={`px-2.5 py-1 text-xs font-semibold rounded transition-colors ${isJa ? 'bg-teal-500 text-white' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}>JP</a>
-        </div>
-      </div>
-    </div>
-  </header>
+  <SiteHeader
+    currentPath={currentPath}
+    isJa={isJa}
+    enPath={enPath}
+    jaPath={jaPath}
+    currentUser={currentUser}
+    getPath={getPath}
+  />
 
   <!-- Main content -->
   <main class="flex-1 pb-16 md:pb-0">
@@ -394,98 +189,13 @@ const defaultCities = ['Bangkok','Bali','Kuala Lumpur','Singapore','Cebu','Hanoi
     </div>
   </nav>
 
-  <!-- Footer -->
-  <footer class="bg-gray-900 text-gray-300 mt-auto">
-    <div class="max-w-7xl mx-auto px-4 py-12">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
-        <!-- Blog Categories (dynamic cities) -->
-        <div>
-          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'ブログカテゴリ' : 'Blog Categories'}</h3>
-          <ul class="space-y-2 text-sm">
-            {(footerCities.length > 0 ? footerCities.map((c: any) => c.city) : defaultCities).map((city: string) => (
-              <li>
-                <a href={`/blog?city=${encodeURIComponent(city)}`} class="hover:text-white transition-colors">{city}</a>
-              </li>
-            ))}
-          </ul>
-        </div>
+  <SiteFooter
+    isJa={isJa}
+    footerBlogs={footerBlogs}
+    footerCities={footerCities}
+    defaultCities={defaultCities}
+  />
 
-        <!-- What's New (dynamic blog posts) -->
-        <div>
-          <a href={isJa ? '/ja/news' : '/news'} class="text-white font-semibold text-sm uppercase tracking-wider mb-4 block hover:text-teal-300 transition-colors">{isJa ? '最新情報' : "What's New"}</a>
-          <ul class="space-y-3 text-sm">
-            {footerBlogs.length > 0 ? footerBlogs.map((post: any) => (
-              <li>
-                <a href={`/${isJa ? 'ja/' : ''}blog/${post.slug}`} class="hover:text-white transition-colors line-clamp-2 leading-snug">{post.title}</a>
-              </li>
-            )) : (
-              <>
-                <li><a href={isJa ? '/ja/concierge' : '/concierge'} class="hover:text-white transition-colors">{isJa ? 'AIコンシェルジュ' : 'AI Concierge'}</a></li>
-                <li><a href="/map" class="hover:text-white transition-colors">{isJa ? 'マップ表示' : 'Map View'}</a></li>
-                <li><a href={isJa ? '/ja/search' : '/search'} class="hover:text-white transition-colors">{isJa ? '詳細検索' : 'Advanced Search'}</a></li>
-              </>
-            )}
-          </ul>
-          <a href={isJa ? '/ja/blog' : '/blog'} class="inline-block mt-3 text-xs text-teal-400 hover:text-teal-300 transition-colors">{isJa ? 'もっと見る →' : 'View More →'}</a>
-        </div>
-
-        <!-- Contact -->
-        <div>
-          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'お問い合わせ' : 'Contact'}</h3>
-          <ul class="space-y-2.5 text-sm">
-            <li class="flex items-start gap-2 text-gray-400">
-              <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-              <span>DayDreamHub</span>
-            </li>
-            <li class="flex items-start gap-2 text-gray-400">
-              <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-              <span>Georgia</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-              <a href="mailto:customer@daydreamhub.com" class="hover:text-white transition-colors break-all">customer@daydreamhub.com</a>
-            </li>
-          </ul>
-          <div class="mt-4 space-y-1.5 text-sm">
-            <a href="/contact" class="block text-teal-400 hover:text-white transition-colors font-medium">{isJa ? '📧 お問い合わせフォーム' : '📧 Contact Form'}</a>
-            <a href="/mypage" class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'マイページ（予約確認）' : 'My Bookings'}</a>
-            <a href="/terms" class="block text-gray-500 hover:text-white transition-colors">{isJa ? '利用規約' : 'Terms of Service'}</a>
-            <a href={isJa ? '/ja/privacy-policy' : '/privacy-policy'} class="block text-gray-500 hover:text-white transition-colors">{isJa ? 'プライバシーポリシー' : 'Privacy Policy'}</a>
-          </div>
-        </div>
-
-        <!-- Quick Links -->
-        <div>
-          <h3 class="text-white font-semibold text-sm uppercase tracking-wider mb-4">{isJa ? 'クイックリンク' : 'Quick Links'}</h3>
-          <ul class="space-y-2 text-sm">
-            <li><a href={isJa ? '/ja/about' : '/about'} class="hover:text-white transition-colors">{isJa ? '私たちについて' : 'About Us'}</a></li>
-            <li><a href={isJa ? '/ja/faq' : '/faq'} class="hover:text-white transition-colors">FAQ</a></li>
-            <li><a href={isJa ? '/ja/how-it-works' : '/how-it-works'} class="hover:text-white transition-colors">{isJa ? '使い方' : 'How it Works'}</a></li>
-            <!-- SERVICES_FOOTER_REMOVED: <li><a href="/services">Services</a></li> -->
-            <li><a href={isJa ? '/ja/for-hotel-owner' : '/for-hotel-owner'} class="hover:text-white transition-colors">{isJa ? '施設オーナー様へ' : 'For Property Owner'}</a></li>
-            <!-- FOR_AI_AGENTS_FOOTER_REMOVED -->
-            <li><a href="/map" class="hover:text-white transition-colors">{isJa ? 'マップ表示' : 'Map View'}</a></li>
-            <li><a href="/wishlist" class="hover:text-white transition-colors">{isJa ? 'ウィッシュリスト' : 'Wishlist'}</a></li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="border-t border-gray-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
-        <span>&copy; {new Date().getFullYear()} Day Dream Hub.com LLC All Rights Reserved.</span>
-        <div class="flex gap-4">
-          <a href="https://x.com/daydreamhubllc" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-white transition-colors" aria-label="X (formerly Twitter)">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-          </a>
-          <a href="https://www.instagram.com/daydreamhub.official/" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-white transition-colors" aria-label="Instagram">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.067.06 1.407.06 4.123v.08c0 2.643-.012 2.987-.06 4.043-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.067.048-1.407.06-4.123.06h-.08c-2.643 0-2.987-.012-4.043-.06-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.047-1.024-.06-1.379-.06-3.808v-.63c0-2.43.013-2.784.06-3.808.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 015.45 2.525c.636-.247 1.363-.416 2.427-.465C8.901 2.013 9.256 2 11.685 2h.63zm-.081 1.802h-.468c-2.456 0-2.784.011-3.807.058-.975.045-1.504.207-1.857.344-.467.182-.8.398-1.15.748-.35.35-.566.683-.748 1.15-.137.353-.3.882-.344 1.857-.047 1.023-.058 1.351-.058 3.807v.468c0 2.456.011 2.784.058 3.807.045.975.207 1.504.344 1.857.182.466.399.8.748 1.15.35.35.683.566 1.15.748.353.137.882.3 1.857.344 1.054.048 1.37.058 4.041.058h.08c2.597 0 2.917-.01 3.96-.058.976-.045 1.505-.207 1.858-.344.466-.182.8-.398 1.15-.748.35-.35.566-.683.748-1.15.137-.353.3-.882.344-1.857.048-1.055.058-1.37.058-4.041v-.08c0-2.597-.01-2.917-.058-3.96-.045-.976-.207-1.505-.344-1.858a3.097 3.097 0 00-.748-1.15 3.098 3.098 0 00-1.15-.748c-.353-.137-.882-.3-1.857-.344-1.023-.047-1.351-.058-3.807-.058zM12 6.865a5.135 5.135 0 110 10.27 5.135 5.135 0 010-10.27zm0 1.802a3.333 3.333 0 100 6.666 3.333 3.333 0 000-6.666zm5.338-3.205a1.2 1.2 0 110 2.4 1.2 1.2 0 010-2.4z"/></svg>
-          </a>
-          <a href="https://www.facebook.com/profile.php?id=61553403023868" target="_blank" rel="noopener noreferrer" class="text-gray-500 hover:text-white transition-colors" aria-label="Facebook">
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-          </a>
-        </div>
-      </div>
-    </div>
-  </footer>
 
   <script>
     // ===== Wishlist (localStorage) =====
