@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 // Haversine distance in meters
 function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -49,9 +49,8 @@ function normaliseResult(result: any): { loc: { lat: number; lng: number }; form
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const db = env?.DB;
   const apiKey = env?.GOOGLE_PLACES_API_KEY;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
@@ -184,9 +183,8 @@ function extractPlaceId(input: string): string | null {
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const db = env?.DB;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 
@@ -217,9 +215,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 export const PUT: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const db = env?.DB;
   const apiKey = env?.GOOGLE_PLACES_API_KEY;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
@@ -266,9 +263,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 export const PATCH: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const db = env?.DB;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 

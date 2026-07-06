@@ -1,15 +1,13 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const env = runtime?.env;
   const db = env?.DB;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
 
   if (!env?.TWILIO_ACCOUNT_SID || !env?.TWILIO_AUTH_TOKEN || !env?.TWILIO_FROM_NUMBER) {
     return new Response(JSON.stringify({ error: 'Twilio not configured' }), { status: 503 });

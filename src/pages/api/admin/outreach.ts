@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 const normalizePhone = (value: string) =>
   (value || '')
@@ -149,7 +149,7 @@ async function getContext(request: Request, locals: any) {
   const env = runtime?.env;
   const db = env?.DB;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
+  const { admin, response } = await requireAdmin(request, jwtSecret);
   return { env, db, admin };
 }
 

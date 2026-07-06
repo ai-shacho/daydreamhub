@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 function formatTimestampForFilename(date = new Date()): string {
   const y = date.getFullYear();
@@ -37,10 +37,8 @@ const HOTEL_CSV_COLUMNS: { header: string; key: string }[] = [
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response('Unauthorized', { status: 401 });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
 
   const db = env?.DB;
   if (!db) {

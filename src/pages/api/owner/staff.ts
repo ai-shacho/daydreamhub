@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { requireOwner } from '../../../lib/apiAuth';
 import { sendStaffInvitationEmail } from '../../../lib/email';
 
 function generateInvitationToken(): string {
@@ -12,13 +13,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   if ((owner as any).role === 'staff') {
     const { getStaffRole } = await import('../../../lib/ownerAuth');
     const staffRole = await getStaffRole(db, (owner as any).sub);
@@ -71,13 +67,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   // Allow owners and co_owners to manage staff
   if ((owner as any).role === 'staff') {
     const { getStaffRole } = await import('../../../lib/ownerAuth');
@@ -211,13 +202,8 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   if ((owner as any).role === 'staff') {
     const { getStaffRole } = await import('../../../lib/ownerAuth');
     const staffRole = await getStaffRole(db, (owner as any).sub);

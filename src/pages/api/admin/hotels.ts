@@ -1,18 +1,13 @@
 import type { APIRoute } from 'astro';
 import { sendListingApprovedEmail } from '../../../lib/email';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 import { isValidPropertyType, normalizePropertyType } from '../../../lib/propertyTypes';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const db = env?.DB;
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
@@ -160,12 +155,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 export const DELETE: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
 
   const db = env?.DB;
   if (!db) {

@@ -1,18 +1,13 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../../../lib/adminAuth';
+import { requireAdmin } from '../../../../../lib/apiAuth';
 
 export const PATCH: APIRoute = async ({ request, params, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
 
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
 
   const { id } = params;
   if (!id) {

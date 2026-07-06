@@ -1,13 +1,12 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner } from '../../../lib/ownerAuth';
+import { requireOwner } from '../../../lib/apiAuth';
 import { sendReviewRequestNotification } from '../../../lib/email';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   const db = env?.DB;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 

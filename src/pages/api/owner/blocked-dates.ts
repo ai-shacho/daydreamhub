@@ -1,13 +1,13 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { requireOwner } from '../../../lib/apiAuth';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   const url = new URL(request.url);
   const hotelId = url.searchParams.get('hotel_id');
   const month = url.searchParams.get('month'); // YYYY-MM
@@ -30,9 +30,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   const body = await request.json() as any;
   const { hotel_id, plan_id, date, reason } = body;
   const ownerHotelIds = await getOwnerHotelIds(db, owner);
@@ -48,9 +47,8 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   const body = await request.json() as any;
   const { hotel_id, date } = body;
   const ownerHotelIds = await getOwnerHotelIds(db, owner);

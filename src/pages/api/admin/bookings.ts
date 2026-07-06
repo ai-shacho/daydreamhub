@@ -1,16 +1,11 @@
 import type { APIRoute } from 'astro';
 import { getBookingInfoForCall, triggerAutoCall } from '../../../lib/autoCall';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const db = (locals as any).runtime?.env?.DB;
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get('page') || '1');
@@ -105,13 +100,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
 const updateBookingStatus: APIRoute = async ({ request, locals }) => {
   const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const db = (locals as any).runtime?.env?.DB;
   let body: any;
   try {
@@ -181,13 +171,8 @@ const updateBookingStatus: APIRoute = async ({ request, locals }) => {
 
 export const PATCH: APIRoute = async ({ request, locals }) => {
   const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
 
   const db = (locals as any).runtime?.env?.DB;
   let body: any;
@@ -312,13 +297,8 @@ export const PUT = updateBookingStatus;
 
 export const DELETE: APIRoute = async ({ request, locals }) => {
   const jwtSecret = (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const db = (locals as any).runtime?.env?.DB;
   const url = new URL(request.url);
   const id = url.searchParams.get('id');

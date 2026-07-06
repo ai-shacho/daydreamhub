@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { requireOwner } from '../../../lib/apiAuth';
 
 const json = { 'Content-Type': 'application/json' };
 const MAX_SIZE = 2 * 1024 * 1024; // 2MB per image
@@ -12,9 +13,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 503, headers: json });
 
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   let body: any;
   try { body = await request.json(); } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: json });
@@ -79,9 +79,8 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
 
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 503, headers: json });
 
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   const url = new URL(request.url);
   const hotelId = Number(url.searchParams.get('hotel_id'));
   const index = Number(url.searchParams.get('index'));
@@ -115,9 +114,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 503, headers: json });
 
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   let body: any;
   try { body = await request.json(); } catch {
     return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: json });

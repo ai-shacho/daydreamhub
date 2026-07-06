@@ -1,13 +1,13 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { requireOwner } from '../../../lib/apiAuth';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   const url = new URL(request.url);
   const bookingId = url.searchParams.get('booking_id');
   if (!bookingId) return new Response(JSON.stringify({ error: 'booking_id required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
@@ -27,9 +27,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
   const RESEND_API_KEY = runtime?.env?.RESEND_API_KEY || '';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   const body = await request.json() as any;
   const { booking_id, content } = body;
   if (!booking_id || !content?.trim()) return new Response(JSON.stringify({ error: 'booking_id and content required' }), { status: 400, headers: { 'Content-Type': 'application/json' } });

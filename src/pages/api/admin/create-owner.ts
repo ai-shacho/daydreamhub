@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 import { sendOwnerAccountEmail } from '../../../lib/email';
 
 async function hashPassword(password: string): Promise<string> {
@@ -17,10 +17,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
 
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
 
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), { status: 500, headers: json });

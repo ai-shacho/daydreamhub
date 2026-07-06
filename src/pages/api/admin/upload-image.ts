@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 const json = { 'Content-Type': 'application/json' };
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB per image
@@ -10,10 +10,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const r2 = env?.IMAGES;
 
   // Verify admin
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
 
   if (!r2) {
     return new Response(JSON.stringify({ error: 'Image storage (R2) not available. Please contact admin.' }), { status: 503, headers: json });

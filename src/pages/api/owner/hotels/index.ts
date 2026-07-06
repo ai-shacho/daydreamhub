@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner } from '../../../../lib/ownerAuth';
+import { requireOwner } from '../../../../lib/apiAuth';
 import { isValidPropertyType, normalizePropertyType } from '../../../../lib/propertyTypes';
 
 export const POST: APIRoute = async ({ request, locals }) => {
@@ -12,10 +12,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Database not available' }), { status: 503, headers: json });
   }
 
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-  }
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
 
   let data: Record<string, any>;
   try { data = await request.json(); } catch {
@@ -82,10 +80,8 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Database not available' }), { status: 503, headers: json });
   }
 
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-  }
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
 
   let data: Record<string, any>;
   try { data = await request.json(); } catch {

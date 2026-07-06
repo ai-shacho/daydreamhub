@@ -1,14 +1,12 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 import { CALL_SCRIPT_PROMPT } from '../../../lib/callScript';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   return new Response(
     JSON.stringify({
       script: CALL_SCRIPT_PROMPT,
@@ -23,10 +21,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
   const env = runtime?.env;
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
   const body = await request.json();
   const action = (body as any).action;
 

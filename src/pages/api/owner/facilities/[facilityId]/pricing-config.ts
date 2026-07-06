@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner, getOwnerHotelIds } from '../../../../../lib/ownerAuth';
+import { getOwnerHotelIds } from '../../../../../lib/ownerAuth';
+import { requireOwner } from '../../../../../lib/apiAuth';
 
 // GET: 施設の料金設定を取得
 export const GET: APIRoute = async ({ params, request, locals }) => {
@@ -7,9 +8,8 @@ export const GET: APIRoute = async ({ params, request, locals }) => {
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
 
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  if (!db)    return new Response(JSON.stringify({ error: 'DB not available' }), { status: 503 });
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
 
   const facilityId = Number(params.facilityId);
   const ownerHotelIds = await getOwnerHotelIds(db, owner);
@@ -39,9 +39,8 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
 
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  if (!db)    return new Response(JSON.stringify({ error: 'DB not available' }), { status: 503 });
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
 
   const facilityId = Number(params.facilityId);
   if (!facilityId) {

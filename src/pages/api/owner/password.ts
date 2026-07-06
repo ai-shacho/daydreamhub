@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner } from '../../../lib/ownerAuth';
+import { requireOwner } from '../../../lib/apiAuth';
 
 async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -21,10 +21,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   }
 
   // 1. Verify owner authentication
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
-  }
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
 
   // 2. Parse request body
   let body: Record<string, any>;

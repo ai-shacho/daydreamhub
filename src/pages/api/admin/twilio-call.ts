@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyAdmin } from '../../../lib/adminAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 function basicAuthHeader(accountSid: string, authToken: string): string {
   const raw = `${accountSid}:${authToken}`;
@@ -25,10 +25,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const env = runtime?.env;
   const db = env?.DB;
   const jwtSecret = env?.JWT_SECRET || 'dev-secret';
-  const admin = await verifyAdmin(request, jwtSecret);
-  if (!admin) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  }
+  const { admin, response } = await requireAdmin(request, jwtSecret);
+  if (response) return response;
 
   const accountSid = env?.TWILIO_ACCOUNT_SID;
   const authToken = env?.TWILIO_AUTH_TOKEN;

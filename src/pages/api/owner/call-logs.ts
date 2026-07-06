@@ -1,16 +1,13 @@
 import type { APIRoute } from 'astro';
-import { verifyOwner, getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { getOwnerHotelIds } from '../../../lib/ownerAuth';
+import { requireOwner } from '../../../lib/apiAuth';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner)
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   if (!db)
     return new Response(JSON.stringify({ error: 'Database not available' }), {
       status: 500,
@@ -62,12 +59,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
-  const owner = await verifyOwner(request, jwtSecret);
-  if (!owner)
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  const { owner, response } = await requireOwner(request, jwtSecret);
+  if (response) return response;
   if (!db)
     return new Response(JSON.stringify({ error: 'Database not available' }), {
       status: 500,
