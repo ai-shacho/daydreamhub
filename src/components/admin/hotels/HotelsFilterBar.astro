@@ -1,0 +1,91 @@
+---
+interface Props {
+  searchQuery: string;
+  countries: string[];
+  countryFilter: string;
+  cities: string[];
+  cityFilter: string;
+  statusFilter: string;
+  ownerFilter: string;
+  sortBy: string;
+  sortOrder: string;
+}
+
+const {
+  searchQuery,
+  countries,
+  countryFilter,
+  cities,
+  cityFilter,
+  statusFilter,
+  ownerFilter,
+  sortBy,
+  sortOrder,
+} = Astro.props;
+---
+
+<div class="bg-white rounded-lg shadow p-4 mb-6">
+  <form method="GET" action="/admin/hotels" class="flex flex-wrap items-end gap-4">
+    <div class="min-w-[220px] flex-1">
+      <label class="block text-xs font-medium text-slate-500 mb-1">Search by Name or ID</label>
+      <input
+        type="text"
+        name="q"
+        value={searchQuery}
+        placeholder="Hotel name or ID..."
+        class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+      />
+    </div>
+
+    <div class="min-w-[160px]">
+      <label class="block text-xs font-medium text-slate-500 mb-1">Country</label>
+      <select name="country" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+        <option value="">All Countries</option>
+        {countries.map((c) => (
+          <option value={c} selected={c === countryFilter}>{c}</option>
+        ))}
+      </select>
+    </div>
+
+    <div class="min-w-[160px]">
+      <label class="block text-xs font-medium text-slate-500 mb-1">City</label>
+      <select name="city" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+        <option value="">All Cities</option>
+        {cities.map((c) => (
+          <option value={c} selected={c === cityFilter}>{c}</option>
+        ))}
+      </select>
+    </div>
+
+    <div class="min-w-[140px]">
+      <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+      <select name="status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+        <option value="" selected={statusFilter === ""}>All Status</option>
+        <option value="active" selected={statusFilter === "active"}>Active</option>
+        <option value="demo" selected={statusFilter === "demo"}>Demo</option>
+        <option value="inactive" selected={statusFilter === "inactive"}>Inactive</option>
+      </select>
+    </div>
+
+    <div class="min-w-[160px]">
+      <label class="block text-xs font-medium text-slate-500 mb-1">Owner</label>
+      <select name="owner" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+        <option value="" selected={ownerFilter === ""}>All</option>
+        <option value="assigned" selected={ownerFilter === "assigned"}>Assigned</option>
+        <option value="unassigned" selected={ownerFilter === "unassigned"}>Unassigned</option>
+      </select>
+    </div>
+
+    <input type="hidden" name="sort" value={sortBy} />
+    <input type="hidden" name="order" value={sortOrder} />
+
+    <div class="flex gap-2">
+      <button type="submit" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+        Filter
+      </button>
+      <a href="/admin/hotels" class="px-4 py-2 bg-slate-100 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors">
+        Reset
+      </a>
+    </div>
+  </form>
+</div>

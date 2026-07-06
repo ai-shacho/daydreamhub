@@ -1,0 +1,20 @@
+---
+interface Props {
+  hotelCount: number;
+  hotelsExportUrl: string;
+}
+
+const { hotelCount, hotelsExportUrl } = Astro.props;
+---
+
+<div class="flex items-center justify-between mb-3">
+  <p class="hotel-count text-sm text-slate-500">{hotelCount} hotel{hotelCount !== 1 ? "s" : ""} found</p>
+  <div class="flex items-center gap-2">
+    <a href={hotelsExportUrl} class="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors">
+      Export CSV
+    </a>
+    <a href="/admin/hotels/new" class="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+      + Add Hotel
+    </a>
+  </div>
+</div>

@@ -1,0 +1,162 @@
+---
+interface Props {
+  hotels: any[];
+  error: string;
+  sortLink: (col: string) => string;
+  sortIcon: (col: string) => string;
+}
+
+const { hotels, error, sortLink, sortIcon } = Astro.props;
+---
+
+{hotels.length === 0 && !error ? (
+  <div class="bg-white rounded-xl border border-slate-200 p-12 text-center">
+    <p class="text-slate-500">No hotels found matching the filters.</p>
+  </div>
+) : (
+  <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200">
+            <th class="text-left px-4 py-3 font-medium text-slate-600">Thumbnail</th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("name")} class="hover:text-teal-600 inline-flex items-center gap-1">
+                Hotel Name <span class="text-xs">{sortIcon("name")}</span>
+              </a>
+            </th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("country")} class="hover:text-teal-600 inline-flex items-center gap-1">
+                Country <span class="text-xs">{sortIcon("country")}</span>
+              </a>
+            </th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("city")} class="hover:text-teal-600 inline-flex items-center gap-1">
+                City <span class="text-xs">{sortIcon("city")}</span>
+              </a>
+            </th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("plans")} class="hover:text-teal-600 inline-flex items-center gap-1">Plans <span class="text-xs">{sortIcon("plans")}</span></a>
+            </th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("bookings")} class="hover:text-teal-600 inline-flex items-center gap-1">Bookings <span class="text-xs">{sortIcon("bookings")}</span></a>
+            </th>
+            <th class="text-left px-4 py-3 font-medium text-slate-600">
+              <a href={sortLink("owner")} class="hover:text-teal-600 inline-flex items-center gap-1">
+                Owner <span class="text-xs">{sortIcon("owner")}</span>
+              </a>
+            </th>
+            <th class="text-center px-4 py-3 font-medium text-slate-600">Status</th>
+            <th class="text-right px-4 py-3 font-medium text-slate-600">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {hotels.map((hotel) => (
+            <tr class="hover:bg-slate-50 transition-colors">
+              <td class="px-4 py-3">
+                {hotel.thumbnail_url ? (
+                  <img src={hotel.thumbnail_url} alt={hotel.name} class="w-12 h-9 object-cover rounded-md border border-slate-200" />
+                ) : (
+                  <div class="w-12 h-9 bg-slate-100 rounded-md border border-slate-200 flex items-center justify-center text-slate-300 text-xs">
+                    🏨
+                  </div>
+                )}
+              </td>
+
+              <td class="px-4 py-3">
+                <a href={`/admin/hotels/${hotel.id}`} class="font-medium text-teal-700 hover:underline">{hotel.name}</a>
+                {hotel.name_ja && <div class="text-xs text-slate-400 mt-0.5">{hotel.name_ja}</div>}
+                <div class="text-xs text-slate-400 mt-0.5">{hotel.property_type || "Hotel"}</div>
+              </td>
+
+              <td class="px-4 py-3 text-slate-600">{hotel.country || "-"}</td>
+              <td class="px-4 py-3 text-slate-600">{hotel.city || "-"}</td>
+
+              <td class="px-4 py-3 text-center">
+                <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold">
+                  {hotel.plan_count}
+                </span>
+              </td>
+
+              <td class="px-4 py-3 text-center">
+                <span class={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold ${hotel.active_bookings > 0 ? "bg-green-50 text-green-700" : "bg-slate-50 text-slate-500"}`}>
+                  {hotel.active_bookings}
+                </span>
+              </td>
+
+              <td class="px-4 py-3">
+                {hotel.owner_login_email ? (
+                  <div class="flex items-center gap-2">
+                    <div>
+                      <div class="text-sm font-medium text-slate-800">{hotel.owner_name}</div>
+                      <div class="text-xs text-slate-400">{hotel.owner_login_email}</div>
+                      {hotel.email && hotel.email !== hotel.owner_login_email && (
+                        <div class="text-xs text-amber-600 mt-0.5" title="Booking notification email">📧 {hotel.email}</div>
+                      )}
+                    </div>
+                    <button class="assign-owner-btn flex-shrink-0 text-slate-400 hover:text-teal-600 transition-colors" data-id={hotel.id} data-name={hotel.name} data-email={hotel.owner_login_email} title="Change Owner">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+                    </button>
+                  </div>
+                ) : hotel.email ? (
+                  <div class="flex items-center gap-2">
+                    <div>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                        No account
+                      </span>
+                      <div class="text-xs text-slate-400 mt-0.5">{hotel.email}</div>
+                    </div>
+                    <button class="assign-owner-btn flex-shrink-0 text-amber-500 hover:text-teal-600 transition-colors" data-id={hotel.id} data-name={hotel.name} data-email={hotel.email} title="Assign Owner">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div class="flex items-center gap-2">
+                    <div>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200">
+                        No Email
+                      </span>
+                      <div class="text-xs text-orange-500 mt-0.5">📞 Auto-call ON</div>
+                    </div>
+                    <button class="assign-owner-btn flex-shrink-0 text-red-400 hover:text-teal-600 transition-colors" data-id={hotel.id} data-name={hotel.name} data-email="" title="Assign Owner">
+                      <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+                    </button>
+                  </div>
+                )}
+              </td>
+
+              <td class="px-4 py-3 text-center">
+                <select
+                  class="status-select text-xs px-2 py-1.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white cursor-pointer min-w-[100px]"
+                  data-id={hotel.id}
+                >
+                  <option value="inactive" selected={hotel.status === 'inactive' || !hotel.status}>Inactive</option>
+                  <option value="demo" selected={hotel.status === 'demo'}>Demo</option>
+                  <option value="active" selected={hotel.status === 'active'}>Active</option>
+                </select>
+              </td>
+
+              <td class="px-4 py-3 text-right">
+                <div class="flex items-center justify-end gap-1">
+                  <a
+                    href={`/admin/hotels/${hotel.id}`}
+                    class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 transition-colors"
+                  >
+                    Edit
+                  </a>
+                  <button
+                    class="delete-hotel-btn inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-100 transition-colors"
+                    data-id={hotel.id}
+                    data-name={hotel.name}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
