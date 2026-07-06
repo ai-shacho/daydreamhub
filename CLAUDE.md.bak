@@ -1,16 +1,4 @@
-# DayDreamHub
-
-## Documentation
-
-- [ARCHITECTURE](/root/daydreamhub/docs/ARCHITECTURE.md)
-- [FEATURES](/root/daydreamhub/docs/FEATURES.md)
-- [OPERATIONS](/root/daydreamhub/docs/OPERATIONS.md)
-- [API](/root/daydreamhub/docs/API.md)
-- [DECISIONS](/root/daydreamhub/docs/DECISIONS.md)
-
---- 
-
-*This is an auto-generated file, please do not edit directly.*
+# daydreamhub
 
 Astro + Cloudflare + Tailwind で構築したWebサイト。候補地の画像（カイロ、カルガリー、エクアドル、ギザ等）が置かれている。
 
