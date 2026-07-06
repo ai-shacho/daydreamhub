@@ -1,0 +1,649 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { nearestAirport } from '../../lib/airports';
+import HotelCard from '../../components/HotelCard.astro';
+
+const DB = (Astro.locals as any).runtime?.env?.DB;
+
+const url = Astro.url;
+const location = url.searchParams.get('location') || '';
+const speciality = url.searchParams.get('speciality') || '';
+const propertyType = url.searchParams.get('propertyType') || '';
+const country = url.searchParams.get('country') || '';
+const ratingMin = url.searchParams.get('rating') || '';
+const amenityFilter = url.searchParams.get('amenity') || '';
+const cityFilter = url.searchParams.get('city') || '';
+const sortBy = url.searchParams.get('sort') || 'default';
+const checkinParam = url.searchParams.get('checkin') || '';
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+const perPage = 12;
+const offset = (page - 1) * perPage;
+
+let whereClauses: string[] = ["h.status = 'active'"];
+let params: any[] = [];
+
+if (location) {
+  whereClauses.push("(h.city LIKE ?1 OR h.country LIKE ?1 OR h.name LIKE ?1 OR h.name_ja LIKE ?1)");
+  params.push(`%${location}%`);
+}
+if (speciality) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`EXISTS (SELECT 1 FROM plans p2 WHERE p2.hotel_id = h.id AND p2.plan_type = ?${paramIdx})`);
+  params.push(speciality);
+}
+if (propertyType) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`h.property_type = ?${paramIdx}`);
+  params.push(propertyType);
+}
+if (country) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`h.country = ?${paramIdx}`);
+  params.push(country);
+}
+if (cityFilter) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`h.city = ?${paramIdx}`);
+  params.push(cityFilter);
+}
+if (ratingMin) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`h.rating >= ?${paramIdx}`);
+  params.push(parseFloat(ratingMin));
+}
+if (amenityFilter) {
+  const paramIdx = params.length + 1;
+  whereClauses.push(`EXISTS (SELECT 1 FROM hotel_amenities ha2 JOIN amenities a2 ON a2.id = ha2.amenity_id WHERE ha2.hotel_id = h.id AND a2.name = ?${paramIdx})`);
+  params.push(amenityFilter);
+}
+
+const whereSQL = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+
+let hotels: any[] = [];
+let totalCount = 0;
+let allCountries: string[] = [];
+let allPropertyTypes: string[] = [];
+let allAmenities: string[] = [];
+let allCities: string[] = [];
+
+if (DB) {
+  try {
+    const countResult = await DB.prepare(
+      `SELECT COUNT(DISTINCT h.id) as total FROM hotels h ${whereSQL}`
+    ).bind(...params).first();
+    totalCount = countResult?.total || 0;
+
+    const isAirportSort = sortBy === 'airport_distance';
+    const orderSQL = sortBy === 'price_asc'
+      ? 'ORDER BY min_price ASC NULLS LAST'
+      : sortBy === 'price_desc'
+        ? 'ORDER BY min_price DESC NULLS LAST'
+        : sortBy === 'rating_desc'
+          ? 'ORDER BY h.rating DESC NULLS LAST'
+          : 'ORDER BY h.rating DESC NULLS LAST, min_price ASC NULLS LAST';
+
+    let fetchLimit = perPage;
+    let fetchOffset = offset;
+    if (isAirportSort) {
+      fetchLimit = 9999;
+      fetchOffset = 0;
+    }
+    const limitIdx = params.length + 1;
+    const offsetIdx = params.length + 2;
+    const result = await DB.prepare(
+      `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating, h.latitude, h.longitude,
+              MIN(p.price_usd) as min_price
+       FROM hotels h
+       LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+       ${whereSQL}
+       GROUP BY h.id
+       ${isAirportSort ? 'ORDER BY h.id DESC' : orderSQL}
+       LIMIT ?${limitIdx} OFFSET ?${offsetIdx}`
+    ).bind(...params, fetchLimit, fetchOffset).all();
+    let allResults: any[] = result?.results || [];
+
+    // Compute nearest airport using shared module
+    allResults = allResults.map((h: any) => {
+      if (h.latitude == null || h.longitude == null) return { ...h, _airport_km: null, _airport_code: null };
+      const ap = nearestAirport(Number(h.latitude), Number(h.longitude));
+      return { ...h, _airport_km: ap?.km ?? null, _airport_code: ap?.code ?? null };
+    });
+
+    if (isAirportSort) {
+      const targetLoc = cityFilter || location;
+      // Find approximate coordinates for target location from results
+      const targetHotel = allResults.find((h: any) => h.city?.toLowerCase().includes(targetLoc.toLowerCase()));
+      if (targetHotel && targetHotel.latitude) {
+        // Sort by distance to a city's approximate center
+      }
+      allResults.sort((a: any, b: any) => (a._airport_km ?? 99999) - (b._airport_km ?? 99999));
+    }
+
+    hotels = isAirportSort ? allResults.slice(offset, offset + perPage) : allResults;
+
+    const countriesResult = await DB.prepare(
+      "SELECT DISTINCT country FROM hotels WHERE country != '' AND status = 'active' ORDER BY country"
+    ).all();
+    allCountries = (countriesResult?.results || []).map((r: any) => r.country).map(c => c.charAt(0).toUpperCase() + c.slice(1));
+
+    const ptResult = await DB.prepare(
+      "SELECT DISTINCT property_type FROM hotels WHERE property_type != '' AND status = 'active' ORDER BY property_type"
+    ).all();
+    allPropertyTypes = (ptResult?.results || []).map((r: any) => r.property_type);
+
+    const cityResult = await DB.prepare(
+      "SELECT DISTINCT city FROM hotels WHERE city != '' AND status = 'active' ORDER BY city"
+    ).all();
+    allCities = (cityResult?.results || []).map((r: any) => r.city);
+
+    const amenResult = await DB.prepare(
+      "SELECT DISTINCT name FROM amenities ORDER BY name"
+    ).all();
+    allAmenities = (amenResult?.results || []).map((r: any) => r.name);
+  } catch (e) {
+    console.error('Search DB error:', e);
+  }
+}
+
+// Fallback property types
+// Fixed property types — matches "Search by Room Type" on the top page
+const fallbackPropertyTypes = ['Hotel', 'Villa', 'Resort', 'Apartment', 'Clinic', 'Spa', 'Wellness', 'Coworking Space', 'Cafe & Lounge', 'Hostel'];
+allPropertyTypes = fallbackPropertyTypes;
+
+const totalPages = Math.ceil(totalCount / perPage);
+
+const paginationItems: (number | string)[] = Array.from({ length: totalPages }, (_, i) => i + 1)
+  .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+  .reduce((acc: (number | string)[], p, idx, arr) => {
+    if (idx > 0 && typeof arr[idx - 1] === 'number' && (p as number) - (arr[idx - 1] as number) > 1) {
+      acc.push('...');
+    }
+    acc.push(p);
+    return acc;
+  }, []);
+
+// Region groups for country filter
+const regionGroups = [
+  { label: '東南アジア', countries: ['Thailand', 'Malaysia', 'Indonesia', 'Vietnam', 'Philippines', 'Cambodia', 'Laos', 'Myanmar', 'Singapore', 'Sri Lanka'] },
+  { label: '東アジア', countries: ['Japan', 'South Korea', 'China', 'Hong Kong', 'Taiwan'] },
+  { label: '中東', countries: ['UAE', 'Qatar', 'Bahrain', 'Oman', 'Saudi Arabia', 'Kuwait', 'Jordan'] },
+  { label: 'アフリカ', countries: ['Kenya', 'Nigeria', 'South Africa', 'Tanzania', 'Rwanda', 'Ethiopia', 'Egypt', 'Morocco'] },
+  { label: 'ヨーロッパ', countries: ['United Kingdom', 'UK', 'France', 'Germany', 'Netherlands', 'Spain', 'Italy', 'Portugal', 'Russia', 'Georgia', 'Czech Republic', 'Hungary', 'Greece', 'Bulgaria', 'Serbia'] },
+  { label: '南北米', countries: ['United States', 'USA', 'Canada', 'Mexico', 'Brazil', 'Colombia', 'Ecuador', 'Peru'] },
+  { label: 'オセアニア', countries: ['Australia', 'New Zealand'] },
+];
+
+function getGroupedCountries(available: string[]) {
+  const normalizeMap = new Map<string, string>();
+  for (const c of available) {
+    if (c) normalizeMap.set(c.toLowerCase(), c.charAt(0).toUpperCase() + c.slice(1));
+  }
+  const availableLower = new Set(normalizeMap.keys());
+  const assignedLower = new Set<string>();
+  const groups: { label: string; countries: string[] }[] = [];
+  for (const rg of regionGroups) {
+    const matched = rg.countries
+      .filter(c => availableLower.has(c.toLowerCase()))
+      .map(c => { assignedLower.add(c.toLowerCase()); return normalizeMap.get(c.toLowerCase()) || c; });
+    if (matched.length > 0) groups.push({ label: rg.label, countries: matched });
+  }
+  const other = [...normalizeMap.values()].filter(c => !assignedLower.has(c.toLowerCase()));
+  if (other.length > 0) groups.push({ label: 'その他', countries: other.sort() });
+  return groups;
+}
+
+const groupedCountries = getGroupedCountries(allCountries);
+
+function buildUrl(overrides: Record<string, string>) {
+  const p = new URLSearchParams(url.searchParams);
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v) p.set(k, v); else p.delete(k);
+  }
+  return `/ja/search?${p.toString()}`;
+}
+
+function getHotelName(hotel: any) {
+  return hotel.name_ja || hotel.name || '';
+}
+---
+
+<Layout title="ホテル検索 - DayDreamHub" description="世界中のデイユースホテルを検索。エリア・プロパティタイプ・その他の条件で絞り込み可能。">
+
+  <!-- 検索バー -->
+  <section class="bg-teal-700 pb-6 pt-4">
+    <div class="max-w-7xl mx-auto px-4">
+      <form method="get" action="/ja/search" class="bg-white rounded-xl shadow-lg p-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <!-- エリア -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">エリア</label>
+            <div class="relative">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <input
+                type="text"
+                name="location"
+                value={location}
+                placeholder="都市名・国名..."
+                class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <!-- チェックイン日 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">チェックイン日</label>
+            <input
+              type="text"
+              name="checkin"
+              id="search-checkin-fp-ja"
+              placeholder="YYYY-MM-DD"
+              autocomplete="off"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            />
+          </div>
+
+          <!-- カテゴリー -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">カテゴリー</label>
+            <select
+              name="speciality"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+            >
+              <option value="">すべてのカテゴリー</option>
+              <option value="rest" selected={speciality === 'rest'}>リラックス＆休憩</option>
+              <option value="work" selected={speciality === 'work'}>リモートワーク</option>
+              <option value="personal_time" selected={speciality === 'personal_time'}>パーソナルタイム</option>
+              <option value="party" selected={speciality === 'party'}>パーティー＆イベント</option>
+              <option value="stay" selected={speciality === 'stay'}>デイステイ</option>
+            </select>
+          </div>
+
+          <!-- 人数 -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1">人数</label>
+            <select
+              name="guests"
+              class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
+            >
+              <option value="">指定なし</option>
+              <option value="1">1名</option>
+              <option value="2">2名</option>
+              <option value="3">3名</option>
+              <option value="4">4名</option>
+              <option value="5">5名以上</option>
+            </select>
+          </div>
+
+          <!-- 検索ボタン -->
+          <div class="flex items-end">
+            <button
+              type="submit"
+              class="w-full bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold py-2.5 px-6 rounded-lg transition-colors text-sm"
+            >
+              検索
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- 検索結果セクション -->
+  <section class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- モバイルフィルタートグル -->
+    <div class="lg:hidden mb-4">
+      <button id="filter-toggle-btn-ja" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm w-full justify-between">
+        <span class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+          絞り込み
+          {(propertyType || country || cityFilter || amenityFilter || ratingMin) && (
+            <span class="bg-teal-600 text-white text-xs rounded-full px-1.5 py-0.5">設定中</span>
+          )}
+        </span>
+        <svg id="filter-toggle-icon-ja" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6">
+
+      <!-- サイドバーフィルター -->
+      <aside id="filter-sidebar-ja" class="w-full lg:w-[280px] shrink-0 hidden lg:block">
+        <div class="lg:sticky lg:top-20 space-y-5">
+          <form method="get" action="/ja/search" id="filter-form-ja">
+            {location && <input type="hidden" name="location" value={location} />}
+            {speciality && <input type="hidden" name="speciality" value={speciality} />}
+
+            <!-- 物件タイプ -->
+            <div class="bg-white rounded-xl shadow-sm p-4">
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">物件タイプ</h3>
+              <div class="space-y-2 max-h-48 overflow-y-auto">
+                {allPropertyTypes.map(pt => (
+                  <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
+                    <input
+                      type="radio"
+                      name="propertyType"
+                      value={pt}
+                      checked={propertyType === pt}
+                      class="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                      onchange="this.form.submit()"
+                    />
+                    {pt}
+                  </label>
+                ))}
+                {propertyType && (
+                  <a href={buildUrl({ propertyType: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-1">フィルターを解除</a>
+                )}
+              </div>
+            </div>
+
+            <!-- 評価 -->
+            <div class="bg-white rounded-xl shadow-sm p-4">
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">評価</h3>
+              <div class="space-y-2">
+                {[
+                  { value: '4.5', label: '4.5以上' },
+                  { value: '4', label: '4.0以上' },
+                  { value: '3.5', label: '3.5以上' },
+                  { value: '3', label: '3.0以上' },
+                ].map(r => (
+                  <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
+                    <input
+                      type="radio"
+                      name="rating"
+                      value={r.value}
+                      checked={ratingMin === r.value}
+                      class="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                      onchange="this.form.submit()"
+                    />
+                    <span class="flex items-center gap-1">
+                      <svg class="w-3.5 h-3.5 text-amber-400" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                      {r.label}
+                    </span>
+                  </label>
+                ))}
+                {ratingMin && (
+                  <a href={buildUrl({ rating: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-1">フィルターを解除</a>
+                )}
+              </div>
+            </div>
+
+            <!-- 国 -->
+            <div class="bg-white rounded-xl shadow-sm p-4">
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">国</h3>
+              <select
+                name="country"
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                onchange="this.form.submit()"
+              >
+                <option value="">すべての国</option>
+                {allCountries.slice().sort((a, b) => a.localeCompare(b)).map(c => (
+                  <option value={c} selected={country === c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                ))}
+              </select>
+              {country && (
+                <a href={buildUrl({ country: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-2">フィルターを解除</a>
+              )}
+            </div>
+
+            <!-- 都市 -->
+            {allCities.length > 0 && (
+              <div class="bg-white rounded-xl shadow-sm p-4">
+                <h3 class="font-semibold text-sm text-gray-800 mb-3">都市</h3>
+                <select
+                  name="city"
+                  class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                  onchange="this.form.submit()"
+                >
+                  <option value="">すべての都市</option>
+                  {allCities.slice().sort((a, b) => a.localeCompare(b)).map(c => (
+                    <option value={c} selected={cityFilter === c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  ))}
+                </select>
+                {cityFilter && (
+                  <a href={buildUrl({ city: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-2">フィルターを解除</a>
+                )}
+              </div>
+            )}
+
+            <!-- アメニティ -->
+            {allAmenities.length > 0 && (
+              <div class="bg-white rounded-xl shadow-sm p-4">
+                <h3 class="font-semibold text-sm text-gray-800 mb-3">アメニティ</h3>
+                <div class="space-y-2 max-h-48 overflow-y-auto">
+                  {allAmenities.slice(0, 15).map(am => (
+                    <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
+                      <input
+                        type="radio"
+                        name="amenity"
+                        value={am}
+                        checked={amenityFilter === am}
+                        class="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
+                        onchange="this.form.submit()"
+                      />
+                      {am}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </form>
+        </div>
+      </aside>
+
+      <!-- メイン結果エリア -->
+      <div class="flex-1 min-w-0">
+        <!-- 結果ヘッダー -->
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <p class="text-sm text-gray-600 flex-1 min-w-0">
+            {totalCount > 0 ? (
+              <span><strong>{offset + 1}</strong>〜<strong>{Math.min(offset + perPage, totalCount)}</strong>件 / 全<strong>{totalCount}</strong>件</span>
+            ) : (
+              <span>ホテルが見つかりませんでした</span>
+            )}
+            {(location || propertyType || country || cityFilter || amenityFilter || ratingMin) && (
+              <a href="/ja/search" class="ml-2 text-teal-600 hover:text-teal-800 text-xs font-medium">すべてのフィルターを解除</a>
+            )}
+          </p>
+
+          <!-- ソート -->
+          <div class="flex items-center gap-2 shrink-0">
+            <select
+              id="sort-select-ja"
+              class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
+            >
+              <option value="default" selected={sortBy === 'default'}>おすすめ順</option>
+              <option value="price_asc" selected={sortBy === 'price_asc'}>料金: 安い順</option>
+              <option value="price_desc" selected={sortBy === 'price_desc'}>料金: 高い順</option>
+              <option value="rating_desc" selected={sortBy === 'rating_desc'}>評価: 高い順</option>
+              <option value="airport_distance" selected={sortBy === 'airport_distance'}>空港からの距離順</option>
+            </select>
+          </div>
+
+          <!-- 表示切替 -->
+          <div class="hidden sm:flex items-center gap-1 bg-gray-100 rounded-lg p-1" id="view-toggle-ja">
+            <button data-view="grid-3" class="p-1.5 rounded text-gray-500 hover:text-gray-700 bg-white shadow-sm" title="3列">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><rect x="0" y="0" width="4" height="4" rx="0.5"/><rect x="6" y="0" width="4" height="4" rx="0.5"/><rect x="12" y="0" width="4" height="4" rx="0.5"/><rect x="0" y="6" width="4" height="4" rx="0.5"/><rect x="6" y="6" width="4" height="4" rx="0.5"/><rect x="12" y="6" width="4" height="4" rx="0.5"/></svg>
+            </button>
+            <button data-view="grid-2" class="p-1.5 rounded text-gray-400 hover:text-gray-700" title="2列">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><rect x="0" y="0" width="7" height="4" rx="0.5"/><rect x="9" y="0" width="7" height="4" rx="0.5"/><rect x="0" y="6" width="7" height="4" rx="0.5"/><rect x="9" y="6" width="7" height="4" rx="0.5"/></svg>
+            </button>
+            <button data-view="list" class="p-1.5 rounded text-gray-400 hover:text-gray-700" title="リスト表示">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="3" rx="0.5"/><rect x="0" y="5" width="16" height="3" rx="0.5"/><rect x="0" y="10" width="16" height="3" rx="0.5"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 検索条件サマリー -->
+        {(location || checkinParam || cityFilter || country) && (
+          <div class="flex flex-wrap gap-2 mb-4">
+            {location && (
+              <span class="inline-flex items-center gap-1 px-3 py-1 bg-teal-50 text-teal-700 text-xs rounded-full border border-teal-200">
+                📍 {location}
+              </span>
+            )}
+            {cityFilter && !location && (
+              <span class="inline-flex items-center gap-1 px-3 py-1 bg-teal-50 text-teal-700 text-xs rounded-full border border-teal-200">
+                📍 {cityFilter}
+              </span>
+            )}
+            {country && (
+              <span class="inline-flex items-center gap-1 px-3 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-200">
+                🌏 {country}
+              </span>
+            )}
+            {checkinParam && (
+              <span class="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200">
+                📅 {checkinParam}
+              </span>
+            )}
+          </div>
+        )}
+
+        <!-- ホテルカードグリッド -->
+        <div id="hotel-grid-ja" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          {hotels.length > 0 ? (
+            hotels.map((hotel: any) => (
+              <HotelCard hotel={hotel} minPrice={hotel.min_price} locale="ja" />
+            ))
+          ) : (
+            <div class="col-span-full py-16 text-center">
+              <div class="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-6">
+                <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+              </div>
+              <h3 class="text-xl font-semibold text-slate-800 mb-2">ホテルが見つかりませんでした</h3>
+              <p class="text-gray-500 mb-8 max-w-sm mx-auto">
+                別の日程・都市・フィルター条件でお試しください。
+              </p>
+              <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                <a href="/ja/search" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-xl transition-colors">
+                  フィルターを解除
+                </a>
+                <a href="/ja/" class="px-6 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium rounded-xl transition-colors">
+                  トップに戻る
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <!-- ページネーション -->
+        {totalPages > 1 && (
+          <nav class="flex items-center justify-center gap-1 mt-8" aria-label="ページネーション">
+            {page > 1 && (
+              <a
+                href={buildUrl({ page: String(page - 1) })}
+                class="px-3 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              >
+                « 前へ
+              </a>
+            )}
+
+            {paginationItems.map(p =>
+                typeof p === 'string' ? (
+                  <span class="px-2 py-2 text-sm text-gray-400">...</span>
+                ) : (
+                  <a
+                    href={buildUrl({ page: String(p) })}
+                    class:list={[
+                      "px-3 py-2 text-sm font-medium rounded-lg border transition-colors",
+                      p === page
+                        ? "bg-teal-700 text-white border-teal-700"
+                        : "text-gray-600 bg-white border-gray-200 hover:bg-gray-50"
+                    ]}
+                  >
+                    {p}
+                  </a>
+                )
+              )
+            }
+
+            {page < totalPages && (
+              <a
+                href={buildUrl({ page: String(page + 1) })}
+                class="px-3 py-2 text-sm font-medium text-gray-600 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              >
+                次へ »
+              </a>
+            )}
+          </nav>
+        )}
+      </div>
+
+    </div>
+  </section>
+
+  <!-- モバイルフィルタートグルスクリプト -->
+  <script is:inline>
+    (function() {
+      var btn = document.getElementById('filter-toggle-btn-ja');
+      var sidebar = document.getElementById('filter-sidebar-ja');
+      var icon = document.getElementById('filter-toggle-icon-ja');
+      if (!btn || !sidebar) return;
+      btn.addEventListener('click', function() {
+        var hidden = sidebar.classList.toggle('hidden');
+        if (icon) icon.style.transform = hidden ? '' : 'rotate(180deg)';
+      });
+    })();
+  </script>
+
+  <!-- ソートスクリプト -->
+  <script is:inline>
+    (function() {
+      var sel = document.getElementById('sort-select-ja');
+      if (!sel) return;
+      sel.addEventListener('change', function() {
+        var p = new URLSearchParams(window.location.search);
+        if (sel.value === 'default') { p.delete('sort'); } else { p.set('sort', sel.value); }
+        p.delete('page');
+        window.location.href = '/ja/search?' + p.toString();
+      });
+    })();
+  </script>
+
+  <!-- 表示切替スクリプト -->
+  <script is:inline>
+    (function() {
+      var grid = document.getElementById('hotel-grid-ja');
+      var toggle = document.getElementById('view-toggle-ja');
+      if (!grid || !toggle) return;
+      toggle.querySelectorAll('button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          toggle.querySelectorAll('button').forEach(function(b) {
+            b.classList.remove('bg-white', 'shadow-sm', 'text-gray-500');
+            b.classList.add('text-gray-400');
+          });
+          btn.classList.add('bg-white', 'shadow-sm', 'text-gray-500');
+          btn.classList.remove('text-gray-400');
+          var view = btn.getAttribute('data-view');
+          grid.className = 'grid gap-5';
+          if (view === 'grid-3') { grid.classList.add('grid-cols-1', 'sm:grid-cols-2', 'xl:grid-cols-3'); }
+          else if (view === 'grid-2') { grid.classList.add('grid-cols-1', 'sm:grid-cols-2'); }
+          else { grid.classList.add('grid-cols-1'); }
+        });
+      });
+    })();
+  </script>
+
+  <!-- Flatpickr -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+  <script is:inline>
+    (function() {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+      s.onload = function() {
+        if (window.flatpickr) {
+          window.flatpickr('#search-checkin-fp-ja', {
+            dateFormat: 'Y-m-d',
+            disableMobile: true,
+            allowInput: true,
+          });
+        }
+      };
+      document.head.appendChild(s);
+    })();
+  </script>
+
+</Layout>

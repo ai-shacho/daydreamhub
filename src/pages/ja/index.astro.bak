@@ -1,0 +1,1982 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ChatWidget from '../../components/ChatWidget.astro';
+import { formatDisplayDate } from '../../lib/dateFormat';
+
+const env = (Astro.locals as any).runtime?.env;
+const DB = env?.DB;
+
+// Speciality tab filter from URL
+const activeSpeciality = Astro.url.searchParams.get('speciality') || '';
+
+// Speciality definitions
+const specialities = [
+  { value: '', label: 'すべて' },
+  { value: 'daycation', label: 'デイケーション' },
+  { value: 'for_couple', label: 'カップル向け' },
+  { value: 'for_work', label: 'ワーク' },
+  { value: 'luxury', label: 'ラグジュアリー' },
+  { value: 'personal_time', label: 'パーソナルタイム' },
+  { value: 'transit_use', label: 'トランジット' },
+  { value: 'workspace', label: 'ワークスペース' },
+];
+
+// Category sections to display
+const categoryDefs = [
+  { planType: 'daycation',    title: 'デイケーション',       subtitle: 'デイトリップ・レジャー',          icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
+  { planType: 'for_couple',   title: 'カップル向けホテル', subtitle: 'カップルに最適',           icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+  { planType: 'workspace',    title: 'ワークスペース',       subtitle: 'コワーキング・ホットデスク',  icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
+  { planType: 'transit_use',  title: 'トランジット・空港', subtitle: '乗り継ぎ・空港ホテル',   icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
+  { planType: 'personal_time',title: '休息・リラックス',    subtitle: 'ゆっくりリチャージ',           icon: 'M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z' },
+  { planType: 'luxury',       title: 'ラグジュアリー',          subtitle: 'プレミアムなデイユース体験',   icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
+  { planType: 'early_check-in', title: 'アーリーチェックイン', subtitle: '早めに到着、快適にスタート', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+];
+
+// Fetch data from DB
+let heroHotels: any[] = [];
+let categoryHotels: Record<string, any[]> = {};
+let allCities: any[] = [];
+let totalHotels = 0;
+let totalPlans = 0;
+let recentBlogs: any[] = [];
+let whatsNewItems: any[] = [];
+let mapHotels: any[] = [];
+let popularPlans: any[] = [];
+let hotelPlanTypes: Record<number, string[]> = {};
+
+try {
+  if (DB) {
+    // 全クエリを並列実行（順次awaitを廃止）
+    const heroQuery = activeSpeciality
+      ? DB.prepare(
+          `SELECT DISTINCT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+                  MIN(p.price_usd) as min_price
+           FROM hotels h
+           JOIN plans p ON p.hotel_id = h.id AND p.plan_type = ?1
+           WHERE h.status = 'active'
+           GROUP BY h.id
+           ORDER BY h.rating DESC
+           LIMIT 12`
+        ).bind(activeSpeciality).all().catch(() => ({ results: [] }))
+      : DB.prepare(
+          `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+                  MIN(p.price_usd) as min_price
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+           WHERE h.status = 'active'
+           GROUP BY h.id
+           ORDER BY h.rating DESC
+           LIMIT 12`
+        ).all().catch(() => ({ results: [] }));
+
+    const categoryQueries = categoryDefs.map(cat =>
+      DB.prepare(
+        `SELECT DISTINCT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.property_type, h.thumbnail_url, h.rating,
+                MIN(p.price_usd) as min_price
+         FROM hotels h
+         JOIN plans p ON p.hotel_id = h.id AND p.plan_type = ?1
+         WHERE h.status = 'active'
+         GROUP BY h.id
+         ORDER BY h.rating DESC
+         LIMIT 6`
+      ).bind(cat.planType).all().catch(() => ({ results: [] }))
+    );
+
+    const [heroResult, cityResult, statsH, statsP, blogResult, mapResult, ...categoryResults] =
+      await Promise.all([
+        heroQuery,
+        DB.prepare(
+          `SELECT TRIM(city) as city, TRIM(country) as country, COUNT(*) as hotel_count
+           FROM hotels WHERE city != '' AND status = 'active'
+           GROUP BY TRIM(LOWER(city)), TRIM(LOWER(country)) ORDER BY hotel_count DESC LIMIT 60`
+        ).all().catch(() => ({ results: [] })),
+        DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE status = 'active'").first().catch(() => ({ c: 0 })),
+        DB.prepare("SELECT COUNT(*) as c FROM plans WHERE status = 'active'").first().catch(() => ({ c: 0 })),
+        DB.prepare(
+          `SELECT id, title, slug, excerpt, thumbnail_url, city, published_at
+           FROM blog_posts ORDER BY published_at DESC LIMIT 3`
+        ).all().catch(() => ({ results: [] })),
+        DB.prepare(
+          `SELECT id, name, slug, city, country, latitude, longitude, thumbnail_url,
+                  MIN(p.price_usd) as min_price
+           FROM hotels h LEFT JOIN plans p ON p.hotel_id = h.id
+           WHERE h.status = 'active' AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
+           GROUP BY h.id LIMIT 100`
+        ).all().catch(() => ({ results: [] })),
+        ...categoryQueries,
+      ]);
+
+    heroHotels = heroResult?.results ?? [];
+    allCities = cityResult?.results ?? [];
+    totalHotels = statsH?.c || 0;
+    totalPlans = statsP?.c || 0;
+    recentBlogs = blogResult?.results ?? [];
+    mapHotels = mapResult?.results ?? [];
+
+    // What's New: newsテーブル + ブログを統合
+    try {
+      const newsResult = await DB.prepare(
+        "SELECT title, title_ja, content, content_ja, category, published_at FROM news WHERE published_at IS NOT NULL AND category != 'blog' ORDER BY published_at DESC LIMIT 5"
+      ).all();
+      const newsItems = (newsResult?.results || []).map((n: any) => ({
+        title: n.title_ja || n.title, content: n.content_ja || n.content, category: n.category, published_at: n.published_at, link: null,
+      }));
+      const blogNewsItems = recentBlogs.slice(0, 5).map((b: any) => ({
+        title: b.title_ja || b.title, content: b.excerpt, category: 'blog', published_at: b.published_at, link: `/blog/${b.slug}`,
+      }));
+      whatsNewItems = [...newsItems, ...blogNewsItems]
+        .sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime())
+        .slice(0, 5);
+    } catch {
+      whatsNewItems = recentBlogs.slice(0, 5).map((b: any) => ({
+        title: b.title_ja || b.title, content: b.excerpt, category: 'blog', published_at: b.published_at, link: `/blog/${b.slug}`,
+      }));
+    }
+
+    categoryDefs.forEach((cat, i) => {
+      categoryHotels[cat.planType] = categoryResults[i]?.results?.slice(0, 8) ?? [];
+    });
+  }
+} catch (e) {
+  console.error('Index DB error:', e);
+}
+
+// Popular Day-Use Plans — separate try block
+try {
+  const DB2 = (Astro.locals as any).runtime?.env?.DB;
+  if (DB2) {
+    const popularResult = await DB2.prepare(
+      `SELECT p.id as plan_id, p.name as plan_name, p.price_usd, p.check_in_time, p.check_out_time, p.plan_type,
+              h.id as hotel_id, h.name as hotel_name, h.slug, h.city, h.country, h.thumbnail_url, h.property_type
+       FROM plans p
+       JOIN hotels h ON h.id = p.hotel_id
+       WHERE h.status = 'active'
+       ORDER BY p.price_usd ASC
+       LIMIT 9`
+    ).all();
+    popularPlans = popularResult?.results ?? [];
+  }
+} catch (e2) {
+  console.error('Popular plans error:', e2);
+}
+
+// Plan types per hotel — separate try block
+try {
+  const DB3 = (Astro.locals as any).runtime?.env?.DB;
+  if (DB3 && heroHotels.length > 0) {
+    const allHotelIds = [
+      ...heroHotels.map((h: any) => h.id),
+      ...Object.values(categoryHotels).flat().map((h: any) => h.id),
+    ].filter((id, i, arr) => id != null && arr.indexOf(id) === i).slice(0, 50);
+
+    if (allHotelIds.length > 0) {
+      const placeholders = allHotelIds.map(() => '?').join(',');
+      const ptResult = await DB3.prepare(
+        `SELECT hotel_id, plan_type FROM plans WHERE hotel_id IN (${placeholders}) AND plan_type IS NOT NULL GROUP BY hotel_id, plan_type`
+      ).bind(...allHotelIds).all();
+      for (const row of ptResult?.results ?? []) {
+        if (!hotelPlanTypes[row.hotel_id]) hotelPlanTypes[row.hotel_id] = [];
+        if (row.plan_type && !hotelPlanTypes[row.hotel_id].includes(row.plan_type)) {
+          hotelPlanTypes[row.hotel_id].push(row.plan_type);
+        }
+      }
+    }
+  }
+} catch (e3) {
+  console.error('Plan types error:', e3);
+}
+
+// City images — local Wikipedia Commons photos per city
+// City images — Unsplash (free for commercial use), unique per city, no people, landmark/scenery
+const cityImages: Record<string, string> = {
+  'Abu Dhabi':            'https://images.unsplash.com/photo-1512632578888-169bbbc64f33?w=600&q=80&fm=webp',
+  'Abuja':                'https://images.unsplash.com/photo-1554457606-ed16c39db884?w=600&q=80&fm=webp', // Abuja city gate Welcome arch
+  'Abuja (F.c.t.)':       'https://images.unsplash.com/photo-1657742846794-35f1d090c054?w=600&q=80&fm=webp', // Mosque minaret FCT
+  'Agra':                 'https://images.unsplash.com/photo-1548013146-72479768bada?w=600&q=80&fm=webp',
+  'Alicante':             '/cities/alicante.jpg',
+  'Almaty':               '/cities/almaty.jpg',
+  'Amsterdam':            'https://images.unsplash.com/photo-1512470876302-972faa2aa9a4?w=600&q=80&fm=webp',
+  'Arequipa':             'https://images.unsplash.com/photo-1597910037310-77e2c7c4f8b5?w=600&q=80&fm=webp',
+  'Auckland':             'https://images.unsplash.com/photo-1507699622108-4be3abd695ad?w=600&q=80&fm=webp',
+  'Auckland Central':     'https://images.unsplash.com/photo-1507699622108-4be3abd695ad?w=600&q=80&fm=webp',
+  'Bali':                 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?w=600&q=80&fm=webp',
+  'Bang Rak':             'https://images.unsplash.com/photo-1563492065599-3520f775eeed?w=600&q=80&fm=webp',
+  'Bangkok':              'https://images.unsplash.com/photo-1563492065599-3520f775eeed?w=600&q=80&fm=webp',
+  'Barcelona':            'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?w=600&q=80&fm=webp',
+  'Batumi':               'https://images.unsplash.com/photo-1643792412669-f7900db4e0c1?w=600&q=80&fm=webp', // Batumi aerial coast Black Sea skyline
+  'Beijing':              'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?w=600&q=80&fm=webp',
+  'Belgrade':             '/cities/belgrade.jpg',
+  'Birmingham':           'https://images.unsplash.com/photo-1526129318478-62ed807ebdf9?w=600&q=80&fm=webp',
+  'Bogotá':               'https://images.unsplash.com/photo-1633624465404-166b904af53d?w=600&q=80&fm=webp', // Bogotá Monserrate cable car cityscape
+  'Busan':                'https://images.unsplash.com/photo-1578637387939-43c525550085?w=600&q=80&fm=webp',
+  'Cairo':                'https://images.unsplash.com/photo-1724921812241-6554e4703ef0?w=600&q=80&fm=webp', // Cairo colonial architecture downtown
+  'Calgary':              'https://images.unsplash.com/photo-1680488736383-6e890a804b50?w=600&q=80&fm=webp', // Calgary Tower skyline sunset
+  'California City':      '/cities/california_city.jpg',
+  'Candidasa':            '/cities/candidasa.jpg', // Bali east coast
+  'Cape Town':            'https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=600&q=80&fm=webp',
+  'Cebu':                 'https://images.unsplash.com/photo-1518509562904-e7ef99cdcc86?w=600&q=80&fm=webp',
+  'Cebu City':            'https://images.unsplash.com/photo-1581493085664-1f55f9197d5a?w=600&q=80&fm=webp',
+  'Cebu city':            'https://images.unsplash.com/photo-1581493085664-1f55f9197d5a?w=600&q=80&fm=webp',
+  'Chiang Mai':           'https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=600&q=80&fm=webp',
+  'Chicago':              'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600&q=80&fm=webp',
+  'Colombo':              'https://images.unsplash.com/photo-1700805047443-ab0ba14e0ced?w=600&q=80&fm=webp',
+  'Da Nang':              'https://images.unsplash.com/photo-1505018620898-92616e1849cc?w=600&q=80&fm=webp',
+  'Dalung':               'https://images.unsplash.com/photo-1623042392889-8073b7791004?w=600&q=80&fm=webp',
+  'Danao City':           'https://images.unsplash.com/photo-1581493085664-1f55f9197d5a?w=600&q=80&fm=webp',
+  'Denpasar':             'https://images.unsplash.com/photo-1518548419970-58e3b4079ab2?w=600&q=80&fm=webp',
+  'Dodoma':               'https://images.unsplash.com/photo-1523805009345-7448845a9e53?w=600&q=80&fm=webp',
+  'Doha':                 'https://images.unsplash.com/photo-1539020140153-e479b8f22986?w=600&q=80&fm=webp',
+  'Dubai':                'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80&fm=webp',
+  'Essex':                '/cities/essex.jpg',
+  'Fukuoka':              'https://images.unsplash.com/photo-1601823984263-b87b59798b70?w=600&q=80&fm=webp',
+  'Giza':                 'https://images.unsplash.com/photo-1541769740-098e80269166?w=600&q=80&fm=webp', // Aerial view all 3 Giza pyramids
+  'Goris':                'https://images.unsplash.com/photo-1571950266038-907c83d664ac?w=600&q=80&fm=webp', // Armenia Syunik canyon rock landscape
+  'Hanoi':                'https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=600&q=80&fm=webp',
+  'Hiroshima':            'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=600&q=80&fm=webp',
+  'Ho Chi Minh':          'https://images.unsplash.com/photo-1557750255-c76072a7aad1?w=600&q=80&fm=webp',
+  'Ho Chi Minh City':     'https://images.unsplash.com/photo-1557750255-c76072a7aad1?w=600&q=80&fm=webp',
+  'Hong Kong':            'https://images.unsplash.com/photo-1506970845246-18f21d533b20?w=600&q=80&fm=webp',
+  'Hong Kong Island':     '/cities/hong_kong_island.jpg',
+  'Islamabad':            'https://images.unsplash.com/photo-1633938312695-e7b9a9cf50c6?w=600&q=80&fm=webp',
+  'Istanbul':             'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?w=600&q=80&fm=webp',
+  'Jakarta':              'https://images.unsplash.com/photo-1555899434-94d1368aa7af?w=600&q=80&fm=webp',
+  'Kajang':               '/cities/kajang.jpg',
+  'Kano':                 'https://images.unsplash.com/photo-1572204097183-e1ab140342ed?w=600&q=80&fm=webp',
+  'Kiambu':               '/cities/kiambu.jpg',
+  'Kigali':               'https://images.unsplash.com/photo-1586861203927-800a5acdcc6d?w=600&q=80&fm=webp',
+  'Kobe':                 'https://images.unsplash.com/photo-1590422749897-47036da0b0ff?w=600&q=80&fm=webp',
+  'Koh Samui':            'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80&fm=webp',
+  'Kuala Lumpur':         'https://images.unsplash.com/photo-1596422846543-75c6fc197f07?w=600&q=80&fm=webp',
+  'Kubutambahan':         '/cities/kubutambahan.jpg',
+  'Kyoto':                'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=600&q=80&fm=webp',
+  'Lahore':               'https://images.unsplash.com/photo-1567961339741-13bfd4f71cb0?w=600&q=80&fm=webp',
+  'Lapulapu':             '/cities/lapulapu.jpg',
+  'Las Vegas':            'https://images.unsplash.com/photo-1581351721010-8cf859cb14a4?w=600&q=80&fm=webp',
+  'Lat Krabang':          '/cities/lat_krabang.jpg',
+  'Liloan':               '/cities/liloan.jpg',
+  'Loganholme':           '/cities/loganholme.jpg',
+  'Lombok':               '/cities/lombok.jpg',
+  'London':               'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600&q=80&fm=webp',
+  'Los Angeles':          'https://images.unsplash.com/photo-1534430480872-3498386e7856?w=600&q=80&fm=webp',
+  'Lovina':               '/cities/lovina.jpg',
+  'Luang Prabang':        'https://images.unsplash.com/photo-1684918169953-088fe974b398?w=600&q=80&fm=webp',
+  'Makati':               'https://images.unsplash.com/photo-1746168632944-5b1ea8140251?w=600&q=80&fm=webp',
+  'Manama':               'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=600&q=80&fm=webp',
+  'Manila':               'https://images.unsplash.com/photo-1746168632944-5b1ea8140251?w=600&q=80&fm=webp',
+  'Marrakech':            'https://images.unsplash.com/photo-1553102674-af2860e3d4ee?w=600&q=80&fm=webp',
+  'Melbourne':            'https://images.unsplash.com/photo-1514395462725-fb4566210144?w=600&q=80&fm=webp',
+  'Mesaieed':             '/cities/mesaieed.jpg',
+  'Miami':                'https://images.unsplash.com/photo-1514214246283-d427a95c5d2f?w=600&q=80&fm=webp',
+  'Nagoya':               'https://images.unsplash.com/photo-1557409518-691ebcd96038?w=600&q=80&fm=webp',
+  'Nairobi':              'https://images.unsplash.com/photo-1693902997450-7e912c0d3554?w=600&q=80&fm=webp', // Nairobi skyline KICC downtown
+  'Nara':                 '/cities/nara.jpg',
+  'New Delhi':            'https://images.unsplash.com/photo-1587474260584-136574528ed5?w=600&q=80&fm=webp',
+  'New York':             'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&q=80&fm=webp',
+  'Nonthaburi':           '/cities/nonthaburi.jpg',
+  'Ontario':              'https://images.unsplash.com/photo-1507992781348-310259076fe0?w=600&q=80&fm=webp', // Toronto CN Tower Ontario skyline
+  'Osaka':                'https://images.unsplash.com/photo-1590559899731-a382839e5549?w=600&q=80&fm=webp',
+  'Oulu':                 'https://images.unsplash.com/photo-1577102935271-2306c1bbc72b?w=600&q=80&fm=webp', // Oulu Finland winter snow landscape
+  'Padang':               '/cities/padang.jpg',
+  'Paris':                'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80&fm=webp',
+  'Perth':                'https://images.unsplash.com/photo-1524293581917-878a6d017c71?w=600&q=80&fm=webp',
+  'Petaling Jaya':        '/cities/petaling_jaya.jpg',
+  'Phnom Penh':           'https://images.unsplash.com/photo-1568895008361-1dee0e15253c?w=600&q=80&fm=webp',
+  'Phuket':               'https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?w=600&q=80&fm=webp',
+  'Pichincha':            '/cities/pichincha.jpg', // Quito Ecuador colonial old town
+  'Plaga':                '/cities/plaga.jpg',
+  'Porto':                'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=600&q=80&fm=webp',
+  'Prague':               'https://images.unsplash.com/photo-1541849546-216549ae216d?w=600&q=80&fm=webp',
+  'Quito':                'https://images.unsplash.com/photo-1597546122016-2afe18dabb3e?w=600&q=80&fm=webp',
+  'Rijswijk':             '/cities/rijswijk.jpg',
+  'Riyadh':               'https://images.unsplash.com/photo-1591604466107-ec97de577aff?w=600&q=80&fm=webp',
+  'Rome':                 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=600&q=80&fm=webp',
+  'Russia':               'https://images.unsplash.com/photo-1513326738677-b964603b136d?w=600&q=80&fm=webp',
+  'Saint Petersburg':     'https://images.unsplash.com/photo-1548834925-e48f8a27b6b7?w=600&q=80&fm=webp',
+  'Salalah':              '/cities/salalah.jpg',
+  'Samarkand':            'https://images.unsplash.com/photo-1604580864964-0462f5d5b1a8?w=600&q=80&fm=webp',
+  'San Francisco':        'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?w=600&q=80&fm=webp',
+  'Sapporo':              '/cities/sapporo.jpg',
+  'Sathon':               '/cities/sathon.jpg',
+  'Seal Beach':           '/cities/seal_beach.jpg',
+  'Seminyak':             '/cities/seminyak.jpg',
+  'Seoul':                'https://images.unsplash.com/photo-1538485399081-7191377e8241?w=600&q=80&fm=webp',
+  'Shanghai':             'https://images.unsplash.com/photo-1548919973-5cef591cdbc9?w=600&q=80&fm=webp',
+  'Sharjah':              '/cities/sharjah.jpg',
+  'Shibuya':              'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=600&q=80&fm=webp',
+  'Siem Reap':            'https://images.unsplash.com/photo-1508159452718-d22f6734a236?w=600&q=80&fm=webp',
+  'Singapore':            'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?w=600&q=80&fm=webp',
+  'Sofia':                '/cities/sofia.jpg',
+  'Sukhumvit':            '/cities/sukhumvit.jpg',
+  'Sydney':               'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=600&q=80&fm=webp',
+  'Taipei':               'https://images.unsplash.com/photo-1470004914212-05527e49370b?w=600&q=80&fm=webp',
+  'Tashkent':             'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=600&q=80&fm=webp',
+  'Tbilisi':              'https://images.unsplash.com/photo-1760566817890-84ef17f3c4e8?w=600&q=80&fm=webp', // Tbilisi Old Town Metekhi Mother of Georgia
+  'Thimphu':              'https://images.unsplash.com/photo-1589656966895-2f33e7653819?w=600&q=80&fm=webp',
+  'Tijuana':              '/cities/tijuana.jpg',
+  'Tokyo':                '/cities/tokyo.jpg',
+  'Toronto':              'https://images.unsplash.com/photo-1517090504586-fde19ea6066f?w=600&q=80&fm=webp',
+  'Toulouse':             '/cities/toulouse.jpg',
+  'Ubud':                 'https://images.unsplash.com/photo-1555400038-63f5ba517a47?w=600&q=80&fm=webp',
+  'Ulaanbaatar':          'https://images.unsplash.com/photo-1600176209323-879e2565a763?w=600&q=80&fm=webp',
+  'Valencia':             '/cities/valencia.jpg',
+  'Vancouver':            'https://images.unsplash.com/photo-1519832979-6fa011b87667?w=600&q=80&fm=webp',
+  'Venice':               'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=600&q=80&fm=webp',
+  'Vienna':               'https://images.unsplash.com/photo-1516550893923-42d28e5677af?w=600&q=80&fm=webp',
+  'Vientiane':            '/cities/vientiane.jpg',
+  'Yakkasaray':           '/cities/yakkasaray.jpg',
+  'Yau Tsim Mong District': '/cities/yau_tsim_mong_district.jpg',
+  'Yerevan':              'https://images.unsplash.com/photo-1589656966895-2f33e7653819?w=600&q=80&fm=webp',
+  'Yokohama':             '/cities/yokohama.jpg',
+  'sofia':                '/cities/sofia.jpg',
+};
+
+function getHotelImage(hotel: any): string {
+  if (hotel.thumbnail_url) return hotel.thumbnail_url;
+  return 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80&fm=webp';
+}
+
+function getHotelName(hotel: any): string {
+  return hotel.name_ja || hotel.name;
+}
+
+function getCityImage(city: string): string {
+  if (cityImages[city]) return cityImages[city];
+  // fallback
+  const safe = city.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  return `/cities/${safe}.jpg`;
+}
+
+// Speciality card data for "タイプで探す" section
+const specialityCards = [
+  { value: 'daycation',    label: 'デイケーション',     desc: 'デイトリップ・体験',    img: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'for_couple',   label: 'カップル向け',    desc: 'ロマンチックな時間',           img: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'for_work',     label: 'ワーク',      desc: 'リモートワークスペース',          img: 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'luxury',       label: 'ラグジュアリー',        desc: 'プレミアム体験',         img: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'personal_time',label: 'パーソナルタイム', desc: '休息・リラックス',           img: 'https://images.unsplash.com/photo-1540518614846-7eded433c457?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'transit_use',  label: 'トランジット',   desc: '空港・乗り継ぎ滞在',     img: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=600&h=400&fit=crop&fm=webp' },
+  { value: 'workspace',    label: 'ワークスペース',     desc: 'コワーキング・会議室',   img: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=600&h=400&fit=crop&fm=webp' },
+];
+
+// Room types for "施設タイプで探す"
+const roomTypes = [
+  { label: 'ホテル', value: 'Hotel', img: 'photo-1566073771259-6a8506099945' },
+  { label: 'ヴィラ', value: 'Villa', img: 'photo-1600596542815-ffad4c1539a9' },
+  { label: 'リゾート', value: 'Resort', img: 'photo-1520250497591-112f2f40a3f4' },
+  { label: 'アパート', value: 'Apartment', img: 'photo-1522708323590-d24dbb6b0267' },
+  { label: 'クリニック', value: 'Clinic', img: 'photo-1519494026892-80bbd2d6fd0d' },
+  { label: 'スパ', value: 'Spa', img: 'photo-1544161515-4ab6ce6db874' },
+  { label: 'ウェルネス', value: 'Wellness', img: 'photo-1506126613408-eca07ce68773' },
+  { label: 'コワーキング', value: 'Coworking Space', img: 'photo-1497366216548-37526070297c' },
+  { label: 'カフェ＆ラウンジ', value: 'Cafe & Lounge', img: 'photo-1501339847302-ac426a4a7cbb' },
+  { label: 'ホステル', value: 'Hostel', img: 'photo-1555854877-bab0e564b8d5' },
+];
+
+// Region mapping (country → region) — Japanese region names
+const countryRegion: Record<string, string> = {
+  // Asia
+  'Thailand': 'アジア', 'Japan': 'アジア', 'Indonesia': 'アジア', 'Malaysia': 'アジア',
+  'Singapore': 'アジア', 'Vietnam': 'アジア', 'Philippines': 'アジア', 'Cambodia': 'アジア',
+  'Myanmar': 'アジア', 'Laos': 'アジア', 'South Korea': 'アジア', 'China': 'アジア',
+  'Hong Kong': 'アジア', 'Taiwan': 'アジア', 'Sri Lanka': 'アジア', 'Nepal': 'アジア',
+  'Bangladesh': 'アジア', 'India': 'アジア', 'Maldives': 'アジア',
+  // Middle East
+  'UAE': '中東', 'Qatar': '中東', 'Bahrain': '中東',
+  'Saudi Arabia': '中東', 'Kuwait': '中東', 'Oman': '中東',
+  'Jordan': '中東', 'Lebanon': '中東', 'Israel': '中東',
+  'Turkey': '中東', 'Iran': '中東', 'Iraq': '中東',
+  // Europe
+  'United Kingdom': 'ヨーロッパ', 'Germany': 'ヨーロッパ', 'France': 'ヨーロッパ',
+  'Netherlands': 'ヨーロッパ', 'Spain': 'ヨーロッパ', 'Italy': 'ヨーロッパ', 'Portugal': 'ヨーロッパ',
+  'Belgium': 'ヨーロッパ', 'Switzerland': 'ヨーロッパ', 'Austria': 'ヨーロッパ',
+  'Sweden': 'ヨーロッパ', 'Norway': 'ヨーロッパ', 'Denmark': 'ヨーロッパ', 'Finland': 'ヨーロッパ',
+  'Poland': 'ヨーロッパ', 'Czech Republic': 'ヨーロッパ', 'Hungary': 'ヨーロッパ',
+  'Romania': 'ヨーロッパ', 'Bulgaria': 'ヨーロッパ', 'Serbia': 'ヨーロッパ', 'Croatia': 'ヨーロッパ',
+  'Georgia': 'ヨーロッパ', 'Ukraine': 'ヨーロッパ', 'Russia': 'ヨーロッパ',
+  // Africa
+  'Nigeria': 'アフリカ', 'Kenya': 'アフリカ', 'Ghana': 'アフリカ', 'South Africa': 'アフリカ',
+  'Tanzania': 'アフリカ', 'Ethiopia': 'アフリカ', 'Uganda': 'アフリカ', 'Rwanda': 'アフリカ',
+  'Senegal': 'アフリカ', 'Egypt': 'アフリカ', 'Morocco': 'アフリカ', 'Tunisia': 'アフリカ',
+  // Oceania
+  'Australia': 'オセアニア', 'New Zealand': 'オセアニア', 'Fiji': 'オセアニア',
+  // Americas
+  'United States': '南北米', 'Canada': '南北米', 'Mexico': '南北米',
+  'Brazil': '南北米', 'Argentina': '南北米', 'Colombia': '南北米',
+  // Central Asia → Asia
+  'Uzbekistan': 'アジア', 'Kazakhstan': 'アジア', 'Kyrgyzstan': 'アジア',
+  'Tajikistan': 'アジア', 'Turkmenistan': 'アジア', 'Afghanistan': 'アジア',
+  'Mongolia': 'アジア',
+  // South Asia → Asia
+  'Pakistan': 'アジア', 'Bhutan': 'アジア',
+  // Country abbreviations
+  'UK': 'ヨーロッパ', 'USA': '南北米', 'US': '南北米',
+  // Europe (additional)
+  'Armenia': 'ヨーロッパ', 'Azerbaijan': 'ヨーロッパ', 'Albania': 'ヨーロッパ',
+  'Bosnia and Herzegovina': 'ヨーロッパ', 'North Macedonia': 'ヨーロッパ',
+  'Moldova': 'ヨーロッパ', 'Belarus': 'ヨーロッパ', 'Estonia': 'ヨーロッパ',
+  'Latvia': 'ヨーロッパ', 'Lithuania': 'ヨーロッパ', 'Slovenia': 'ヨーロッパ',
+  'Slovakia': 'ヨーロッパ', 'Luxembourg': 'ヨーロッパ', 'Malta': 'ヨーロッパ',
+  'Iceland': 'ヨーロッパ', 'Ireland': 'ヨーロッパ', 'Greece': 'ヨーロッパ',
+  // Americas (additional)
+  'Ecuador': '南北米', 'Peru': '南北米', 'Chile': '南北米',
+  'Bolivia': '南北米', 'Venezuela': '南北米', 'Uruguay': '南北米',
+  'Paraguay': '南北米', 'Panama': '南北米', 'Costa Rica': '南北米',
+  'Guatemala': '南北米', 'Honduras': '南北米', 'El Salvador': '南北米',
+  'Nicaragua': '南北米', 'Cuba': '南北米', 'Jamaica': '南北米',
+  'Dominican Republic': '南北米', 'Trinidad and Tobago': '南北米',
+};
+
+const regionOrder = ['アジア', '中東', 'ヨーロッパ', 'アフリカ', 'オセアニア', '南北米'];
+
+// City-level overrides for edge cases
+const cityRegionOverride: Record<string, string> = {
+  'Goris': 'ヨーロッパ', // Armenia
+  'Bang Rak': 'アジア', // Bangkok district
+};
+
+// City name aliases: merge these cities into a canonical name
+const cityAliases: Record<string, string> = {
+  'Auckland Central': 'Auckland',
+  'Abuja (F.c.t.)': 'Abuja',
+  'Bang Rak': 'Bangkok',
+  'Candidasa': 'Bali',
+  'Kubutambahan': 'Bali',
+  'Cebu City': 'Cebu',
+  'Cebu city': 'Cebu',
+};
+
+// Japanese city name mapping
+const cityNameJa: Record<string, string> = {
+  'Agra': 'アグラ', 'Bali': 'バリ', 'Ubud': 'ウブド', 'Jakarta': 'ジャカルタ',
+  'Dalung': 'ダルン', 'Denpasar': 'デンパサール', 'Tokyo': '東京', 'Kyoto': '京都',
+  'Almaty': 'アルマトイ', 'Vientiane': 'ビエンチャン', 'Luang Prabang': 'ルアンパバーン',
+  'Kuala Lumpur': 'クアラルンプール', 'Ulaanbaatar': 'ウランバートル',
+  'Islamabad': 'イスラマバード', 'Cebu': 'セブ', 'Manila': 'マニラ',
+  'Danao City': 'ダナオ', 'Colombo': 'コロンボ', 'Bangkok': 'バンコク',
+  'Koh Samui': 'コサムイ', 'Phuket': 'プーケット', 'Tashkent': 'タシケント',
+  'Samarkand': 'サマルカンド', 'Hanoi': 'ハノイ', 'Da Nang': 'ダナン',
+  'Ho Chi Minh City': 'ホーチミン', 'Osaka': '大阪', 'Siem Reap': 'シェムリアップ',
+  'Phnom Penh': 'プノンペン', 'Singapore': 'シンガポール', 'Seoul': 'ソウル',
+  'Busan': 'プサン', 'Taipei': '台北', 'Hong Kong': '香港', 'Macau': 'マカオ',
+  'Delhi': 'デリー', 'Mumbai': 'ムンバイ', 'Jaipur': 'ジャイプール',
+  'Kathmandu': 'カトマンズ', 'Yangon': 'ヤンゴン', 'Chiang Mai': 'チェンマイ',
+  'Pattaya': 'パタヤ', 'Doha': 'ドーハ', 'Dubai': 'ドバイ', 'Abu Dhabi': 'アブダビ',
+  'Tbilisi': 'トビリシ', 'Yerevan': 'エレバン', 'Nairobi': 'ナイロビ',
+  'Cairo': 'カイロ', 'Istanbul': 'イスタンブール', 'Prague': 'プラハ',
+  'Sofia': 'ソフィア', 'London': 'ロンドン', 'Paris': 'パリ', 'Rome': 'ローマ',
+  'Barcelona': 'バルセロナ', 'Amsterdam': 'アムステルダム', 'Berlin': 'ベルリン',
+  'Auckland': 'オークランド', 'Sydney': 'シドニー', 'Melbourne': 'メルボルン',
+  'Quito': 'キト', 'Lima': 'リマ', 'Bogota': 'ボゴタ',
+  'Seminyak': 'スミニャック', 'Sanur': 'サヌール', 'Nusa Dua': 'ヌサドゥア',
+  'Sharjah': 'シャルジャ', 'Bahrain': 'バーレーン', 'Muscat': 'マスカット',
+  'Lahore': 'ラホール', 'Colombo': 'コロンボ',
+};
+function getCityNameJa(name: string): string { return cityNameJa[name] || name; }
+
+// Japanese country name mapping
+const countryNameJa: Record<string, string> = {
+  'India': 'インド', 'Indonesia': 'インドネシア', 'Japan': '日本', 'Kazakhstan': 'カザフスタン',
+  'Laos': 'ラオス', 'Malaysia': 'マレーシア', 'Mongolia': 'モンゴル', 'Pakistan': 'パキスタン',
+  'Philippines': 'フィリピン', 'Sri Lanka': 'スリランカ', 'Thailand': 'タイ',
+  'Uzbekistan': 'ウズベキスタン', 'Vietnam': 'ベトナム', 'Cambodia': 'カンボジア',
+  'Singapore': 'シンガポール', 'South Korea': '韓国', 'Taiwan': '台湾', 'China': '中国',
+  'Nepal': 'ネパール', 'Myanmar': 'ミャンマー', 'Qatar': 'カタール', 'UAE': 'アラブ首長国連邦',
+  'United Arab Emirates': 'アラブ首長国連邦', 'Georgia': 'ジョージア', 'Armenia': 'アルメニア',
+  'Kenya': 'ケニア', 'Egypt': 'エジプト', 'Turkey': 'トルコ', 'Czech Republic': 'チェコ',
+  'Czechia': 'チェコ', 'Bulgaria': 'ブルガリア', 'United Kingdom': 'イギリス', 'France': 'フランス',
+  'Italy': 'イタリア', 'Spain': 'スペイン', 'Netherlands': 'オランダ', 'Germany': 'ドイツ',
+  'New Zealand': 'ニュージーランド', 'Australia': 'オーストラリア',
+  'Ecuador': 'エクアドル', 'Peru': 'ペルー', 'Colombia': 'コロンビア',
+  'Bahrain': 'バーレーン', 'Iceland': 'アイスランド', 'Tanzania': 'タンザニア',
+  'South Africa': '南アフリカ', 'Nigeria': 'ナイジェリア', 'Bhutan': 'ブータン',
+  'Bangladesh': 'バングラデシュ', 'Russia': 'ロシア',
+};
+function getCountryNameJa(name: string): string { return countryNameJa[name] || name; }
+
+// Apply aliases and merge hotel counts
+const cityMap: Record<string, any> = {};
+for (const city of allCities) {
+  const canonicalName = cityAliases[city.city] || city.city;
+  const normalizedCountry = (city.country || '').toLowerCase();
+  const key = `${canonicalName}__${normalizedCountry}`;
+  if (cityMap[key]) {
+    cityMap[key].hotel_count = (cityMap[key].hotel_count || 0) + (city.hotel_count || 0);
+  } else {
+    cityMap[key] = { ...city, city: canonicalName };
+  }
+}
+const mergedCities = Object.values(cityMap);
+
+// Normalize country lookup (case-insensitive)
+function getRegionForCountry(country: string): string | undefined {
+  if (!country) return undefined;
+  if (countryRegion[country]) return countryRegion[country];
+  const titled = country.charAt(0).toUpperCase() + country.slice(1).toLowerCase();
+  if (countryRegion[titled]) return countryRegion[titled];
+  const lower = country.toLowerCase();
+  for (const [key, val] of Object.entries(countryRegion)) {
+    if (key.toLowerCase() === lower) return val;
+  }
+  return undefined;
+}
+
+// Group cities by region
+const citiesByRegion: Record<string, any[]> = {};
+for (const city of mergedCities) {
+  let region = cityRegionOverride[city.city] || getRegionForCountry(city.country);
+  if (!region) {
+    for (const [country, r] of Object.entries(countryRegion)) {
+      if (city.city?.includes(country) || city.country?.includes(country)) {
+        region = r;
+        break;
+      }
+    }
+  }
+  region = region || 'その他';
+  if (!citiesByRegion[region]) citiesByRegion[region] = [];
+  citiesByRegion[region].push(city);
+}
+// Sort each region's cities
+for (const region of Object.keys(citiesByRegion)) {
+  citiesByRegion[region].sort((a: any, b: any) => {
+    const cmp = (a.country || '').localeCompare(b.country || '');
+    if (cmp !== 0) return cmp;
+    return b.hotel_count - a.hotel_count;
+  });
+}
+const availableRegions = regionOrder.filter(r => citiesByRegion[r]?.length > 0);
+// 'その他' は表示しない
+
+// Pre-compute city data with images for JS dynamic rendering (non-default tabs)
+const citiesDataForJS: Record<string, Array<{city: string; country: string; hotel_count: number; image: string; href: string}>> = {};
+for (const [region, cities] of Object.entries(citiesByRegion)) {
+  citiesDataForJS[region] = (cities as any[]).map((city) => ({
+    city: getCityNameJa(city.city),
+    country: getCountryNameJa(city.country),
+    hotel_count: city.hotel_count,
+    image: getCityImage(city.city),
+    href: `/ja/search?city=${encodeURIComponent(city.city)}`
+  }));
+}
+
+// Unique city count
+const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85;
+---
+
+<Layout title={`DayDreamHub - 時間単位でホテルを。世界${uniqueCityCount}都市以上。`} description="時間単位・日帰り利用のホテル予約プラットフォーム。世界中のデイユースホテルを今すぐ検索。">
+  <link slot="head" rel="preload" as="image" href="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80&fm=webp" fetchpriority="high" />
+
+  <!-- Hero Section -->
+  <section class="relative min-h-[600px] md:min-h-[700px] flex items-center overflow-hidden">
+    <div id="hero-slide-0" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-100" style="background-image:url('https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1600&q=80&fm=webp')"></div>
+    <div id="hero-slide-1" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" data-bg="https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=1600&q=80&fm=webp"></div>
+    <div id="hero-slide-2" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" data-bg="https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=1600&q=80&fm=webp"></div>
+    <div class="absolute inset-0 bg-teal-900/80"></div>
+
+    <div class="relative z-10 max-w-7xl mx-auto px-4 py-16 w-full">
+      <div class="text-center text-white mb-8">
+        <h1 class="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4">時間単位でホテルを。世界{uniqueCityCount}都市以上。</h1>
+        <p class="text-lg md:text-xl text-teal-100 max-w-3xl mx-auto mb-6">デイユースホテル予約のグローバルプラットフォーム — 仕事・休息・トランジットに最適なプランを。</p>
+        <div class="flex flex-wrap justify-center gap-3 mb-8">
+          <span class="bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full">1時間〜利用可能</span>
+          <span class="bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full">宿泊費の半額以下</span>
+          <span class="bg-white/15 backdrop-blur-sm border border-white/20 text-white text-sm font-medium px-4 py-1.5 rounded-full">AI即時検索</span>
+        </div>
+      </div>
+
+      <!-- AI Chat Box -->
+      <div class="max-w-4xl mx-auto mb-4" id="ai-chat-wrapper">
+        <!-- AI Messages (hidden until chat starts) -->
+        <div id="hero-chat-messages" class="hidden bg-gray-900/75 backdrop-blur-sm border border-white/20 rounded-xl p-4 mb-3 space-y-3 max-h-[380px] overflow-y-auto">
+          <!-- messages injected here -->
+        </div>
+
+        <!-- AI Input Row -->
+        <p class="text-white font-semibold text-sm mb-2 pl-1 flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+          💬 AIコンシェルジュ — 都市名・空港名を入力してください
+        </p>
+        <div class="bg-white border border-amber-400/60 shadow-lg shadow-amber-500/20 rounded-xl p-3 flex items-center gap-2 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/40 transition-all">
+          <!-- Upload flight photo -->
+          <label for="hero-flight-upload" class="flex-shrink-0 cursor-pointer text-gray-400 hover:text-amber-500 transition-colors p-1.5 rounded-lg hover:bg-amber-50" title="フライト写真をアップロード">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <input type="file" id="hero-flight-upload" accept="image/*" class="hidden" />
+          </label>
+
+          <!-- Upload status -->
+          <span id="hero-upload-status" class="hidden text-xs text-amber-500 flex-shrink-0">アップロード中...</span>
+          <span id="hero-upload-name" class="hidden text-xs text-teal-600 flex-shrink-0 max-w-[80px] truncate"></span>
+
+          <!-- Text input -->
+          <input
+            type="text"
+            id="hero-chat-input"
+            placeholder="例: 東京、バンコク、Dubai、Singapore..."
+            class="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm focus:outline-none font-medium"
+            maxlength="300"
+          />
+
+          <!-- Send button -->
+          <button
+            id="hero-chat-send"
+            class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white font-bold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+            </svg>
+            送信
+          </button>
+        </div>
+      </div>
+
+      <!-- Search Form -->
+      <div class="max-w-4xl mx-auto">
+        <form action="/ja/search" method="get" class="bg-white/95 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
+          <!-- Row 1: Location, Date, Check-in time, Check-out time -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div class="relative col-span-2 md:col-span-1" id="location-wrapper">
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">エリア</label>
+              <input type="text" name="location" id="location-input" placeholder="都市・空港名..." autocomplete="off"
+                class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              <ul id="location-suggestions"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm">
+              </ul>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">日付</label>
+              <input type="text" name="checkin" id="checkin-fp" placeholder="YYYY-MM-DD" autocomplete="off" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">チェックイン</label>
+              <select name="checkin_time" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                {['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'].map(t => (
+                  <option value={t} selected={t === '10:00'}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">チェックアウト</label>
+              <select name="checkout_time" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                {['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'].map(t => (
+                  <option value={t} selected={t === '18:00'}>{t}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">タイプ</label>
+              <select name="speciality" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="">すべて</option>
+                {specialities.filter(s => s.value).map(s => (
+                  <option value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">人数</label>
+              <select name="guests" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                {[1, 2, 3, 4, 5].map(n => (
+                  <option value={n}>{n === 5 ? '5名以上' : n + '名'}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-gray-600 mb-1 font-semibold">予算</label>
+              <select name="budget" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="">指定なし</option>
+                <option value="budget">格安（$30以下）</option>
+                <option value="mid">スタンダード（$30〜$100）</option>
+                <option value="premium">プレミアム（$100以上）</option>
+              </select>
+            </div>
+            <div class="flex items-end">
+              <!-- Split button: Ask AI | Search -->
+              <div class="flex w-full rounded-lg overflow-hidden shadow-sm text-sm font-semibold">
+                <button type="button" id="mode-ai" onclick="window._heroAskAI()"
+                  class="flex-1 py-2.5 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-gray-900 transition-colors border-r border-amber-600">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                  AIに聞く
+                </button>
+                <button type="button" id="mode-search" onclick="window._heroNormalSearch()"
+                  class="flex-1 py-2.5 flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                  検索
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Airport Shortcuts -->
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <span class="text-white font-semibold text-xs">✈️ 現在地：</span>
+          {[
+            { label: 'ドバイ(DXB)', city: 'Dubai', airport: 'ドバイ国際空港近くのデイユースホテルを教えてください' },
+            { label: 'バンコク(BKK)', city: 'Bangkok', airport: 'スワンナプーム空港近くのデイユースホテルを教えてください' },
+            { label: 'クアラルンプール(KUL)', city: 'Kuala Lumpur', airport: 'クアラルンプール国際空港近くのデイユースホテルを教えてください' },
+            { label: 'ナイロビ(NBO)', city: 'Nairobi', airport: 'ジョモ・ケニヤッタ空港近くのデイユースホテルを教えてください' },
+            { label: 'ドーハ(DOH)', city: 'Doha', airport: 'ハマド国際空港近くのデイユースホテルを教えてください' },
+            { label: 'バーミンガム(BHX)', city: 'Birmingham', airport: 'バーミンガム空港近くのデイユースホテルを教えてください' },
+          ].map(airport => (
+            <button
+              type="button"
+              data-airport={airport.airport}
+              class="text-xs text-white/80 hover:text-white border border-white/30 hover:border-white/60 rounded-full px-3 py-1 transition-colors bg-white/10 hover:bg-white/20">
+              {airport.label}
+            </button>
+          ))}
+        </div>
+
+        <!-- Stats inline -->
+        <div class="flex items-center justify-center gap-8 mt-5 text-white/80 text-base md:text-lg">
+          <span><strong class="text-white font-extrabold text-2xl md:text-3xl">{totalHotels || '350'}+</strong> デイユースホテル</span>
+          <span class="text-white/40 text-xl">|</span>
+          <span><strong class="text-white font-extrabold text-2xl md:text-3xl">{uniqueCityCount}+</strong> 都市</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Search by City (Region tabs) -->
+  <section class="py-12 bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4">
+      <h2 class="text-2xl font-bold text-gray-800 mb-2">都市で探す</h2>
+      <p class="text-sm text-gray-500 mb-6">人気のデスティネーションでデイユースホテルを探す</p>
+
+      <!-- Region tabs -->
+      <div class="flex flex-wrap gap-2 mb-6" id="region-tabs">
+        {availableRegions.map((region, i) => (
+          <button
+            data-region={region}
+            class={`region-tab px-4 py-2 rounded-full text-sm font-medium border transition-colors ${i === 0 ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-300 hover:border-teal-400 hover:text-teal-600'}`}
+          >
+            {region} <span class="opacity-70">({citiesByRegion[region]?.length})</span>
+          </button>
+        ))}
+      </div>
+
+      <!-- City grids per region — default tab SSR only, others rendered dynamically by JS -->
+      <div id="region-panels-container">
+        <div data-region-panel={availableRegions[0]}>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+            {citiesByRegion[availableRegions[0]].map((city: any) => (
+              <a href={`/ja/search?city=${encodeURIComponent(city.city)}`} class="group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow">
+                <img src={getCityImage(city.city)} alt={city.city} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                <div class="absolute bottom-0 left-0 right-0 p-3">
+                  <h3 class="text-white font-semibold text-sm">{getCityNameJa(city.city)}</h3>
+                  <p class="text-white/60 text-xs">{getCountryNameJa(city.country)}</p>
+                  <p class="text-white/70 text-xs">{city.hotel_count}件</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+      <script define:vars={{ citiesDataForJS, defaultRegion: availableRegions[0] }}>
+        window.__CITIES_DATA__ = citiesDataForJS;
+        window.__DEFAULT_REGION__ = defaultRegion;
+      </script>
+    </div>
+  </section>
+
+  <!-- Browse by Speciality -->
+  <section class="py-10 bg-white">
+    <div class="max-w-7xl mx-auto px-4">
+      <h2 class="text-2xl font-bold text-gray-800 mb-2">タイプで探す</h2>
+      <p class="text-sm text-gray-500 mb-6">理想の滞在スタイルを選ぶ</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {specialityCards.map(s => (
+          <a href={`/ja/search?speciality=${s.value}`}
+            class="group relative rounded-2xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow">
+            <img src={s.img} alt={s.label}
+              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-0 left-0 right-0 p-4">
+              <p class="font-bold text-white text-sm leading-tight">{s.label}</p>
+              <p class="text-xs text-white/80 mt-0.5">{s.desc}</p>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <script is:inline>
+    document.querySelectorAll('.region-tab').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var region = btn.getAttribute('data-region');
+        var container = document.getElementById('region-panels-container');
+
+        // Create panel on demand if not yet rendered
+        var existingPanel = container.querySelector('[data-region-panel="' + region + '"]');
+        if (!existingPanel) {
+          var cities = (window.__CITIES_DATA__ || {})[region] || [];
+          var panel = document.createElement('div');
+          panel.setAttribute('data-region-panel', region);
+          var grid = document.createElement('div');
+          grid.className = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4';
+          cities.forEach(function(city) {
+            var a = document.createElement('a');
+            a.href = city.href;
+            a.className = 'group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow';
+            a.innerHTML =
+              '<img src="' + city.image + '" alt="' + city.city.replace(/"/g, '&quot;') + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
+              '<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>' +
+              '<div class="absolute bottom-0 left-0 right-0 p-3">' +
+                '<h3 class="text-white font-semibold text-sm">' + city.city.replace(/</g, '&lt;') + '</h3>' +
+                '<p class="text-white/60 text-xs">' + city.country.replace(/</g, '&lt;') + '</p>' +
+                '<p class="text-white/70 text-xs">' + city.hotel_count + '件</p>' +
+              '</div>';
+            grid.appendChild(a);
+          });
+          panel.appendChild(grid);
+          container.appendChild(panel);
+          existingPanel = panel;
+        }
+
+        // Show this panel, hide others
+        container.querySelectorAll('[data-region-panel]').forEach(function(p) {
+          p.classList.toggle('hidden', p.getAttribute('data-region-panel') !== region);
+        });
+
+        // Switch tab styles
+        document.querySelectorAll('.region-tab').forEach(function(t) {
+          t.classList.remove('bg-teal-600', 'text-white', 'border-teal-600');
+          t.classList.add('bg-white', 'text-gray-600', 'border-gray-300', 'hover:border-teal-400', 'hover:text-teal-600');
+        });
+        btn.classList.remove('bg-white', 'text-gray-600', 'border-gray-300', 'hover:border-teal-400', 'hover:text-teal-600');
+        btn.classList.add('bg-teal-600', 'text-white', 'border-teal-600');
+      });
+    });
+  </script>
+
+  <!-- Search by Room Type -->
+  <section class="py-12 bg-white">
+    <div class="max-w-7xl mx-auto px-4">
+      <h2 class="text-2xl font-bold text-gray-800 mb-2">施設タイプで探す</h2>
+      <p class="text-sm text-gray-500 mb-6">理想の宿泊スタイルを見つけよう</p>
+
+      <div class="flex flex-wrap justify-center gap-4">
+        {roomTypes.map(rt => (
+          <a href={`/ja/search?propertyType=${encodeURIComponent(rt.value)}`} class="group relative rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow w-[calc(50%-0.5rem)] sm:w-[calc(33.333%-0.75rem)] lg:w-[calc(20%-0.8rem)]" style="aspect-ratio:1">
+            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80&fm=webp`} alt={rt.label} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            <div class="absolute bottom-0 left-0 right-0 p-3 text-center">
+              <h3 class="text-white font-semibold text-sm">{rt.label}</h3>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Blog -->
+  <section class="py-12 bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-gray-800 mb-1">ブログ</h2>
+          <p class="text-sm text-gray-500">旅行のヒント、都市ガイド、デイユースホテルの情報</p>
+        </div>
+        <a href="/ja/blog" class="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1">
+          もっと見る
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+
+      {recentBlogs.length > 0 ? (
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {recentBlogs.map((post: any) => (
+            <a href={`/ja/blog/${post.slug}`} class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100">
+              <div class="aspect-[16/9] overflow-hidden bg-gray-100">
+                {post.thumbnail_url ? (
+                  <img src={post.thumbnail_url} alt={post.title} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                ) : (
+                  <div class="w-full h-full bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center">
+                    <svg class="w-12 h-12 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
+                  </div>
+                )}
+              </div>
+              <div class="p-4">
+                <div class="flex items-center justify-between mb-1">
+                  {post.city && <span class="text-xs text-teal-600 font-medium">{post.city}</span>}
+                  {post.published_at && (
+                    <span class="text-xs text-gray-400">
+                      {formatDisplayDate(post.published_at)}
+                    </span>
+                  )}
+                </div>
+                <h3 class="font-semibold text-gray-800 text-sm leading-snug line-clamp-2 group-hover:text-teal-700 transition-colors">{post.title}</h3>
+                {post.excerpt && <p class="text-xs text-gray-500 mt-2 line-clamp-2">{post.excerpt}</p>}
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-12 text-gray-400">
+          <p>ブログ記事を準備中です</p>
+        </div>
+      )}
+    </div>
+  </section>
+
+  <!-- What's New -->
+  {whatsNewItems.length > 0 && (
+    <section class="py-10 bg-white border-t border-gray-100">
+      <div class="max-w-3xl mx-auto px-4">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-800">最新情報</h2>
+            <p class="text-sm text-gray-500 mt-1">DayDreamHubの最新のお知らせ、更新情報をお届けします。</p>
+          </div>
+          <a href="/ja/news" class="text-teal-600 hover:text-teal-700 text-sm font-medium flex items-center gap-1">
+            もっと見る →
+          </a>
+        </div>
+        <div class="space-y-4">
+          {whatsNewItems.map((item: any) => (
+            <article class="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow">
+              <div class="flex items-center gap-3 mb-2">
+                <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                  item.category === 'blog' ? 'bg-teal-100 text-teal-700' :
+                  item.category === 'update' ? 'bg-blue-100 text-blue-700' :
+                  item.category === 'feature' ? 'bg-purple-100 text-purple-700' :
+                  item.category === 'policy' ? 'bg-amber-100 text-amber-700' :
+                  'bg-slate-100 text-slate-600'
+                }`}>{
+                  item.category === 'blog' ? 'ブログ' :
+                  item.category === 'update' ? 'お知らせ' :
+                  item.category === 'feature' ? '新機能' :
+                  item.category === 'policy' ? '規約更新' :
+                  item.category === 'maintenance' ? 'メンテナンス' :
+                  item.category
+                }</span>
+                <time class="text-xs text-gray-400">
+                  {formatDisplayDate(item.published_at)}
+                </time>
+              </div>
+              {item.link ? (
+                <a href={item.link} class="text-base font-semibold text-gray-900 hover:text-cyan-600 transition-colors">{item.title}</a>
+              ) : (
+                <h3 class="text-base font-semibold text-gray-900">{item.title}</h3>
+              )}
+              {item.content && (
+                <p class="text-sm text-gray-600 mt-1 line-clamp-2">{item.content}</p>
+              )}
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- Map Script (Leaflet) -->
+  <script is:inline>
+    (function() {
+      function initMap() {
+        var mapEl = document.getElementById('homepage-map');
+        if (!mapEl) return;
+
+        var hotelsEl = document.getElementById('map-hotels-data');
+        var hotels = [];
+        try { hotels = JSON.parse(hotelsEl ? hotelsEl.textContent : '[]'); } catch(e) { console.error('map hotels parse error', e); }
+
+        // Load Leaflet CSS
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+
+        // Load Leaflet JS
+        var script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = function() {
+          mapEl.innerHTML = '';
+          var map = L.map('homepage-map', { scrollWheelZoom: false }).setView([13.75, 100.5], 3);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+          }).addTo(map);
+
+          hotels.forEach(function(h) {
+            if (!h.latitude || !h.longitude) return;
+            var marker = L.circleMarker([h.latitude, h.longitude], {
+              radius: 7,
+              fillColor: '#0d9488',
+              color: '#fff',
+              weight: 2,
+              opacity: 1,
+              fillOpacity: 0.9
+            }).addTo(map);
+            marker.bindPopup(
+              '<a href="/ja/hotel/' + escHtml(h.slug) + '" style="font-weight:600;color:#0d9488">' + escHtml(h.name) + '</a>' +
+              '<br><span style="font-size:12px;color:#6b7280">' + escHtml(h.city) + ', ' + escHtml(h.country) + '</span>' +
+              (h.min_price ? '<br><span style="font-size:12px;font-weight:700">$' + escHtml(h.min_price) + '〜</span>' : '')
+            );
+          });
+        };
+        document.head.appendChild(script);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initMap);
+      } else {
+        initMap();
+      }
+    })();
+  </script>
+
+  <!-- Slideshow Script -->
+  <script>
+    (function() {
+      const slides = [
+        document.getElementById('hero-slide-0'),
+        document.getElementById('hero-slide-1'),
+        document.getElementById('hero-slide-2'),
+      ];
+      let current = 0;
+      function loadSlide(el: HTMLElement | null) {
+        if (el && (el as any).dataset?.bg && !el.style.backgroundImage) {
+          el.style.backgroundImage = `url('${(el as any).dataset.bg}')`;
+        }
+      }
+      setInterval(() => {
+        const next = (current + 1) % 3;
+        loadSlide(slides[next]);
+        if (slides[current]) slides[current].style.opacity = '0';
+        if (slides[next]) slides[next].style.opacity = '1';
+        current = next;
+      }, 4000);
+    })();
+  </script>
+
+  <ChatWidget />
+
+<!-- Hero AI Chatbot -->
+<script is:inline>
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+(function() {
+  var sessionId = 'ja_hero_' + Math.random().toString(36).slice(2, 11);
+  var pendingImageKey = null;
+  var isSending = false;
+
+  var messagesEl = document.getElementById('hero-chat-messages');
+  var inputEl    = document.getElementById('hero-chat-input');
+  var sendBtn    = document.getElementById('hero-chat-send');
+  var uploadEl   = document.getElementById('hero-flight-upload');
+  var uploadStatus = document.getElementById('hero-upload-status');
+  var uploadName   = document.getElementById('hero-upload-name');
+
+  if (!messagesEl || !inputEl || !sendBtn) return;
+
+  // --- helpers ---
+  function getFormContext() {
+    var checkin  = document.getElementById('checkin-fp')?.value || '';
+    var ciTime   = document.querySelector('select[name="checkin_time"]')?.value || '';
+    var coTime   = document.querySelector('select[name="checkout_time"]')?.value || '';
+    var guests   = document.querySelector('select[name="guests"]')?.value || '1';
+    var budget   = document.querySelector('select[name="budget"]')?.value || '';
+    var parts = [];
+    if (checkin)  parts.push('日付: ' + checkin);
+    if (ciTime)   parts.push('チェックイン: ' + ciTime);
+    if (coTime)   parts.push('チェックアウト: ' + coTime);
+    if (guests)   parts.push('人数: ' + guests + '名');
+    if (budget)   parts.push('予算: ' + budget);
+    return parts.length ? '[' + parts.join(', ') + '] ' : '';
+  }
+
+  function showMessages() {
+    messagesEl.classList.remove('hidden');
+  }
+
+  // Parse hotel slugs from text — returns [{slug, name}]
+  // Extracts name from markdown links [Hotel Name](/hotel/slug) when available
+  function extractHotelSlugs(text) {
+    var hotels = [];
+    var seen = {};
+    // Markdown links: [Hotel Name](/hotel/slug) or [Hotel Name](/ja/hotel/slug)
+    var linkRe = /\[([^\]]+)\]\(\/(?:ja\/)?hotel\/([\w-]+)\)/g;
+    var m;
+    while ((m = linkRe.exec(text)) !== null) {
+      if (!seen[m[2]]) {
+        seen[m[2]] = true;
+        hotels.push({ slug: m[2], name: m[1].trim() });
+      }
+    }
+    // Fallback: bare /hotel/slug without label
+    var bareRe = /\/(?:ja\/)?hotel\/([\w-]+)/g;
+    while ((m = bareRe.exec(text)) !== null) {
+      if (!seen[m[1]]) {
+        seen[m[1]] = true;
+        hotels.push({ slug: m[1], name: null });
+      }
+    }
+    return hotels;
+  }
+
+  // Render text with hotel links converted to clickable cards
+  function renderMsgContent(text) {
+    if (!text) return '';
+
+    // 1. BEFORE escHtml: extract Markdown links [label](url) → safe tokens
+    //    Tolerant regex handles LLM variations (query params, symbols in URLs)
+    var linkStore = [];
+    var processed = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, label, url) {
+      var idx = linkStore.length;
+      var token = '__LINK_' + idx + '__';
+      var cleanUrl = url.trim();
+      var finalHref = (cleanUrl.startsWith('/') || cleanUrl.startsWith('http')) ? cleanUrl : '/' + cleanUrl;
+      linkStore.push({ label: label.trim(), href: finalHref });
+      return token;
+    });
+
+    // 2. Escape entire text (links protected as tokens)
+    var html = escHtml(processed);
+
+    // 3. Restore tokens to raw <a> tags from original link info
+    html = html.replace(/__LINK_(\d+)__/g, function(_, idxStr) {
+      var link = linkStore[parseInt(idxStr, 10)];
+      if (!link) return '';
+      var safeLabel = escHtml(link.label);
+      var safeHref = escHtml(link.href);
+      return '<a href="' + safeHref + '" target="_blank" class="underline text-amber-300 hover:text-amber-200">' + safeLabel + '</a>';
+    });
+
+    // Markdown: ### 見出し
+    html = html.replace(/^### (.+)$/gm, '<strong class="block text-amber-300 text-sm mt-2">$1</strong>');
+    html = html.replace(/^## (.+)$/gm, '<strong class="block text-amber-200 text-sm mt-2 mb-1">$1</strong>');
+    html = html.replace(/^# (.+)$/gm, '<strong class="block text-white text-base mt-2 mb-1">$1</strong>');
+
+    // Markdown: **太字**
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    // Markdown: *斜体*
+    html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+
+    // Markdown: --- 区切り線
+    html = html.replace(/^---+$/gm, '<hr class="border-white/20 my-2"/>');
+
+    // Markdown: - リスト項目
+    html = html.replace(/^[-•]\s+(.+)$/gm, '<span class="flex gap-1.5"><span class="text-amber-400 flex-shrink-0">•</span><span>$1</span></span>');
+
+    // Bare /hotel/slug (fallback) — JA version: force label to "予約", link to /ja/hotel/
+    html = html.replace(/(?<!href=")(\/hotel\/([\w-]+))(?!")/g,
+      function(_, path, slug) {
+        return '<a href="/ja/hotel/' + slug + '" target="_blank" class="underline text-amber-300 hover:text-amber-200">予約</a>';
+      });
+
+    return html;
+  }
+
+  // 外部ホテル情報をテキストから抽出（複数行対応：電話番号行から前方向にホテル名を探す）
+  function extractExternalHotels(text) {
+    var hotels = [];
+    if (!text) return hotels;
+    var lines = text.split('\n');
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (line.indexOf('/hotel/') !== -1) continue;
+      var phoneMatch = line.match(/📞\s*([\+\d][\d\s\-\(\)\.]{6,20})/) ||
+                       line.match(/(\+\d[\d\s\-\(\)\.]{6,20})/);
+      if (!phoneMatch) continue;
+      // 電話番号の前後1行以内に /hotel/ リンクがあれば自社ホテル扱いで除外
+      var nearPartner = false;
+      for (var k = Math.max(0, i - 1); k <= Math.min(lines.length - 1, i + 1); k++) {
+        if (lines[k].indexOf('/hotel/') !== -1) { nearPartner = true; break; }
+      }
+      if (nearPartner) continue;
+      var phone = phoneMatch[1].trim();
+      var name = '';
+      for (var j = i; j >= Math.max(0, i - 3); j--) {
+        var checkLine = lines[j];
+        if (checkLine.indexOf('/hotel/') !== -1) break;
+        var np = checkLine.match(/\*\*(.+?)\*\*/) ||
+                 checkLine.match(/^\s*\d+\.\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+\d|$)/) ||
+                 checkLine.match(/^\s*[-•]\s+(.+?)(?:\s*[|｜]|\s*[⭐★]|\s*📍|\s*📞|\s*\+\d|$)/);
+        if (np) {
+          name = np[1].replace(/\*\*/g, '').trim();
+          if (name.length >= 2) break;
+        }
+      }
+      if (!name || name.length < 2) continue;
+      if (!hotels.some(function(h){ return h.phone === phone; })) {
+        hotels.push({ name: name, phone: phone });
+      }
+    }
+    return hotels;
+  }
+
+  function addMsg(text, role, metadata) {
+    showMessages();
+    var wrap = document.createElement('div');
+    wrap.className = 'flex gap-2' + (role === 'user' ? ' flex-row-reverse' : '');
+    if (role === 'assistant') {
+      var _metaHotels = (metadata && Array.isArray(metadata.hotels) && metadata.hotels.length > 0) ? metadata.hotels : null;
+      var _internalMeta = _metaHotels ? _metaHotels.filter(function(h){ return h.source === 'internal'; }) : null;
+      var _externalMeta = _metaHotels ? _metaHotels.filter(function(h){ return h.source === 'external'; }) : null;
+
+      var internalHotels = (_internalMeta && _internalMeta.length > 0)
+        ? _internalMeta.map(function(h){ return { slug: h.slug, name: (h.name_ja || h.name), min_price: h.min_price }; }).filter(function(h){ return h.slug; })
+        : extractHotelSlugs(text).map(function(h){
+            var slug = typeof h === 'string' ? h : h.slug;
+            var name = (typeof h === 'string' ? null : h.name);
+            return {
+              slug: slug,
+              name: name || slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }),
+              min_price: null
+            };
+          });
+
+      var externalHotels = (_externalMeta && _externalMeta.length > 0)
+        ? _externalMeta.map(function(h){ return { name: h.name || '', phone: h.phone || '' }; })
+        : extractExternalHotels(text);
+
+      var internalCards = internalHotels.map(function(h) {
+        var label = escHtml(h.name || '');
+        var price = (h.min_price != null && h.min_price !== '') ? ('$' + h.min_price + '〜') : '';
+        return '<a href="/ja/hotel/' + h.slug + '" class="flex items-center justify-between gap-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-2 transition-colors">' +
+          '<div class="min-w-0 flex-1">' +
+            '<p class="text-white text-xs font-bold break-words">' + label + '</p>' +
+            (price ? '<p class="text-amber-300 text-xs font-semibold mt-0.5">' + escHtml(price) + '</p>' : '') +
+          '</div>' +
+          '<span class="shrink-0 bg-amber-500 hover:bg-amber-400 text-gray-900 text-[11px] font-bold px-2.5 py-1 rounded-md">詳細を見る</span>' +
+        '</a>';
+      }).join('');
+
+      var callBtns = '';
+      var validExternal = externalHotels.filter(function(h){ return h.name && h.name.length >= 2; });
+      if (validExternal.length > 0) {
+        var top3 = validExternal.slice(0, 3);
+        window._heroExternalHotels = top3;
+        var items = top3.map(function(h, i) {
+          var safeName = (h.name || '').replace(/"/g, '&quot;').slice(0, 60);
+          var safePhone = (h.phone || '').replace(/"/g, '');
+          return '<label class="flex items-start gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition-colors">' +
+            '<input type="checkbox" class="hero-ext-hotel-cb mt-0.5 accent-amber-400" data-name="' + safeName + '" data-phone="' + safePhone + '" checked />' +
+            '<span class="flex-1 text-xs text-white/90">' +
+              '<span class="font-semibold block">' + safeName + '</span>' +
+              '<span class="text-white/50 text-[11px]">' + safePhone + '</span>' +
+            '</span>' +
+          '</label>';
+        }).join('');
+        callBtns =
+          '<div class="mt-2 space-y-1.5">' +
+            '<p class="text-[11px] text-white/60 mb-1">📞 AIが最大3軒のホテルに順番に電話します — <strong class="text-amber-300">合計$7</strong>（全て空きなしなら全額返金）</p>' +
+            items +
+            '<button onclick="window._heroCallBook(this)" class="mt-1 w-full flex items-center justify-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">' +
+              '📞 選択したホテルに電話 ($7)' +
+            '</button>' +
+          '</div>';
+      }
+
+      var hasStructuredHotels = !!(_metaHotels && _metaHotels.length > 0);
+      var assistantBody = hasStructuredHotels
+        ? ''
+        : '<div class="whitespace-pre-wrap leading-relaxed">' + renderMsgContent(text) + '</div>';
+      var hotelCards = internalCards ? '<div class="grid gap-2 mt-2">' + internalCards + '</div>' : '';
+
+      wrap.innerHTML =
+        '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
+        '<div class="bg-white/20 text-white rounded-xl rounded-tl-none px-3 py-2.5 text-sm max-w-[85%] shadow border border-white/10">' +
+          assistantBody +
+          hotelCards +
+          callBtns +
+        '</div>';
+    } else {
+      wrap.innerHTML =
+        '<div class="bg-amber-500 text-gray-900 rounded-xl rounded-tr-none px-3 py-2 text-sm max-w-[85%] font-medium">' + escHtml(text) + '</div>';
+    }
+    messagesEl.appendChild(wrap);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // ===== Call Status Polling =====
+  window._startCallPolling = function(callId, sid, loc) {
+    var maxAttempts = 36;
+    var attempt = 0;
+    var waitEl = document.createElement('div');
+    waitEl.id = 'call-polling-' + callId;
+    waitEl.className = 'flex gap-2';
+    waitEl.innerHTML =
+      '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
+      '<div class="bg-white/20 text-white/80 rounded-xl rounded-tl-none px-3 py-2 text-sm border border-white/10">' +
+        '<span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse mr-2"></span>' +
+        '📞 AIがホテルに電話中...' +
+      '</div>';
+    messagesEl.appendChild(waitEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    var timer = setInterval(async function() {
+      attempt++;
+      if (attempt > maxAttempts) {
+        clearInterval(timer);
+        waitEl.remove();
+        addMsg('⏱️ 電話の結果を取得できませんでした。しばらく後に確認してください。', 'assistant');
+        return;
+      }
+      try {
+        var r = await fetch('/api/concierge/chat', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({session_id: sid, message: '__check_call_status:' + callId, locale: 'ja'})
+        });
+        var d = await r.json();
+        var status = d.metadata?.call_status || d.metadata?.status;
+        if (status === 'calling' || status === 'pending') return;
+        clearInterval(timer);
+        waitEl.remove();
+        if (d.response) addMsg(d.response, 'assistant');
+
+        if (status === 'failed' && d.metadata?.failed_count >= 1) {
+          setTimeout(function(){
+            addMsg(
+              '💸 **全ホテルへの電話が繋がりませんでした。**\n\n' +
+              '$7の料金は自動的に全額返金されます（PayPal処理に2〜5営業日）。\n\n' +
+              '別の日時や別の都市で再度お試しください。',
+              'assistant'
+            );
+          }, 1000);
+        }
+      } catch(e) { /* retry */ }
+    }, 5000);
+  };
+
+  // ===== External Hotel Call Booking Flow (最大3件で合計$7) =====
+  window._heroCallBook = async function(btn) {
+    var container = btn.parentElement;
+    var checkboxes = container.querySelectorAll('.hero-ext-hotel-cb:checked');
+    if (checkboxes.length === 0) {
+      alert('少なくとも1軒は選択してください');
+      return;
+    }
+    var selected = Array.prototype.map.call(checkboxes, function(cb) {
+      return { name: cb.getAttribute('data-name'), phone: cb.getAttribute('data-phone') };
+    }).slice(0, 3);
+    window._heroSelectedHotels = selected;
+
+    btn.disabled = true;
+    btn.textContent = '読み込み中...';
+
+    var formDiv = document.createElement('div');
+    formDiv.className = 'flex gap-2';
+    var hotelListHtml = selected.map(function(h, i) {
+      return '<li class="text-white/80"><span class="text-amber-300 font-bold">' + (i+1) + '.</span> ' + escHtml(h.name) + '</li>';
+    }).join('');
+    formDiv.innerHTML =
+      '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
+      '<div class="bg-gray-900/80 border border-white/20 text-white rounded-xl rounded-tl-none px-4 py-3 text-sm max-w-[92%] w-full" id="call-booking-form">' +
+        '<p class="font-bold text-base mb-1">📞 AI電話予約代行</p>' +
+        '<p class="text-amber-300 text-xs font-medium mb-2">対象ホテル ' + selected.length + '軒</p>' +
+        '<ul class="text-xs mb-3 space-y-0.5 pl-1">' + hotelListHtml + '</ul>' +
+        '<p class="text-white/70 text-xs mb-3">AIが上から順番にホテルへ電話して空きを確認します。<br>サービス料 <strong class="text-amber-400">合計$7</strong>（全件不成立時は全額返金）</p>' +
+        '<div class="space-y-2">' +
+          '<div class="grid grid-cols-2 gap-2">' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">お名前</label>' +
+              '<input id="call-guest-name" type="text" placeholder="山田 太郎" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">メールアドレス</label>' +
+              '<input id="call-guest-email" type="email" placeholder="your@email.com" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+            '</div>' +
+          '</div>' +
+          '<div>' +
+            '<label class="text-xs text-white/60 block mb-1">電話番号</label>' +
+            '<input id="call-guest-phone" type="tel" placeholder="+81 90 1234 5678" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+          '</div>' +
+          '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">📅 チェックイン日</label>' +
+              '<input id="call-checkin-date" type="text" readonly placeholder="YYYY-MM-DD" class="w-full bg-white/10 text-white placeholder-white/30 rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">人数</label>' +
+              '<select id="call-guests" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
+                [1,2,3,4,5,6,7,8,9,10].map(function(n){ return '<option value="' + n + '"' + (n===2?' selected':'') + '>' + n + '</option>'; }).join('') +
+              '</select>' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">🕐 チェックイン</label>' +
+              '<select id="call-checkin-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
+                ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00'].map(function(t){ return '<option value="' + t + '"' + (t==='10:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
+              '</select>' +
+            '</div>' +
+            '<div>' +
+              '<label class="text-xs text-white/60 block mb-1">🕔 チェックアウト</label>' +
+              '<select id="call-checkout-time" class="w-full bg-white/10 text-white rounded-lg px-3 py-2 text-sm border border-white/20 focus:border-amber-400 focus:outline-none">' +
+                ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'].map(function(t){ return '<option value="' + t + '"' + (t==='18:00'?' selected':'') + '>' + t + '</option>'; }).join('') +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<button onclick="window._heroSubmitCallBook()" ' +
+          'class="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">' +
+          '💳 PayPalで$7支払い → AI電話予約へ進む' +
+        '</button>' +
+        '<button onclick="document.getElementById(\'call-booking-form\').closest(\'.flex\').remove()" ' +
+          'class="mt-2 w-full text-white/40 hover:text-white/70 text-xs py-1 transition-colors">キャンセル</button>' +
+      '</div>';
+    messagesEl.appendChild(formDiv);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    btn.textContent = '📞 選択したホテルに電話 ($7)';
+    btn.disabled = false;
+
+    if (window.flatpickr) {
+      var todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      window.flatpickr('#call-checkin-date', {
+        locale: 'ja',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'Y-m-d',
+        minDate: todayDate,
+        defaultDate: todayDate,
+        disableMobile: true
+      });
+    }
+  };
+
+  window._heroSubmitCallBook = async function() {
+    var submitBtn = event?.target;
+    var defaultSubmitText = '💳 PayPalで$7支払い → AI電話予約へ進む';
+    var resetSubmitBtn = function() {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = defaultSubmitText;
+      }
+    };
+
+    var name = document.getElementById('call-guest-name')?.value?.trim();
+    var email = document.getElementById('call-guest-email')?.value?.trim();
+    var phone = document.getElementById('call-guest-phone')?.value?.trim();
+    var date = document.getElementById('call-checkin-date')?.value;
+    var checkinTime = document.getElementById('call-checkin-time')?.value || '10:00';
+    var checkoutTime = document.getElementById('call-checkout-time')?.value || '18:00';
+    var guests = document.getElementById('call-guests')?.value || '2';
+    if (!name || !email || !date) {
+      resetSubmitBtn();
+      alert('お名前・メール・日付を入力してください');
+      return;
+    }
+    if (!phone) {
+      resetSubmitBtn();
+      alert('電話番号を入力してください');
+      return;
+    }
+    var selectedHotels = window._heroSelectedHotels || [];
+    if (selectedHotels.length === 0) {
+      resetSubmitBtn();
+      alert('ホテルが選択されていません');
+      return;
+    }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '処理中...'; }
+
+    try {
+      var sessionId = window._heroSessionId || ('ja-hero-' + Date.now());
+      var res = await fetch('/api/concierge/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId,
+          message: '__create_call_group_direct',
+          locale: 'ja',
+          _call_group: {
+            hotels: selectedHotels.map(function(h) {
+              return { hotel_name: h.name, hotel_phone: h.phone, hotel_source: 'external' };
+            }),
+            guest_name: name,
+            guest_email: email,
+            guest_phone: phone,
+            check_in_date: date,
+            check_in_time: checkinTime,
+            check_out_time: checkoutTime,
+            guests: parseInt(guests, 10),
+            adults: parseInt(guests, 10),
+            children: 0
+          }
+        })
+      });
+      var data = await res.json();
+      if (data.error) {
+        addMsg('❌ エラー: ' + data.error, 'assistant');
+        resetSubmitBtn();
+        return;
+      }
+
+      if (data.paypal_url) {
+        var groupId = data.group_id;
+        var paypalOrderId = data.paypal_order_id;
+        window.open(data.paypal_url, '_blank');
+        var hotelListText = selectedHotels.map(function(h, i){ return (i+1) + '. ' + h.name; }).join('\n');
+        addMsg('✅ PayPalページを開きました。支払い完了後、AIが以下のホテルに順番に電話します。\n\n' + hotelListText + '\n\n👤 ' + name + '\n📞 ' + phone + '\n📅 ' + date + ' ' + checkinTime + '〜' + checkoutTime + '（' + guests + '名）', 'assistant');
+
+        var paid = false;
+        var hardError = null;
+        var startedAt = Date.now();
+        while (!paid && !hardError && Date.now() - startedAt < 300000) {
+          await new Promise(function(resolve){ setTimeout(resolve, 5000); });
+          try {
+            var captureRes = await fetch('/api/concierge/pay', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'capture',
+                order_id: paypalOrderId,
+                group_id: groupId,
+                session_id: sessionId,
+                guest_name: name,
+                guest_email: email
+              })
+            });
+            var captureData = await captureRes.json();
+            var status = String(captureData?.status || '').toLowerCase();
+            var detail = captureData?.detail || captureData?.error || '';
+            var isPending = captureRes.status === 202 || status === 'pending' || status === 'processing';
+
+            if (status === 'paid') {
+              paid = true;
+              var confirmRes = await fetch('/api/concierge/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  session_id: sessionId,
+                  message: '__confirm_group_payment:' + groupId,
+                  locale: 'ja',
+                  guest_name: name,
+                  guest_email: email,
+                  guest_phone: phone,
+                  guests: parseInt(guests, 10),
+                  details: {
+                    guest_phone: phone,
+                    guests: parseInt(guests, 10)
+                  }
+                })
+              });
+              var confirmData = await confirmRes.json();
+              if (confirmData?.response) addMsg(confirmData.response, 'assistant', confirmData.metadata);
+            } else if (!isPending && (captureRes.status >= 400 || status === 'failed' || status === 'error' || status === 'cancelled')) {
+              hardError = detail || ('HTTP ' + captureRes.status);
+            }
+          } catch (_e) {
+            // retry until timeout
+          }
+        }
+
+        if (!paid) {
+          addMsg(
+            '決済の確認に時間がかかっています（お金は引き落とされている可能性があります）。しばらくして再確認するか、お問い合わせください。' + (hardError ? ('\n\n詳細: ' + hardError) : ''),
+            'assistant'
+          );
+        }
+      } else {
+        addMsg(data.response || '予約リクエストを受け付けました。', 'assistant');
+      }
+    } catch(e) {
+      addMsg('❌ 通信エラーが発生しました。もう一度お試しください。', 'assistant');
+      resetSubmitBtn();
+    }
+  };
+
+
+  function addTyping() {
+    var el = document.createElement('div');
+    el.id = 'hero-typing';
+    el.className = 'flex gap-2';
+    el.innerHTML =
+      '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
+      '<div class="bg-white/15 text-white rounded-xl rounded-tl-none px-3 py-2 text-sm flex items-center gap-1">' +
+        '<span class="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce" style="animation-delay:0ms"></span>' +
+        '<span class="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce" style="animation-delay:150ms"></span>' +
+        '<span class="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce" style="animation-delay:300ms"></span>' +
+      '</div>';
+    messagesEl.appendChild(el);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function removeTyping() {
+    var el = document.getElementById('hero-typing');
+    if (el) el.remove();
+  }
+
+  // --- send message ---
+  async function sendMessage() {
+    var text = inputEl.value.trim();
+    if (!text || isSending) return;
+
+    isSending = true;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+
+    var ctx = getFormContext();
+    var fullMsg = ctx + text;
+    addMsg(text, 'user');
+    addTyping();
+
+    try {
+      var body = { session_id: sessionId, message: fullMsg, locale: 'ja' };
+      if (pendingImageKey) { body.image_key = pendingImageKey; pendingImageKey = null; }
+
+      var res = await fetch('/api/concierge/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      var data = await res.json();
+      removeTyping();
+      addMsg(data.response || data.reply || data.message || (data.error ? '⚠️ ' + data.error : 'エラーが発生しました。もう一度お試しください。'), 'assistant', data.metadata);
+
+      // 電話発信中なら自動ポーリング開始
+      if (data.message_type === 'call_status' && data.metadata?.call_status === 'calling') {
+        var callId = data.metadata.call_id;
+        window._startCallPolling(callId, sessionId, 'ja');
+      }
+
+      // Clear upload badge
+      uploadName.classList.add('hidden');
+      uploadStatus.classList.add('hidden');
+    } catch (e) {
+      removeTyping();
+      addMsg('通信エラーが発生しました。もう一度お試しください。', 'assistant');
+    } finally {
+      isSending = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  inputEl.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
+  });
+
+  window._heroNormalSearch = function() {
+    var location = document.getElementById('location-input') ? document.getElementById('location-input').value.trim() : '';
+    var date     = document.getElementById('checkin-fp') ? document.getElementById('checkin-fp').value.trim() : '';
+    var ciTime   = document.querySelector('select[name="checkin_time"]') ? document.querySelector('select[name="checkin_time"]').value : '';
+    var coTime   = document.querySelector('select[name="checkout_time"]') ? document.querySelector('select[name="checkout_time"]').value : '';
+    var guestsEl = document.querySelector('select[name="guests"]');
+    var guests   = guestsEl ? guestsEl.value : '';
+    var budgetEl = document.querySelector('select[name="budget"]');
+    var budget   = budgetEl ? budgetEl.value : '';
+    var specEl   = document.querySelector('select[name="speciality"]');
+    var spec     = specEl ? specEl.value : '';
+
+    var params = new URLSearchParams();
+    if (location) params.set('city', location);
+    if (date)     params.set('date', date);
+    if (ciTime)   params.set('checkin_time', ciTime);
+    if (coTime)   params.set('checkout_time', coTime);
+    if (guests)   params.set('guests', guests);
+    if (budget)   params.set('budget', budget);
+    if (spec)     params.set('speciality', spec);
+
+    window.location.href = '/ja/search?' + params.toString();
+  };
+
+  window._heroAskAI = function() {
+    var location = document.getElementById('location-input') ? document.getElementById('location-input').value.trim() : '';
+    var date     = document.getElementById('checkin-fp') ? document.getElementById('checkin-fp').value.trim() : '';
+    var ciTime   = document.querySelector('select[name="checkin_time"]') ? document.querySelector('select[name="checkin_time"]').value : '10:00';
+    var coTime   = document.querySelector('select[name="checkout_time"]') ? document.querySelector('select[name="checkout_time"]').value : '18:00';
+    var guestsEl = document.querySelector('select[name="guests"]');
+    var guests   = guestsEl ? guestsEl.value : '1';
+    var budgetEl = document.querySelector('select[name="budget"]');
+    var budget   = budgetEl ? budgetEl.value : '';
+    var specEl   = document.querySelector('select[name="speciality"]');
+    var spec     = specEl ? specEl.value : '';
+
+    if (!location) {
+      var li = document.getElementById('location-input');
+      if (li) li.focus();
+      showMessages();
+      addMsg('📍 都市名または空港名を入力してください！', 'assistant');
+      return;
+    }
+
+    var parts = [location + 'でデイユースホテルを3件おすすめしてください'];
+    if (date) parts.push('日付: ' + date);
+    if (ciTime && coTime) parts.push('チェックイン' + ciTime + '〜チェックアウト' + coTime);
+    if (guests) parts.push(guests + '名');
+    if (budget) parts.push('予算: ' + budget);
+    if (spec) parts.push('(' + spec + ')');
+    parts.push('。価格・時間帯・予約リンクを教えてください。');
+
+    var autoMsg = parts.join('、');
+    inputEl.value = autoMsg;
+
+    var wrapper = document.getElementById('ai-chat-wrapper');
+    if (wrapper) wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    setTimeout(function() { sendMessage(); }, 400);
+  };
+
+  // --- airport shortcuts → fill input ---
+  document.querySelectorAll('[data-airport]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      inputEl.value = btn.dataset.airport;
+      inputEl.focus();
+    });
+  });
+
+  // --- flight photo upload ---
+  uploadEl.addEventListener('change', async function() {
+    var file = uploadEl.files[0];
+    if (!file) return;
+
+    uploadStatus.textContent = 'アップロード中...';
+    uploadStatus.classList.remove('hidden');
+    uploadName.classList.add('hidden');
+
+    var form = new FormData();
+    form.append('image', file);
+    form.append('session_id', sessionId);
+
+    try {
+      var res = await fetch('/api/concierge/upload', { method: 'POST', body: form });
+      var data = await res.json();
+      if (data.image_key || data.key) {
+        pendingImageKey = data.image_key || data.key;
+        uploadStatus.classList.add('hidden');
+        uploadName.textContent = '📎 ' + file.name;
+        uploadName.classList.remove('hidden');
+        inputEl.placeholder = '写真をアップロードしました！目的地を入力してください...';
+        inputEl.focus();
+      } else {
+        uploadStatus.textContent = data.error || 'アップロード失敗';
+      }
+    } catch (e) {
+      uploadStatus.textContent = 'アップロードエラー';
+    }
+  });
+})();
+</script>
+
+<!-- Flatpickr: Japanese date picker for Check-in -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" media="print" onload="this.media='all'" /><noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" /></noscript>
+
+<script is:inline define:vars={{ allCities }}>
+(function() {
+  // 世界のメジャー都市（DB未登録でも検索可能にする）
+  var WORLD_CITIES = [
+    // Japan
+    {city:"東京",country:"日本"},{city:"大阪",country:"日本"},{city:"京都",country:"日本"},
+    {city:"札幌",country:"日本"},{city:"福岡",country:"日本"},{city:"名古屋",country:"日本"},
+    {city:"神戸",country:"日本"},{city:"横浜",country:"日本"},{city:"広島",country:"日本"},
+    {city:"奈良",country:"日本"},
+    // North America
+    {city:"New York",country:"USA"},{city:"Los Angeles",country:"USA"},{city:"Chicago",country:"USA"},
+    {city:"San Francisco",country:"USA"},{city:"Miami",country:"USA"},{city:"Las Vegas",country:"USA"},
+    {city:"Seattle",country:"USA"},{city:"Boston",country:"USA"},{city:"Houston",country:"USA"},
+    {city:"Toronto",country:"Canada"},{city:"Vancouver",country:"Canada"},{city:"Montreal",country:"Canada"},
+    {city:"Mexico City",country:"Mexico"},{city:"Cancun",country:"Mexico"},
+    // Europe
+    {city:"London",country:"UK"},{city:"Paris",country:"France"},{city:"Berlin",country:"Germany"},
+    {city:"Madrid",country:"Spain"},{city:"Rome",country:"Italy"},{city:"Amsterdam",country:"Netherlands"},
+    {city:"Barcelona",country:"Spain"},{city:"Vienna",country:"Austria"},{city:"Prague",country:"Czech Republic"},
+    {city:"Istanbul",country:"Turkey"},{city:"Moscow",country:"Russia"},
+    {city:"Lisbon",country:"Portugal"},{city:"Stockholm",country:"Sweden"},
+    {city:"Copenhagen",country:"Denmark"},{city:"Zurich",country:"Switzerland"},
+    {city:"Munich",country:"Germany"},{city:"Frankfurt",country:"Germany"},
+    // Asia
+    {city:"Tokyo",country:"Japan"},{city:"Osaka",country:"Japan"},{city:"Kyoto",country:"Japan"},
+    {city:"Yokohama",country:"Japan"},{city:"Nagoya",country:"Japan"},{city:"Sapporo",country:"Japan"},
+    {city:"Fukuoka",country:"Japan"},{city:"Kobe",country:"Japan"},{city:"Hiroshima",country:"Japan"},
+    {city:"Beijing",country:"China"},{city:"Shanghai",country:"China"},{city:"Shenzhen",country:"China"},
+    {city:"Guangzhou",country:"China"},{city:"Chengdu",country:"China"},
+    {city:"Taipei",country:"Taiwan"},{city:"Taichung",country:"Taiwan"},
+    {city:"Seoul",country:"South Korea"},{city:"Busan",country:"South Korea"},
+    {city:"Hong Kong",country:"Hong Kong"},{city:"Macau",country:"Macau"},
+    {city:"Singapore",country:"Singapore"},
+    {city:"Bangkok",country:"Thailand"},{city:"Chiang Mai",country:"Thailand"},{city:"Phuket",country:"Thailand"},
+    {city:"Kuala Lumpur",country:"Malaysia"},{city:"Penang",country:"Malaysia"},
+    {city:"Bali",country:"Indonesia"},{city:"Jakarta",country:"Indonesia"},
+    {city:"Manila",country:"Philippines"},{city:"Cebu",country:"Philippines"},
+    {city:"Ho Chi Minh City",country:"Vietnam"},{city:"Hanoi",country:"Vietnam"},{city:"Da Nang",country:"Vietnam"},
+    {city:"Phnom Penh",country:"Cambodia"},{city:"Siem Reap",country:"Cambodia"},
+    {city:"Mumbai",country:"India"},{city:"Delhi",country:"India"},{city:"Bangalore",country:"India"},
+    {city:"Goa",country:"India"},
+    // Middle East
+    {city:"Dubai",country:"UAE"},{city:"Abu Dhabi",country:"UAE"},{city:"Sharjah",country:"UAE"},
+    {city:"Doha",country:"Qatar"},{city:"Riyadh",country:"Saudi Arabia"},{city:"Jeddah",country:"Saudi Arabia"},
+    {city:"Kuwait City",country:"Kuwait"},{city:"Manama",country:"Bahrain"},{city:"Muscat",country:"Oman"},
+    {city:"Cairo",country:"Egypt"},{city:"Nairobi",country:"Kenya"},
+    // Oceania
+    {city:"Sydney",country:"Australia"},{city:"Melbourne",country:"Australia"},{city:"Brisbane",country:"Australia"},
+    {city:"Perth",country:"Australia"},{city:"Auckland",country:"New Zealand"},
+    // Africa
+    {city:"Cape Town",country:"South Africa"},{city:"Johannesburg",country:"South Africa"},
+    {city:"Lagos",country:"Nigeria"},{city:"Accra",country:"Ghana"},{city:"Marrakech",country:"Morocco"},
+    // South America
+    {city:"São Paulo",country:"Brazil"},{city:"Rio de Janeiro",country:"Brazil"},
+    {city:"Buenos Aires",country:"Argentina"},{city:"Lima",country:"Peru"},{city:"Bogotá",country:"Colombia"},
+  ];
+
+  // DBの自社登録都市（優先表示）— city+country キーで重複除去
+  var dbCities = [];
+  var dbCitySet = {};
+  (allCities || []).forEach(function(c) {
+    var key = (c.city || '').toLowerCase().trim() + '__' + (c.country || '').toLowerCase().trim();
+    if (!dbCitySet[key]) {
+      dbCitySet[key] = true;
+      dbCities.push({ city: (c.city || '').trim(), country: (c.country || '').trim(), inDB: true });
+    }
+  });
+  var dbCityKeys = new Set(dbCities.map(function(c){ return c.city.toLowerCase(); }));
+
+  // マージ: DB都市優先 + 世界都市（重複除外）
+  var worldExtras = WORLD_CITIES.filter(function(c) {
+    return !dbCityKeys.has(c.city.toLowerCase());
+  }).map(function(c) { return { city: c.city, country: c.country, inDB: false }; });
+
+  var cities = dbCities.concat(worldExtras);
+
+  var input = document.getElementById('location-input');
+  var list  = document.getElementById('location-suggestions');
+  if (!input || !list) return;
+
+  var activeIdx = -1;
+
+  function normalize(s) {
+    return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+
+  function highlight(text, q) {
+    var safe = escHtml(text);
+    if (!q) return safe;
+    var re = new RegExp('(' + escHtml(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+    return safe.replace(re, '<strong class="text-teal-600">$1</strong>');
+  }
+
+  function render(items, q) {
+    activeIdx = -1;
+    if (!items.length) {
+      list.classList.add('hidden');
+      list.innerHTML = '';
+      return;
+    }
+    list.innerHTML = items.map(function(c, i) {
+      var badge = c.inDB
+        ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">DDH</span>'
+        : '';
+      return '<li class="px-4 py-2.5 cursor-pointer hover:bg-teal-50 text-gray-800 flex justify-between items-center suggestion-item" data-city="' + escHtml(c.city) + '" data-idx="' + i + '">' +
+             '<span class="font-medium flex items-center">' + highlight(c.city, q) + badge + '</span>' +
+             '<span class="text-gray-400 text-xs ml-2 flex-shrink-0">' + escHtml(c.country) + '</span>' +
+             '</li>';
+    }).join('');
+    list.classList.remove('hidden');
+  }
+
+  function setActive(idx, items) {
+    var lis = list.querySelectorAll('.suggestion-item');
+    lis.forEach(function(li, i) {
+      li.classList.toggle('bg-teal-50', i === idx);
+    });
+    if (lis[idx]) {
+      input.value = lis[idx].dataset.city;
+    }
+  }
+
+  function getMatches(q) {
+    if (!q) {
+      var dbTop = cities.filter(function(c){ return c.inDB; }).slice(0, 8);
+      return dbTop.length >= 8 ? dbTop : dbTop.concat(cities.filter(function(c){ return !c.inDB; }).slice(0, 8 - dbTop.length));
+    }
+    var nq = normalize(q);
+    var prefixDB = [], prefixWorld = [], containsDB = [], containsWorld = [];
+    // 国名のみマッチの場合、同一国は1件のみ表示（重複防止）
+    var seenCountryPrefix = {}, seenCountryContains = {};
+    cities.forEach(function(c) {
+      var nc = normalize(c.city), nco = normalize(c.country);
+      var cityPrefix = nc.startsWith(nq);
+      var countryPrefix = nco.startsWith(nq);
+      var cityContains = nc.includes(nq);
+      var countryContains = nco.includes(nq);
+      if (cityPrefix || cityContains) {
+        if (cityPrefix) { c.inDB ? prefixDB.push(c) : prefixWorld.push(c); }
+        else { c.inDB ? containsDB.push(c) : containsWorld.push(c); }
+      } else if (countryPrefix) {
+        if (!seenCountryPrefix[nco]) {
+          seenCountryPrefix[nco] = true;
+          c.inDB ? prefixDB.push(c) : prefixWorld.push(c);
+        }
+      } else if (countryContains) {
+        if (!seenCountryContains[nco]) {
+          seenCountryContains[nco] = true;
+          c.inDB ? containsDB.push(c) : containsWorld.push(c);
+        }
+      }
+    });
+    return prefixDB.concat(prefixWorld).concat(containsDB).concat(containsWorld).slice(0, 10);
+  }
+
+  input.addEventListener('input', function() {
+    var q = this.value.trim();
+    var matches = getMatches(q);
+    render(matches, normalize(q));
+  });
+
+  input.addEventListener('focus', function() {
+    var q = this.value.trim();
+    render(getMatches(q), normalize(q));
+  });
+
+  input.addEventListener('keydown', function(e) {
+    var lis = list.querySelectorAll('.suggestion-item');
+    if (!lis.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, lis.length - 1);
+      setActive(activeIdx, lis);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      setActive(activeIdx, lis);
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      input.value = lis[activeIdx].dataset.city;
+      list.classList.add('hidden');
+      activeIdx = -1;
+    } else if (e.key === 'Escape') {
+      list.classList.add('hidden');
+    }
+  });
+
+  list.addEventListener('mousedown', function(e) {
+    var li = e.target.closest('.suggestion-item');
+    if (!li) return;
+    e.preventDefault();
+    input.value = li.dataset.city;
+    list.classList.add('hidden');
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!document.getElementById('location-wrapper').contains(e.target)) {
+      list.classList.add('hidden');
+    }
+  });
+})();
+</script>
+
+<script is:inline>
+  (function() {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/flatpickr';
+    s.onload = function() {
+      if (window.flatpickr) {
+        window.flatpickr('#checkin-fp', {
+          locale: 'ja',
+          dateFormat: 'Y-m-d',
+          disableMobile: true,
+          allowInput: true,
+        });
+      }
+    };
+    document.head.appendChild(s);
+  })();
+</script>
+
+</Layout>

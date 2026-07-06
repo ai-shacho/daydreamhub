@@ -1,0 +1,498 @@
+---
+import Layout from '../../layouts/Layout.astro';
+
+const runtime = (Astro.locals as any).runtime;
+const db = runtime?.env?.DB;
+
+let hotels: any[] = [];
+let allCities: string[] = [];
+
+if (db) {
+  try {
+    const result = await db.prepare(`
+      SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country,
+             h.thumbnail_url, h.categories, h.latitude, h.longitude,
+             MIN(p.price_usd) as min_price
+      FROM hotels h
+      LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+      WHERE h.status = 'active'
+      GROUP BY h.id
+      ORDER BY h.name
+    `).all();
+    hotels = result?.results || [];
+
+    const cityResult = await db.prepare(
+      "SELECT DISTINCT city FROM hotels WHERE city != '' AND status = 'active' ORDER BY city"
+    ).all();
+    allCities = (cityResult?.results || []).map((r: any) => r.city);
+  } catch(e) {
+    console.error('Map DB error:', e);
+  }
+}
+
+const cityCoords: Record<string, [number, number]> = {"Bangkok": [13.7563, 100.5018], "Bangkok, Thailand": [13.7563, 100.5018], "Singapore": [1.3521, 103.8198], "Kuala Lumpur": [3.139, 101.6869], "Petaling Jaya": [3.1073, 101.6067], "Jakarta": [-6.2088, 106.8456], "Bali": [-8.3405, 115.092], "Ubud": [-8.5069, 115.2625], "Seminyak": [-8.6913, 115.1683], "Dalung": [-8.6478, 115.1668], "Denpasar": [-8.6705, 115.2126], "Badung Regency": [-8.5819, 115.1771], "Gianyar Regency": [-8.5083, 115.3269], "Amlapura": [-8.4482, 115.6078], "North Lombok Regency": [-8.3654, 116.1069], "Phuket": [7.8804, 98.3923], "Koh Samui": [9.512, 100.0136], "Manila": [14.5995, 120.9842], "Makati": [14.5547, 121.0244], "Mandaluyong": [14.5794, 121.0359], "Cebu": [10.3157, 123.8854], "Cebu City": [10.3157, 123.8854], "Danao City": [10.52, 124.028], "Ho Chi Minh City": [10.8231, 106.6297], "Ho Chi Minh": [10.8231, 106.6297], "Mesaieed": [24.9897, 51.5658], "Hanoi": [21.0285, 105.8542], "Da Nang": [16.0544, 108.2022], "Vientiane": [17.9757, 102.6331], "Luang Prabang": [19.8856, 102.1347], "Padang": [-0.9471, 100.4172], "Hong Kong": [22.3193, 114.1694], "Tokyo": [35.6762, 139.6503], "Shibuya": [35.658, 139.7016], "Kyoto": [35.0116, 135.7681], "Osaka": [34.6937, 135.5023], "Fukuoka": [33.5902, 130.4017], "Ulaanbaatar": [47.8864, 106.9057], "New Delhi": [28.6139, 77.209], "Agra": [27.1767, 78.0081], "Islamabad": [33.6844, 73.0479], "Lahore": [31.5204, 74.3587], "Colombo": [6.9271, 79.8612], "Thimphu": [27.4728, 89.639], "Tashkent": [41.2995, 69.2401], "Yakkasaray": [41.2925, 69.28], "Samarkand": [39.6542, 66.9597], "Tbilisi": [41.7151, 44.8271], "Batumi": [41.6168, 41.6367], "Goris": [39.5111, 46.3422], "Almaty": [43.222, 76.8512], "Dubai": [25.2048, 55.2708], "Sharjah": [25.3463, 55.4209], "Doha": [25.2854, 51.531], "Manama": [26.2285, 50.586], "Salalah": [17.0151, 54.0924], "Riyadh": [24.6877, 46.7219], "Nairobi": [-1.2921, 36.8219], "Kiambu": [-1.1714, 36.8356], "Kigali": [-1.9403, 29.8739], "Abuja": [9.0579, 7.4951], "Abuja (F.c.t.)": [9.0579, 7.4951], "Kano": [12.0022, 8.592], "Cairo": [30.0444, 31.2357], "Giza": [30.0131, 31.2089], "Cape Town": [-33.9249, 18.4241], "Dodoma": [-6.163, 35.7516], "London": [51.5074, -0.1278], "Essex": [51.7343, 0.4691], "Birmingham": [52.4862, -1.8904], "Paris": [48.8566, 2.3522], "Berlin": [52.52, 13.405], "Belgrade": [44.7866, 20.4489], "Sofia": [42.6977, 23.3219], "Prague": [50.0755, 14.4378], "Amsterdam": [52.3676, 4.9041], "Rijswijk": [52.0362, 4.326], "Porto": [41.1579, -8.6291], "Valencia": [39.4699, -0.3763], "Alicante": [38.3452, -0.481], "Venice": [45.4408, 12.3155], "Toulouse": [43.6047, 1.4442], "Rome": [41.9028, 12.4964], "Barcelona": [41.3851, 2.1734], "Istanbul": [41.0082, 28.9784], "Oulu": [65.0121, 25.4651], "Saint Petersburg": [59.9343, 30.3351], "Russia": [55.7558, 37.6173], "Sydney": [-33.8688, 151.2093], "Perth": [-31.9505, 115.8605], "Melbourne": [-37.8136, 144.9631], "Auckland": [-36.8485, 174.7633], "Auckland Central": [-36.8485, 174.7633], "Loganholme": [-27.6414, 153.205], "New York": [40.7128, -74.006], "Los Angeles": [34.0522, -118.2437], "Tijuana": [32.5149, -117.0382], "Bogot\u00e1": [4.711, -74.0721], "Quito": [-0.1807, -78.4678], "Pichincha": [-0.1807, -78.4678], "Arequipa": [-16.409, -71.5375], "Calgary": [51.0447, -114.0719], "Ontario": [34.0633, -117.6509], "California City": [35.1258, -117.9859], "Seal Beach": [33.7414, -118.1048], "Toronto": [43.6532, -79.3832], "Vancouver": [49.2827, -123.1207]};
+
+const dbCityCounts: Record<string, number> = {};
+for (const h of hotels) {
+  dbCityCounts[h.city] = (dbCityCounts[h.city] || 0) + 1;
+}
+
+const citiesArray = Object.entries(dbCityCounts)
+  .map(([name, count]) => {
+    const coords = cityCoords[name];
+    if (!coords) return null;
+    return {
+      name,
+      nameDisplay: name,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      country: hotels.find((h: any) => h.city === name)?.country || '',
+      hotelCount: count,
+      lat: coords[0],
+      lng: coords[1],
+    };
+  })
+  .filter(Boolean);
+
+const mapHotels = hotels.map((h: any) => ({
+  id: h.id,
+  name: h.name_ja || h.name,
+  slug: h.slug,
+  city: h.city,
+  country: h.country,
+  lat: h.latitude || null,
+  lng: h.longitude || null,
+  thumbnail: h.thumbnail_url || '',
+  categories: h.categories || '[]',
+  minPrice: h.min_price || null,
+}));
+
+// Build airport markers data (unique major airports with Japanese names)
+const airportMarkersData = [
+  { code: 'BKK', name: 'スワンナプーム国際空港', lat: 13.6811, lng: 100.7472 },
+  { code: 'DMK', name: 'ドンムアン空港', lat: 13.9126, lng: 100.6067 },
+  { code: 'DPS', name: 'ングラライ国際空港', lat: -8.7482, lng: 115.1671 },
+  { code: 'CGK', name: 'スカルノ・ハッタ国際空港', lat: -6.1256, lng: 106.6559 },
+  { code: 'KUL', name: 'クアラルンプール国際空港', lat: 2.7456, lng: 101.7072 },
+  { code: 'SIN', name: 'チャンギ国際空港', lat: 1.3644, lng: 103.9915 },
+  { code: 'MNL', name: 'ニノイ・アキノ国際空港', lat: 14.5086, lng: 121.0194 },
+  { code: 'CEB', name: 'マクタン・セブ国際空港', lat: 10.3075, lng: 123.9792 },
+  { code: 'SGN', name: 'タンソンニャット国際空港', lat: 10.8188, lng: 106.6520 },
+  { code: 'HAN', name: 'ノイバイ国際空港', lat: 21.2187, lng: 105.8072 },
+  { code: 'DAD', name: 'ダナン国際空港', lat: 16.0439, lng: 108.1993 },
+  { code: 'HKT', name: 'プーケット国際空港', lat: 8.1132, lng: 98.3161 },
+  { code: 'USM', name: 'サムイ空港', lat: 9.5479, lng: 100.0623 },
+  { code: 'PNH', name: 'プノンペン国際空港', lat: 11.5466, lng: 104.8440 },
+  { code: 'HND', name: '羽田空港', lat: 35.5494, lng: 139.7798 },
+  { code: 'NRT', name: '成田国際空港', lat: 35.7720, lng: 140.3929 },
+  { code: 'KIX', name: '関西国際空港', lat: 34.4347, lng: 135.2440 },
+  { code: 'FUK', name: '福岡空港', lat: 33.5859, lng: 130.4513 },
+  { code: 'ICN', name: '仁川国際空港', lat: 37.4691, lng: 126.4510 },
+  { code: 'HKG', name: '香港国際空港', lat: 22.3080, lng: 113.9185 },
+  { code: 'TPE', name: '桃園国際空港', lat: 25.0777, lng: 121.2328 },
+  { code: 'PEK', name: '北京首都国際空港', lat: 40.0799, lng: 116.6031 },
+  { code: 'PVG', name: '上海浦東国際空港', lat: 31.1443, lng: 121.8083 },
+  { code: 'BOM', name: 'ムンバイ国際空港', lat: 19.0896, lng: 72.8656 },
+  { code: 'DEL', name: 'デリー国際空港', lat: 28.5562, lng: 77.1000 },
+  { code: 'CMB', name: 'バンダラナイケ国際空港', lat: 7.1806, lng: 79.8841 },
+  { code: 'ISB', name: 'イスラマバード空港', lat: 33.6167, lng: 73.0992 },
+  { code: 'TAS', name: 'タシケント空港', lat: 41.2579, lng: 69.2813 },
+  { code: 'ALA', name: 'アルマティ空港', lat: 43.3521, lng: 77.0405 },
+  { code: 'TBS', name: 'トビリシ空港', lat: 41.6692, lng: 44.9547 },
+  { code: 'DXB', name: 'ドバイ国際空港', lat: 25.2528, lng: 55.3644 },
+  { code: 'DOH', name: 'ハマド国際空港', lat: 25.2731, lng: 51.6081 },
+  { code: 'BAH', name: 'バーレーン国際空港', lat: 26.2708, lng: 50.6336 },
+  { code: 'NBO', name: 'ジョモ・ケニヤッタ国際空港', lat: -1.3192, lng: 36.9275 },
+  { code: 'CAI', name: 'カイロ国際空港', lat: 30.1219, lng: 31.4056 },
+  { code: 'CPT', name: 'ケープタウン空港', lat: -33.9648, lng: 18.6017 },
+  { code: 'ABV', name: 'アブジャ空港', lat: 9.0068, lng: 7.2632 },
+  { code: 'KGL', name: 'キガリ空港', lat: -1.9686, lng: 30.1395 },
+  { code: 'LHR', name: 'ヒースロー空港', lat: 51.4775, lng: -0.4614 },
+  { code: 'CDG', name: 'シャルル・ド・ゴール空港', lat: 49.0097, lng: 2.5479 },
+  { code: 'AMS', name: 'スキポール空港', lat: 52.3086, lng: 4.7639 },
+  { code: 'FRA', name: 'フランクフルト空港', lat: 50.0379, lng: 8.5622 },
+  { code: 'FCO', name: 'フィウミチーノ空港', lat: 41.8003, lng: 12.2389 },
+  { code: 'BCN', name: 'バルセロナ空港', lat: 41.2971, lng: 2.0785 },
+  { code: 'PRG', name: 'プラハ空港', lat: 50.1008, lng: 14.2600 },
+  { code: 'IST', name: 'イスタンブール空港', lat: 41.2753, lng: 28.7519 },
+  { code: 'SYD', name: 'シドニー国際空港', lat: -33.9399, lng: 151.1753 },
+  { code: 'MEL', name: 'メルボルン空港', lat: -37.6690, lng: 144.8410 },
+  { code: 'AKL', name: 'オークランド空港', lat: -37.0082, lng: 174.7850 },
+  { code: 'PER', name: 'パース空港', lat: -31.9403, lng: 115.9672 },
+  { code: 'BNE', name: 'ブリスベン空港', lat: -27.3842, lng: 153.1175 },
+  { code: 'JFK', name: 'JFK国際空港', lat: 40.6413, lng: -73.7781 },
+  { code: 'LAX', name: 'ロサンゼルス国際空港', lat: 33.9425, lng: -118.4081 },
+  { code: 'YYZ', name: 'トロント・ピアソン空港', lat: 43.6777, lng: -79.6248 },
+  { code: 'YVR', name: 'バンクーバー空港', lat: 49.1947, lng: -123.1792 },
+  { code: 'YYC', name: 'カルガリー空港', lat: 51.1215, lng: -114.0076 },
+  { code: 'BOG', name: 'エルドラド空港', lat: 4.7016, lng: -74.1469 },
+  { code: 'UIO', name: 'キト空港', lat: -0.1292, lng: -78.3575 },
+  { code: 'TIJ', name: 'ティファナ空港', lat: 32.5411, lng: -116.9700 },
+  { code: 'HNL', name: 'ホノルル空港', lat: 21.3245, lng: -157.9251 },
+  { code: 'BHX', name: 'バーミンガム空港', lat: 52.4539, lng: -1.7480 },
+  { code: 'VCE', name: 'ヴェネツィア空港', lat: 45.5053, lng: 12.3519 },
+  { code: 'TLS', name: 'トゥールーズ空港', lat: 43.6291, lng: 1.3678 },
+  { code: 'OPO', name: 'ポルト空港', lat: 41.2481, lng: -8.6814 },
+  { code: 'HEL', name: 'ヘルシンキ・ヴァンター空港', lat: 60.3172, lng: 24.9633 },
+  { code: 'OUL', name: 'オウル空港', lat: 64.9301, lng: 25.3546 },
+  { code: 'LED', name: 'プルコヴォ空港', lat: 59.8003, lng: 30.2625 },
+  { code: 'BEG', name: 'ベオグラード空港', lat: 44.8184, lng: 20.3091 },
+  { code: 'SOF', name: 'ソフィア空港', lat: 42.6952, lng: 23.4062 },
+  { code: 'LHE', name: 'ラホール空港', lat: 31.5216, lng: 74.4036 },
+  { code: 'SKD', name: 'サマルカンド空港', lat: 39.7005, lng: 66.9838 },
+  { code: 'ULN', name: 'チンギスハーン空港', lat: 47.8431, lng: 106.7666 },
+  { code: 'AGR', name: 'アグラ空港', lat: 27.1558, lng: 77.9608 },
+  { code: 'PBH', name: 'パロ空港', lat: 27.4032, lng: 89.4246 },
+  { code: 'AQP', name: 'アレキパ空港', lat: -16.3411, lng: -71.5680 },
+  { code: 'MCT', name: 'マスカット空港', lat: 23.5933, lng: 58.2844 },
+  { code: 'RUH', name: 'リヤド空港', lat: 24.9576, lng: 46.6988 },
+  { code: 'JNB', name: 'O.R.タンボ国際空港', lat: -26.1392, lng: 28.2460 },
+  { code: 'EVN', name: 'ズヴァルトノッツ空港', lat: 40.1473, lng: 44.3959 },
+  { code: 'BUS', name: 'バトゥミ空港', lat: 41.6103, lng: 41.5997 },
+  { code: 'VLC', name: 'バレンシア空港', lat: 39.4893, lng: -0.4816 },
+  { code: 'AUH', name: 'アブダビ国際空港', lat: 24.4330, lng: 54.6511 },
+  { code: 'SHJ', name: 'シャルジャ空港', lat: 25.3286, lng: 55.5172 },
+  { code: 'DAR', name: 'ダルエスサラーム空港', lat: -6.8781, lng: 39.2026 },
+  { code: 'KAN', name: 'カノ空港', lat: 12.0476, lng: 8.5247 },
+];
+
+const mapData = {
+  hotels: mapHotels,
+  cities: citiesArray,
+  cityCoords,
+  airports: airportMarkersData,
+};
+
+const translations = {
+  viewDetails: '詳細を見る',
+  fromPrice: '$${price}〜',
+  hotelsCount: '{count}件のホテル',
+  hotelFrom: '料金',
+  nearestAirport: '最寄りの空港',
+  fromAirport: '{airport}から{dist}km',
+  showAirports: '空港を表示',
+};
+---
+
+<Layout title="ホテルマップ - DayDreamHub" description="インタラクティブマップでデイユースホテルを探す。都市・カテゴリーで絞り込み。">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { width: 100%; height: calc(100vh - 64px); }
+    .leaflet-container { font-family: inherit; }
+  </style>
+
+  <div class="relative" style="height: calc(100vh - 64px); min-height: 500px;">
+    <!-- Filter Panel -->
+    <div class="absolute top-4 left-4 z-[1000] bg-white rounded-xl shadow-lg p-4 w-72 max-w-[calc(100vw-2rem)]" id="filter-panel">
+      <h2 class="text-lg font-bold text-teal-700 mb-3">ホテルマップ</h2>
+
+      <!-- City Filter -->
+      <div class="mb-3">
+        <label for="filter-city" class="block text-sm font-medium text-slate-600 mb-1">都市で絞り込む</label>
+        <select id="filter-city" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+          <option value="">すべての都市</option>
+          {allCities.map((city: string) => (
+            <option value={city}>{city}</option>
+          ))}
+        </select>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="mb-3">
+        <label for="filter-category" class="block text-sm font-medium text-slate-600 mb-1">カテゴリー</label>
+        <select id="filter-category" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500">
+          <option value="">すべてのカテゴリー</option>
+          <option value="daycation">デイケーション</option>
+          <option value="for_couple">カップル向け</option>
+          <option value="for_work">ワーク向け</option>
+          <option value="workspace">ワークスペース</option>
+          <option value="luxury">ラグジュアリー</option>
+          <option value="personal_time">パーソナルタイム</option>
+          <option value="transit_use">トランジット／乗り継ぎ</option>
+        </select>
+      </div>
+
+      <!-- Airport toggle -->
+      <div class="mb-3">
+        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+          <input type="checkbox" id="toggle-airports" checked class="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>
+          {translations.showAirports}
+        </label>
+      </div>
+
+      <!-- Results count -->
+      <div id="results-count" class="text-xs text-slate-500"></div>
+    </div>
+
+    <!-- Mobile toggle button -->
+    <button id="toggle-panel" class="absolute top-4 right-4 z-[1000] lg:hidden bg-white shadow-lg rounded-full w-10 h-10 flex items-center justify-center text-teal-700 hover:bg-teal-50 transition-colors" aria-label="フィルターパネルを切り替え">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+      </svg>
+    </button>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+  </div>
+</Layout>
+
+<script is:inline src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script is:inline define:vars={{ mapData, translations }}>
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+      // Haversine distance calculation (km)
+      function haversineKm(lat1, lng1, lat2, lng2) {
+        var R = 6371;
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLng = (lng2 - lng1) * Math.PI / 180;
+        var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      // Find nearest airport to given coordinates
+      function findNearestAirport(lat, lng) {
+        var best = null;
+        for (var i = 0; i < mapData.airports.length; i++) {
+          var ap = mapData.airports[i];
+          var km = haversineKm(lat, lng, ap.lat, ap.lng);
+          if (!best || km < best.km) {
+            best = { code: ap.code, name: ap.name, km: km };
+          }
+        }
+        return best;
+      }
+
+      const map = L.map('map', { zoomControl: true }).setView([13.7, 105.0], 5);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        maxZoom: 19,
+      }).addTo(map);
+
+      // City name labels layer (Japanese)
+      var cityLabels = {
+        'バンコク': [13.7563, 100.5018], 'シンガポール': [1.3521, 103.8198], 'クアラルンプール': [3.139, 101.6869],
+        'ジャカルタ': [-6.2088, 106.8456], 'バリ': [-8.3405, 115.092], 'プーケット': [7.8804, 98.3923],
+        'マニラ': [14.5995, 120.9842], 'セブ': [10.3157, 123.8854], 'ホーチミン': [10.8231, 106.6297],
+        'ハノイ': [21.0285, 105.8542], 'ダナン': [16.0544, 108.2022], 'ビエンチャン': [17.9757, 102.6331],
+        '香港': [22.3193, 114.1694], '東京': [35.6762, 139.6503], '京都': [35.0116, 135.7681],
+        'ソウル': [37.5665, 126.978], '北京': [39.9042, 116.4074], '上海': [31.2304, 121.4737],
+        '台北': [25.033, 121.5654], 'ウランバートル': [47.8864, 106.9057],
+        'ニューデリー': [28.6139, 77.209], 'ムンバイ': [19.076, 72.8777], 'コロンボ': [6.9271, 79.8612],
+        'イスラマバード': [33.6844, 73.0479], 'ラホール': [31.5204, 74.3587],
+        'タシケント': [41.2995, 69.2401], 'アルマティ': [43.222, 76.8512], 'サマルカンド': [39.6542, 66.9597],
+        'トビリシ': [41.7151, 44.8271], 'バトゥミ': [41.6168, 41.6367],
+        'ドバイ': [25.2048, 55.2708], 'ドーハ': [25.2854, 51.531], 'マナーマ': [26.2285, 50.586],
+        'リヤド': [24.6877, 46.7219], 'マスカット': [23.588, 58.3829],
+        'ナイロビ': [-1.2921, 36.8219], 'カイロ': [30.0444, 31.2357], 'ケープタウン': [-33.9249, 18.4241],
+        'キガリ': [-1.9403, 29.8739], 'アブジャ': [9.0579, 7.4951],
+        'ロンドン': [51.5074, -0.1278], 'パリ': [48.8566, 2.3522], 'アムステルダム': [52.3676, 4.9041],
+        'ベルリン': [52.52, 13.405], 'ローマ': [41.9028, 12.4964], 'バルセロナ': [41.3851, 2.1734],
+        'プラハ': [50.0755, 14.4378], 'イスタンブール': [41.0082, 28.9784], 'ベオグラード': [44.7866, 20.4489],
+        'ポルト': [41.1579, -8.6291], 'バレンシア': [39.4699, -0.3763], 'ヴェネツィア': [45.4408, 12.3155],
+        'バーミンガム': [52.4862, -1.8904], 'フランクフルト': [50.1109, 8.6821],
+        'シドニー': [-33.8688, 151.2093], 'メルボルン': [-37.8136, 144.9631], 'オークランド': [-36.8485, 174.7633],
+        'パース': [-31.9505, 115.8605], 'ブリスベン': [-27.4698, 153.0251],
+        'ニューヨーク': [40.7128, -74.006], 'ロサンゼルス': [34.0522, -118.2437],
+        'トロント': [43.6532, -79.3832], 'バンクーバー': [49.2827, -123.1207], 'カルガリー': [51.0447, -114.0719],
+        'ボゴタ': [4.711, -74.0721], 'キト': [-0.1807, -78.4678], 'ティファナ': [32.5149, -117.0382],
+      };
+      var cityLabelLayer = L.layerGroup().addTo(map);
+      for (var cityName in cityLabels) {
+        var c = cityLabels[cityName];
+        var label = L.marker(c, {
+          icon: L.divIcon({
+            html: '<span style="font-size:11px;font-weight:600;color:#475569;text-shadow:1px 1px 2px #fff,-1px -1px 2px #fff,1px -1px 2px #fff,-1px 1px 2px #fff;white-space:nowrap;pointer-events:none;">' + cityName + '</span>',
+            className: '',
+            iconSize: [0, 0],
+            iconAnchor: [0, 6],
+          }),
+          interactive: false,
+          pane: 'tooltipPane',
+        });
+        cityLabelLayer.addLayer(label);
+      }
+
+      // Add scale bar
+      L.control.scale({ metric: true, imperial: false, position: 'bottomright' }).addTo(map);
+
+      const hotelIcon = L.divIcon({
+        html: '<div style="background-color: #0f766e; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 14px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V7a2 2 0 012-2h14a2 2 0 012 2v14"/><path d="M3 11h18"/><path d="M9 21V11"/><path d="M15 21V11"/></svg></div>',
+        className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -32],
+      });
+
+      const cityIcon = L.divIcon({
+        html: '<div style="background-color: #f59e0b; color: white; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg></div>',
+        className: '', iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36],
+      });
+
+      const airportIcon = L.divIcon({
+        html: '<div style="background-color: #6366f1; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); border: 2px solid white;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg></div>',
+        className: '', iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -28],
+      });
+
+      let hotelMarkers = [];
+      let cityMarkers = [];
+      const hotelLayer = L.layerGroup().addTo(map);
+      const cityLayer = L.layerGroup().addTo(map);
+      const airportLayer = L.layerGroup().addTo(map);
+      const basePath = '/ja';
+
+      // Create airport markers
+      function createAirportMarkers() {
+        airportLayer.clearLayers();
+        for (var i = 0; i < mapData.airports.length; i++) {
+          var ap = mapData.airports[i];
+          var popupContent = '<div style="min-width:140px;font-family:system-ui,sans-serif;padding:4px;">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+            '<span style="background:#6366f1;color:white;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700;">' + ap.code + '</span>' +
+            '<span style="font-size:13px;font-weight:600;color:#334155;">' + ap.name + '</span>' +
+            '</div></div>';
+          var marker = L.marker([ap.lat, ap.lng], { icon: airportIcon })
+            .bindPopup(popupContent, { maxWidth: 240 });
+          airportLayer.addLayer(marker);
+        }
+      }
+
+      function createHotelMarkers(filteredHotels) {
+        hotelLayer.clearLayers();
+        hotelMarkers = [];
+        for (const hotel of filteredHotels) {
+          let lat = hotel.lat;
+          let lng = hotel.lng;
+          if (!lat || !lng) {
+            const coords = mapData.cityCoords[hotel.city];
+            if (coords) {
+              lat = coords[0] + (Math.random() - 0.5) * 0.003;
+              lng = coords[1] + (Math.random() - 0.5) * 0.003;
+            }
+          }
+          if (!lat || !lng) continue;
+
+          // Find nearest airport
+          var nearest = findNearestAirport(lat, lng);
+          var airportHtml = '';
+          if (nearest) {
+            var distStr = nearest.km < 1 ? nearest.km.toFixed(1) : Math.round(nearest.km);
+            airportHtml = '<p style="margin:0 0 6px;font-size:11px;color:#6366f1;display:flex;align-items:center;gap:4px;">' +
+              '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.4-.1.9.3 1.1l5.5 3.2-2.2 2.2-2.3-.4c-.4-.1-.8.1-1 .4l-.1.2c-.2.3-.1.7.2.9l2.6 1.7 1.7 2.6c.2.3.6.4.9.2l.2-.1c.3-.2.5-.6.4-1l-.4-2.3 2.2-2.2 3.2 5.5c.2.4.7.5 1.1.3l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>' +
+              translations.fromAirport.replace('{dist}', distStr).replace('{airport}', nearest.name + ' (' + nearest.code + ')') +
+              '</p>';
+          }
+
+          const priceStr = hotel.minPrice ? translations.fromPrice.replace('${price}', hotel.minPrice) : '';
+          const thumbnailHtml = hotel.thumbnail
+            ? '<img src="' + hotel.thumbnail + '" alt="' + hotel.name + '" style="width:100%;height:100px;object-fit:cover;border-radius:8px 8px 0 0;margin-bottom:8px;" />' : '';
+          const popupContent = '<div style="min-width:200px;max-width:260px;font-family:system-ui,sans-serif;">' +
+            thumbnailHtml + '<div style="padding:0 4px 4px;">' +
+            '<h3 style="margin:0 0 4px;font-size:14px;font-weight:700;color:#0f766e;">' + hotel.name + '</h3>' +
+            '<p style="margin:0 0 4px;font-size:12px;color:#64748b;">' + hotel.city + ', ' + hotel.country + '</p>' +
+            airportHtml +
+            (priceStr ? '<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#d97706;">' + priceStr + '</p>' : '') +
+            '<a href="' + basePath + '/hotel/' + hotel.slug + '" style="display:inline-block;background:#0f766e;color:white;padding:6px 16px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">' + translations.viewDetails + '</a>' +
+            '</div></div>';
+          const marker = L.marker([lat, lng], { icon: hotelIcon }).bindPopup(popupContent, { maxWidth: 280 });
+          marker._hotelData = hotel;
+          hotelMarkers.push(marker);
+          hotelLayer.addLayer(marker);
+        }
+      }
+
+      function createCityMarkers(filterCity, filterCategory) {
+        cityLayer.clearLayers();
+        cityMarkers = [];
+        for (const city of mapData.cities) {
+          if (!city.lat || !city.lng) continue;
+          if (filterCity && city.name !== filterCity) continue;
+          let cityHotelCount = 0;
+          for (const hotel of mapData.hotels) {
+            if (hotel.city !== city.name) continue;
+            if (filterCategory) {
+              try { const cats = JSON.parse(hotel.categories || '[]'); if (!cats.includes(filterCategory)) continue; } catch { continue; }
+            }
+            cityHotelCount++;
+          }
+          const hasHotelWithCoords = mapData.hotels.some(h => h.city === city.name && h.lat && h.lng);
+          if (hasHotelWithCoords) continue;
+          if (cityHotelCount === 0 && !filterCity) continue;
+          const countText = translations.hotelsCount.replace('{count}', cityHotelCount);
+          const popupContent = '<div style="min-width:160px;font-family:system-ui,sans-serif;padding:4px;">' +
+            '<h3 style="margin:0 0 4px;font-size:15px;font-weight:700;color:#d97706;">' + city.nameDisplay + '</h3>' +
+            '<p style="margin:0 0 4px;font-size:12px;color:#64748b;">' + city.country + '</p>' +
+            '<p style="margin:0 0 8px;font-size:13px;color:#334155;">' + countText + '</p>' +
+            '<a href="' + basePath + '/city/' + city.slug + '" style="display:inline-block;background:#f59e0b;color:white;padding:6px 16px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600;">' + translations.viewDetails + '</a>' +
+            '</div>';
+          const marker = L.marker([city.lat, city.lng], { icon: cityIcon }).bindPopup(popupContent, { maxWidth: 240 });
+          cityMarkers.push(marker);
+          cityLayer.addLayer(marker);
+        }
+      }
+
+      function applyFilters() {
+        const cityFilter = document.getElementById('filter-city').value;
+        const categoryFilter = document.getElementById('filter-category').value;
+        let filtered = mapData.hotels;
+        if (cityFilter) filtered = filtered.filter(h => h.city === cityFilter);
+        if (categoryFilter) {
+          filtered = filtered.filter(h => {
+            try { const cats = JSON.parse(h.categories || '[]'); return cats.includes(categoryFilter); } catch { return false; }
+          });
+        }
+        createHotelMarkers(filtered);
+        createCityMarkers(cityFilter, categoryFilter);
+        const countEl = document.getElementById('results-count');
+        if (countEl) countEl.textContent = translations.hotelsCount.replace('{count}', filtered.length);
+        if (cityFilter) {
+          const coords = mapData.cityCoords[cityFilter];
+          if (coords) map.setView([coords[0], coords[1]], 12, { animate: true });
+        }
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const cityParam = urlParams.get('city');
+      if (cityParam) {
+        const citySelect = document.getElementById('filter-city');
+        const options = Array.from(citySelect.options);
+        const match = options.find(o => o.value.toLowerCase() === cityParam.toLowerCase());
+        if (match) citySelect.value = match.value;
+      }
+
+      createAirportMarkers();
+      createHotelMarkers(mapData.hotels);
+      createCityMarkers('', '');
+      document.getElementById('results-count').textContent =
+        translations.hotelsCount.replace('{count}', mapData.hotels.length);
+
+      if (cityParam) applyFilters();
+
+      document.getElementById('filter-city').addEventListener('change', applyFilters);
+      document.getElementById('filter-category').addEventListener('change', applyFilters);
+
+      // Airport toggle
+      var airportToggle = document.getElementById('toggle-airports');
+      if (airportToggle) {
+        airportToggle.addEventListener('change', function() {
+          if (this.checked) {
+            map.addLayer(airportLayer);
+          } else {
+            map.removeLayer(airportLayer);
+          }
+        });
+      }
+
+      const toggleBtn = document.getElementById('toggle-panel');
+      const panel = document.querySelector('.absolute.top-4.left-4');
+      let panelVisible = true;
+      if (toggleBtn && panel) {
+        if (window.innerWidth < 768) { panel.classList.add('hidden'); panelVisible = false; }
+        toggleBtn.addEventListener('click', function() {
+          panelVisible = !panelVisible;
+          if (panelVisible) panel.classList.remove('hidden');
+          else panel.classList.add('hidden');
+        });
+      }
+    });
+})();
+</script>
