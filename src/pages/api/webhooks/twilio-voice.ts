@@ -251,6 +251,52 @@ async function findConciergeCallIdFromLog(db: DbLike | null, logId: string | nul
   }
 }
 
+async function resolveConciergeCallByClues(
+  db: DbLike | null,
+  clues: { logId?: string | null; linkedConciergeCallIdFromLog?: string | null; callSid?: string | null }
+): Promise<{ row: any | null; resolvedId: string | null; attemptedPaths: string[] }> {
+  if (!db) return { row: null, resolvedId: null, attemptedPaths: [] };
+
+  const logId = String(clues.logId || '').trim() || null;
+  const linked = String(clues.linkedConciergeCallIdFromLog || '').trim() || null;
+  const callSid = String(clues.callSid || '').trim() || null;
+  const twilioCallRef = callSid ? `twilio:${callSid}` : null;
+
+  const attemptedPaths: string[] = [];
+  const colsQ = db.prepare(`PRAGMA table_info(concierge_calls)`);
+  const colsR = (typeof colsQ.all === 'function') ? await colsQ.all() : await colsQ.bind().run();
+  const cols = new Set((colsR?.results || []).map((r: any) => String(r?.name || '')));
+
+  const tryFetchBy = async (label: string, sql: string, ...binds: any[]) => {
+    attemptedPaths.push(label);
+    return await db.prepare(sql).bind(...binds).first().catch(() => null);
+  };
+
+  if (linked && /^\d+$/.test(linked)) {
+    const row = await tryFetchBy('linked_concierge_call_id_from_log', `SELECT id, call_group_id, outcome, status, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ? LIMIT 1`, linked);
+    if (row?.id) return { row, resolvedId: String(row.id), attemptedPaths };
+  }
+
+  if (twilioCallRef && cols.has('telnyx_call_id')) {
+    const row = await tryFetchBy('telnyx_call_id_from_twilio_callsid', `SELECT id, call_group_id, outcome, status, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE telnyx_call_id = ? ORDER BY id DESC LIMIT 1`, twilioCallRef);
+    if (row?.id) return { row, resolvedId: String(row.id), attemptedPaths };
+  }
+
+  if (logId && /^\d+$/.test(logId)) {
+    const row = await tryFetchBy('concierge_calls.id_from_lid', `SELECT id, call_group_id, outcome, status, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ? LIMIT 1`, logId);
+    if (row?.id) return { row, resolvedId: String(row.id), attemptedPaths };
+  }
+
+  const possibleLogIdCols = ['call_log_id', 'related_call_log_id', 'source_call_log_id'].filter((c) => cols.has(c));
+  for (const col of possibleLogIdCols) {
+    if (!logId) break;
+    const row = await tryFetchBy(`concierge_calls.${col}_from_lid`, `SELECT id, call_group_id, outcome, status, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE ${col} = ? ORDER BY id DESC LIMIT 1`, logId);
+    if (row?.id) return { row, resolvedId: String(row.id), attemptedPaths };
+  }
+
+  return { row: null, resolvedId: null, attemptedPaths };
+}
+
 async function insertCallLogEvent(
   db: DbLike | null,
   logId: string | null,
@@ -676,10 +722,31 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const linkedConciergeCallIdFromLog = (db && logId && inferredPhase === 'concierge')
         ? await findConciergeCallIdFromLog(db, logId)
         : null;
-      const statusTargetConciergeCallId = logId || linkedConciergeCallIdFromLog;
-      const conciergeRow: any = (db && statusTargetConciergeCallId && inferredPhase === 'concierge')
-        ? await db.prepare(`SELECT id, call_group_id, outcome, status FROM concierge_calls WHERE id = ?`).bind(statusTargetConciergeCallId).first().catch(() => null)
-        : null;
+
+      const conciergeResolution = (db && inferredPhase === 'concierge')
+        ? await resolveConciergeCallByClues(db, {
+            logId,
+            linkedConciergeCallIdFromLog,
+            callSid,
+          })
+        : { row: null, resolvedId: null, attemptedPaths: [] as string[] };
+
+      const conciergeRow: any = conciergeResolution.row;
+      const statusTargetConciergeCallId = conciergeResolution.resolvedId || linkedConciergeCallIdFromLog || logId;
+
+      if (!conciergeRow && inferredPhase === 'concierge') {
+        console.warn('[twilio-voice] concierge status callback could not resolve target record before placeholder fallback', {
+          phaseParam,
+          inferredPhase,
+          logId,
+          linkedConciergeCallIdFromLog,
+          statusTargetConciergeCallId,
+          callSid: callSid || null,
+          twilioCallRef: callSid ? `twilio:${callSid}` : null,
+          callStatus: callStatus || null,
+          attemptedPaths: conciergeResolution.attemptedPaths || [],
+        });
+      }
 
       if (conciergeRow) {
         const alreadyTerminal = ['booked', 'available', 'unavailable', 'no_answer'].includes(String(conciergeRow.outcome || ''));
@@ -743,23 +810,26 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           outreachLead = await db.prepare(`SELECT l.id, l.hotel_name, l.person_in_charge_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
         }
       } else {
-        resolvedConciergeCallId = await findConciergeCallIdFromLog(db, logId);
-        const candidateIds = [logId, resolvedConciergeCallId].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx) as string[];
-        for (const candidateId of candidateIds) {
-          conciergeCall = await db.prepare(`SELECT id, call_group_id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?`).bind(candidateId).first().catch(() => null);
-          if (conciergeCall?.id) {
-            resolvedConciergeCallId = String(conciergeCall.id);
-            break;
-          }
-        }
+        const linkedConciergeCallIdFromLog = await findConciergeCallIdFromLog(db, logId);
+        const conciergeResolution = await resolveConciergeCallByClues(db, {
+          logId,
+          linkedConciergeCallIdFromLog,
+          callSid,
+        });
+
+        conciergeCall = conciergeResolution.row;
+        resolvedConciergeCallId = conciergeResolution.resolvedId || linkedConciergeCallIdFromLog || logId;
 
         if (!conciergeCall?.id) {
-          console.error('[Twilio Webhook Error] Failed to find concierge_calls record.', {
+          console.warn('[twilio-voice] concierge gather webhook could not resolve concierge_calls record before placeholder fallback', {
             phaseParam,
+            inferredPhase,
             logId,
+            linkedConciergeCallIdFromLog,
             resolvedConciergeCallId,
-            candidateIds,
-            query: 'SELECT id, call_group_id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?'
+            callSid: callSid || null,
+            twilioCallRef: callSid ? `twilio:${callSid}` : null,
+            attemptedPaths: conciergeResolution.attemptedPaths || [],
           });
         }
 
