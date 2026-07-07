@@ -76,6 +76,36 @@ export function sanitizeAIText(text: string): string {
   return text.trim();
 }
 
+function safeParseObject(raw: unknown): { value: any; ok: boolean } {
+  if (raw && typeof raw === 'object') return { value: raw, ok: true };
+  const text = String(raw ?? '').trim();
+  if (!text) return { value: {}, ok: true };
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object') return { value: parsed, ok: true };
+  } catch {}
+  return { value: {}, ok: false };
+}
+
+function normalizeConciergeRequestDetails(details: any): any {
+  const src = (details && typeof details === 'object') ? details : {};
+  const adults = Number(src.adults || 0) || 0;
+  const children = Number(src.children || 0) || 0;
+  const rawGuests = src.guests ?? src.guest_count;
+  const guestsNum = Number(rawGuests);
+  const guests = Number.isFinite(guestsNum) && guestsNum > 0
+    ? guestsNum
+    : ((adults > 0 ? adults : 1) + children);
+
+  return {
+    ...src,
+    check_in_date: src.check_in_date || src.date || '',
+    check_in_time: src.check_in_time || src.check_in || '10:00',
+    check_out_time: src.check_out_time || src.check_out || '18:00',
+    guests,
+  };
+}
+
 type HotelSearchBundle = {
   city: string;
   hotels: any[];
@@ -815,18 +845,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
         );
       }
       if (guest_name || guest_email || effectiveGuestPhone || effectiveGuests !== null) {
-        let requestDetails: any = {};
-        try {
-          requestDetails = JSON.parse(c.request_details || '{}');
-        } catch {}
+        const parsed = safeParseObject(c.request_details);
+        const requestDetails: any = normalizeConciergeRequestDetails(parsed.value);
         if (guest_name) requestDetails.guest_name = guest_name;
         if (effectiveGuestPhone) requestDetails.guest_phone = effectiveGuestPhone;
         if (effectiveGuests !== null && !Number.isNaN(effectiveGuests)) requestDetails.guests = effectiveGuests;
+        const requestDetailsToStore = parsed.ok
+          ? JSON.stringify(normalizeConciergeRequestDetails(requestDetails))
+          : (c.request_details || JSON.stringify(normalizeConciergeRequestDetails(requestDetails)));
         await db
           .prepare(
             `UPDATE concierge_calls SET guest_name = COALESCE(?, guest_name), guest_email = COALESCE(?, guest_email), request_details = ?, updated_at = datetime('now') WHERE id = ?`
           )
-          .bind(guest_name || null, guest_email || null, JSON.stringify(requestDetails), callId)
+          .bind(guest_name || null, guest_email || null, requestDetailsToStore, callId)
           .run();
       }
       const result = await initiateCall(env, db, session_id, callId);
@@ -867,18 +898,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const normalizedGuests = Number(callGroupData.guests || guests || 0);
       const _adults = Number(callGroupData.adults || 0) || (normalizedGuests > 0 ? normalizedGuests : 1);
       const _children = Number(callGroupData.children || 0);
-      const requestDetails = {
+      const requestDetails = normalizeConciergeRequestDetails({
         guest_name: callGroupData.guest_name,
         guest_email: callGroupData.guest_email,
         guest_phone: callGroupData.guest_phone || callGroupData.phone || guest_phone || null,
-        // 正準キー（check_in_date / check_in_time / check_out_time / guests）に統一（Task #54）
-        check_in_date: callGroupData.check_in_date,
-        check_in_time: callGroupData.check_in_time || '10:00',
-        check_out_time: callGroupData.check_out_time || '18:00',
+        check_in_date: callGroupData.check_in_date || callGroupData.date,
+        check_in_time: callGroupData.check_in_time || callGroupData.check_in || '10:00',
+        check_out_time: callGroupData.check_out_time || callGroupData.check_out || '18:00',
         adults: _adults,
         children: _children,
         guests: normalizedGuests > 0 ? normalizedGuests : (_adults + _children),
-      };
+      });
       const group = await createCallGroup(env, {
         session_id,
         hotels: callGroupData.hotels.slice(0, 3),
@@ -957,10 +987,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      // 正準キー guests を明示的に補完（Task #54）
-      if (request_details.guests == null) {
-        request_details.guests = (request_details.adults || 1) + (request_details.children || 0);
-      }
+      const normalizedRequestDetails = normalizeConciergeRequestDetails(request_details);
       await db
         .prepare(
           `INSERT INTO concierge_sessions (id, locale, created_at, updated_at)
@@ -973,7 +1000,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const result = await createCallGroup(env, {
         session_id,
         hotels: hotelsSlice,
-        request_details,
+        request_details: normalizedRequestDetails,
       });
       // 全てDDH登録ホテルなら無料
       const allInternal = hotelsSlice.every((h: any) => h.hotel_source === 'internal');
@@ -1032,18 +1059,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
           .bind(groupId)
           .all();
         for (const row of (childCalls?.results as any[]) || []) {
-          let details: any = {};
-          try {
-            details = JSON.parse(row.request_details || '{}');
-          } catch {}
+          const parsed = safeParseObject(row.request_details);
+          const details: any = normalizeConciergeRequestDetails(parsed.value);
           if (guest_name) details.guest_name = guest_name;
           if (effectiveGuestPhone) details.guest_phone = effectiveGuestPhone;
           if (effectiveGuests !== null && !Number.isNaN(effectiveGuests)) details.guests = effectiveGuests;
+          const detailsToStore = parsed.ok
+            ? JSON.stringify(normalizeConciergeRequestDetails(details))
+            : (row.request_details || JSON.stringify(normalizeConciergeRequestDetails(details)));
           await db
             .prepare(
               "UPDATE concierge_calls SET guest_name = COALESCE(?, guest_name), guest_email = COALESCE(?, guest_email), request_details = ?, updated_at = datetime('now') WHERE id = ?"
             )
-            .bind(guest_name || null, guest_email || null, JSON.stringify(details), row.id)
+            .bind(guest_name || null, guest_email || null, detailsToStore, row.id)
             .run();
         }
       }
@@ -1096,7 +1124,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           const guestEmail = groupRow?.guest_email;
           if (guestEmail) {
             const hotelNames: string[] = ((callRows?.results as any[]) || []).map((r: any) => r.hotel_name || 'Hotel');
-            const firstDetails = (() => { try { return JSON.parse((callRows?.results as any[])?.[0]?.request_details || '{}'); } catch { return {}; } })();
+            const firstDetails = normalizeConciergeRequestDetails((() => {
+              const parsed = safeParseObject((callRows?.results as any[])?.[0]?.request_details || '{}');
+              return parsed.value;
+            })());
             await sendConciergeCallStartedEmail(resendKey, {
               guestName: groupRow?.guest_name || 'Guest',
               guestEmail,
@@ -1176,18 +1207,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
           { headers: { 'Content-Type': 'application/json' } }
         );
       }
-      let details: any = {};
-      try {
-        details = JSON.parse((call as any).request_details || '{}');
-      } catch {}
+      const parsedCallDetails = safeParseObject((call as any).request_details || '{}');
+      let details: any = normalizeConciergeRequestDetails(parsedCallDetails.value);
       details.call_mode = 'callback_confirm';
       details.confirmed_price =
         (call as any).price_quoted || details.max_price || '';
+      const overBudgetDetailsToStore = parsedCallDetails.ok
+        ? JSON.stringify(normalizeConciergeRequestDetails(details))
+        : ((call as any).request_details || JSON.stringify(normalizeConciergeRequestDetails(details)));
       await db
         .prepare(
           "UPDATE concierge_calls SET status = 'pending', outcome = NULL, request_details = ?, updated_at = datetime('now') WHERE id = ?"
         )
-        .bind(JSON.stringify(details), callId)
+        .bind(overBudgetDetailsToStore, callId)
         .run();
       if ((call as any).call_group_id) {
         await db

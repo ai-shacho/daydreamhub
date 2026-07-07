@@ -204,6 +204,33 @@ function parseJsonWithGuard(raw: unknown, context: string): any {
   }
 }
 
+function normalizeConciergeDetails(raw: any): any {
+  const src = (raw && typeof raw === 'object') ? raw : {};
+  const adults = Number(src.adults || 0) || 0;
+  const children = Number(src.children || 0) || 0;
+  const guestsNum = Number(src.guests ?? src.guest_count);
+  const guests = Number.isFinite(guestsNum) && guestsNum > 0
+    ? guestsNum
+    : ((adults > 0 ? adults : 1) + children);
+
+  return {
+    ...src,
+    check_in_date: src.check_in_date || src.date || '',
+    check_in_time: src.check_in_time || src.check_in || '',
+    check_out_time: src.check_out_time || src.check_out || '',
+    guests,
+  };
+}
+
+function hasCoreConciergeSchedule(details: any): boolean {
+  if (!details || typeof details !== 'object') return false;
+  return Boolean(
+    String(details.check_in_date || '').trim() &&
+    String(details.check_in_time || '').trim() &&
+    String(details.check_out_time || '').trim()
+  );
+}
+
 async function findConciergeCallIdFromLog(db: DbLike | null, logId: string | null): Promise<string | null> {
   if (!db || !logId) return null;
   try {
@@ -468,7 +495,7 @@ async function sendResultEmailOnce(env: any, db: DbLike | null, conciergeCallId:
       `SELECT hotel_name FROM concierge_calls WHERE call_group_id = ? ORDER BY call_order ASC, id ASC`
     ).bind(call.call_group_id).all().then((r: any) => r?.results || []).catch(() => []);
 
-    const details: any = parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(all_failed_email)');
+    const details: any = normalizeConciergeDetails(parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(all_failed_email)'));
 
     await sendConciergeResultEmail(env.RESEND_API_KEY, {
       guestName: call.guest_name || 'Guest',
@@ -489,7 +516,7 @@ async function sendResultEmailOnce(env: any, db: DbLike | null, conciergeCallId:
   ).bind(conciergeCallId).run().catch(() => null);
   if (Number(claim?.meta?.changes || 0) === 0) return;
 
-  const details: any = parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(result_email)');
+  const details: any = normalizeConciergeDetails(parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(result_email)'));
 
   await sendConciergeResultEmail(env.RESEND_API_KEY, {
     guestName: call.guest_name || 'Guest',
@@ -514,7 +541,7 @@ async function sendAdminConciergeBookedEmail(env: any, db: DbLike | null, concie
   ).bind(conciergeCallId).first().catch(() => null);
   if (!call) return;
 
-  const details: any = parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(admin_email)');
+  const details: any = normalizeConciergeDetails(parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(admin_email)'));
 
   const payload = {
     from: 'DaydreamHub <noreply@daydreamhub.com>',
@@ -719,7 +746,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         resolvedConciergeCallId = await findConciergeCallIdFromLog(db, logId);
         const candidateIds = [logId, resolvedConciergeCallId].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx) as string[];
         for (const candidateId of candidateIds) {
-          conciergeCall = await db.prepare(`SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?`).bind(candidateId).first().catch(() => null);
+          conciergeCall = await db.prepare(`SELECT id, call_group_id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?`).bind(candidateId).first().catch(() => null);
           if (conciergeCall?.id) {
             resolvedConciergeCallId = String(conciergeCall.id);
             break;
@@ -732,12 +759,12 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             logId,
             resolvedConciergeCallId,
             candidateIds,
-            query: 'SELECT id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?'
+            query: 'SELECT id, call_group_id, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ?'
           });
         }
 
         if (conciergeCall?.request_details) {
-          conciergeDetails = parseJsonWithGuard(conciergeCall.request_details, 'concierge_calls.request_details');
+          conciergeDetails = normalizeConciergeDetails(parseJsonWithGuard(conciergeCall.request_details, 'concierge_calls.request_details'));
           if (Object.keys(conciergeDetails || {}).length === 0) {
             console.error('[Twilio Webhook Error] concierge_calls.request_details parsed to empty object.', {
               phaseParam,
@@ -745,6 +772,18 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
               resolvedConciergeCallId,
               requestDetailsSample: clamp(conciergeCall.request_details, 300),
             });
+          }
+        }
+
+        if ((!hasCoreConciergeSchedule(conciergeDetails)) && conciergeCall?.call_group_id) {
+          const groupRow: any = await db
+            .prepare('SELECT request_details FROM concierge_call_groups WHERE id = ? LIMIT 1')
+            .bind(conciergeCall.call_group_id)
+            .first()
+            .catch(() => null);
+          if (groupRow?.request_details) {
+            const groupDetails = normalizeConciergeDetails(parseJsonWithGuard(groupRow.request_details, 'concierge_call_groups.request_details'));
+            conciergeDetails = normalizeConciergeDetails({ ...groupDetails, ...conciergeDetails });
           }
         }
 
@@ -757,6 +796,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
             resolvedConciergeCallId,
             missingKeys: missingRequiredConciergeKeys,
             availableKeys: Object.keys(conciergeDetails || {}),
+            call_group_id: conciergeCall?.call_group_id || null,
           });
         }
       }
