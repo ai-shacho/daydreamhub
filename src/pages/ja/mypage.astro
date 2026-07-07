@@ -187,7 +187,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
                   )}
                   {(b.status === 'cancelled' || b.status === 'failed') && (
                     <div class="mt-3 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-xs text-red-700">
-                      ご不明な点がございましたら、<a href="/ja/contact" class="underline font-medium">お問い合わせ</a>ください。
+                      キャンセル済み、または決済が完了していない予約です。未完了の決済は請求されず、二重請求も発生しないよう保護されています。ご不明点は<a href="/ja/contact" class="underline font-medium">お問い合わせ</a>ください。
                     </div>
                   )}
 
@@ -225,7 +225,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
                           data-booking-id={b.id}
                           data-hotel-name={b.hotel_name}
                         >
-                          キャンセル
+                          キャンセルを依頼
                         </button>
                       )}
                     </div>
@@ -288,7 +288,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
   <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
     <h3 class="text-lg font-bold text-gray-900 mb-2">予約のキャンセル</h3>
     <p class="text-sm text-gray-500 mb-1">予約先：<span id="cancel-hotel-name" class="font-medium text-gray-700"></span></p>
-    <p class="text-sm text-gray-500 mb-4">キャンセルの理由をお知らせください。</p>
+    <p class="text-sm text-gray-500 mb-2">キャンセル理由をお知らせください。</p>
+    <p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-4">決済が完了していない場合は請求されません。二重請求も発生しないよう保護されています。</p>
     <textarea id="cancel-reason" rows="3" placeholder="キャンセル理由（任意）"
       class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none resize-none mb-4"></textarea>
     <div class="flex gap-3">
@@ -338,14 +339,14 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
   reviewModal.addEventListener('click', function(e) { if (e.target === reviewModal) { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); } });
 
   reviewConfirm.addEventListener('click', async function() {
-    if (!currentRating) { alert('星評価を選択してください。'); return; }
+    if (!currentRating) { showToast('星評価を選択してください。'); return; }
     reviewConfirm.textContent = '送信中...'; reviewConfirm.disabled = true;
     try {
       var res = await fetch('/api/guest/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booking_id: Number(currentReviewBookingId), rating: currentRating, content: reviewContent.value.trim() }) });
       var data = await res.json();
-      if (data.success) { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); alert('レビューありがとうございます！'); }
-      else { alert(data.error || '送信に失敗しました'); }
-    } catch { alert('レビューの送信中にエラーが発生しました'); }
+      if (data.success) { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); showToast('レビューありがとうございます！'); }
+      else { showToast(data.error || '送信に失敗しました'); }
+    } catch { showToast('レビューの送信中にエラーが発生しました'); }
     reviewConfirm.textContent = 'レビューを送信'; reviewConfirm.disabled = false;
   });
 
@@ -394,8 +395,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
       var res = await fetch('/api/guest/message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booking_id: Number(currentMsgBookingId), content: msgContent.value.trim() }) });
       var data = await res.json();
       if (data.success) { msgContent.value = ''; await loadMessages(currentMsgBookingId); }
-      else { alert(data.error || '送信に失敗しました'); }
-    } catch { alert('メッセージの送信中にエラーが発生しました'); }
+      else { showToast(data.error || '送信に失敗しました'); }
+    } catch { showToast('メッセージの送信中にエラーが発生しました'); }
     msgSend.textContent = '送信'; msgSend.disabled = false;
   });
 
@@ -445,12 +446,12 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
         closeModal();
         window.location.reload();
       } else {
-        alert(data.error || '予約のキャンセルに失敗しました');
+        showToast(data.error || '予約のキャンセルに失敗しました');
         confirmBtn.textContent = 'キャンセルを確定';
         confirmBtn.disabled = false;
       }
     } catch (e) {
-      alert('キャンセル中にエラーが発生しました。サポートにお問い合わせください。');
+      showToast('キャンセル中にエラーが発生しました。サポートにお問い合わせください。');
       confirmBtn.textContent = 'キャンセルを確定';
       confirmBtn.disabled = false;
     }

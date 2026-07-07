@@ -57,6 +57,9 @@ if (db) {
         <button id="today-btn" class="px-3 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
           Today
         </button>
+        <button id="block-dates-btn" class="px-3 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors">
+          Block dates
+        </button>
       </div>
     </div>
   </div>
@@ -212,6 +215,14 @@ if (db) {
   var blockHotelSelect = document.getElementById('block-hotel-select');
 
   var blockedDates = new Set();
+  var STATUS_MAP = {
+    pending: { label: 'Payment pending', badge: 'bg-amber-100 text-amber-700' },
+    pending_confirmation: { label: 'Waiting for hotel approval', badge: 'bg-blue-100 text-blue-700' },
+    confirmed: { label: 'Confirmed', badge: 'bg-emerald-100 text-emerald-700' },
+    cancelled: { label: 'Cancelled', badge: 'bg-red-100 text-red-700' },
+    completed: { label: 'Completed', badge: 'bg-slate-100 text-slate-700' },
+    failed: { label: 'Payment failed', badge: 'bg-red-100 text-red-700' },
+  };
 
   // Get all hotel IDs from the block-hotel-select dropdown (skip "All Hotels" option with value="")
   function getAllHotelIds() {
@@ -434,11 +445,7 @@ if (db) {
     } else {
       let html = '';
       dayData.forEach((b) => {
-        const statusColor =
-          b.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
-          b.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-          b.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-          'bg-slate-100 text-slate-600';
+        const statusMeta = STATUS_MAP[b.status] || { label: b.status, badge: 'bg-slate-100 text-slate-600' };
 
         const showConfirm = b.status === 'pending' || b.status === 'pending_confirmation';
         const showCancel = b.status === 'pending' || b.status === 'pending_confirmation' || b.status === 'confirmed';
@@ -451,7 +458,7 @@ if (db) {
                 <span class="text-xs text-slate-400 ml-2">#${b.id}</span>
               </div>
               <div class="flex items-center gap-2">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">${b.status}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusMeta.badge}">${statusMeta.label}</span>
                 ${showConfirm ? `<button class="cal-confirm-btn px-2 py-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded hover:bg-emerald-100 transition-colors" data-id="${b.id}">Confirm</button>` : ''}
                 ${showCancel ? `<button class="cal-cancel-btn px-2 py-1 text-xs text-red-700 bg-red-50 border border-red-200 rounded hover:bg-red-100 transition-colors" data-id="${b.id}">Cancel</button>` : ''}
               </div>
@@ -520,6 +527,38 @@ if (db) {
     return div.innerHTML;
   }
 
+  async function blockDateRange(startDate, endDate, shouldBlock) {
+    var hotelId = getSelectedHotelId();
+    var ids = hotelId ? [hotelId] : getAllHotelIds();
+    if (!ids.length) return;
+    var start = new Date(startDate + 'T00:00:00');
+    var end = new Date(endDate + 'T00:00:00');
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
+      showToast('Please enter a valid date range.', 'error');
+      return;
+    }
+    for (var d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      var dateStr = d.toISOString().slice(0, 10);
+      for (var i = 0; i < ids.length; i++) {
+        await fetch('/api/owner/blocked-dates', {
+          method: shouldBlock ? 'POST' : 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotel_id: Number(ids[i]), date: dateStr })
+        });
+      }
+    }
+    await fetchBlockedDates();
+    showToast(shouldBlock ? 'Dates have been blocked.' : 'Dates have been unblocked.', 'success');
+  }
+
+  function showToast(message, kind) {
+    var el = document.createElement('div');
+    el.className = 'fixed top-4 right-4 z-[80] text-white text-sm px-4 py-2 rounded-lg shadow ' + (kind === 'error' ? 'bg-red-600' : 'bg-emerald-600');
+    el.textContent = message;
+    document.body.appendChild(el);
+    setTimeout(function(){ el.remove(); }, 2200);
+  }
+
   // Navigation handlers
   document.getElementById('prev-month')?.addEventListener('click', () => {
     currentMonth--;
@@ -544,6 +583,16 @@ if (db) {
     currentYear = now.getFullYear();
     currentMonth = now.getMonth() + 1;
     fetchBookings();
+  });
+
+  document.getElementById('block-dates-btn')?.addEventListener('click', async () => {
+    var start = prompt('Start date (YYYY-MM-DD)');
+    if (!start) return;
+    var end = prompt('End date (YYYY-MM-DD)');
+    if (!end) return;
+    var mode = prompt('Type BLOCK to block dates, or UNBLOCK to release dates', 'BLOCK');
+    if (!mode) return;
+    await blockDateRange(start.trim(), end.trim(), mode.trim().toUpperCase() !== 'UNBLOCK');
   });
 
   // Hotel filter change - sync with block hotel select

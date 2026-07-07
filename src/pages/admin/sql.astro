@@ -11,7 +11,8 @@ if (!admin) return Astro.redirect("/admin/login");
 
 <AdminLayout title="SQL Console" activeNav="sql">
   <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-sm text-amber-800">
-    <strong>Warning:</strong> This console executes SQL directly on the production database. Use with caution.
+    <strong>Danger zone:</strong> This tool runs SQL directly on production data.
+    <div class="mt-1 text-xs">A typo can update or delete live records immediately. Please review your query twice before running.</div>
   </div>
 
   <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
@@ -45,9 +46,21 @@ if (!admin) return Astro.redirect("/admin/login");
     status.textContent = '';
   });
 
+  function isDangerousQuery(sql: string) {
+    const compact = sql.replace(/\s+/g, ' ').toLowerCase();
+    return /\b(update|delete|drop|truncate|alter|create|replace|insert)\b/.test(compact);
+  }
+
   runBtn.addEventListener('click', async () => {
     const sql = input.value.trim();
     if (!sql) return;
+
+    if (isDangerousQuery(sql)) {
+      const ok = confirm('This query may change production data. Continue?');
+      if (!ok) return;
+      const finalOk = confirm('Final confirmation: execute this SQL now?');
+      if (!finalOk) return;
+    }
 
     runBtn.disabled = true;
     runBtn.textContent = 'Running...';

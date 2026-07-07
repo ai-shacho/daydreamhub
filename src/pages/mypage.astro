@@ -193,7 +193,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
                   )}
                   {(b.status === 'cancelled' || b.status === 'failed') && (
                     <div class="mt-3 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-xs text-red-700">
-                      If you have questions about this booking, <a href="/contact" class="underline font-medium">contact us</a>.
+                      This booking was canceled or payment did not complete. You are not charged for incomplete payments, and we prevent double charges. Need help? <a href="/contact" class="underline font-medium">Contact us</a>.
                     </div>
                   )}
 
@@ -232,7 +232,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
                           data-booking-id={b.id}
                           data-hotel-name={b.hotel_name}
                         >
-                          Cancel
+                          Request cancellation
                         </button>
                       )}
                     </div>
@@ -295,7 +295,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
   <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
     <h3 class="text-lg font-bold text-gray-900 mb-2">Cancel Booking</h3>
     <p class="text-sm text-gray-500 mb-1">Booking at: <span id="cancel-hotel-name" class="font-medium text-gray-700"></span></p>
-    <p class="text-sm text-gray-500 mb-4">Please let us know why you're cancelling.</p>
+    <p class="text-sm text-gray-500 mb-2">Please let us know why you're cancelling.</p>
+    <p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 mb-4">If payment was not completed yet, you are not charged. We also protect you from double charges.</p>
     <textarea id="cancel-reason" rows="3" placeholder="Reason for cancellation (optional)"
       class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none resize-none mb-4"></textarea>
     <div class="flex gap-3">
@@ -311,6 +312,16 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
 
 <script is:inline>
 (function() {
+  function showToast(message, kind) {
+    var el = document.createElement('div');
+    var color = kind === 'error' ? 'bg-red-600' : kind === 'success' ? 'bg-emerald-600' : 'bg-slate-800';
+    el.className = 'fixed top-4 right-4 z-[70] text-white text-sm px-4 py-2.5 rounded-lg shadow-lg ' + color;
+    el.textContent = message;
+    document.body.appendChild(el);
+    setTimeout(function(){ el.style.opacity = '0'; el.style.transition = 'opacity .25s'; }, 2200);
+    setTimeout(function(){ el.remove(); }, 2500);
+  }
+
   // --- Review modal ---
   var reviewModal = document.getElementById('review-modal');
   var reviewHotelName = document.getElementById('review-hotel-name');
@@ -345,14 +356,14 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
   reviewModal.addEventListener('click', function(e) { if (e.target === reviewModal) { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); } });
 
   reviewConfirm.addEventListener('click', async function() {
-    if (!currentRating) { alert('Please select a star rating.'); return; }
+    if (!currentRating) { showToast('Please select a star rating.'); return; }
     reviewConfirm.textContent = 'Submitting...'; reviewConfirm.disabled = true;
     try {
       var res = await fetch('/api/guest/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booking_id: Number(currentReviewBookingId), rating: currentRating, content: reviewContent.value.trim() }) });
       var data = await res.json();
-      if (data.success) { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); alert('Thank you for your review!'); }
-      else { alert(data.error || 'Failed'); }
-    } catch { alert('Error submitting review'); }
+      if (data.success) { reviewModal.classList.add('hidden'); reviewModal.classList.remove('flex'); showToast('Thank you for your review!'); }
+      else { showToast(data.error || 'Failed'); }
+    } catch { showToast('Error submitting review'); }
     reviewConfirm.textContent = 'Submit Review'; reviewConfirm.disabled = false;
   });
 
@@ -401,8 +412,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
       var res = await fetch('/api/guest/message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booking_id: Number(currentMsgBookingId), content: msgContent.value.trim() }) });
       var data = await res.json();
       if (data.success) { msgContent.value = ''; await loadMessages(currentMsgBookingId); }
-      else { alert(data.error || 'Failed'); }
-    } catch { alert('Error sending message'); }
+      else { showToast(data.error || 'Failed'); }
+    } catch { showToast('Error sending message'); }
     msgSend.textContent = 'Send Message'; msgSend.disabled = false;
   });
 
@@ -452,12 +463,12 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
         closeModal();
         window.location.reload();
       } else {
-        alert(data.error || 'Failed to cancel booking');
+        showToast(data.error || 'Failed to cancel booking');
         confirmBtn.textContent = 'Confirm Cancel';
         confirmBtn.disabled = false;
       }
     } catch (e) {
-      alert('Error cancelling booking. Please contact support.');
+      showToast('Error cancelling booking. Please contact support.');
       confirmBtn.textContent = 'Confirm Cancel';
       confirmBtn.disabled = false;
     }

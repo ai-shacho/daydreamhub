@@ -163,14 +163,14 @@ const paginationItems: (number | string)[] = Array.from({ length: totalPages }, 
     return acc;
   }, []);
 
-// Speciality options
+// Purpose options
 const specialities = [
-  { value: '', label: 'All Specialities' },
-  { value: 'rest', label: 'Rest & Relaxation' },
-  { value: 'work', label: 'Remote Work' },
-  { value: 'personal_time', label: 'Personal Time' },
-  { value: 'party', label: 'Party & Events' },
-  { value: 'stay', label: 'Day Stay' },
+  { value: '', label: 'All purposes' },
+  { value: 'rest', label: 'Rest & relaxation' },
+  { value: 'work', label: 'Remote work' },
+  { value: 'personal_time', label: 'Personal time' },
+  { value: 'party', label: 'Party & events' },
+  { value: 'stay', label: 'Day stay' },
 ];
 
 // Country region groups for optgroup
@@ -308,7 +308,7 @@ function buildUrl(overrides: Record<string, string>) {
                 type="text"
                 name="location"
                 value={location}
-                placeholder="City or country..."
+                placeholder="City, country, or hotel name"
                 class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
             </div>
@@ -321,15 +321,15 @@ function buildUrl(overrides: Record<string, string>) {
               type="text"
               name="checkin"
               id="search-checkin-fp"
-              placeholder="YYYY-MM-DD"
+              placeholder="Select date"
               autocomplete="off"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
 
-          <!-- Speciality -->
+          <!-- Purpose -->
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Speciality</label>
+            <label class="block text-xs font-medium text-gray-500 mb-1">Purpose</label>
             <select
               name="speciality"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
