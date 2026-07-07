@@ -795,9 +795,9 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       const paramsForm = new URLSearchParams();
       paramsForm.set('To', toPhone.normalized);
       paramsForm.set('From', fromPhone.normalized);
-      paramsForm.set('Url', `${baseUrl}/api/webhooks/twilio-voice?cid=${callId}&lid=${callId}&phase=concierge`);
+      paramsForm.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&phase=concierge`);
       paramsForm.set('Method', 'POST');
-      paramsForm.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?cid=${callId}&lid=${callId}&event=status&phase=concierge`);
+      paramsForm.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callId}&event=status&phase=concierge`);
       paramsForm.set('StatusCallbackMethod', 'POST');
       paramsForm.set('StatusCallbackEvent', 'initiated');
       paramsForm.append('StatusCallbackEvent', 'ringing');
