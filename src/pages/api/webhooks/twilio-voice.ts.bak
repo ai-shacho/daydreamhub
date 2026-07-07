@@ -145,6 +145,10 @@ function parseTurn(raw: string | null): number {
 function makeWebhookUrl(request: Request, logId: string | null, step: Step, phase: 'booking' | 'outreach' | 'concierge', turn = 0, event?: string): string {
   const u = new URL('/api/webhooks/twilio-voice', getWebhookBase(request));
   if (logId) u.searchParams.set('lid', logId);
+  if (phase === 'concierge') {
+    const conciergeId = logId && /^\d+$/.test(logId) ? logId : null;
+    if (conciergeId) u.searchParams.set('cid', conciergeId);
+  }
   u.searchParams.set('step', step);
   u.searchParams.set('turn', String(turn));
   u.searchParams.set('phase', phase);
@@ -253,10 +257,11 @@ async function findConciergeCallIdFromLog(db: DbLike | null, logId: string | nul
 
 async function resolveConciergeCallByClues(
   db: DbLike | null,
-  clues: { logId?: string | null; linkedConciergeCallIdFromLog?: string | null; callSid?: string | null }
+  clues: { cid?: string | null; logId?: string | null; linkedConciergeCallIdFromLog?: string | null; callSid?: string | null }
 ): Promise<{ row: any | null; resolvedId: string | null; attemptedPaths: string[] }> {
   if (!db) return { row: null, resolvedId: null, attemptedPaths: [] };
 
+  const cid = String(clues.cid || '').trim() || null;
   const logId = String(clues.logId || '').trim() || null;
   const linked = String(clues.linkedConciergeCallIdFromLog || '').trim() || null;
   const callSid = String(clues.callSid || '').trim() || null;
@@ -271,6 +276,14 @@ async function resolveConciergeCallByClues(
     attemptedPaths.push(label);
     return await db.prepare(sql).bind(...binds).first().catch(() => null);
   };
+
+  // Absolute rule for concierge phase:
+  // if cid is present, resolve concierge_calls.id = cid first and do not fall back to call_logs clues.
+  if (cid && /^\d+$/.test(cid)) {
+    const row = await tryFetchBy('concierge_calls.id_from_cid', `SELECT id, call_group_id, outcome, status, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ? LIMIT 1`, cid);
+    if (row?.id) return { row, resolvedId: String(row.id), attemptedPaths };
+    return { row: null, resolvedId: cid, attemptedPaths };
+  }
 
   if (linked && /^\d+$/.test(linked)) {
     const row = await tryFetchBy('linked_concierge_call_id_from_log', `SELECT id, call_group_id, outcome, status, guest_name, guest_email, guest_phone, hotel_name, hotel_phone, request_details, price_quoted, ai_summary FROM concierge_calls WHERE id = ? LIMIT 1`, linked);
@@ -683,6 +696,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     const db: DbLike | null = env?.DB && typeof env.DB.prepare === 'function' ? env.DB : null;
 
     const logId = normalizeLogId(url.searchParams.get('lid'));
+    const cid = normalizeLogId(url.searchParams.get('cid'));
     const step = normalizeStep(url.searchParams.get('step'));
     const turn = parseTurn(url.searchParams.get('turn'));
     const event = clamp(url.searchParams.get('event') || '', 40).toLowerCase();
@@ -719,12 +733,13 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     });
 
     if (event === 'status') {
-      const linkedConciergeCallIdFromLog = (db && logId && inferredPhase === 'concierge')
+      const linkedConciergeCallIdFromLog = (db && logId && inferredPhase === 'concierge' && !cid)
         ? await findConciergeCallIdFromLog(db, logId)
         : null;
 
       const conciergeResolution = (db && inferredPhase === 'concierge')
         ? await resolveConciergeCallByClues(db, {
+            cid,
             logId,
             linkedConciergeCallIdFromLog,
             callSid,
@@ -732,7 +747,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         : { row: null, resolvedId: null, attemptedPaths: [] as string[] };
 
       const conciergeRow: any = conciergeResolution.row;
-      const statusTargetConciergeCallId = conciergeResolution.resolvedId || linkedConciergeCallIdFromLog || logId;
+      const statusTargetConciergeCallId = conciergeResolution.resolvedId || cid || linkedConciergeCallIdFromLog || logId;
 
       if (!conciergeRow && inferredPhase === 'concierge') {
         console.warn('[twilio-voice] concierge status callback could not resolve target record before placeholder fallback', {
@@ -810,15 +825,16 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           outreachLead = await db.prepare(`SELECT l.id, l.hotel_name, l.person_in_charge_name FROM outreach_leads l WHERE l.call_log_id = ? ORDER BY l.id DESC LIMIT 1`).bind(logId).first().catch(() => null);
         }
       } else {
-        const linkedConciergeCallIdFromLog = await findConciergeCallIdFromLog(db, logId);
+        const linkedConciergeCallIdFromLog = cid ? null : await findConciergeCallIdFromLog(db, logId);
         const conciergeResolution = await resolveConciergeCallByClues(db, {
+          cid,
           logId,
           linkedConciergeCallIdFromLog,
           callSid,
         });
 
         conciergeCall = conciergeResolution.row;
-        resolvedConciergeCallId = conciergeResolution.resolvedId || linkedConciergeCallIdFromLog || logId;
+        resolvedConciergeCallId = conciergeResolution.resolvedId || cid || linkedConciergeCallIdFromLog || logId;
 
         if (!conciergeCall?.id) {
           console.warn('[twilio-voice] concierge gather webhook could not resolve concierge_calls record before placeholder fallback', {
