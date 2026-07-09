@@ -10,12 +10,23 @@ function escapeHtml(str: string): string {
 const SITE_URL = 'https://daydreamhub.com';
 
 const MONTH_NAMES_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTH_NAMES_SHORT_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function formatDate(dateStr: string): string {
   if (!dateStr) return dateStr;
   const parts = dateStr.split('-');
   if (parts.length !== 3) return dateStr;
   const month = MONTH_NAMES_EN[parseInt(parts[1]) - 1] || parts[1];
   return `${month} ${parseInt(parts[2])}, ${parts[0]}`;
+}
+
+function formatDateYyyyMmmDd(dateStr: string): string {
+  if (!dateStr) return dateStr;
+  const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return dateStr;
+  const monthIdx = Number(m[2]) - 1;
+  const mon = MONTH_NAMES_SHORT_EN[monthIdx];
+  if (!mon) return dateStr;
+  return `${m[1]}-${mon}-${m[3]}`;
 }
 
 function hotelLink(hotelName: string, hotelSlug?: string): string {
@@ -329,7 +340,7 @@ export async function sendConciergeCallStartedEmail(
     .map((n, i) => `<li style="margin:4px 0">${i + 1}. ${escapeHtml(n)}</li>`)
     .join('');
   const detailsRows = [
-    data.date ? `<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:6px 12px;border:1px solid #ddd">${escapeHtml(formatDate(data.date))}</td></tr>` : '',
+    data.date ? `<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:6px 12px;border:1px solid #ddd">${escapeHtml(formatDateYyyyMmmDd(data.date))}</td></tr>` : '',
     (data.checkIn || data.checkOut) ? `<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Time</td><td style="padding:6px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn || '?')}–${escapeHtml(data.checkOut || '?')}</td></tr>` : '',
     data.guests ? `<tr><td style="padding:6px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:6px 12px;border:1px solid #ddd">${data.guests}</td></tr>` : '',
   ].filter(Boolean).join('');
@@ -389,7 +400,7 @@ export async function sendConciergeConfirmation(
     <table style="border-collapse:collapse;width:100%;margin:16px 0">
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Phone</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelPhone)}</td></tr>
-      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.date)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(formatDateYyyyMmmDd(data.date))}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-in</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-out</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkOut)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>
@@ -701,7 +712,7 @@ export async function sendConciergeDeclineToGuest(
     <p>Unfortunately, <strong>${escapeHtml(data.hotelName)}</strong> was unable to accommodate your booking request via our AI phone call.</p>
     <table style="border-collapse:collapse;width:100%;margin:16px 0">
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>
-      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.date)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(formatDateYyyyMmmDd(data.date))}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-in</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Check-out</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkOut)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>
@@ -912,7 +923,7 @@ export async function sendConciergeResultEmail(
   const detailsRows = [
     data.hotelName ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>` : '',
     data.hotelPhone ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Hotel Phone</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelPhone)}</td></tr>` : '',
-    data.date ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.date)}</td></tr>` : '',
+    data.date ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(formatDateYyyyMmmDd(data.date))}</td></tr>` : '',
     (data.checkIn || data.checkOut) ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Time</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn || '?')} - ${escapeHtml(data.checkOut || '?')}</td></tr>` : '',
     data.guests ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>` : '',
     data.priceQuoted ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Quoted Price</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(formatQuotedPriceUsd(data.priceQuoted))}</td></tr>` : '',
