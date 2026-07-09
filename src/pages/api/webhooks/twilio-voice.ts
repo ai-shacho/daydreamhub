@@ -24,7 +24,8 @@ type Step =
   | 'outreach_phase_callback_email'
   | 'ask_dayuse'
   | 'ask_price'
-  | 'confirm_booking';
+  | 'confirm_booking'
+  | 'confirm_booking_details';
 
 const MAX_RETRY = 3;
 const WEBHOOK_BASE = 'https://daydreamhub.com';
@@ -133,6 +134,7 @@ function normalizeStep(raw: string | null): Step {
   if (s === 'ask_dayuse') return 'ask_dayuse';
   if (s === 'ask_price') return 'ask_price';
   if (s === 'confirm_booking') return 'confirm_booking';
+  if (s === 'confirm_booking_details') return 'confirm_booking_details';
   return 'intro';
 }
 
@@ -462,6 +464,26 @@ function parsePrice(text: string, digits: string): number | null {
   const n = Number(m[1].replace(/,/g, ''));
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n * 100) / 100;
+}
+
+function formatPhoneForSpeech(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return 'not provided';
+  const chars = s.replace(/[^\d+]/g, '').split('');
+  if (!chars.length) return 'not provided';
+  return chars.map((ch) => (ch === '+' ? 'plus' : ch)).join(' ');
+}
+
+function formatEmailForSpeech(raw: unknown): string {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (!s) return 'not provided';
+  return s
+    .replace(/@/g, ' at ')
+    .replace(/\./g, ' dot ')
+    .replace(/[_-]/g, (m) => (m === '_' ? ' underscore ' : ' dash '))
+    .replace(/\+/g, ' plus ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function isYes(speech: string, digits: string): boolean {
@@ -1241,6 +1263,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (isYes(speech, digits)) {
         const finalAmount = quotedAmountFromNote;
         const guestName = bookingGuestName;
+        const guestPhoneSpeech = formatPhoneForSpeech(bookingGuestPhone);
+        const guestEmailSpeech = formatEmailForSpeech(bookingGuestEmail);
         await updateCallLog(db, logId, 'confirmed', 'twilio_booking_confirmed', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
         if (phase === 'concierge') {
           await finalizeConciergeOutcome(
@@ -1254,7 +1278,22 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         } else if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='confirmed_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="${VOICE}">Thank you! All consent checks are complete. The reservation is confirmed at a final total of ${esc(finalAmount != null ? finalAmount : 'the agreed')} dollars, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details. For your immediate records, the guest's name is ${esc(guestName)}, guest phone is ${esc(bookingGuestPhone || 'not provided')}, and guest email is ${esc(bookingGuestEmail || 'not provided')}. Have a wonderful day!</Say><Hangup/>`);
+        const detailAction = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, 0);
+        return twiml(
+          `<Say voice="${VOICE}">Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${esc(finalAmount != null ? finalAmount : 'the agreed')} dollars, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details.</Say>` +
+          `<Pause length="1"/>` +
+          `<Say voice="${VOICE}">For your immediate records, I will share the guest details slowly.</Say>` +
+          `<Pause length="1"/>` +
+          `<Say voice="${VOICE}">Guest name: ${esc(guestName)}.</Say>` +
+          `<Pause length="1"/>` +
+          `<Say voice="${VOICE}">Guest phone: ${esc(guestPhoneSpeech)}.</Say>` +
+          `<Pause length="1"/>` +
+          `<Say voice="${VOICE}">Guest email: ${esc(guestEmailSpeech)}.</Say>` +
+          `<Pause length="1"/>` +
+          `<Gather input="speech dtmf" timeout="8" speechTimeout="auto" actionOnEmptyResult="true" language="en-US" action="${esc(detailAction)}" method="POST">` +
+          `<Say voice="${VOICE}">If you would like me to repeat these details slowly, press 3 or say repeat. Otherwise, press 1 or say yes to finish this call.</Say>` +
+          `</Gather>`
+        );
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_booking_declined', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
@@ -1277,6 +1316,27 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
       }
       return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes to confirm. Press 2 or say no to decline. You can also provide a corrected amount.');
+    }
+
+    if (step === 'confirm_booking_details') {
+      const guestName = bookingGuestName;
+      const guestPhoneSpeech = formatPhoneForSpeech(bookingGuestPhone);
+      const guestEmailSpeech = formatEmailForSpeech(bookingGuestEmail);
+      if (isRepeat(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, turn + 1);
+        return gatherTwiml(
+          action,
+          `Repeating slowly. Guest name: ${guestName}. Guest phone: ${guestPhoneSpeech}. Guest email: ${guestEmailSpeech}. If you would like another repeat, press 3 or say repeat. Otherwise, press 1 or say yes to finish this call.`
+        );
+      }
+      if (isYes(speech, digits)) {
+        return twiml(`<Say voice="${VOICE}">Thank you. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        return twiml(`<Say voice="${VOICE}">Thank you for your time. Goodbye.</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, turn + 1);
+      return gatherTwiml(action, 'If you want the guest details repeated slowly, press 3 or say repeat. Otherwise, press 1 or say yes to finish this call.');
     }
 
     return twiml(`<Say voice="Polly.Joanna">Invalid state. Goodbye.</Say><Hangup/>`);

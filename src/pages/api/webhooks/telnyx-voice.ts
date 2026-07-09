@@ -199,6 +199,26 @@ function toAmPm(time: string | null): string {
   return m ? `${hour}:${String(m).padStart(2, '0')} ${period}` : `${hour} ${period}`;
 }
 
+function formatPhoneForSpeech(raw: unknown): string {
+  const s = String(raw ?? '').trim();
+  if (!s) return 'not provided';
+  const chars = s.replace(/[^\d+]/g, '').split('');
+  if (!chars.length) return 'not provided';
+  return chars.map((ch) => (ch === '+' ? 'plus' : ch)).join(' ');
+}
+
+function formatEmailForSpeech(raw: unknown): string {
+  const s = String(raw ?? '').trim().toLowerCase();
+  if (!s) return 'not provided';
+  return s
+    .replace(/@/g, ' at ')
+    .replace(/\./g, ' dot ')
+    .replace(/[_-]/g, (m) => (m === '_' ? ' underscore ' : ' dash '))
+    .replace(/\+/g, ' plus ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 type HybridIntent = 'affirm' | 'deny' | 'repeat' | 'price' | 'unclear';
 
 async function aiClassifyIntent(
@@ -951,14 +971,23 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         });
 
         let guestName = state.guest_name || 'the guest';
+        let guestPhone = state.guest_phone || '';
+        let guestEmail = state.guest_email || '';
         if (db && conciergeCallId) {
           const guestInfo: any = await db.prepare(
-            `SELECT guest_name FROM concierge_calls WHERE id = ?`
+            `SELECT guest_name, request_details FROM concierge_calls WHERE id = ?`
           ).bind(conciergeCallId).first().catch(() => null);
           if (guestInfo?.guest_name) guestName = guestInfo.guest_name;
+          try {
+            const details = JSON.parse(guestInfo?.request_details || '{}');
+            guestPhone = guestPhone || details?.guest_phone || '';
+            guestEmail = guestEmail || details?.guest_email || '';
+          } catch {}
         }
 
-        const farewell = `Thank you! All consent checks are complete. The reservation is confirmed at a final total of ${priceQuoted} dollars, including service fees and taxes, with payment at the hotel. We will send a follow-up confirmation email shortly with all the details. For your immediate records, the guest's name is ${guestName}. Have a wonderful day!`;
+        const guestPhoneSpeech = formatPhoneForSpeech(guestPhone);
+        const guestEmailSpeech = formatEmailForSpeech(guestEmail);
+        const farewell = `Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${priceQuoted} dollars, including service fees and taxes, with payment at the hotel. We will send a follow-up confirmation email shortly with all the details. For your immediate records, I will say the guest details slowly. Guest name: ${guestName}. Guest phone: ${guestPhoneSpeech}. Guest email: ${guestEmailSpeech}. Have a wonderful day!`;
         if (db) {
           if (logId) {
             await db.prepare(`UPDATE call_logs SET status='confirmed', price_quoted=?, transcription = COALESCE(transcription||'\n','') || ? WHERE id=?`)
