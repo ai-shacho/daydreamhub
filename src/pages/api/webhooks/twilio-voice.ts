@@ -1332,7 +1332,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const action = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, turn + 1);
         return gatherTwiml(
           action,
-          `Repeating slowly. Guest name: ${guestName}. Guest phone: ${guestPhoneSpeech}. Guest email: ${guestEmailSpeech}. If you would like another repeat, press 3 or say repeat. Otherwise, press 1 or say yes to finish this call.`
+          `Repeating slowly. Guest name: ${guestName}. Guest phone: ${guestPhoneSpeech}. Guest email: ${guestEmailSpeech}. If you would like another repeat, press 3 or say repeat. Otherwise, press 1 or say yes to finish this call.`,
+          { slow: true }
         );
       }
       if (isYes(speech, digits)) {
