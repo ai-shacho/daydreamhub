@@ -8,7 +8,7 @@ function maskSecret(raw: any): string {
   return `${value.slice(0, 3)}***${value.slice(-2)}`;
 }
 
-// Force rebuild to reload Cloudflare Worker env vars (cache-bust marker: 2026-07-14-4)
+// Force rebuild to reload Cloudflare Worker env vars (cache-bust marker: 2026-07-14-5)
 function envProbe(env: any) {
   const callProvider = String(env?.CALL_PROVIDER || '').trim().toLowerCase() || 'auto';
   return {
