@@ -55,7 +55,14 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   try { data = await request.json(); } catch { return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: json }); }
 
   const { id, status, note, action } = data;
+  const hotelId = data.hotel_id !== undefined && data.hotel_id !== null && data.hotel_id !== ''
+    ? Number(data.hotel_id)
+    : null;
+
   if (!id) return new Response(JSON.stringify({ error: 'id required' }), { status: 400, headers: json });
+  if (hotelId !== null && (!Number.isInteger(hotelId) || hotelId <= 0)) {
+    return new Response(JSON.stringify({ error: 'hotel_id must be a positive integer' }), { status: 400, headers: json });
+  }
 
   // --- 承認処理（Task #57: アカウント作成・認証情報通知をオプショナル化） ---
   // action:
@@ -75,6 +82,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
     let accountCreated = false;
     let credentialsSent = false;
+    let plainPassword: string | null = null;
 
     try {
       if (createAccount) {
@@ -84,13 +92,14 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           return new Response(JSON.stringify({ error: 'An account with this email already exists.' }), { status: 409, headers: json });
         }
         const password = generatePassword();
+        plainPassword = password;
         const passwordHash = await hashPassword(password);
         await db.prepare(
           "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, 'owner', datetime('now'))"
         ).bind(ownerName, loginEmail, passwordHash).run();
         accountCreated = true;
 
-        // 認証情報メールは明示指定時のみ送信（初期PWは画面に返さない）
+        // 認証情報メールは明示指定時のみ送信
         if (sendCredentials) {
           const resendKey = env?.RESEND_API_KEY;
           if (resendKey) {
@@ -100,16 +109,56 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         }
       }
 
-      // 申込ステータスを approved に更新（hotels 更新は Task #57 で廃止）
+      // 申込ステータスを approved に更新
       await db.prepare(
         'UPDATE owner_applications SET status = ?, note = ? WHERE id = ?'
       ).bind('approved', note ?? app.note ?? '', Number(id)).run();
+
+      // hotel_id が指定された場合は同一フローでオーナー割り当て
+      if (hotelId !== null) {
+        const hotel = await db.prepare('SELECT id, name, email FROM hotels WHERE id = ?').bind(hotelId).first() as any;
+        if (!hotel) {
+          return new Response(JSON.stringify({ error: `Hotel not found: ${hotelId}` }), { status: 404, headers: json });
+        }
+        if (hotel.email) {
+          return new Response(JSON.stringify({ error: `Hotel #${hotelId} is already assigned to ${hotel.email}` }), { status: 409, headers: json });
+        }
+
+        await db.prepare('UPDATE hotels SET email = ?, is_active = 1 WHERE id = ?').bind(loginEmail, hotelId).run();
+
+        // 既存の割り当て通知と同等のメール送信
+        const resendKey = env?.RESEND_API_KEY;
+        if (resendKey) {
+          fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from: 'DaydreamHub <noreply@daydreamhub.com>',
+              to: [loginEmail],
+              subject: `Hotel Assigned: ${hotel.name || `Hotel #${hotelId}`} — DaydreamHub`,
+              html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+                <div style="background:#4f46e5;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
+                  <h1 style="margin:0;font-size:20px">🏨 Hotel Assigned to Your Account</h1>
+                </div>
+                <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+                  <p>Hi <strong>${ownerName}</strong>,</p>
+                  <p><strong>${hotel.name || `Hotel #${hotelId}`}</strong> has been assigned to your DaydreamHub owner account.</p>
+                  <p>You can now manage this hotel from the Owner Portal:</p>
+                  <div style="text-align:center;margin:24px 0">
+                    <a href="${env?.SITE_URL || 'https://daydreamhub.com'}/login?redirect=/owner" style="display:inline-block;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:700">Go to Owner Portal →</a>
+                  </div>
+                </div>
+              </div>`,
+            }),
+          }).catch((err) => console.error('Assign owner email failed:', err));
+        }
+      }
 
       const mode = accountCreated ? 'approved_with_account' : 'approved';
       const message = accountCreated
         ? (credentialsSent
             ? 'アカウントを作成し、認証情報メールを送信しました。'
-            : 'アカウントを作成しました。初期パスワードは表示されません。ログイン不可の場合はAdminのUsers管理からパスワード再設定を実施してください。')
+            : 'アカウントを作成しました。初期パスワードは画面表示で一度のみ確認してください。')
         : '申込を承認しました（ステータス更新のみ）。アカウントが必要な場合はAdminのUsers管理から作成・パスワード設定を実施してください。';
 
       return new Response(JSON.stringify({
@@ -118,6 +167,9 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         account_created: accountCreated,
         credentials_sent: credentialsSent,
         email: createAccount ? loginEmail : undefined,
+        generated_password: createAccount ? plainPassword : undefined,
+        hotel_assigned: hotelId !== null,
+        hotel_id: hotelId ?? undefined,
         message,
       }), { headers: json });
     } catch (err) {

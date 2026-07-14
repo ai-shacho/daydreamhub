@@ -15,6 +15,7 @@ const statusFilter = url.searchParams.get("status") || "";
 const searchQuery = url.searchParams.get("q") || "";
 
 let applications: any[] = [];
+let unassignedHotels: any[] = [];
 let error = "";
 
 if (db) {
@@ -30,6 +31,15 @@ if (db) {
     query += " ORDER BY created_at DESC LIMIT 200";
     const result = await db.prepare(query).bind(...binds).all();
     applications = result?.results || [];
+
+    const hotelsResult = await db.prepare(`
+      SELECT id, name, city, country
+      FROM hotels
+      WHERE email IS NULL OR TRIM(email) = ''
+      ORDER BY name ASC
+      LIMIT 500
+    `).all();
+    unassignedHotels = hotelsResult?.results || [];
   } catch (e: any) {
     error = e.message || "Failed to load applications";
   }
@@ -173,19 +183,40 @@ const statusColors: Record<string, string> = {
             </div>
           </div>
 
-          <!-- Approve (Task #57: account creation is optional, no initial password shown) -->
           <div class="border-t border-slate-200 pt-4">
             <h3 class="text-sm font-semibold text-slate-500 mb-1">承認 / Approve</h3>
-            <p class="text-xs text-slate-400 mb-3">申込ステータスを「Approved」に更新します。アカウントは必要時のみ作成してください（初期パスワードは表示されません）。</p>
+            <p class="text-xs text-slate-400 mb-3">申込ステータスを「Approved」に更新します。必要に応じてオーナーアカウント作成・ホテル割り当てを同時実行できます。</p>
             <div id="d-approve-result" class="hidden mb-3 p-3 rounded-lg text-sm"></div>
+            <div id="d-created-credentials" class="hidden mb-3 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-900 text-sm">
+              <div class="font-semibold mb-2">初期ログイン情報（この表示は一度のみ）</div>
+              <div class="grid grid-cols-[90px_1fr_auto] gap-2 items-center text-xs">
+                <div class="text-slate-600">Email</div>
+                <code id="d-created-email" class="bg-white border border-amber-200 rounded px-2 py-1 break-all"></code>
+                <button type="button" id="d-copy-email" class="px-2 py-1 rounded border border-amber-300 bg-white hover:bg-amber-100">Copy</button>
+                <div class="text-slate-600">Password</div>
+                <code id="d-created-password" class="bg-white border border-amber-200 rounded px-2 py-1 break-all"></code>
+                <button type="button" id="d-copy-password" class="px-2 py-1 rounded border border-amber-300 bg-white hover:bg-amber-100">Copy</button>
+              </div>
+            </div>
 
             <label class="flex items-start gap-2 mb-2 text-sm text-slate-600 cursor-pointer">
               <input id="d-create-account" type="checkbox" class="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-              <span>オーナーアカウントを作成する（contact email を使用）<br><span class="text-xs text-slate-400">未チェックなら承認のみ。アカウントは後から Users 管理でも作成できます。</span></span>
+              <span>オーナーアカウントを作成する（contact email を使用）</span>
             </label>
             <label class="flex items-start gap-2 mb-3 text-sm text-slate-600 cursor-pointer">
               <input id="d-send-credentials" type="checkbox" class="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
-              <span>認証情報メールを送信する（任意）<br><span class="text-xs text-slate-400">アカウント作成時のみ有効。通常運用では送付せず、Users管理でパスワード再設定を行います。</span></span>
+              <span>認証情報メールを送信する（任意）</span>
+            </label>
+
+            <label class="block mb-3 text-sm text-slate-600">
+              <span class="block mb-1">割り当てるホテル（デモホテル・任意）</span>
+              <select id="d-hotel-id" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm">
+                <option value="">未選択（割り当てなし）</option>
+                {unassignedHotels.map((h: any) => (
+                  <option value={h.id}>{h.name} ({h.city || '-'}, {h.country || '-'}) / #{h.id}</option>
+                ))}
+              </select>
+              <span class="text-xs text-slate-400">owner email 未設定のホテルのみ表示</span>
             </label>
 
             <button id="d-approve-btn" class="w-full px-4 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition-colors">
@@ -230,6 +261,15 @@ const statusColors: Record<string, string> = {
 <script>
   const modal = document.getElementById('detail-modal')!;
   let currentId: number | null = null;
+  let credentialsShownOnce = false;
+
+  function hideGeneratedCredentials() {
+    const wrap = document.getElementById('d-created-credentials') as HTMLElement | null;
+    if (!wrap) return;
+    wrap.classList.add('hidden');
+    (document.getElementById('d-created-email') as HTMLElement).textContent = '';
+    (document.getElementById('d-created-password') as HTMLElement).textContent = '';
+  }
 
   function openModal(app: any) {
     currentId = app.id;
@@ -253,10 +293,21 @@ const statusColors: Record<string, string> = {
     (document.getElementById('d-bank') as HTMLElement).textContent = app.bank_account || '-';
     (document.getElementById('d-status') as HTMLSelectElement).value = app.status || 'new';
     (document.getElementById('d-note') as HTMLInputElement).value = app.note || '';
+    (document.getElementById('d-hotel-id') as HTMLSelectElement).value = '';
+    (document.getElementById('d-create-account') as HTMLInputElement).checked = false;
+    (document.getElementById('d-send-credentials') as HTMLInputElement).checked = false;
+    (document.getElementById('d-approve-result') as HTMLElement).className = 'hidden mb-3 p-3 rounded-lg text-sm';
+    if (!credentialsShownOnce) hideGeneratedCredentials();
     modal.classList.remove('hidden');
   }
 
-  function closeModal() { modal.classList.add('hidden'); }
+  function closeModal() {
+    modal.classList.add('hidden');
+    if (credentialsShownOnce) {
+      hideGeneratedCredentials();
+      credentialsShownOnce = false;
+    }
+  }
 
   document.getElementById('detail-close')?.addEventListener('click', closeModal);
   document.getElementById('detail-close-bottom')?.addEventListener('click', closeModal);
@@ -275,19 +326,34 @@ const statusColors: Record<string, string> = {
     const resultEl = document.getElementById('d-approve-result') as HTMLElement;
     const createAccount = (document.getElementById('d-create-account') as HTMLInputElement)?.checked || false;
     const sendCredentials = (document.getElementById('d-send-credentials') as HTMLInputElement)?.checked || false;
+    const hotelIdRaw = (document.getElementById('d-hotel-id') as HTMLSelectElement)?.value || '';
+    const credentialsWrap = document.getElementById('d-created-credentials') as HTMLElement;
+
     btn.textContent = 'Processing...'; btn.disabled = true;
     resultEl.className = 'hidden mb-3 p-3 rounded-lg text-sm';
+    hideGeneratedCredentials();
+
     try {
+      const payload: Record<string, unknown> = { id: currentId, action: 'approve', create_account: createAccount, send_credentials: sendCredentials };
+      if (hotelIdRaw) payload.hotel_id = Number(hotelIdRaw);
+
       const res = await fetch('/api/admin/owner-applications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: currentId, action: 'approve', create_account: createAccount, send_credentials: sendCredentials }),
+        body: JSON.stringify(payload),
       });
       const d = await res.json();
       if (res.ok && d.success) {
-        // Task #57: 初期パスワードは画面表示しない。運用文言を明記。
         resultEl.className = 'block mb-3 p-3 rounded-lg text-sm bg-emerald-50 border border-emerald-200 text-emerald-800';
-        resultEl.innerHTML = `✅ ${d.message || '承認しました。'}<br><span style="font-size:11px;color:#065f46">ログイン不可の場合は <a href="/admin/users" style="text-decoration:underline">Admin の Users 管理</a> からパスワード再設定を実施してください。</span>`;
+        resultEl.innerHTML = `✅ ${d.message || '承認しました。'}`;
+
+        if (d.account_created && d.generated_password && d.email) {
+          (document.getElementById('d-created-email') as HTMLElement).textContent = String(d.email);
+          (document.getElementById('d-created-password') as HTMLElement).textContent = String(d.generated_password);
+          credentialsWrap.classList.remove('hidden');
+          credentialsShownOnce = true;
+        }
+
         btn.textContent = '✅ Done';
       } else {
         resultEl.className = 'block mb-3 p-3 rounded-lg text-sm bg-red-50 border border-red-200 text-red-700';
@@ -300,6 +366,19 @@ const statusColors: Record<string, string> = {
       btn.textContent = '✅ 承認する / Approve'; btn.disabled = false;
     }
   });
+
+  async function copyFrom(id: string) {
+    const value = (document.getElementById(id) as HTMLElement)?.textContent || '';
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // ignore clipboard errors in unsupported contexts
+    }
+  }
+
+  document.getElementById('d-copy-email')?.addEventListener('click', () => copyFrom('d-created-email'));
+  document.getElementById('d-copy-password')?.addEventListener('click', () => copyFrom('d-created-password'));
 
   document.getElementById('d-save')?.addEventListener('click', async () => {
     if (!currentId) return;
