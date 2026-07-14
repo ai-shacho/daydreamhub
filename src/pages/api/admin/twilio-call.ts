@@ -1,6 +1,33 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '../../../lib/apiAuth';
 
+function maskSecret(raw: any): string {
+  const value = String(raw || '');
+  if (!value) return 'not_set';
+  if (value.length <= 6) return `${value.slice(0, 1)}***`;
+  return `${value.slice(0, 3)}***${value.slice(-2)}`;
+}
+
+// Force rebuild to reload Cloudflare Worker env vars (cache-bust marker: 2026-07-14-2)
+function envProbe(env: any) {
+  const callProvider = String(env?.CALL_PROVIDER || '').trim().toLowerCase() || 'auto';
+  return {
+    call_provider: callProvider,
+    twilio: {
+      account_sid_set: Boolean(env?.TWILIO_ACCOUNT_SID),
+      account_sid_masked: maskSecret(env?.TWILIO_ACCOUNT_SID),
+      auth_token_set: Boolean(env?.TWILIO_AUTH_TOKEN),
+      from_number_set: Boolean(env?.TWILIO_FROM_NUMBER),
+      from_number_masked: maskSecret(env?.TWILIO_FROM_NUMBER),
+    },
+    telnyx: {
+      api_key_set: Boolean(env?.TELNYX_API_KEY),
+      connection_id_set: Boolean(env?.TELNYX_CONNECTION_ID),
+      from_number_set: Boolean(env?.TELNYX_FROM_NUMBER),
+    },
+  };
+}
+
 function basicAuthHeader(accountSid: string, authToken: string): string {
   const raw = `${accountSid}:${authToken}`;
   const encoded = btoa(raw);
@@ -28,6 +55,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const { admin, response } = await requireAdmin(request, jwtSecret);
   if (response) return response;
 
+  const probe = envProbe(env);
   const accountSid = env?.TWILIO_ACCOUNT_SID;
   const authToken = env?.TWILIO_AUTH_TOKEN;
   const fromNumber = env?.TWILIO_FROM_NUMBER;
@@ -40,6 +68,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         TWILIO_AUTH_TOKEN: !authToken,
         TWILIO_FROM_NUMBER: !fromNumber,
       },
+      probe,
     }), { status: 503 });
   }
 
@@ -55,6 +84,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       TWILIO_ACCOUNT_SID: accountSid ? `✅ ${String(accountSid).slice(0, 6)}...` : '❌',
       TWILIO_AUTH_TOKEN: authToken ? '✅ Set' : '❌',
       TWILIO_FROM_NUMBER: fromNumber || '❌',
+      probe,
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -69,7 +99,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const note = String(body?.note || '').trim();
 
   if (!toNumber) {
-    return new Response(JSON.stringify({ error: 'to_number is required' }), { status: 400 });
+    return new Response(JSON.stringify({ error: 'to_number is required', probe }), { status: 400 });
   }
 
   const conciergeMeta = {
@@ -109,7 +139,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           callLogId,
           phase,
           `Admin dial request to ${toNumber}`,
-          JSON.stringify({ to_number: toNumber, from_number: fromNumber, note, hotel_id: hotelId, lead_id: outreachLeadId })
+          JSON.stringify({ to_number: toNumber, from_number: fromNumber, note, hotel_id: hotelId, lead_id: outreachLeadId, probe })
         ).run().catch(() => {});
       }
 
@@ -134,6 +164,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     params.append('StatusCallbackEvent', 'answered');
     params.append('StatusCallbackEvent', 'completed');
 
+    const twilioReqSummary = {
+      url: `https://api.twilio.com/2010-04-01/Accounts/${maskSecret(accountSid)}/Calls.json`,
+      to: toNumber,
+      from: maskSecret(fromNumber),
+      callback_url: `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&phase=${phase}&event=status`,
+    };
+
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json`, {
       method: 'POST',
       headers: {
@@ -144,17 +181,39 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
 
     const text = await res.text();
-    const data = text ? JSON.parse(text) : {};
-
-    if (!res.ok) {
-      if (db && callLogId) {
-        await db.prepare(`UPDATE call_logs SET status='failed', error_detail=? WHERE id=?`)
-          .bind(text.slice(0, 1000), callLogId).run().catch(() => {});
-      }
-      return new Response(JSON.stringify({ error: 'Twilio error', details: data || text }), { status: res.status });
+    let providerBody: any = null;
+    try {
+      providerBody = text ? JSON.parse(text) : {};
+    } catch {
+      providerBody = { raw_text: text };
     }
 
-    const callSid = data?.sid || null;
+    if (!res.ok) {
+      const details = {
+        provider: 'twilio',
+        provider_status: res.status,
+        provider_status_text: res.statusText,
+        provider_error_code: providerBody?.code || null,
+        provider_error_message: providerBody?.message || null,
+        provider_more_info: providerBody?.more_info || null,
+        provider_response: providerBody,
+        request: twilioReqSummary,
+        probe,
+        call_log_id: callLogId,
+      };
+      if (db && callLogId) {
+        await db.prepare(`
+          INSERT INTO call_log_events (call_log_id, provider, event_type, phase, note, payload_json, created_at)
+          VALUES (?1, 'twilio', 'dial_rejected', ?2, ?3, ?4, datetime('now'))
+        `).bind(callLogId, phase, `Twilio rejected dial request: HTTP ${res.status}`, JSON.stringify(details)).run().catch(() => {});
+      }
+      return new Response(JSON.stringify({ success: false, error: 'Twilio dial failed', details }), {
+        status: res.status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const callSid = providerBody?.sid || null;
     if (db && callSid && callLogId) {
       await db.prepare(`UPDATE call_logs SET telnyx_call_id=?, last_event_type='dial_accepted', updated_at=datetime('now') WHERE id=?`)
         .bind(`twilio:${callSid}`, callLogId).run();
@@ -166,18 +225,42 @@ export const POST: APIRoute = async ({ request, locals }) => {
         phase,
         callSid,
         'Twilio accepted outbound call request',
-        JSON.stringify({ sid: callSid, to_number: toNumber, from_number: fromNumber })
+        JSON.stringify({ sid: callSid, to_number: toNumber, from_number: fromNumber, request: twilioReqSummary, probe })
       ).run().catch(() => {});
     }
 
     return new Response(JSON.stringify({
       success: true,
-      provider: 'twilio',
-      phase,
       call_sid: callSid,
       log_id: callLogId,
+      provider: 'twilio',
+      phase,
+      provider_status: res.status,
+      provider_response: {
+        sid: providerBody?.sid || null,
+        status: providerBody?.status || null,
+        queue_time: providerBody?.queue_time || null,
+      },
+      probe,
     }), { headers: { 'Content-Type': 'application/json' } });
   } catch (e: any) {
-    return new Response(JSON.stringify({ error: e?.message || 'Unknown error' }), { status: 500 });
+    const errorDetails = {
+      provider: 'twilio',
+      error_name: e?.name || 'Error',
+      error_message: e?.message || String(e),
+      stack: String(e?.stack || '').split('\n').slice(0, 5).join('\n'),
+      call_log_id: callLogId,
+      probe,
+    };
+    if (db && callLogId) {
+      await db.prepare(`
+        INSERT INTO call_log_events (call_log_id, provider, event_type, phase, note, payload_json, created_at)
+        VALUES (?1, 'twilio', 'dial_exception', ?2, ?3, ?4, datetime('now'))
+      `).bind(callLogId, phase, 'Exception thrown while dialing Twilio', JSON.stringify(errorDetails)).run().catch(() => {});
+    }
+    return new Response(JSON.stringify({ success: false, error: 'Dial exception', details: errorDetails }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 };
