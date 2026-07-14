@@ -200,11 +200,11 @@ const statusColors: Record<string, string> = {
             </div>
 
             <label class="flex items-start gap-2 mb-2 text-sm text-slate-600 cursor-pointer">
-              <input id="d-create-account" type="checkbox" class="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+              <input id="d-create-account" type="checkbox" checked class="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
               <span>オーナーアカウントを作成する（contact email を使用）</span>
             </label>
             <label class="flex items-start gap-2 mb-3 text-sm text-slate-600 cursor-pointer">
-              <input id="d-send-credentials" type="checkbox" class="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+              <input id="d-send-credentials" type="checkbox" checked class="mt-0.5 w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
               <span>認証情報メールを送信する（任意）</span>
             </label>
 
@@ -294,8 +294,8 @@ const statusColors: Record<string, string> = {
     (document.getElementById('d-status') as HTMLSelectElement).value = app.status || 'new';
     (document.getElementById('d-note') as HTMLInputElement).value = app.note || '';
     (document.getElementById('d-hotel-id') as HTMLSelectElement).value = '';
-    (document.getElementById('d-create-account') as HTMLInputElement).checked = false;
-    (document.getElementById('d-send-credentials') as HTMLInputElement).checked = false;
+    (document.getElementById('d-create-account') as HTMLInputElement).checked = true;
+    (document.getElementById('d-send-credentials') as HTMLInputElement).checked = true;
     (document.getElementById('d-approve-result') as HTMLElement).className = 'hidden mb-3 p-3 rounded-lg text-sm';
     if (!credentialsShownOnce) hideGeneratedCredentials();
     modal.classList.remove('hidden');
