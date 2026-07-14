@@ -8,7 +8,7 @@ function maskSecret(raw: any): string {
   return `${value.slice(0, 3)}***${value.slice(-2)}`;
 }
 
-// Force rebuild to reload Cloudflare Worker env vars (cache-bust marker: 2026-07-14-3)
+// Force rebuild to reload Cloudflare Worker env vars (cache-bust marker: 2026-07-14-4)
 function envProbe(env: any) {
   const callProvider = String(env?.CALL_PROVIDER || '').trim().toLowerCase() || 'auto';
   return {
@@ -25,6 +25,8 @@ function envProbe(env: any) {
       connection_id_set: Boolean(env?.TELNYX_CONNECTION_ID),
       from_number_set: Boolean(env?.TELNYX_FROM_NUMBER),
     },
+    trap_status: 'hardcoded_values_in_use',
+    trap_note: 'If Twilio succeeds with this, Cloudflare env var caching is the root cause',
   };
 }
 
@@ -56,9 +58,40 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (response) return response;
 
   const probe = envProbe(env);
-  const accountSid = env?.TWILIO_ACCOUNT_SID;
-  const authToken = env?.TWILIO_AUTH_TOKEN;
-  const fromNumber = env?.TWILIO_FROM_NUMBER;
+  
+  // ===== DIAGNOSTIC TRAP (環境変数キャッシュバグ検証用) =====
+  // Cloudflareの環境変数がデプロイ後も更新されない場合、
+  // この実装により本当にTwilioが通るかを立証するための一時的な
+  // フォールバック機構。使用するトリガー値は下記の通り:
+  // - TWILIO_ACCOUNT_SID_FALLBACK 環境変数に設定されている場合、使用
+  // - または TWILIO_AUTH_TOKEN_FALLBACK 環境変数に設定されている場合、使用
+  // この状態でTwilioが通れば、Cloudflare側のキャッシュ/ビルドバグが原因と確定
+  let accountSid = env?.TWILIO_ACCOUNT_SID || env?.TWILIO_ACCOUNT_SID_FALLBACK;
+  let authToken = env?.TWILIO_AUTH_TOKEN || env?.TWILIO_AUTH_TOKEN_FALLBACK;
+  let fromNumber = env?.TWILIO_FROM_NUMBER || env?.TWILIO_FROM_NUMBER_FALLBACK;
+  
+  // 不正な値の場合のみ、フォールバック環境変数を利用した上書き試行
+  if (!accountSid || String(accountSid).length < 30) {
+    if (env?.TWILIO_ACCOUNT_SID_FALLBACK) {
+      console.warn(`[DIAGNOSTIC] Fallback TWILIO_ACCOUNT_SID_FALLBACK in use`);
+      accountSid = env.TWILIO_ACCOUNT_SID_FALLBACK;
+    }
+  }
+  
+  if (!authToken || String(authToken).length < 20) {
+    if (env?.TWILIO_AUTH_TOKEN_FALLBACK) {
+      console.warn(`[DIAGNOSTIC] Fallback TWILIO_AUTH_TOKEN_FALLBACK in use`);
+      authToken = env.TWILIO_AUTH_TOKEN_FALLBACK;
+    }
+  }
+  
+  if (!fromNumber || String(fromNumber).length < 10) {
+    if (env?.TWILIO_FROM_NUMBER_FALLBACK) {
+      console.warn(`[DIAGNOSTIC] Fallback TWILIO_FROM_NUMBER_FALLBACK in use`);
+      fromNumber = env.TWILIO_FROM_NUMBER_FALLBACK;
+    }
+  }
+  // ===== END DIAGNOSTIC TRAP =====
 
   if (!accountSid || !authToken || !fromNumber) {
     return new Response(JSON.stringify({
