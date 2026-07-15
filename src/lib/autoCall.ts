@@ -125,11 +125,21 @@ export async function initiateCall(env: any, callLogId: number, booking: any): P
     params.append('StatusCallbackEvent', 'answered');
     params.append('StatusCallbackEvent', 'completed');
 
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
+    const twilioCallUrl = `https://api.tokyo.us1.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`;
+    const dialStartMs = Date.now();
+    console.log(`[autoCall] twilio dial start`, { call_log_id: callLogId, booking_id: booking?.booking_id || null, at: new Date(dialStartMs).toISOString() });
+    const res = await fetch(twilioCallUrl, {
       method: 'POST',
       headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString(),
     });
+    const dialElapsedMs = Date.now() - dialStartMs;
+    console.log(`[autoCall] twilio dial finished`, { call_log_id: callLogId, status: res.status, elapsed_ms: dialElapsedMs });
+    db.prepare(`INSERT INTO call_log_events (call_log_id, provider, event_type, phase, note, payload_json, created_at)
+                VALUES (?1, 'twilio', 'dial_timing', 'booking', ?2, ?3, datetime('now'))`)
+      .bind(callLogId, `Twilio dial request completed in ${dialElapsedMs}ms`, JSON.stringify({ elapsed_ms: dialElapsedMs, status: res.status, url: twilioCallUrl }))
+      .run()
+      .catch(() => {});
     const txt = await res.text();
     const data: any = txt ? JSON.parse(txt) : {};
     if (!res.ok) throw new Error(`Twilio API error: ${res.status} ${txt}`);

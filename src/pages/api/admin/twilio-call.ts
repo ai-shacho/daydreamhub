@@ -145,8 +145,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const baseUrl = toHttpsOrigin(env?.PUBLIC_BASE_URL, env?.SITE_URL);
 
+  let callLogId: number | null = null;
   try {
-    let callLogId: number | null = null;
     let logNote = note || `Twilio test call to ${toNumber}`;
 
     if (phase === 'outreach') {
@@ -198,14 +198,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
     params.append('StatusCallbackEvent', 'answered');
     params.append('StatusCallbackEvent', 'completed');
 
+    const twilioCallUrl = `https://api.tokyo.us1.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json`;
+    const dialStartMs = Date.now();
     const twilioReqSummary = {
-      url: `https://api.twilio.com/2010-04-01/Accounts/${maskSecret(accountSid)}/Calls.json`,
+      url: `https://api.tokyo.us1.twilio.com/2010-04-01/Accounts/${maskSecret(accountSid)}/Calls.json`,
       to: toNumber,
       from: maskSecret(fromNumber),
       callback_url: `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&phase=${phase}&event=status`,
     };
 
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json`, {
+    console.log(`[admin/twilio-call] twilio dial start`, { call_log_id: callLogId, phase, to: toNumber, at: new Date(dialStartMs).toISOString() });
+    const res = await fetch(twilioCallUrl, {
       method: 'POST',
       headers: {
         Authorization: basicAuthHeader(accountSid, authToken),
@@ -213,6 +216,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
       },
       body: params.toString(),
     });
+    const dialElapsedMs = Date.now() - dialStartMs;
+    console.log(`[admin/twilio-call] twilio dial finished`, { call_log_id: callLogId, phase, status: res.status, elapsed_ms: dialElapsedMs });
+    if (db && callLogId) {
+      db.prepare(`
+        INSERT INTO call_log_events (call_log_id, provider, event_type, phase, note, payload_json, created_at)
+        VALUES (?1, 'twilio', 'dial_timing', ?2, ?3, ?4, datetime('now'))
+      `).bind(callLogId, phase, `Twilio dial request completed in ${dialElapsedMs}ms`, JSON.stringify({ elapsed_ms: dialElapsedMs, status: res.status, url: twilioReqSummary.url })).run().catch(() => {});
+    }
 
     const text = await res.text();
     let providerBody: any = null;

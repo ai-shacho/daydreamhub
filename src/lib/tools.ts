@@ -805,11 +805,16 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       paramsForm.append('StatusCallbackEvent', 'answered');
       paramsForm.append('StatusCallbackEvent', 'completed');
 
-      const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
+      const twilioCallUrl = `https://api.tokyo.us1.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`;
+      const dialStartMs = Date.now();
+      console.info(`[initiateCall] Twilio dial start: callId=${callId} to=${toPhone.normalized} at=${new Date(dialStartMs).toISOString()}`);
+      const response = await fetch(twilioCallUrl, {
         method: 'POST',
         headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: paramsForm.toString(),
       });
+      const dialElapsedMs = Date.now() - dialStartMs;
+      console.info(`[initiateCall] Twilio dial finished: callId=${callId} status=${response.status} elapsedMs=${dialElapsedMs}`);
       const txt = await response.text();
       let resData: any = {};
       try {

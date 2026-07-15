@@ -547,11 +547,23 @@ export const POST: APIRoute = async ({ request, locals }) => {
       form.append('StatusCallbackEvent', 'answered');
       form.append('StatusCallbackEvent', 'completed');
 
-      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`, {
+      const twilioCallUrl = `https://api.tokyo.us1.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Calls.json`;
+      const dialStartMs = Date.now();
+      console.log(`[admin/outreach] twilio dial start`, { lead_id, call_log_id: callLogId, at: new Date(dialStartMs).toISOString() });
+      const res = await fetch(twilioCallUrl, {
         method: 'POST',
         headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
         body: form.toString(),
       });
+      const dialElapsedMs = Date.now() - dialStartMs;
+      console.log(`[admin/outreach] twilio dial finished`, { lead_id, call_log_id: callLogId, status: res.status, elapsed_ms: dialElapsedMs });
+      if (callLogId) {
+        db.prepare(`INSERT INTO call_log_events (call_log_id, provider, event_type, phase, note, payload_json, created_at)
+                    VALUES (?1, 'twilio', 'dial_timing', 'outreach', ?2, ?3, datetime('now'))`)
+          .bind(callLogId, `Twilio dial request completed in ${dialElapsedMs}ms`, JSON.stringify({ elapsed_ms: dialElapsedMs, status: res.status, url: twilioCallUrl }))
+          .run()
+          .catch(() => {});
+      }
       const text = await res.text();
       const data: any = text ? JSON.parse(text) : {};
       if (!res.ok) {
