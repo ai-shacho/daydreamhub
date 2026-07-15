@@ -1219,7 +1219,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
         if (phase === 'concierge') {
           await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'unavailable', 'hotel_declined_dayuse');
-          return twiml(`<Say voice="${VOICE}">Understood. Thank you for confirming. Goodbye.</Say><Hangup/>`);
+          return twiml(`<Say voice="${VOICE}">Understood. We currently have guests seeking day-use stays in your area. We may follow up to discuss whether a day-use plan could work for your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
         }
         if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});

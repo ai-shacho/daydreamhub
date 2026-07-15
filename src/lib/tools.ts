@@ -259,7 +259,7 @@ export async function searchHotelsExternal(env: any, params: any) {
   // "day use hotel Tokyo" のような自然文クエリにもヒットさせるため「含む」で判定。
   if (cityInput.includes("tokyo") || cityInput.includes("東京")) {
     const mockHotels = [
-      { name: "Tokyo Test Hotel A", address: "Tokyo", phone: "+818038489554", rating: null, rating_count: 0, website: null, source: "external" },
+      { name: "Tokyo Test Hotel A", address: "Tokyo", phone: "+817084443210", rating: null, rating_count: 0, website: null, source: "external" },
       { name: "Tokyo Test Hotel B", address: "Tokyo", phone: "+818053689489", rating: null, rating_count: 0, website: null, source: "external" },
       { name: "Tokyo Test Hotel C", address: "Tokyo", phone: "+17207275686", rating: null, rating_count: 0, website: null, source: "external" },
     ];
