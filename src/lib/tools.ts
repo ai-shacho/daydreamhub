@@ -799,6 +799,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       paramsForm.set('Method', 'POST');
       paramsForm.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?cid=${callId}&lid=${callId}&event=status&phase=concierge`);
       paramsForm.set('StatusCallbackMethod', 'POST');
+      paramsForm.set('Timeout', '120');
       paramsForm.set('StatusCallbackEvent', 'initiated');
       paramsForm.append('StatusCallbackEvent', 'ringing');
       paramsForm.append('StatusCallbackEvent', 'answered');

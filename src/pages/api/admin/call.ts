@@ -82,6 +82,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       params.set('Method', 'POST');
       params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&event=status`);
       params.set('StatusCallbackMethod', 'POST');
+      params.set('Timeout', '120');
       params.set('StatusCallbackEvent', 'initiated');
       params.append('StatusCallbackEvent', 'ringing');
       params.append('StatusCallbackEvent', 'answered');
