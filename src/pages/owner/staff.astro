@@ -53,7 +53,7 @@ if (db) {
   <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
     <h3 class="text-lg font-semibold text-slate-900 mb-4">Invite Staff Member</h3>
     <form id="invite-form" class="space-y-4">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Name</label>
           <input type="text" name="name" required placeholder="Staff member name" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
@@ -61,6 +61,11 @@ if (db) {
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
           <input type="email" name="email" required placeholder="staff@example.com" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+          <input type="text" name="password" required minlength="8" placeholder="Set initial password" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+          <p class="text-xs text-slate-500 mt-1">At least 8 characters</p>
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">Hotels</label>
@@ -99,13 +104,27 @@ if (db) {
         </div>
       </div>
       <div class="flex items-center justify-between">
-        <p class="text-xs text-slate-500">Staff will need to log in with the email and a password set by admin.</p>
+        <p class="text-xs text-slate-500">Staff credentials are set manually here. Copy and share them securely.</p>
         <button type="submit" id="invite-btn" class="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
           Invite Staff
         </button>
       </div>
     </form>
     <div id="invite-message" class="mt-3 hidden"></div>
+    <div id="invite-credentials" class="mt-3 hidden bg-slate-50 border border-slate-200 rounded-lg p-4">
+      <p class="text-sm font-semibold text-slate-800 mb-2">Copy credentials and send to staff</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <div>
+          <p class="text-xs text-slate-500">Email</p>
+          <p id="cred-email" class="font-mono text-slate-800 break-all"></p>
+        </div>
+        <div>
+          <p class="text-xs text-slate-500">Password</p>
+          <p id="cred-password" class="font-mono text-slate-800 break-all"></p>
+        </div>
+      </div>
+      <button type="button" id="copy-credentials-btn" class="mt-3 px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-100">Copy email + password</button>
+    </div>
   </div>
 
   {error && (
@@ -191,11 +210,12 @@ if (db) {
       const formData = new FormData(inviteForm as HTMLFormElement);
       const name = formData.get('name');
       const email = formData.get('email');
+      const password = String(formData.get('password') || '');
       const staff_role = formData.get('staff_role') || 'booking_manager';
       const hotelIds = formData.getAll('hotel_ids').map(Number).filter(Boolean);
 
-      if (!name || !email || hotelIds.length === 0) {
-        showMessage('Please fill in all fields and select at least one hotel.', 'error');
+      if (!name || !email || !password || hotelIds.length === 0) {
+        showMessage('Please fill in all fields (including password) and select at least one hotel.', 'error');
         return;
       }
 
@@ -207,18 +227,20 @@ if (db) {
       try {
         let successCount = 0;
         let lastError = '';
-        let anyEmailSent = false;
+        const credBox = document.getElementById('invite-credentials');
+        const credEmail = document.getElementById('cred-email');
+        const credPassword = document.getElementById('cred-password');
+        const copyBtn = document.getElementById('copy-credentials-btn') as HTMLButtonElement | null;
         let anyNewUser = false;
         for (const hid of hotelIds) {
           const res = await fetch('/api/owner/staff', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, email, hotel_id: hid, staff_role }),
+            body: JSON.stringify({ name, email, password, hotel_id: hid, staff_role }),
           });
           const data = await res.json();
           if (res.ok && data.success) {
             successCount++;
-            if (data.email_sent) anyEmailSent = true;
             if (data.is_new_user) anyNewUser = true;
           } else {
             lastError = data.error || 'Failed to invite staff member.';
@@ -227,13 +249,21 @@ if (db) {
 
         if (successCount > 0) {
           let msg = `Staff member invited to ${successCount} hotel${successCount > 1 ? 's' : ''} successfully!`;
-          if (anyNewUser && anyEmailSent) {
-            msg += ' An invitation email with a password setup link has been sent.';
-          } else if (anyNewUser && !anyEmailSent) {
-            msg += ' (Email not sent — please ask the staff to use "Forgot password" to set their password.)';
+          if (credBox && credEmail && credPassword) {
+            credEmail.textContent = String(email);
+            credPassword.textContent = password;
+            credBox.classList.remove('hidden');
+          }
+          if (copyBtn) {
+            copyBtn.onclick = async () => {
+              const text = `Email: ${String(email)}\nPassword: ${password}`;
+              await navigator.clipboard.writeText(text);
+              copyBtn.textContent = 'Copied!';
+              setTimeout(() => (copyBtn.textContent = 'Copy email + password'), 1200);
+            };
           }
           showMessage(msg, 'success');
-          setTimeout(() => window.location.reload(), 2000);
+
         } else {
           showMessage(lastError || 'Failed to invite staff member.', 'error');
         }
