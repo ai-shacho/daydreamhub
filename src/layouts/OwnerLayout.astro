@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { verifyOwner, getStaffRole, canManageStaff, canAccessReports } from '../lib/ownerAuth';
 
 interface Props {
   title: string;
@@ -7,6 +8,15 @@ interface Props {
 }
 
 const { title, activeNav = "" } = Astro.props;
+
+const runtime = Astro.locals.runtime as any;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || "dev-secret";
+const owner = await verifyOwner(Astro.request, jwtSecret);
+const staffRole = owner?.role === 'staff' && db ? await getStaffRole(db, owner.sub) : null;
+const canSeeReports = owner ? canAccessReports(owner, staffRole) : false;
+const canSeeStaff = owner ? canManageStaff(owner, staffRole) : false;
+const canSeeSettings = owner?.role !== 'staff' || staffRole === 'co_owner';
 
 const navGroups = [
   {
@@ -28,7 +38,7 @@ const navGroups = [
   {
     label: "Insights",
     items: [
-      { key: "reports", label: "Reports", href: "/owner/reports", icon: "chart" },
+      ...(canSeeReports ? [{ key: "reports", label: "Reports", href: "/owner/reports", icon: "chart" }] : []),
       { key: "messages", label: "Messages", href: "/owner/messages", icon: "envelope" },
     ]
   },
@@ -41,10 +51,10 @@ const navGroups = [
   {
     label: "Settings",
     items: [
-      { key: "staff", label: "Staff", href: "/owner/staff", icon: "users" },
+      ...(canSeeStaff ? [{ key: "staff", label: "Staff", href: "/owner/staff", icon: "users" }] : []),
       { key: "notifications", label: "Notifications", href: "/owner/notifications", icon: "bell" },
       { key: "call-logs", label: "Call Logs", href: "/owner/call-logs", icon: "phone" },
-      { key: "settings", label: "Settings", href: "/owner/settings", icon: "cog" },
+      ...(canSeeSettings ? [{ key: "settings", label: "Settings", href: "/owner/settings", icon: "cog" }] : []),
     ]
   }
 ];
