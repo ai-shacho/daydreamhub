@@ -248,7 +248,8 @@ if (db) {
         }
 
         if (successCount > 0) {
-          let msg = `Staff member invited to ${successCount} hotel${successCount > 1 ? 's' : ''} successfully!`;
+          const msg = `Staff member invited to ${successCount} hotel${successCount > 1 ? 's' : ''} successfully!`;
+          window.location.reload();
           if (credBox && credEmail && credPassword) {
             credEmail.textContent = String(email);
             credPassword.textContent = password;

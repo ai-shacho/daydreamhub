@@ -2,6 +2,14 @@ import type { APIRoute } from 'astro';
 import { getOwnerHotelIds } from '../../../lib/ownerAuth';
 import { requireOwner } from '../../../lib/apiAuth';
 
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
@@ -123,11 +131,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         );
       }
     } else {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(String(password));
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const passwordHash = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+      const passwordHash = await hashPassword(String(password));
       const insertRes = await db
         .prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
         .bind(name.trim(), normalizedEmail, passwordHash, 'staff')
