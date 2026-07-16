@@ -220,8 +220,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         if (planFull) {
           try {
             const bookingEmail: string = (hotel as any)?.email || '';
-            const ownerLoginEmail: string = (hotel as any)?.owner_login_email || '';
-            const notifyEmails = [...new Set([bookingEmail, ownerLoginEmail].filter(Boolean))];
+            const contactEmail: string = (hotel as any)?.owner_login_email || '';
+            const notifyEmails = [...new Set([bookingEmail, contactEmail].filter(Boolean))];
             if (notifyEmails.length > 0) {
               const subject = `New Booking #${bookingId} - ${guest_name} on ${check_in_date}`;
               const emailResult = await sendBookingNotificationToHotel(RESEND_API_KEY, {

@@ -77,8 +77,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     // 認証情報メールは明示指定時のみ（新運用では初期PW送付を常用しない）。
     const sendCredentials = data.send_credentials === true;
 
-    const loginEmail = (app.contact_email || '').toLowerCase().trim();
-    const ownerName = app.contact_name;
+    const loginEmail = (app.booking_email || app.contact_email || '').toLowerCase().trim();
+    const ownerName = (app.hotel_name || app.contact_name || '').trim();
 
     let accountCreated = false;
     let credentialsSent = false;
