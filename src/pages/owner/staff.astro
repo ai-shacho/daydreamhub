@@ -123,7 +123,10 @@ if (db) {
           <p id="cred-password" class="font-mono text-slate-800 break-all"></p>
         </div>
       </div>
-      <button type="button" id="copy-credentials-btn" class="mt-3 px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-100">Copy email + password</button>
+      <div class="mt-3 flex items-center gap-2">
+        <button type="button" id="copy-credentials-btn" class="px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-100">Copy email + password</button>
+        <button type="button" id="close-refresh-btn" class="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Close & Refresh</button>
+      </div>
     </div>
   </div>
 
@@ -249,7 +252,6 @@ if (db) {
 
         if (successCount > 0) {
           const msg = `Staff member invited to ${successCount} hotel${successCount > 1 ? 's' : ''} successfully!`;
-          window.location.reload();
           if (credBox && credEmail && credPassword) {
             credEmail.textContent = String(email);
             credPassword.textContent = password;
@@ -261,6 +263,12 @@ if (db) {
               await navigator.clipboard.writeText(text);
               copyBtn.textContent = 'Copied!';
               setTimeout(() => (copyBtn.textContent = 'Copy email + password'), 1200);
+            };
+          }
+          const closeRefreshBtn = document.getElementById('close-refresh-btn') as HTMLButtonElement | null;
+          if (closeRefreshBtn) {
+            closeRefreshBtn.onclick = () => {
+              window.location.reload();
             };
           }
           showMessage(msg, 'success');
