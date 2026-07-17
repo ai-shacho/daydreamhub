@@ -439,6 +439,9 @@ for (const img of images) {
       {plans.length > 0 && (
         <section class="mb-10">
           <h2 class="text-xl font-bold text-slate-900 mb-4">{t('hotel.available_plans', locale)}</h2>
+          <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 hidden" data-currency-usd-notice>
+            決済はUSDで行われます。表示価格は参考値です。
+          </p>
           {roomTypes.map(rt => {
               const rtImages = imagesByRoomType[rt] || [];
               return (
@@ -733,6 +736,17 @@ for (const img of images) {
     });
   };
   document.head.appendChild(fpScript);
+
+  // Show currency notice only for non-USD
+  (function() {
+    var noticeEls = document.querySelectorAll('[data-currency-usd-notice]');
+    if (!noticeEls.length) return;
+    var currency = localStorage.getItem('ddh_currency') || 'USD';
+    var show = currency !== 'USD';
+    noticeEls.forEach(function(el) {
+      el.classList.toggle('hidden', !show);
+    });
+  })();
 
   // Book Now button handler
   document.querySelectorAll('.book-now-btn').forEach(function(btn) {

@@ -467,6 +467,9 @@ for (const img of images) {
           <h2 class="text-xl font-bold text-slate-900 mb-4">
             {t('hotel.available_plans', locale)}
           </h2>
+          <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 hidden" data-currency-usd-notice>
+            Payments are processed in USD. Other currencies are for reference only.
+          </p>
           {roomTypes.map(rt => {
               const rtImageUrl = (plansByRoomType[rt][0] as any)?.room_type_image_url || '';
               const rtImages = imagesByRoomType[rt] || (rtImageUrl ? [rtImageUrl] : []);
@@ -786,6 +789,17 @@ for (const img of images) {
     });
   };
   document.head.appendChild(fpScript);
+
+  // Show currency notice only for non-USD
+  (function() {
+    var noticeEls = document.querySelectorAll('[data-currency-usd-notice]');
+    if (!noticeEls.length) return;
+    var currency = localStorage.getItem('ddh_currency') || 'USD';
+    var show = currency !== 'USD';
+    noticeEls.forEach(function(el) {
+      el.classList.toggle('hidden', !show);
+    });
+  })();
 
   // Book Now button handler
   document.querySelectorAll('.book-now-btn').forEach(function(btn) {
