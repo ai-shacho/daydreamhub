@@ -101,6 +101,10 @@ function localClassifyShortIntent(text: string, context: 'outreach_interest' | '
     if (words.some((w) => repeatWords.has(w))) return 'repeat';
     if (words.some((w) => affirmWords.has(w))) return 'affirm';
     if (words.some((w) => denyWords.has(w))) return 'deny';
+    const hasNumericAmount = /\b\d{1,6}\b/.test(normalized);
+    if ((context === 'ask_price' || context === 'confirm_booking') && hasNumericAmount) {
+      return 'price';
+    }
     if (context === 'ask_price') {
       const amount = normalized.match(/\b(\d{1,6})\b/);
       if (amount) return 'price';
@@ -267,7 +271,7 @@ async function aiClassifyIntent(
           {
             role: 'system',
             content:
-              'You classify spoken responses from hotel staff in a phone call. Return JSON only with schema: {"intent":"affirm|deny|repeat|price|unclear","amount":number|null,"raw":"string"}. Use context to disambiguate. intent=price when user provides or corrects a numeric amount in USD. For yes/no style confirmations, use affirm/deny. If uncertain, use unclear.'
+              'You classify spoken responses from hotel staff in a phone call. Return JSON only with schema: {"intent":"affirm|deny|repeat|price|unclear","amount":number|null,"raw":"string"}. Use context to disambiguate. CRITICAL PRIORITY RULE: if speech includes any explicit numeric amount (for example "120 dollars") AND any affirmation words (for example "yes", "ok"), classify as intent="price" (not affirm) and extract that amount. In confirm_booking and ask_price contexts, amount correction always takes precedence over affirmation/denial when a numeric amount is present. intent=price when user provides or corrects a numeric amount in USD. For pure yes/no style confirmations without numeric amount, use affirm/deny. If uncertain, use unclear.'
           },
           {
             role: 'user',
