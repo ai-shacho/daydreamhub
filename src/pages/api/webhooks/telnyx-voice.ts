@@ -101,10 +101,6 @@ function localClassifyShortIntent(text: string, context: 'outreach_interest' | '
     if (words.some((w) => repeatWords.has(w))) return 'repeat';
     if (words.some((w) => affirmWords.has(w))) return 'affirm';
     if (words.some((w) => denyWords.has(w))) return 'deny';
-    const hasNumericAmount = /\b\d{1,6}\b/.test(normalized);
-    if ((context === 'ask_price' || context === 'confirm_booking') && hasNumericAmount) {
-      return 'price';
-    }
     if (context === 'ask_price') {
       const amount = normalized.match(/\b(\d{1,6})\b/);
       if (amount) return 'price';
@@ -271,7 +267,7 @@ async function aiClassifyIntent(
           {
             role: 'system',
             content:
-              'You classify spoken responses from hotel staff in a phone call. Return JSON only with schema: {"intent":"affirm|deny|repeat|price|unclear","amount":number|null,"raw":"string"}. Use context to disambiguate. CRITICAL PRIORITY RULE: if speech includes any explicit numeric amount (for example "120 dollars") AND any affirmation words (for example "yes", "ok"), classify as intent="price" (not affirm) and extract that amount. In confirm_booking and ask_price contexts, amount correction always takes precedence over affirmation/denial when a numeric amount is present. intent=price when user provides or corrects a numeric amount in USD. For pure yes/no style confirmations without numeric amount, use affirm/deny. If uncertain, use unclear.'
+              'You classify spoken responses from hotel staff in a phone call. Return JSON only with schema: {"intent":"affirm|deny|repeat|price|unclear","amount":number|null,"raw":"string"}. Use context to disambiguate. intent=price when user provides or corrects a numeric amount in USD. For yes/no style confirmations, use affirm/deny. If uncertain, use unclear.'
           },
           {
             role: 'user',
@@ -720,6 +716,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
 
         const intentResult = await aiClassifyIntent(apiKey, speech, '', 'outreach_interest');
+        console.log(`[trap:intent] step=${step} context=outreach_interest speech=${JSON.stringify(speech || '')} digits=${JSON.stringify('')} intent=${intentResult.intent} amount=${JSON.stringify(intentResult.amount ?? null)} price_quoted=${JSON.stringify(state.price_quoted ?? null)}`);
 
         if (intentResult.intent === 'repeat') {
           await gatherUsingSpeak({ ...state, step: 'outreach_ask_interest' }, "DayDreamHub is a day-use hotel booking platform. Listing is free. Press 1 if you want our materials, or press 2 if you want a follow-up explanation call. You can also answer by voice.");
@@ -757,6 +754,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       // ─── STEP 1: Do you offer day-use plans? ───
       if (step === 'ask_dayuse') {
         const intentResult = await aiClassifyIntent(apiKey, speech, digits, 'ask_dayuse');
+        console.log(`[trap:intent] step=${step} context=ask_dayuse speech=${JSON.stringify(speech || '')} digits=${JSON.stringify(digits || '')} intent=${intentResult.intent} amount=${JSON.stringify(intentResult.amount ?? null)} price_quoted=${JSON.stringify(state.price_quoted ?? null)}`);
 
         if (intentResult.intent === 'repeat') {
           const checkIn = (state.check_in_date || state.date || 'the requested date');
@@ -838,6 +836,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const hotelSaid = speech || '';
         // Hybrid intent: prioritize DTMF, then let LLM classify free-form speech.
         const intentResult = await aiClassifyIntent(apiKey, hotelSaid, digits, 'ask_price');
+        console.log(`[trap:intent] step=${step} context=ask_price speech=${JSON.stringify(hotelSaid || '')} digits=${JSON.stringify(digits || '')} intent=${intentResult.intent} amount=${JSON.stringify(intentResult.amount ?? null)} price_quoted=${JSON.stringify(state.price_quoted ?? null)}`);
         const priceResult = (intentResult.intent === 'price' && intentResult.amount && intentResult.amount > 0)
           ? { amount: intentResult.amount, raw: intentResult.raw || hotelSaid }
           : await aiExtractPrice(apiKey, hotelSaid);
@@ -886,6 +885,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (step === 'confirm_booking') {
         // Hybrid intent for final confirmation: affirm/deny/repeat + price correction from free speech.
         const intentResult = await aiClassifyIntent(apiKey, speech || '', digits || '', 'confirm_booking');
+        console.log(`[trap:intent] step=${step} context=confirm_booking speech=${JSON.stringify((speech || ''))} digits=${JSON.stringify((digits || ''))} intent=${intentResult.intent} amount=${JSON.stringify(intentResult.amount ?? null)} price_quoted=${JSON.stringify(state.price_quoted ?? null)}`);
         let correctedPrice: number | null = (intentResult.intent === 'price' && intentResult.amount && intentResult.amount > 0)
           ? intentResult.amount
           : null;
