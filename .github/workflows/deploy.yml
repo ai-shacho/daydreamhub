@@ -38,7 +38,7 @@ jobs:
           PAYPAL_SANDBOX_CLIENT_ID: ${{ secrets.PAYPAL_SANDBOX_CLIENT_ID != '' && secrets.PAYPAL_SANDBOX_CLIENT_ID || secrets.PAYPAL_CLIENT_ID }}
           PAYPAL_SECRET: ${{ secrets.PAYPAL_SANDBOX_SECRET != '' && secrets.PAYPAL_SANDBOX_SECRET || secrets.PAYPAL_SECRET != '' && secrets.PAYPAL_SECRET || secrets.SECRET }}
           PAYPAL_SANDBOX_SECRET: ${{ secrets.PAYPAL_SANDBOX_SECRET != '' && secrets.PAYPAL_SANDBOX_SECRET || secrets.PAYPAL_SECRET != '' && secrets.PAYPAL_SECRET || secrets.SECRET }}
-          PAYPAL_MODE: sandbox
+          PAYPAL_MODE: live
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
