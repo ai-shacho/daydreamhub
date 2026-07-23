@@ -1054,6 +1054,52 @@ function escHtml(s) {
     return slugs;
   }
 
+  // Parse internal hotel cards from plain response text when metadata is missing.
+  // Expected examples:
+  // - Hotel Name ... From $89 ... /hotel/hotel-slug
+  // - [Hotel Name](/hotel/hotel-slug)
+  function extractInternalHotelsFromText(text) {
+    if (!text) return [];
+    var lines = String(text).split('\n');
+    var hotels = [];
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var slugMatch = line.match(/\/hotel\/([\w-]+)/);
+      if (!slugMatch) continue;
+
+      var slug = slugMatch[1];
+      if (!slug || hotels.some(function(h){ return h.slug === slug; })) continue;
+
+      var name = '';
+      var markdownName = line.match(/\[([^\]\n]{2,120})\]\(\/?hotel\/[\w-]+\)/);
+      if (markdownName) {
+        name = markdownName[1].trim();
+      } else {
+        var beforePath = line.split('/hotel/' + slug)[0] || '';
+        name = beforePath
+          .replace(/^\s*[-•\d\.\)\s]+/, '')
+          .replace(/\*\*/g, '')
+          .replace(/\|.*$/, '')
+          .replace(/(?:from|From)\s*\$[\d.,]+.*$/, '')
+          .replace(/[—–-]\s*$/, '')
+          .trim();
+      }
+      if (!name) {
+        name = slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+      }
+
+      var price = null;
+      var priceMatch = line.match(/(?:from|From)\s*\$\s*([\d.,]+)/);
+      if (!priceMatch) priceMatch = line.match(/\$\s*([\d.,]+)\s*[〜~]?/);
+      if (priceMatch) price = priceMatch[1];
+
+      hotels.push({ slug: slug, name: name, min_price: price });
+    }
+
+    return hotels;
+  }
+
   // Render text with hotel links converted to clickable cards
   function renderMsgContent(text) {
     if (!text) return '';
@@ -1190,9 +1236,7 @@ function escHtml(s) {
 
       var internalHotels = (_internalMeta && _internalMeta.length > 0)
         ? _internalMeta.map(function(h){ return { slug: h.slug, name: h.name, min_price: h.min_price }; }).filter(function(h){ return h.slug; })
-        : extractHotelSlugs(text).map(function(slug){
-            return { slug: slug, name: slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }), min_price: null };
-          });
+        : extractInternalHotelsFromText(text);
 
       var externalHotels = (_externalMeta && _externalMeta.length > 0)
         ? _externalMeta.map(function(h){ return { name: h.name || '', phone: h.phone || '' }; })
@@ -1200,13 +1244,12 @@ function escHtml(s) {
 
       var internalCards = internalHotels.map(function(h) {
         var label = escHtml(h.name || '');
-        var price = (h.min_price != null && h.min_price !== '') ? ('$' + h.min_price + '〜') : '';
-        return '<a href="/hotel/' + h.slug + '" class="flex items-center justify-between gap-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-2 transition-colors">' +
-          '<div class="min-w-0 flex-1">' +
-            '<p class="text-white text-xs font-bold break-words">' + label + '</p>' +
-            (price ? '<p class="text-amber-300 text-xs font-semibold mt-0.5">From ' + escHtml(price) + '</p>' : '') +
-          '</div>' +
-          '<span class="shrink-0 bg-amber-500 hover:bg-amber-400 text-gray-900 text-[11px] font-bold px-2.5 py-1 rounded-md">Details</span>' +
+        var detailPath = '/hotel/' + h.slug;
+        var price = (h.min_price != null && h.min_price !== '') ? ('$' + h.min_price + '〜') : (pageLocale === 'ja' ? '未設定' : 'N/A');
+        return '<a href="' + detailPath + '" class="block bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-2 transition-colors">' +
+          '<p class="text-white text-xs font-bold break-words leading-relaxed">' + label + '</p>' +
+          '<p class="text-amber-300 text-xs font-semibold mt-1">' + (pageLocale === 'ja' ? '料金' : 'Min price') + ': ' + escHtml(price) + '</p>' +
+          '<p class="text-amber-200 text-[11px] mt-1 break-all">' + (pageLocale === 'ja' ? '詳細ページ' : 'Details') + ': ' + escHtml(detailPath) + '</p>' +
         '</a>';
       }).join('');
 
@@ -1236,8 +1279,8 @@ function escHtml(s) {
           '</div>';
       }
 
-      var hasStructuredHotels = !!(_metaHotels && _metaHotels.length > 0);
-      var assistantBody = hasStructuredHotels
+      var hasCardHotels = internalHotels.length > 0;
+      var assistantBody = hasCardHotels
         ? ''
         : '<div class="whitespace-pre-wrap leading-relaxed">' + renderMsgContent(text) + '</div>';
       var hotelCards = internalCards ? '<div class="grid gap-2 mt-2">' + internalCards + '</div>' : '';

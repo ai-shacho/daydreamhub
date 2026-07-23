@@ -195,20 +195,23 @@
 
       const bubble = document.createElement('div');
       bubble.className = 'bg-slate-100 rounded-2xl rounded-tl-none px-3 py-2 text-sm text-slate-700 max-w-[85%]';
-      bubble.innerHTML = renderMarkdown(text);
 
       // Task #47: render hotel cards from structured data
       const metaHotels = (metadata && Array.isArray(metadata.hotels) && metadata.hotels.length > 0) ? metadata.hotels : null;
+      let hasInternalCards = false;
       if (metaHotels) {
-        const internal = metaHotels.filter(h => h.source === 'internal');
+        const internal = metaHotels.filter(h => h.source === 'internal' && h.slug);
         const external = metaHotels.filter(h => h.source === 'external');
         let cardsHtml = '';
         if (internal.length > 0) {
+          hasInternalCards = true;
           cardsHtml += internal.map(h => {
-            const price = h.min_price ? ` · $${h.min_price}〜` : '';
-            return `<a href="/hotel/${h.slug}" class="flex items-center justify-between bg-white border border-teal-100 rounded-xl px-3 py-2 mt-2 hover:bg-teal-50 transition-colors">
-              <span class="font-semibold text-teal-700 text-xs flex-1 pr-2 break-words">${h.name}</span>
-              <span class="text-teal-500 text-xs font-bold shrink-0">${price} 予約 →</span>
+            const price = (h.min_price != null && h.min_price !== '') ? `$${h.min_price}〜` : (pageLocale === 'ja' ? '未設定' : 'N/A');
+            const detailPath = `/hotel/${h.slug}`;
+            return `<a href="${detailPath}" class="block bg-white border border-teal-100 rounded-xl px-3 py-2 mt-2 hover:bg-teal-50 transition-colors">
+              <p class="font-semibold text-teal-700 text-xs break-words leading-relaxed">${h.name}</p>
+              <p class="text-teal-600 text-xs font-bold mt-1">${pageLocale === 'ja' ? '料金' : 'Min price'}: ${price}</p>
+              <p class="text-teal-500 text-[11px] mt-1 break-all">${pageLocale === 'ja' ? '詳細ページ' : 'Details'}: ${detailPath}</p>
             </a>`;
           }).join('');
         }
@@ -223,7 +226,10 @@
             </div>`
           ).join('') + `</div>`;
         }
+        bubble.innerHTML = hasInternalCards ? '' : renderMarkdown(text);
         if (cardsHtml) bubble.innerHTML += cardsHtml;
+      } else {
+        bubble.innerHTML = renderMarkdown(text);
       }
 
       wrap.appendChild(avatar);
