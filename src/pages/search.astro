@@ -2,6 +2,11 @@
 import Layout from '../layouts/Layout.astro';
 import { getAirportCoords, haversineKm, nearestAirport, airportList } from '../lib/airports';
 import HotelCard from '../components/HotelCard.astro';
+import { getLocale } from '../lib/i18n';
+
+const locale = getLocale(Astro.url);
+const isJa = locale === 'ja';
+const searchPath = isJa ? '/ja/search' : '/search';
 
 // Get D1 database binding
 const DB = (Astro.locals as any).runtime?.env?.DB;
@@ -165,7 +170,14 @@ const paginationItems: (number | string)[] = Array.from({ length: totalPages }, 
   }, []);
 
 // Purpose options
-const specialities = [
+const specialities = isJa ? [
+  { value: '', label: 'すべての目的' },
+  { value: 'rest', label: '休息・リラックス' },
+  { value: 'work', label: 'リモートワーク' },
+  { value: 'personal_time', label: 'ひとり時間' },
+  { value: 'party', label: 'パーティー・イベント' },
+  { value: 'stay', label: 'デイステイ' },
+] : [
   { value: '', label: 'All purposes' },
   { value: 'rest', label: 'Rest & relaxation' },
   { value: 'work', label: 'Remote work' },
@@ -289,27 +301,27 @@ function buildUrl(overrides: Record<string, string>) {
     if (v) p.set(k, v);
     else p.delete(k);
   }
-  return `/search?${p.toString()}`;
+  return `${searchPath}?${p.toString()}`;
 }
 ---
 
-<Layout title="Search Hotels - DayDreamHub" description="Find day-use hotels worldwide. Filter by location, property type, and more.">
+<Layout title={isJa ? 'ホテルを検索 - DayDreamHub' : 'Search Hotels - DayDreamHub'} description={isJa ? '世界中のデイユースホテルを検索。場所や施設タイプで絞り込みできます。' : 'Find day-use hotels worldwide. Filter by location, property type, and more.'}>
 
   <!-- Search Bar -->
   <section class="bg-teal-700 pb-6">
     <div class="max-w-7xl mx-auto px-4">
-      <form method="get" action="/search" class="bg-white rounded-xl shadow-lg p-4">
+      <form method="get" action={searchPath} class="bg-white rounded-xl shadow-lg p-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <!-- Location -->
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Location</label>
+            <label class="block text-xs font-medium text-gray-500 mb-1">{isJa ? '場所' : 'Location'}</label>
             <div class="relative">
               <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
               <input
                 type="text"
                 name="location"
                 value={location}
-                placeholder="City, country, or hotel name"
+                placeholder={isJa ? '都市・国・ホテル名' : 'City, country, or hotel name'}
                 class="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               />
             </div>
@@ -317,12 +329,12 @@ function buildUrl(overrides: Record<string, string>) {
 
           <!-- Check-in -->
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Check-in</label>
+            <label class="block text-xs font-medium text-gray-500 mb-1">{isJa ? 'チェックイン' : 'Check-in'}</label>
             <input
               type="text"
               name="checkin"
               id="search-checkin-fp"
-              placeholder="Select date"
+              placeholder={isJa ? '日付を選択' : 'Select date'}
               autocomplete="off"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
@@ -343,12 +355,12 @@ function buildUrl(overrides: Record<string, string>) {
 
           <!-- Guests -->
           <div>
-            <label class="block text-xs font-medium text-gray-500 mb-1">Guests</label>
+            <label class="block text-xs font-medium text-gray-500 mb-1">{isJa ? '人数' : 'Guests'}</label>
             <select
               name="guests"
               class="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent bg-white"
             >
-              <option value="">Any</option>
+              <option value="">{isJa ? '指定なし' : 'Any'}</option>
               <option value="1">1 Guest</option>
               <option value="2">2 Guests</option>
               <option value="3">3 Guests</option>
@@ -363,7 +375,7 @@ function buildUrl(overrides: Record<string, string>) {
               type="submit"
               class="w-full bg-amber-500 hover:bg-amber-400 text-gray-900 font-semibold py-2.5 px-6 rounded-lg transition-colors text-sm"
             >
-              Search
+              {isJa ? '検索' : 'Search'}
             </button>
           </div>
         </div>
@@ -379,9 +391,9 @@ function buildUrl(overrides: Record<string, string>) {
       <button id="filter-toggle-btn" class="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm w-full justify-between">
         <span class="flex items-center gap-2">
           <svg class="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-          Filters
+          {isJa ? '絞り込み' : 'Filters'}
           {(propertyType || country || cityFilter || amenityFilter || ratingMin) && (
-            <span class="bg-teal-600 text-white text-xs rounded-full px-1.5 py-0.5">Active</span>
+            <span class="bg-teal-600 text-white text-xs rounded-full px-1.5 py-0.5">{isJa ? '適用中' : 'Active'}</span>
           )}
         </span>
         <svg id="filter-toggle-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -400,7 +412,7 @@ function buildUrl(overrides: Record<string, string>) {
 
             <!-- Property Type -->
             <div class="bg-white rounded-xl shadow-sm p-4">
-              <h3 class="font-semibold text-sm text-gray-800 mb-3">Property Type</h3>
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">{isJa ? '施設タイプ' : 'Property Type'}</h3>
               <div class="space-y-2">
                 {allPropertyTypes.map(pt => (
                   <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
@@ -416,14 +428,14 @@ function buildUrl(overrides: Record<string, string>) {
                   </label>
                 ))}
                 {propertyType && (
-                  <a href={buildUrl({ propertyType: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-1">Clear filter</a>
+                  <a href={buildUrl({ propertyType: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-1">{isJa ? '解除' : 'Clear filter'}</a>
                 )}
               </div>
             </div>
 
             <!-- Rating -->
             <div class="bg-white rounded-xl shadow-sm p-4">
-              <h3 class="font-semibold text-sm text-gray-800 mb-3">Rating</h3>
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">{isJa ? '評価' : 'Rating'}</h3>
               <div class="space-y-2">
                 {[
                   { value: '4.5', label: '4.5+' },
@@ -447,14 +459,14 @@ function buildUrl(overrides: Record<string, string>) {
                   </label>
                 ))}
                 {ratingMin && (
-                  <a href={buildUrl({ rating: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-1">Clear filter</a>
+                  <a href={buildUrl({ rating: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-1">{isJa ? '解除' : 'Clear filter'}</a>
                 )}
               </div>
             </div>
 
             <!-- Country (grouped by region) -->
             <div class="bg-white rounded-xl shadow-sm p-4">
-              <h3 class="font-semibold text-sm text-gray-800 mb-3">Country</h3>
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">{isJa ? '国' : 'Country'}</h3>
               <select
                 name="country"
                 class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
@@ -466,13 +478,13 @@ function buildUrl(overrides: Record<string, string>) {
                 ))}
               </select>
               {country && (
-                <a href={buildUrl({ country: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-2">Clear filter</a>
+                <a href={buildUrl({ country: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-2">{isJa ? '解除' : 'Clear filter'}</a>
               )}
             </div>
 
             <!-- City -->
             <div class="bg-white rounded-xl shadow-sm p-4">
-              <h3 class="font-semibold text-sm text-gray-800 mb-3">City</h3>
+              <h3 class="font-semibold text-sm text-gray-800 mb-3">{isJa ? '都市' : 'City'}</h3>
               <select
                 name="city"
                 class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
@@ -484,14 +496,14 @@ function buildUrl(overrides: Record<string, string>) {
                 ))}
               </select>
               {cityFilter && (
-                <a href={buildUrl({ city: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-2">Clear filter</a>
+                <a href={buildUrl({ city: '' })} class="inline-block text-xs text-teal-600 hover:text-teal-800 mt-2">{isJa ? '解除' : 'Clear filter'}</a>
               )}
             </div>
 
             <!-- Amenities -->
             {allAmenities.length > 0 && (
               <div class="bg-white rounded-xl shadow-sm p-4">
-                <h3 class="font-semibold text-sm text-gray-800 mb-3">Amenities</h3>
+                <h3 class="font-semibold text-sm text-gray-800 mb-3">{isJa ? '設備' : 'Amenities'}</h3>
                 <div class="space-y-2 max-h-48 overflow-y-auto">
                   {allAmenities.slice(0, 15).map(am => (
                     <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer hover:text-gray-900">
@@ -516,18 +528,18 @@ function buildUrl(overrides: Record<string, string>) {
       <!-- Main results area -->
       <div class="flex-1 min-w-0">
         <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-          💳 Payments are processed in USD. Local-currency prices are for reference only.（お支払いはUSD（米ドル）で処理されます。現地通貨の表示は参考価格です。）
+          {isJa ? '💳 お支払いはUSD（米ドル）で処理されます。現地通貨の表示は参考価格です。' : '💳 Payments are processed in USD. Local-currency prices are for reference only.'}
         </p>
         <!-- Results header -->
         <div class="flex flex-wrap items-center gap-3 mb-2">
           <p class="text-sm text-gray-600 flex-1 min-w-0">
             {totalCount > 0 ? (
-              <span>Showing <strong>{offset + 1}</strong>-<strong>{Math.min(offset + perPage, totalCount)}</strong> of <strong>{totalCount}</strong> properties</span>
+              <span>{isJa ? <>全<strong>{totalCount}</strong>件中 <strong>{offset + 1}</strong>-<strong>{Math.min(offset + perPage, totalCount)}</strong>件を表示</> : <>Showing <strong>{offset + 1}</strong>-<strong>{Math.min(offset + perPage, totalCount)}</strong> of <strong>{totalCount}</strong> properties</>}</span>
             ) : (
-              <span>No properties found</span>
+              <span>{isJa ? '該当する施設が見つかりません' : 'No properties found'}</span>
             )}
             {(location || propertyType || country || cityFilter || amenityFilter || ratingMin) && (
-              <a href="/search" class="ml-2 text-teal-600 hover:text-teal-800 text-xs font-medium">Clear all filters</a>
+              <a href={searchPath} class="ml-2 text-teal-600 hover:text-teal-800 text-xs font-medium">{isJa ? 'すべての絞り込みを解除' : 'Clear all filters'}</a>
             )}
           </p>
 
@@ -537,11 +549,11 @@ function buildUrl(overrides: Record<string, string>) {
               id="sort-select"
               class="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
             >
-              <option value="default" selected={sortBy === 'default'}>Sort: Recommended</option>
-              <option value="price_asc" selected={sortBy === 'price_asc'}>Price: Low to High</option>
-              <option value="price_desc" selected={sortBy === 'price_desc'}>Price: High to Low</option>
-              <option value="rating_desc" selected={sortBy === 'rating_desc'}>Rating: Highest</option>
-              <option value="airport_distance" selected={sortBy === 'airport_distance'}>Distance from Airport</option>
+              <option value="default" selected={sortBy === 'default'}>{isJa ? '並び順: おすすめ' : 'Sort: Recommended'}</option>
+              <option value="price_asc" selected={sortBy === 'price_asc'}>{isJa ? '料金が安い順' : 'Price: Low to High'}</option>
+              <option value="price_desc" selected={sortBy === 'price_desc'}>{isJa ? '料金が高い順' : 'Price: High to Low'}</option>
+              <option value="rating_desc" selected={sortBy === 'rating_desc'}>{isJa ? '評価が高い順' : 'Rating: Highest'}</option>
+              <option value="airport_distance" selected={sortBy === 'airport_distance'}>{isJa ? '空港から近い順' : 'Distance from Airport'}</option>
             </select>
           </div>
 
@@ -589,7 +601,7 @@ function buildUrl(overrides: Record<string, string>) {
         <div id="hotel-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
           {hotels.length > 0 ? (
             hotels.map((hotel: any) => (
-              <HotelCard hotel={hotel} minPrice={hotel.min_price} locale="en" />
+              <HotelCard hotel={hotel} minPrice={hotel.min_price} locale={locale} />
             ))
           ) : (
             <div class="col-span-full py-16 text-center">
@@ -598,16 +610,16 @@ function buildUrl(overrides: Record<string, string>) {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
               </div>
-              <h3 class="text-xl font-semibold text-slate-800 mb-2">No hotels found</h3>
+              <h3 class="text-xl font-semibold text-slate-800 mb-2">{isJa ? 'ホテルが見つかりませんでした' : 'No hotels found'}</h3>
               <p class="text-gray-500 mb-8 max-w-sm mx-auto">
-                Try adjusting your search — different dates, city, or fewer filters often reveal more options.
+                {isJa ? '日付や都市を変える、絞り込みを減らすなど、条件を調整してみてください。' : 'Try adjusting your search — different dates, city, or fewer filters often reveal more options.'}
               </p>
               <div class="flex flex-col sm:flex-row gap-3 justify-center">
-                <a href="/search" class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-xl transition-colors">
-                  Clear Filters
+                <a href={searchPath} class="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-xl transition-colors">
+                  {isJa ? '絞り込みを解除' : 'Clear Filters'}
                 </a>
-                <a href="/" class="px-6 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium rounded-xl transition-colors">
-                  Back to Home
+                <a href={isJa ? '/ja' : '/'} class="px-6 py-3 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium rounded-xl transition-colors">
+                  {isJa ? 'トップへ戻る' : 'Back to Home'}
                 </a>
               </div>
             </div>
