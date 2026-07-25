@@ -1,6 +1,7 @@
 import { APIRoute } from 'astro';
 import { requireOwner } from '../../../../lib/apiAuth';
 import { isValidPropertyType, normalizePropertyType } from '../../../../lib/propertyTypes';
+import { isValidCurrencyCode, repriceHotelPlansForCurrency } from '../../../../lib/currency';
 
 export const GET: APIRoute = async ({ params, request, locals }) => {
   const hotelId = params.id;
@@ -83,8 +84,10 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       'name', 'name_ja', 'description', 'description_ja',
       'amenities', 'categories', 'property_type',
       'thumbnail_url', 'address', 'latitude', 'longitude',
+      'currency',
     ]);
 
+    let newCurrency: string | null = null;
     const setClauses: string[] = [];
     const bindings: any[] = [];
     for (const [key, value] of Object.entries(changes)) {
@@ -92,6 +95,16 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       let val = value;
       if (key === 'property_type' && val) {
         val = isValidPropertyType(String(val)) ? normalizePropertyType(String(val)) : 'hotel';
+      }
+      if (key === 'currency') {
+        val = String(val || 'USD').toUpperCase();
+        if (!isValidCurrencyCode(val)) {
+          return new Response(JSON.stringify({ error: 'Invalid currency code' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        newCurrency = val;
       }
       setClauses.push(`${key} = ?`);
       bindings.push(val);
@@ -106,6 +119,19 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 
     bindings.push(parsedHotelId);
     await db.prepare(`UPDATE hotels SET ${setClauses.join(', ')} WHERE id = ?`).bind(...bindings).run();
+
+    // Currency switch: re-derive plan local prices in the new currency
+    // (value preserved via the USD cache) so displays stay consistent.
+    if (newCurrency) {
+      try {
+        await repriceHotelPlansForCurrency(db, parsedHotelId, newCurrency);
+      } catch (e) {
+        return new Response(JSON.stringify({ error: `Currency updated but plan reprice failed: ${e instanceof Error ? e.message : e}` }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

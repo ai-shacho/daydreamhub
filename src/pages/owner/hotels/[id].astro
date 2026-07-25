@@ -2,6 +2,7 @@
 import OwnerLayout from '../../../layouts/OwnerLayout.astro';
 import { verifyOwner, getOwnerHotelIds, getStaffRole, canEditHotels } from '../../../lib/ownerAuth';
 import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from '../../../lib/propertyTypes';
+import { CURRENCY_CHOICES, ZERO_DECIMAL_CURRENCIES } from '../../../lib/currency';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -40,6 +41,14 @@ if (db) {
     editRequests = [];
   }
 }
+
+// Hotel pricing currency (exclusive: local currency OR USD, never both)
+const hotelCurrency = String((hotel as any)?.currency || 'USD').toUpperCase();
+const isUsdHotel = hotelCurrency === 'USD';
+const priceStep = ZERO_DECIMAL_CURRENCIES.has(hotelCurrency) ? '1' : '0.01';
+const currencyOptions = CURRENCY_CHOICES.includes(hotelCurrency)
+  ? CURRENCY_CHOICES
+  : [hotelCurrency, ...CURRENCY_CHOICES];
 
 // room_typeでプランをグループ化
 const plansByRoomType: Record<string, any[]> = {};
@@ -256,6 +265,20 @@ for (let h = 0; h < 24; h++) {
           </select>
         </div>
 
+        <!-- Pricing Currency -->
+        <div>
+          <label for="edit_currency" class="block text-sm font-medium text-slate-700 mb-1">Pricing Currency</label>
+          <select id="edit_currency" name="currency" class="w-64 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow">
+            {currencyOptions.map((c) => (
+              <option value={c} selected={hotelCurrency === c}>{c}</option>
+            ))}
+          </select>
+          <p class="text-xs text-slate-400 mt-1">
+            All plan prices are entered in this currency. Guests always pay in USD (converted automatically at the current exchange rate).
+            Changing the currency converts existing plan prices automatically — please review them afterwards.
+          </p>
+        </div>
+
         <!-- Thumbnail Upload -->
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-2">Thumbnail Image</label>
@@ -431,7 +454,11 @@ for (let h = 0; h < 24; h++) {
                     <div class="flex items-center gap-2 flex-wrap">
                       <span class="font-medium text-slate-900 text-sm">{plan.name}</span>
                       {plan.name_ja && <span class="text-xs text-slate-400">{plan.name_ja}</span>}
-                      <span class="font-mono text-slate-700 text-sm">${plan.price_usd}</span>
+                      <span class="font-mono text-slate-700 text-sm">
+                        {isUsdHotel
+                          ? `$${plan.price_usd}`
+                          : `${hotelCurrency} ${plan.price_local ?? plan.price_usd} (≈ $${plan.price_usd})`}
+                      </span>
                       {plan.check_in_time && plan.check_out_time && (
                         <span class="text-xs text-slate-500">{plan.check_in_time}–{plan.check_out_time}</span>
                       )}
@@ -537,9 +564,12 @@ for (let h = 0; h < 24; h++) {
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1">Weekday Price (USD) <span class="text-red-500">*</span></label>
-            <input type="number" id="plan-price" name="price_usd" min="0" step="0.01" required placeholder="0.00"
+            <label class="block text-sm font-medium text-slate-700 mb-1">Weekday Price ({hotelCurrency}) <span class="text-red-500">*</span></label>
+            <input type="number" id="plan-price" name="price" min="0" step={priceStep} required placeholder="0"
               class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none" />
+            {!isUsdHotel && (
+              <p class="text-xs text-slate-400 mt-1">Enter the price in {hotelCurrency}. The USD equivalent is calculated automatically at the current exchange rate — guests always pay in USD.</p>
+            )}
           </div>
           <div class="hidden">
             <label class="block text-sm font-medium text-slate-700 mb-1">Weekend Price (USD) <span class="text-xs text-slate-400">optional</span></label>
@@ -629,7 +659,7 @@ for (let h = 0; h < 24; h++) {
     </div>
   </div>
 
-  <script define:vars={{ hotelId, originalName: hotel?.name || "", originalNameJa: hotel?.name_ja || "", originalDescription: hotel?.description || "", originalDescriptionJa: hotel?.description_ja || "", originalAmenities: amenitiesStr, originalCategories: selectedCategories, originalPropertyType: hotel?.property_type || "Hotel", originalThumbnailUrl: hotel?.thumbnail_url || "", originalIcalUrl: hotel?.ical_url || "", originalAddress: hotel?.address || "", originalLatitude: hotel?.latitude ?? "", originalLongitude: hotel?.longitude ?? "" }}>
+  <script define:vars={{ hotelId, originalName: hotel?.name || "", originalNameJa: hotel?.name_ja || "", originalDescription: hotel?.description || "", originalDescriptionJa: hotel?.description_ja || "", originalAmenities: amenitiesStr, originalCategories: selectedCategories, originalPropertyType: hotel?.property_type || "Hotel", originalCurrency: hotelCurrency, originalThumbnailUrl: hotel?.thumbnail_url || "", originalIcalUrl: hotel?.ical_url || "", originalAddress: hotel?.address || "", originalLatitude: hotel?.latitude ?? "", originalLongitude: hotel?.longitude ?? "" }}>
   document.addEventListener('DOMContentLoaded', function() {
   try {
     // -- Thumbnail preview --
@@ -888,6 +918,9 @@ for (let h = 0; h < 24; h++) {
         var newPropertyType = form.querySelector('[name="property_type"]').value;
         if (newPropertyType !== originalPropertyType) fieldChanges.property_type = newPropertyType;
 
+        var currencyEl = form.querySelector('[name="currency"]');
+        if (currencyEl && currencyEl.value !== originalCurrency) fieldChanges.currency = currencyEl.value;
+
         var newThumbnailUrl = form.querySelector('[name="thumbnail_url"]').value;
         if (newThumbnailUrl !== originalThumbnailUrl) fieldChanges.thumbnail_url = newThumbnailUrl;
 
@@ -1064,7 +1097,7 @@ for (let h = 0; h < 24; h++) {
       document.getElementById('plan-room-type').value = isEdit ? (plan.room_type || '') : (presetRoomType || '');
       document.getElementById('plan-name').value = isEdit ? (plan.name || '') : '';
       document.getElementById('plan-name-ja').value = isEdit ? (plan.name_ja || '') : '';
-      document.getElementById('plan-price').value = isEdit ? (plan.price_usd || '') : '';
+      document.getElementById('plan-price').value = isEdit ? (plan.price_local != null ? plan.price_local : (plan.price_usd || '')) : '';
       document.getElementById('plan-weekend-price').value = isEdit ? (plan.weekend_price_usd || '') : '';
       document.getElementById('plan-guests').value = isEdit ? (plan.max_guests || '') : '';
       document.getElementById('plan-checkin').value = isEdit ? (plan.check_in_time || '') : '';
@@ -1146,7 +1179,7 @@ for (let h = 0; h < 24; h++) {
         room_type: document.getElementById('plan-room-type').value || null,
         name: document.getElementById('plan-name').value,
         name_ja: document.getElementById('plan-name-ja').value,
-        price_usd: parseFloat(document.getElementById('plan-price').value) || 0,
+        price: parseFloat(document.getElementById('plan-price').value) || 0,
         weekend_price_usd: parseFloat(document.getElementById('plan-weekend-price').value) || null,
         max_guests: parseInt(document.getElementById('plan-guests').value) || 2,
         check_in_time: document.getElementById('plan-checkin').value,

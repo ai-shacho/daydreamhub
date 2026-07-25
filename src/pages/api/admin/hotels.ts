@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { sendListingApprovedEmail } from '../../../lib/email';
 import { requireAdmin } from '../../../lib/apiAuth';
 import { isValidPropertyType, normalizePropertyType } from '../../../lib/propertyTypes';
+import { isValidCurrencyCode, repriceHotelPlansForCurrency } from '../../../lib/currency';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
@@ -101,8 +102,21 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     fields.property_type = normalized;
   }
 
+  // Currency: validate + uppercase; plans get repriced after the UPDATE below.
+  let newCurrency: string | null = null;
+  if ('currency' in fields) {
+    const code = String(fields.currency || 'USD').toUpperCase();
+    if (!isValidCurrencyCode(code)) {
+      return new Response(JSON.stringify({ error: `Invalid currency code: ${fields.currency}` }), {
+        status: 400, headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    fields.currency = code;
+    newCurrency = code;
+  }
+
   const allowed = ['name','name_ja','slug','description','description_ja','city','country','address',
-    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy','is_active','status'];
+    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy','is_active','status','currency'];
   const updates: string[] = [];
   const params: any[] = [];
   for (const key of allowed) {
@@ -128,6 +142,10 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       : null;
 
     await db.prepare(`UPDATE hotels SET ${updates.join(', ')} WHERE id = ?`).bind(...params, id).run();
+
+    if (newCurrency) {
+      await repriceHotelPlansForCurrency(db, Number(id), newCurrency);
+    }
 
     // is_active: 0→1 になったらオーナーに掲載完了メール送信
     if (wasActive && !wasActive.is_active && wasActive.email) {

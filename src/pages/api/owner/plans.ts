@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getOwnerHotelIds } from '../../../lib/ownerAuth';
 import { requireOwner } from '../../../lib/apiAuth';
+import { resolvePlanPriceFields } from '../../../lib/currency';
 
 const json = { 'Content-Type': 'application/json' };
 
@@ -29,14 +30,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   try {
+    // Price is entered in the hotel's currency (body.price preferred; legacy
+    // clients send price_usd). Both columns are resolved server-side.
+    const pricing = await resolvePlanPriceFields(db, hotel_id, body.price ?? body.price_local ?? price_usd ?? 0);
     const r = await db.prepare(
-      `INSERT INTO plans (hotel_id,name,name_ja,description,description_ja,price_usd,check_in_time,check_out_time,plan_type,max_guests,duration_hours,cancellation_policy,cancellation_hours,room_type,room_type_image_url,is_active)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`
+      `INSERT INTO plans (hotel_id,name,name_ja,description,description_ja,price_usd,price_local,check_in_time,check_out_time,plan_type,max_guests,duration_hours,cancellation_policy,cancellation_hours,room_type,room_type_image_url,is_active)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`
     ).bind(hotel_id, name, name_ja||null, description||'', description_ja||null,
-      price_usd||0, check_in_time||'', check_out_time||'', plan_type||'daycation',
+      pricing.price_usd, pricing.price_local, check_in_time||'', check_out_time||'', plan_type||'daycation',
       max_guests||2, duration_hours||null, cancellation_policy||'', cancellation_hours ?? 24,
       room_type||null, room_type_image_url||null).run();
-    return new Response(JSON.stringify({ success: true, id: r.meta?.last_row_id }), { status: 201, headers: json });
+    return new Response(JSON.stringify({ success: true, id: r.meta?.last_row_id, pricing }), { status: 201, headers: json });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: json });
   }
@@ -62,11 +66,23 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'Hotel not found' }), { status: 404, headers: json });
   }
 
-  const allowed = ['name','name_ja','description','description_ja','price_usd','check_in_time',
+  const allowed = ['name','name_ja','description','description_ja','check_in_time',
     'check_out_time','plan_type','max_guests','duration_hours','cancellation_policy','cancellation_hours','is_active',
     'room_type','room_type_image_url'];
   const updates: string[] = []; const params: any[] = [];
   for (const k of allowed) { if (k in fields) { updates.push(`${k} = ?`); params.push(fields[k]); } }
+
+  // Price updates resolve both columns from the hotel-currency amount.
+  const priceInput = fields.price ?? fields.price_local ?? fields.price_usd;
+  if (priceInput !== undefined) {
+    try {
+      const pricing = await resolvePlanPriceFields(db, hotel_id, priceInput);
+      updates.push('price_local = ?', 'price_usd = ?');
+      params.push(pricing.price_local, pricing.price_usd);
+    } catch (e: any) {
+      return new Response(JSON.stringify({ error: e?.message || String(e) }), { status: 400, headers: json });
+    }
+  }
   if (!updates.length) return new Response(JSON.stringify({ error: 'No fields to update' }), { status: 400, headers: json });
 
   await db.prepare(`UPDATE plans SET ${updates.join(', ')} WHERE id = ? AND hotel_id = ?`)
