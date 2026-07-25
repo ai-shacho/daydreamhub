@@ -1,5 +1,6 @@
 ---
 import Layout from '../../../layouts/Layout.astro';
+import { geoNameJa } from '../../../lib/geoJa';
 import BlogCard from '../../../components/BlogCard.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
 import { formatDisplayDate } from '../../../lib/dateFormat';
@@ -144,7 +145,7 @@ const formattedDate = post ? formatDisplayDate(post.published_at) : '';
           <time datetime={post.published_at}>{t('blog.published_on', locale)}: {formattedDate}</time>
           {post.city && (
             <a href={localePath(`/blog?city=${encodeURIComponent(post.city)}`, locale)} class="bg-blue-50 text-blue-600 rounded px-2.5 py-0.5 hover:bg-blue-100 transition-colors font-medium">
-              {post.city}
+              {geoNameJa(post.city)}
             </a>
           )}
         </div>

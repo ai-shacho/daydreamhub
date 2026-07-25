@@ -5,6 +5,7 @@ import { getLocale, t, localePath } from '../../lib/i18n';
 import { nearestAirport } from '../../lib/airports';
 import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../../lib/propertyTypes';
 import { formatMoney } from '../../lib/currency';
+import { categoryColor, categoryLabel } from '../../lib/categories';
 
 const locale = getLocale(Astro.url);
 const { slug } = Astro.params;
@@ -390,9 +391,9 @@ for (const img of images) {
               {categories.map((cat) => (
                 <span class:list={[
                   'text-xs font-medium rounded-full px-3 py-1',
-                  categoryColors[cat] || 'bg-gray-100 text-gray-700'
+                  categoryColor(cat)
                 ]}>
-                  {t(categoryLabelKeys[cat] || cat, locale)}
+                  {categoryLabel(cat, locale)}
                 </span>
               ))}
             </div>

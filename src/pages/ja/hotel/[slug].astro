@@ -6,6 +6,7 @@ import { nearestAirport, airportNamesJa } from '../../../lib/airports';
 import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../../../lib/propertyTypes';
 import { formatMoney } from '../../../lib/currency';
 import { geoNameJa } from '../../../lib/geoJa';
+import { categoryColor, categoryLabel } from '../../../lib/categories';
 
 const locale = getLocale(Astro.url);
 const { slug } = Astro.params;
@@ -405,8 +406,8 @@ for (const img of images) {
           {categories.length > 0 && (
             <div class="flex flex-wrap gap-2 mb-5">
               {categories.map(cat => (
-                <span class:list={['text-xs font-medium rounded-full px-3 py-1', categoryColors[cat] || 'bg-gray-100 text-gray-700']}>
-                  {t(categoryLabelKeys[cat] || cat, locale)}
+                <span class:list={['text-xs font-medium rounded-full px-3 py-1', categoryColor(cat)]}>
+                  {categoryLabel(cat, locale)}
                 </span>
               ))}
             </div>
@@ -593,7 +594,7 @@ for (const img of images) {
       {nearbyHotels.length > 0 && (
         <section class="max-w-5xl mx-auto px-4 py-10 border-t border-gray-100">
           <h2 class="text-xl font-bold text-gray-900 mb-5">
-            {locale === 'ja' ? `${hotel.city}の他のホテル` : `More Hotels in ${hotel.city}`}
+            {locale === 'ja' ? `${geoNameJa(hotel.city)}の他のホテル` : `More Hotels in ${hotel.city}`}
           </h2>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {nearbyHotels.map((h: any) => (
