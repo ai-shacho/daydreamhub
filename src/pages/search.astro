@@ -3,10 +3,25 @@ import Layout from '../layouts/Layout.astro';
 import { getAirportCoords, haversineKm, nearestAirport, airportList } from '../lib/airports';
 import HotelCard from '../components/HotelCard.astro';
 import { getLocale } from '../lib/i18n';
+import { geoNameJa } from '../lib/geoJa';
+import { PROPERTY_TYPE_LABELS } from '../lib/propertyTypes';
 
 const locale = getLocale(Astro.url);
 const isJa = locale === 'ja';
 const searchPath = isJa ? '/ja/search' : '/search';
+// Display-name helpers for ja (values submitted to the server stay English)
+const ptLabel = (pt: string) => isJa ? (Object.values(PROPERTY_TYPE_LABELS).find(l => l.en === pt)?.ja || pt) : pt;
+const geoLabel = (n: string) => isJa ? geoNameJa(n) : (n.charAt(0).toUpperCase() + n.slice(1));
+const AMENITY_JA: Record<string, string> = {
+  'wifi': 'Wi-Fi', 'pool': 'プール', 'spa': 'スパ', 'gym': 'ジム',
+  'restaurant': 'レストラン', 'bar': 'バー', 'parking': '駐車場',
+  'desk': 'デスク', 'coffee': 'コーヒー', 'meeting_room': '会議室',
+  'printer': 'プリンター', 'shower': 'シャワー', 'luggage_storage': '荷物預かり',
+  'garden': '庭園', 'beach': 'ビーチアクセス', 'breakfast': '朝食',
+  'air_conditioning': 'エアコン', 'tv': 'テレビ', 'minibar': 'ミニバー',
+  'balcony': 'バルコニー', 'kitchen': 'キッチン', 'workspace': 'ワークスペース',
+};
+const amenityLabel = (a: string) => isJa ? (AMENITY_JA[String(a).toLowerCase().replace(/[^a-z]+/g, '_')] || a) : a;
 
 // Get D1 database binding
 const DB = (Astro.locals as any).runtime?.env?.DB;
@@ -424,7 +439,7 @@ function buildUrl(overrides: Record<string, string>) {
                       class="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
                       onchange="this.form.submit()"
                     />
-                    {pt}
+                    {ptLabel(pt)}
                   </label>
                 ))}
                 {propertyType && (
@@ -472,9 +487,9 @@ function buildUrl(overrides: Record<string, string>) {
                 class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
                 onchange="this.form.submit()"
               >
-                <option value="">All Countries</option>
+                <option value="">{isJa ? 'すべての国' : 'All Countries'}</option>
                 {allCountries.slice().sort((a, b) => a.localeCompare(b)).map(c => (
-                  <option value={c} selected={country === c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  <option value={c} selected={country === c}>{geoLabel(c)}</option>
                 ))}
               </select>
               {country && (
@@ -490,9 +505,9 @@ function buildUrl(overrides: Record<string, string>) {
                 class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
                 onchange="this.form.submit()"
               >
-                <option value="">All Cities</option>
+                <option value="">{isJa ? 'すべての都市' : 'All Cities'}</option>
                 {allCities.slice().sort((a, b) => a.localeCompare(b)).map(c => (
-                  <option value={c} selected={cityFilter === c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  <option value={c} selected={cityFilter === c}>{geoLabel(c)}</option>
                 ))}
               </select>
               {cityFilter && (
@@ -515,7 +530,7 @@ function buildUrl(overrides: Record<string, string>) {
                         class="w-4 h-4 text-teal-600 border-gray-300 focus:ring-teal-500"
                         onchange="this.form.submit()"
                       />
-                      {am}
+                      {amenityLabel(am)}
                     </label>
                   ))}
                 </div>

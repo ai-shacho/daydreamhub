@@ -1,6 +1,7 @@
 ---
 // Floating chat widget for the homepage
 // Connects to /api/concierge/chat (separate from booking form)
+const isJa = Astro.url.pathname.startsWith('/ja');
 ---
 
 <!-- Chat Button (floating, bottom-right) -->
@@ -16,7 +17,7 @@
       <div class="flex items-center gap-2">
         <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-white text-sm font-bold">AI</div>
         <div>
-          <p class="text-white font-semibold text-sm">AI Hotel Search</p>
+          <p class="text-white font-semibold text-sm">{isJa ? 'AIホテル検索' : 'AI Hotel Search'}</p>
           <p class="text-teal-100 text-xs">Powered by AI · Not a human agent</p>
         </div>
       </div>
@@ -33,7 +34,7 @@
       <div class="flex gap-2">
         <div class="w-7 h-7 bg-teal-100 rounded-full flex-shrink-0 flex items-center justify-center text-teal-600 text-xs font-bold mt-0.5">AI</div>
         <div class="bg-slate-100 rounded-2xl rounded-tl-none px-3 py-2 text-sm text-slate-700 max-w-[85%]">
-          Hi! I'm the DayDreamHub <strong>AI Hotel Search</strong> 🤖<br>Tell me a city, dates, or what you need — I'll find day-use hotels instantly!<br><span class="text-xs text-slate-400 mt-1 block">Need human support? <a href="/contact" class="text-teal-600 underline">Contact Us</a></span>
+          {isJa ? <>こんにちは！DayDreamHubの<strong>AIホテル検索</strong>です 🤖<br />都市名・日付・ご希望を教えてください。デイユースホテルをすぐに探します！<br /><span class="text-xs text-slate-400 mt-1 block">有人サポートは <a href="/ja/contact" class="text-teal-600 underline">お問い合わせ</a> へ</span></> : <>Hi! I'm the DayDreamHub <strong>AI Hotel Search</strong> 🤖<br />Tell me a city, dates, or what you need — I'll find day-use hotels instantly!<br /><span class="text-xs text-slate-400 mt-1 block">Need human support? <a href="/contact" class="text-teal-600 underline">Contact Us</a></span></>}
         </div>
       </div>
     </div>
@@ -41,7 +42,7 @@
     <div class="border-t border-slate-100 p-3 flex gap-2 items-end">
       <textarea
         id="chat-input"
-        placeholder="Type a message... (Shift+Enter for new line)"
+        placeholder={isJa ? 'メッセージを入力…（Shift+Enterで改行）' : 'Type a message... (Shift+Enter for new line)'}
         class="flex-1 text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white resize-none overflow-hidden min-h-[40px] max-h-[120px]"
         maxlength="500"
         rows="1"
