@@ -147,6 +147,16 @@ if (DB) {
       "SELECT DISTINCT country FROM hotels WHERE country != '' ORDER BY country"
     ).all();
     allCountries = (countriesResult?.results || []).map((r: any) => r.country);
+    // DB has case variants ('Bulgaria' / 'bulgaria') — dedupe case-insensitively, keeping the first (capitalized) form
+    {
+      const seen = new Set<string>();
+      allCountries = allCountries.filter((c: string) => {
+        const k = String(c).toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
 
     const ptResult = await DB.prepare(
       "SELECT DISTINCT property_type FROM hotels WHERE property_type != '' ORDER BY property_type"
@@ -157,6 +167,15 @@ if (DB) {
       "SELECT DISTINCT city FROM hotels WHERE city != '' ORDER BY city"
     ).all();
     allCities = (cityResult?.results || []).map((r: any) => r.city);
+    {
+      const seen = new Set<string>();
+      allCities = allCities.filter((c: string) => {
+        const k = String(c).toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+    }
 
     const amenResult = await DB.prepare(
       "SELECT DISTINCT name FROM amenities ORDER BY name"
