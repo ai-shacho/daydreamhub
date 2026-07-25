@@ -4,6 +4,7 @@ import ReviewSection from '../../components/ReviewSection.astro';
 import { getLocale, t, localePath } from '../../lib/i18n';
 import { nearestAirport } from '../../lib/airports';
 import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../../lib/propertyTypes';
+import { formatMoney } from '../../lib/currency';
 
 const locale = getLocale(Astro.url);
 const { slug } = Astro.params;
@@ -196,6 +197,11 @@ for (const plan of plans) {
   plansByRoomType[rt].push(plan);
 }
 const roomTypes = Object.keys(plansByRoomType);
+
+// Hotel pricing currency: non-USD hotels show "EGP 2,500 (≈ $48.71)" with a
+// server-rendered USD-settlement notice; USD hotels keep the legacy display.
+const hotelCurrency = String((hotel as any)?.currency || 'USD').toUpperCase();
+const isUsdHotel = hotelCurrency === 'USD';
 
 // Group hotel_images by room_type
 const imagesByRoomType: Record<string, string[]> = {};
@@ -467,8 +473,8 @@ for (const img of images) {
           <h2 class="text-xl font-bold text-slate-900 mb-4">
             {t('hotel.available_plans', locale)}
           </h2>
-          <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 hidden" data-currency-usd-notice>
-            Payments are processed in USD. Other currencies are for reference only.
+          <p class={`text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 ${isUsdHotel ? 'hidden' : ''}`} data-currency-usd-notice={isUsdHotel ? true : undefined}>
+            {locale === 'ja' ? 'お支払いはUSD（米ドル）で処理されます。他通貨の表示は参考価格です。' : 'Payments are processed in USD. Other currencies are for reference only.'}
           </p>
           {roomTypes.map(rt => {
               const rtImageUrl = (plansByRoomType[rt][0] as any)?.room_type_image_url || '';
@@ -506,7 +512,11 @@ for (const img of images) {
                       <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow duration-200">
                         <h3 class="text-base font-semibold text-gray-900 leading-snug mb-3">{planName}</h3>
                         <p class="text-[#45A2C1] font-bold text-xl mb-3">
-                          <span data-usd={plan.price_usd}>${plan.price_usd}</span> <span class="text-sm font-normal text-gray-500" data-currency-label>USD</span>
+                          {isUsdHotel ? (
+                            <><span data-usd={plan.price_usd}>${plan.price_usd}</span> <span class="text-sm font-normal text-gray-500" data-currency-label>USD</span></>
+                          ) : (
+                            <>{formatMoney(Number(plan.price_local ?? plan.price_usd), hotelCurrency)} <span class="text-sm font-normal text-gray-500">(≈ {formatMoney(Number(plan.price_usd), 'USD')} USD)</span></>
+                          )}
                         </p>
                         <div class="space-y-1.5 mb-4">
                           {timeSlot && (

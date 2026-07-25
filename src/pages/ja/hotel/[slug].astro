@@ -4,6 +4,7 @@ import ReviewSection from '../../../components/ReviewSection.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
 import { nearestAirport, airportNamesJa } from '../../../lib/airports';
 import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../../../lib/propertyTypes';
+import { formatMoney } from '../../../lib/currency';
 
 const locale = getLocale(Astro.url);
 const { slug } = Astro.params;
@@ -274,6 +275,10 @@ for (const plan of plans) {
 }
 const roomTypes = Object.keys(plansByRoomType);
 
+// ホテルの価格通貨（非USDホテルは「現地通貨 (≈ USD)」併記＋USD決済注記を常時表示）
+const hotelCurrency = String((hotel as any)?.currency || 'USD').toUpperCase();
+const isUsdHotel = hotelCurrency === 'USD';
+
 // Group hotel_images by room_type
 const imagesByRoomType: Record<string, string[]> = {};
 for (const img of images) {
@@ -439,8 +444,8 @@ for (const img of images) {
       {plans.length > 0 && (
         <section class="mb-10">
           <h2 class="text-xl font-bold text-slate-900 mb-4">{t('hotel.available_plans', locale)}</h2>
-          <p class="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 hidden" data-currency-usd-notice>
-            決済はUSDで行われます。表示価格は参考値です。
+          <p class={`text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 ${isUsdHotel ? 'hidden' : ''}`} data-currency-usd-notice={isUsdHotel ? true : undefined}>
+            お支払いはUSD（米ドル）で処理されます。他通貨の表示は参考価格です。
           </p>
           {roomTypes.map(rt => {
               const rtImages = imagesByRoomType[rt] || [];
@@ -481,7 +486,13 @@ for (const img of images) {
                           {plan.duration_hours && <p>{plan.duration_hours} {t('hotel.hours', locale)}</p>}
                           {plan.max_guests && <p>{t('hotel.max_guests', locale)}: {plan.max_guests} {t('hotel.guests_unit', locale)}</p>}
                         </div>
-                        <p class="text-xl font-bold text-[#45A2C1] mb-3">${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span></p>
+                        <p class="text-xl font-bold text-[#45A2C1] mb-3">
+                          {isUsdHotel ? (
+                            <>${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span></>
+                          ) : (
+                            <>{formatMoney(Number(plan.price_local ?? plan.price_usd), hotelCurrency)} <span class="text-sm font-normal text-gray-500">(≈ {formatMoney(Number(plan.price_usd), 'USD')} USD)</span></>
+                          )}
+                        </p>
                         {/* キャンセルポリシー */}
                         {(() => {
                           const hours = plan.cancellation_hours ?? hotel.cancellation_hours ?? null;

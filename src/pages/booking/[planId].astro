@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import PayPalButton from '../../components/PayPalButton.astro';
 import { getLocale, t, localePath } from '../../lib/i18n';
+import { formatMoney } from '../../lib/currency';
 
 const locale = getLocale(Astro.url);
 const { planId } = Astro.params;
@@ -61,7 +62,7 @@ try {
   if (db) {
     dbAvailable = true;
     plan = await db.prepare(
-      "SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country, h.cancellation_policy as hotel_cancellation_policy FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?"
+      "SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country, h.cancellation_policy as hotel_cancellation_policy, h.currency as hotel_currency FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?"
     ).bind(planIdNum).first();
   }
 } catch (e) {
@@ -384,6 +385,8 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
             </div>
             <div class="border-t border-gray-200 my-4"></div>
             {(() => {
+              const hotelCurrency = String((plan as any).hotel_currency || 'USD').toUpperCase();
+              const isUsdHotel = hotelCurrency === 'USD';
               const processingFee = Math.round(plan.price_usd * 0.06 * 100) / 100;
               const serviceFeeBase = Math.round(plan.price_usd * 0.10 * 100) / 100;
               const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
@@ -392,7 +395,7 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
                 <div class="space-y-1.5 text-sm mb-3">
                   <div class="flex justify-between text-gray-600">
                     <span>{locale === 'ja' ? 'プラン料金' : 'Plan Price'}</span>
-                    <span>${plan.price_usd.toFixed(2)}</span>
+                    <span>{isUsdHotel ? `$${plan.price_usd.toFixed(2)}` : `${formatMoney(Number(plan.price_local ?? plan.price_usd), hotelCurrency)} (≈ $${plan.price_usd.toFixed(2)})`}</span>
                   </div>
                   <div class="flex justify-between text-gray-600">
                     <span class="inline-flex items-center gap-1">
@@ -413,6 +416,9 @@ const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-1
                       ${total.toFixed(2)} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
                     </p>
                   </div>
+                  {!isUsdHotel && (
+                    <p class="text-xs text-amber-700 pt-1">{locale === 'ja' ? 'お支払いはUSD（米ドル）で処理されます。現地通貨の表示は参考価格です。' : 'Payment is processed in USD. Local-currency amounts are for reference only.'}</p>
+                  )}
                 </div>
               );
             })()}

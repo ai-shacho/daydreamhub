@@ -47,6 +47,16 @@ const plansMinPrice = plans.length > 0
 const effectiveMinPrice: number | null =
   minPriceProp !== undefined ? minPriceProp : plansMinPrice;
 
+// 非USDホテルは「現地通貨 (≈ USD)」併記。現地最安値はクエリの min_price_local か
+// plans 配列の最安プランから取得できた場合のみ（無ければUSDのみ表示にフォールバック）。
+const cardCurrency = String(hotel.currency || 'USD').toUpperCase();
+let minPriceLocal: number | null = hotel.min_price_local != null ? Number(hotel.min_price_local) : null;
+if (minPriceLocal == null && cardCurrency !== 'USD' && plans.length > 0) {
+  const cheapest = plans.reduce((a: any, b: any) => (Number(a.price_usd) <= Number(b.price_usd) ? a : b));
+  minPriceLocal = cheapest?.price_local != null ? Number(cheapest.price_local) : null;
+}
+const showDualPrice = cardCurrency !== 'USD' && minPriceLocal != null && effectiveMinPrice !== null;
+
 const hotelLink = localePath('/hotel/' + hotel.slug, locale);
 const imageUrl = hotel.thumbnail_url || '/images/placeholder-hotel.jpg';
 
@@ -128,7 +138,15 @@ const airportCode: string | null = hotel._airport_code ?? null;
     <!-- Price -->
     <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
       <div>
-        {effectiveMinPrice !== null ? (
+        {showDualPrice ? (
+          <div>
+            <span class="text-base font-bold text-teal-700">
+              {cardCurrency} {minPriceLocal}
+            </span>
+            <span class="text-base font-bold text-teal-700">〜</span>
+            <span class="text-xs font-normal text-gray-500"> (≈ ${effectiveMinPrice})</span>
+          </div>
+        ) : effectiveMinPrice !== null ? (
           <div>
             <span class="text-base font-bold text-teal-700" data-usd={effectiveMinPrice}>
               ${effectiveMinPrice}

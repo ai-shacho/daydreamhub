@@ -97,7 +97,8 @@ if (DB) {
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
     const result = await DB.prepare(
-      `SELECT h.*, MIN(p.price_usd) as min_price
+      `SELECT h.*, MIN(p.price_usd) as min_price,
+       (SELECT p2.price_local FROM plans p2 WHERE p2.hotel_id = h.id AND p2.is_active = 1 ORDER BY p2.price_usd ASC LIMIT 1) as min_price_local
        FROM hotels h
        LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
        ${whereSQL}
