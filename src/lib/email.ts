@@ -44,6 +44,13 @@ function formatQuotedPriceUsd(price?: string): string {
   return `$${num} USD`;
 }
 
+// "EGP 2,565 (≈ $49.98 USD)" when a payment-time fx snapshot exists; plain USD otherwise.
+function formatAmountDual(totalUsd: number, localCurrency?: string | null, localAmount?: number | null): string {
+  const usd = `$${Number(totalUsd || 0).toFixed(2)} USD`;
+  if (!localCurrency || localCurrency === 'USD' || localAmount == null) return usd;
+  return `${localCurrency} ${localAmount} (≈ ${usd})`;
+}
+
 function emailFooter(): string {
   return `
     <div style="margin-top:32px;padding-top:24px;border-top:1px solid #e5e7eb;text-align:center">
@@ -270,12 +277,16 @@ export async function sendBookingNotificationToHotel(
     children: number;
     infants: number;
     totalPriceUsd: number;
+    localCurrency?: string | null;
+    localAmount?: number | null;
+    fxRate?: number | null;
     notes?: string;
     hotelName: string;
     hotelEmail: string | string[];
   }
 ): Promise<{ success: boolean; error?: string }> {
   const subject = `New Booking #${data.bookingId} - ${data.guestName} on ${data.checkInDate}`;
+  const hasFx = !!(data.localCurrency && data.localCurrency !== 'USD' && data.localAmount != null);
   const rows: [string, string][] = [
     ['Booking ID', `#${data.bookingId}`],
     ['Guest Name', data.guestName],
@@ -286,7 +297,8 @@ export async function sendBookingNotificationToHotel(
     ['Adults', String(data.adults)],
     ['Children', String(data.children)],
     ['Infants', String(data.infants)],
-    ['Total (USD)', `$${data.totalPriceUsd.toFixed(2)}`],
+    ['Total', formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount)],
+    ...(hasFx ? [['Exchange Rate', `1 USD = ${data.fxRate} ${data.localCurrency} (at payment time; payment was processed in USD)`] as [string, string]] : []),
     ['Notes', data.notes || '-'],
   ];
   const tableRows = rows
@@ -532,6 +544,8 @@ export async function sendGuestBookingConfirmation(
     adults: number;
     children: number;
     totalPriceUsd: number;
+    localCurrency?: string | null;
+    localAmount?: number | null;
     notes?: string;
     cancellationHours?: number | null;
   }
@@ -550,7 +564,7 @@ export async function sendGuestBookingConfirmation(
 
   <div style="padding:28px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#ffffff">
     <p style="font-size:16px;margin-top:0">Hello <strong>${escapeHtml(data.guestName)}</strong>,</p>
-    <p style="color:#374151">Your payment of <strong>$${data.totalPriceUsd.toFixed(2)}</strong> has been received. The hotel will confirm your booking shortly — we'll send you another email once confirmed.</p>
+    <p style="color:#374151">Your payment of <strong>${formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount)}</strong> has been received (processed in USD). The hotel will confirm your booking shortly — we'll send you another email once confirmed.</p>
 
     <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;padding:20px;margin:20px 0">
       <h2 style="margin:0 0 16px;font-size:16px;color:#0d9488">📋 Booking Details</h2>
@@ -562,7 +576,7 @@ export async function sendGuestBookingConfirmation(
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${formatDate(data.checkInDate)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Time</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(data.checkInTime)} – ${escapeHtml(data.checkOutTime)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(guestCount)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Total Paid</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px"><strong style="color:#0d9488">$${data.totalPriceUsd.toFixed(2)} USD</strong></td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Total Paid</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px"><strong style="color:#0d9488">${formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount)}</strong></td></tr>
         ${data.notes ? `<tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Notes</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(data.notes)}</td></tr>` : ''}
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Cancellation Policy</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${data.cancellationHours === 0 ? '❌ Non-refundable' : `✅ Free cancellation up to ${data.cancellationHours ?? 24}h before check-in`}</td></tr>
       </table>

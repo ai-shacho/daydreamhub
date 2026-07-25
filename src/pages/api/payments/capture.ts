@@ -244,6 +244,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 children: children || 0,
                 infants: infants || 0,
                 totalPriceUsd: totalAmount,
+                localCurrency: charge.currency,
+                localAmount: localTotal,
+                fxRate: charge.fxRate,
                 notes: notes || '',
                 hotelName: (hotel as any)?.name || '',
                 hotelEmail: notifyEmails,
@@ -301,6 +304,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
               adults: adults || 1,
               children: children || 0,
               totalPriceUsd: totalAmount,
+              localCurrency: charge.currency,
+              localAmount: localTotal,
               notes: notes,
               cancellationHours: (planFull as any)?.cancellation_hours ?? 24,
             });
