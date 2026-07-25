@@ -107,7 +107,7 @@ const airportCode: string | null = hotel._airport_code ?? null;
     <!-- Airport distance (optional) -->
     {airportKm !== null && airportCode !== null && airportKm < 500 && (
       <p class="text-xs text-teal-700 mb-1 flex items-center gap-1">
-        <span>✈</span>~{Math.round(airportKm)}km from {airportCode}
+        <span>✈</span>{locale === 'ja' ? `${airportCode}から約${Math.round(airportKm)}km` : `~${Math.round(airportKm)}km from ${airportCode}`}
       </p>
     )}
 
