@@ -5,6 +5,7 @@ import { getLocale, t, localePath } from '../../../lib/i18n';
 import { nearestAirport, airportNamesJa } from '../../../lib/airports';
 import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../../../lib/propertyTypes';
 import { formatMoney } from '../../../lib/currency';
+import { geoNameJa } from '../../../lib/geoJa';
 
 const locale = getLocale(Astro.url);
 const { slug } = Astro.params;
@@ -389,7 +390,7 @@ for (const img of images) {
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"></path>
               <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"></path>
             </svg>
-            <span class="text-sm">{hotel.city}, {hotel.country}</span>
+            <span class="text-sm">{geoNameJa(hotel.city)}、{geoNameJa(hotel.country)}</span>
           </div>
 
           {airportInfo && (
@@ -563,7 +564,7 @@ for (const img of images) {
                 </svg>
                 <div>
                   <p class="text-gray-700 font-medium">{hotel.address}</p>
-                  <p class="text-sm text-gray-500 mt-1">{hotel.city}, {hotel.country}</p>
+                  <p class="text-sm text-gray-500 mt-1">{geoNameJa(hotel.city)}、{geoNameJa(hotel.country)}</p>
                 </div>
               </div>
             </div>

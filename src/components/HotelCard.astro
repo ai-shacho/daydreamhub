@@ -1,5 +1,7 @@
 ---
 import { t, localePath } from '../lib/i18n';
+import { geoNameJa } from '../lib/geoJa';
+import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../lib/propertyTypes';
 
 interface Props {
   hotel: any;
@@ -60,6 +62,31 @@ const showDualPrice = cardCurrency !== 'USD' && minPriceLocal != null && effecti
 const hotelLink = localePath('/hotel/' + hotel.slug, locale);
 const imageUrl = hotel.thumbnail_url || '/images/placeholder-hotel.jpg';
 
+// Category slugs in the DB come in variants ('early_check-in', 'transit_use'…);
+// normalize before looking up colors/labels so every tag gets translated.
+function normalizeCategory(c: string): string {
+  const n = String(c || '').toLowerCase().replace(/[^a-z]+/g, '_').replace(/^_+|_+$/g, '');
+  const aliases: Record<string, string> = {
+    early_check_in: 'early_checkin',
+    transit_use: 'transit',
+    couple: 'for_couple',
+  };
+  return aliases[n] || n;
+}
+function categoryLabel(c: string): string {
+  const key = categoryLabelKeys[normalizeCategory(c)];
+  if (key) return t(key, locale);
+  return String(c || '').replace(/_/g, ' ');
+}
+
+const displayCity = locale === 'ja' ? geoNameJa(hotel.city) : hotel.city;
+const displayCountry = locale === 'ja' ? geoNameJa(hotel.country) : hotel.country;
+const propertyTypeLabel = hotel.property_type
+  ? (locale === 'ja'
+      ? (PROPERTY_TYPE_LABELS[normalizePropertyType(String(hotel.property_type))]?.ja || String(hotel.property_type).replace(/_/g, ' '))
+      : String(hotel.property_type).replace(/_/g, ' '))
+  : '';
+
 // airport distance (populated by nearestAirport enrichment in some pages)
 const airportKm: number | null = hotel._airport_km ?? null;
 const airportCode: string | null = hotel._airport_code ?? null;
@@ -90,7 +117,7 @@ const airportCode: string | null = hotel._airport_code ?? null;
     <!-- Property type badge -->
     {hotel.property_type && (
       <span class="text-[10px] bg-gray-100 text-gray-500 rounded-full px-2 py-0.5 mb-2 inline-block capitalize">
-        {hotel.property_type.replace(/_/g, ' ')}
+        {propertyTypeLabel}
       </span>
     )}
 
@@ -101,7 +128,7 @@ const airportCode: string | null = hotel._airport_code ?? null;
 
     <!-- Location -->
     <p class="text-xs text-gray-500 mb-1">
-      {hotel.city}{hotel.country ? `, ${hotel.country}` : ''}
+      {displayCity}{hotel.country ? `${locale === 'ja' ? '、' : ', '}${displayCountry}` : ''}
     </p>
 
     <!-- Airport distance (optional) -->
@@ -127,9 +154,9 @@ const airportCode: string | null = hotel._airport_code ?? null;
         {categories.map((cat) => (
           <span class:list={[
             'text-xs font-medium rounded-full px-2.5 py-0.5',
-            categoryColors[cat] || 'bg-gray-100 text-gray-700'
+            categoryColors[normalizeCategory(cat)] || 'bg-gray-100 text-gray-700'
           ]}>
-            {t(categoryLabelKeys[cat] || cat, locale)}
+            {categoryLabel(cat)}
           </span>
         ))}
       </div>
