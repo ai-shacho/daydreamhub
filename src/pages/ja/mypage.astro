@@ -43,7 +43,7 @@ try {
   if (DB) {
     const result = await DB.prepare(`
       SELECT
-        b.id, b.status, b.check_in_date, b.total_price_usd,
+        b.id, b.status, b.check_in_date, b.total_price_usd, b.local_currency, b.local_amount,
         b.adults, b.children, b.created_at, b.paypal_order_id,
         b.notes,
         h.name as hotel_name, h.slug as hotel_slug,
@@ -150,6 +150,9 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
                     </div>
                     <div class="text-right">
                       <div class="text-lg font-bold text-teal-700">${Number(b.total_price_usd || 0).toFixed(2)}</div>
+                      {b.local_currency && b.local_currency !== 'USD' && b.local_amount != null && (
+                        <div class="text-xs text-gray-400">{b.local_currency} {b.local_amount}</div>
+                      )}
                       <div class="text-xs text-gray-400">USD</div>
                     </div>
                   </div>

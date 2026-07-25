@@ -102,6 +102,12 @@ const statusColor: Record<string,string> = {
           <div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Total</p>
             <p class="text-2xl font-bold text-teal-600">${booking.total_price_usd}</p>
+            {booking.local_currency && booking.local_currency !== 'USD' && booking.local_amount != null && (
+              <p class="text-sm text-slate-500 mt-0.5">
+                {booking.local_currency} {booking.local_amount}
+                {booking.fx_rate ? ` · rate at payment: 1 USD = ${booking.fx_rate} ${booking.local_currency}` : ''}
+              </p>
+            )}
           </div>
           <div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Payment</p>

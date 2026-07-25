@@ -63,6 +63,8 @@ if (db) {
           b.infants,
           b.check_in_date,
           b.total_price_usd,
+          b.local_currency,
+          b.local_amount,
           b.status,
           b.created_at,
           h.name as hotel_name,
@@ -83,6 +85,8 @@ if (db) {
           0 as infants,
           json_extract(c.request_details, '$.date') as check_in_date,
           c.price_quoted as total_price_usd,
+          NULL as local_currency,
+          NULL as local_amount,
           c.outcome as status,
           c.created_at,
           c.hotel_name,
@@ -252,6 +256,9 @@ const statusColors: Record<string, string> = {
               <td class="px-4 py-3 text-slate-600">{formatDisplayDate(b.check_in_date)}</td>
               <td class="px-4 py-3 text-right font-mono text-slate-900">
                 {b.total_price_usd != null ? `$${Number(b.total_price_usd).toFixed(2)}` : "-"}
+                {b.local_currency && b.local_currency !== 'USD' && b.local_amount != null && (
+                  <span class="block text-xs text-slate-400">{b.local_currency} {b.local_amount}</span>
+                )}
               </td>
               <td class="px-4 py-3 text-center">
                 <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[b.status] || "bg-slate-100 text-slate-600"}`}>
