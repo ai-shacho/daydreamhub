@@ -1,5 +1,6 @@
 ---
 import { localePath } from '../lib/i18n';
+import { geoNameJa } from '../lib/geoJa';
 import { formatDisplayDate } from '../lib/dateFormat';
 
 interface Props {
@@ -53,7 +54,7 @@ const truncatedExcerpt = displayExcerpt
       <div class="flex items-center gap-2">
         {post.city && (
           <a href={localePath(`/blog?city=${encodeURIComponent(post.city)}`, locale)} class="bg-blue-50 text-blue-600 rounded px-2 py-0.5 hover:bg-blue-100 transition-colors">
-            {post.city}
+            {locale === 'ja' ? geoNameJa(post.city) : post.city}
           </a>
         )}
       </div>
