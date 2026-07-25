@@ -77,6 +77,48 @@ export async function repriceHotelPlansForCurrency(db: any, hotelId: number | st
   }
 }
 
+// Single source of truth for what a listed-hotel booking costs in USD.
+// Non-USD hotels: price_local × payment-time rate (daily-cached) → USD base;
+// USD hotels: price_usd as-is. Fee formula must stay identical everywhere.
+// Returns the fx snapshot (local currency / local total / rate) for storage.
+export async function resolveBookingCharge(db: any, planId: number | string): Promise<null | {
+  plan: any;
+  currency: string;
+  baseUsd: number;
+  processingFee: number;
+  serviceFee: number;
+  totalAmount: number;
+  fxRate: number;
+  localTotal: number;
+}> {
+  const plan: any = await db.prepare(
+    'SELECT p.id, p.hotel_id, p.name, p.price_usd, p.price_local, h.currency FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?'
+  ).bind(planId).first();
+  if (!plan) return null;
+
+  const currency = String(plan.currency || 'USD').toUpperCase();
+  let baseUsd = Number(plan.price_usd || 0);
+  let fxRate = 1;
+  if (currency !== 'USD' && plan.price_local != null) {
+    const { getExchangeRates } = await import('./tools');
+    const rates = await getExchangeRates(db);
+    const fresh = convertLocalToUsd(Number(plan.price_local), currency, rates);
+    if (fresh != null) {
+      baseUsd = fresh;
+      fxRate = Number(rates[currency]);
+    }
+  }
+
+  // Fee formula shared by create/capture/booking pages — keep in sync everywhere.
+  const processingFee = Math.round(baseUsd * 0.06 * 100) / 100;
+  const serviceFeeBase = Math.round(baseUsd * 0.10 * 100) / 100;
+  const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
+  const totalAmount = Math.round((baseUsd + processingFee + serviceFee) * 100) / 100;
+  const localTotal = currency === 'USD' ? totalAmount : roundForCurrency(totalAmount * fxRate, currency);
+
+  return { plan, currency, baseUsd, processingFee, serviceFee, totalAmount, fxRate, localTotal };
+}
+
 // Resolve the two price columns from a single amount entered in the hotel's
 // currency. Hotels use exactly one currency: non-USD hotels enter local prices
 // (price_usd becomes a derived cache); USD hotels enter USD (both columns equal).

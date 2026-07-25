@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getAccessToken, createOrder } from '../../../lib/paypal';
+import { resolveBookingCharge } from '../../../lib/currency';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
@@ -41,27 +42,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
     );
   }
 
-  // Fetch plan info (price only — no guest data needed here)
-  const plan = await db
-    .prepare('SELECT id, hotel_id, name, price_usd FROM plans WHERE id = ?')
-    .bind(plan_id)
-    .first();
+  // Server-side charge resolution (local price × payment-time rate → USD).
+  // Shared with capture.ts via resolveBookingCharge so amounts always match.
+  const charge = await resolveBookingCharge(db, plan_id);
 
-  if (!plan) {
+  if (!charge) {
     return new Response(JSON.stringify({ error: 'Plan not found' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  const price_usd: number = (plan as any).price_usd;
-  const planName: string = (plan as any).name;
-
-  // Fee calculation (must match capture.ts exactly)
-  const processingFee = Math.round(price_usd * 0.06 * 100) / 100;
-  const serviceFeeBase = Math.round(price_usd * 0.10 * 100) / 100;
-  const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
-  const totalAmount = Math.round((price_usd + processingFee + serviceFee) * 100) / 100;
+  const planName: string = charge.plan.name;
+  const totalAmount = charge.totalAmount;
 
   try {
     const idempotencyKey = crypto.randomUUID();
