@@ -123,6 +123,9 @@ const resultsText = t('city.hotels_found', locale).replace('{count}', String(tot
 
       {hotels.length > 0 ? (
         <>
+          <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+            💳 お支払いはUSD（米ドル）で処理されます。現地通貨の表示は参考価格です。
+          </p>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {hotels.map((hotel: any) => (
               <HotelCard hotel={hotel} minPrice={hotel.min_price} locale={locale} />

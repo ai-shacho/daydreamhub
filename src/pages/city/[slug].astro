@@ -120,6 +120,11 @@ function getHotelImage(hotel: any): string {
       )}
 
       {hotels.length > 0 && (
+        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+          💳 Payments are processed in USD. Local-currency prices are for reference only.
+        </p>
+      )}
+      {hotels.length > 0 && (
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {hotels.map((hotel: any) => {
             const ap = (hotel.latitude && hotel.longitude) ? nearestAirport(hotel.latitude, hotel.longitude) : null;
