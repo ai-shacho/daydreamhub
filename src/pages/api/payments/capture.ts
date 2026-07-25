@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getAccessToken, captureOrder } from '../../../lib/paypal';
 import { sendBookingNotificationToHotel, sendGuestBookingConfirmation, sendPaymentFailureEmail } from '../../../lib/email';
 import { getBookingInfoForCall, triggerAutoCall } from '../../../lib/autoCall';
+import { resolveBookingCharge, roundForCurrency } from '../../../lib/currency';
 
 async function logMessage(params: {
   db: any;
@@ -81,27 +82,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  // Fetch plan to get hotel_id and price
-  const plan = await db
-    .prepare('SELECT id, hotel_id, name, price_usd FROM plans WHERE id = ?')
-    .bind(plan_id)
-    .first();
+  // Server-side charge resolution — same resolver as create.ts.
+  const charge = await resolveBookingCharge(db, plan_id);
 
-  if (!plan) {
+  if (!charge) {
     return new Response(JSON.stringify({ error: 'Plan not found' }), {
       status: 404,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  const price_usd: number = (plan as any).price_usd;
-  const hotelId: number = (plan as any).hotel_id;
-
-  // Fee calculation (must match create.ts exactly)
-  const processingFee = Math.round(price_usd * 0.06 * 100) / 100;
-  const serviceFeeBase = Math.round(price_usd * 0.10 * 100) / 100;
-  const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
-  const totalAmount = Math.round((price_usd + processingFee + serviceFee) * 100) / 100;
+  const hotelId: number = charge.plan.hotel_id;
+  let totalAmount = charge.totalAmount;
+  let localTotal = charge.localTotal;
 
   try {
     const accessToken = await getAccessToken(PAYPAL_CLIENT_ID, PAYPAL_SECRET, PAYPAL_MODE);
@@ -137,6 +130,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }
       } catch {}
 
+      // The amount PayPal actually captured is authoritative. If the fx cache
+      // refreshed between create and capture, prefer the captured value and
+      // re-derive the local snapshot from it.
+      try {
+        const capturedValue = Number(captureResult.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value);
+        if (Number.isFinite(capturedValue) && capturedValue > 0 && capturedValue !== totalAmount) {
+          console.warn(`[payments/capture] captured amount ${capturedValue} differs from recomputed ${totalAmount} (order=${order_id}); using captured value`);
+          totalAmount = capturedValue;
+          localTotal = charge.currency === 'USD' ? capturedValue : roundForCurrency(capturedValue * charge.fxRate, charge.currency);
+        }
+      } catch {}
+
       // Insert booking now that PayPal payment is confirmed
       let bookingId: number | null = null;
       try {
@@ -145,8 +150,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
             `INSERT INTO bookings (
               plan_id, hotel_id, guest_name, guest_email, guest_phone,
               check_in_date, adults, children, infants, total_price_usd,
+              local_currency, local_amount, fx_rate,
               status, paypal_order_id, paypal_capture_id, notes, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?, ?, datetime('now'), datetime('now'))`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?, ?, datetime('now'), datetime('now'))`
           )
           .bind(
             plan_id,
@@ -159,6 +165,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
             children || 0,
             infants || 0,
             totalAmount,
+            charge.currency,
+            localTotal,
+            charge.fxRate,
             order_id,
             captureId,
             notes || ''

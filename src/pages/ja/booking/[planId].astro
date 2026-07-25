@@ -2,7 +2,8 @@
 import Layout from '../../../layouts/Layout.astro';
 import PayPalButton from '../../../components/PayPalButton.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
-import { formatMoney } from '../../../lib/currency';
+import { formatMoney, convertLocalToUsd } from '../../../lib/currency';
+import { getExchangeRates } from '../../../lib/tools';
 
 const locale = getLocale(Astro.url);
 const { planId } = Astro.params;
@@ -102,6 +103,20 @@ const planTypeColors = {
   'hourly': 'bg-green-100 text-green-700',
 };
 const planTypeClass = plan ? (planTypeColors[plan.plan_type || ''] || 'bg-gray-100 text-gray-700') : '';
+
+// Displayed totals use the same payment-time conversion as payments/create.ts
+// (daily-cached rate) so the amount shown equals the amount charged.
+let effectivePriceUsd: number = Number(plan?.price_usd || 0);
+try {
+  const runtime = (Astro.locals as any).runtime;
+  const dbFx = runtime?.env?.DB;
+  const cur = String((plan as any)?.hotel_currency || 'USD').toUpperCase();
+  if (dbFx && plan && cur !== 'USD' && (plan as any).price_local != null) {
+    const fxRates = await getExchangeRates(dbFx);
+    const fresh = convertLocalToUsd(Number((plan as any).price_local), cur, fxRates);
+    if (fresh != null) effectivePriceUsd = fresh;
+  }
+} catch {}
 const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_type || '') : '';
 ---
 
@@ -377,15 +392,15 @@ const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_
             {(() => {
               const hotelCurrency = String((plan as any).hotel_currency || 'USD').toUpperCase();
               const isUsdHotel = hotelCurrency === 'USD';
-              const processingFee = Math.round(plan.price_usd * 0.06 * 100) / 100;
-              const serviceFeeBase = Math.round(plan.price_usd * 0.10 * 100) / 100;
+              const processingFee = Math.round(effectivePriceUsd * 0.06 * 100) / 100;
+              const serviceFeeBase = Math.round(effectivePriceUsd * 0.10 * 100) / 100;
               const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
-              const total = Math.round((plan.price_usd + processingFee + serviceFee) * 100) / 100;
+              const total = Math.round((effectivePriceUsd + processingFee + serviceFee) * 100) / 100;
               return (
                 <div class="space-y-1.5 text-sm mb-3">
                   <div class="flex justify-between text-gray-600">
                     <span>プラン料金</span>
-                    <span>{isUsdHotel ? `$${plan.price_usd.toFixed(2)}` : `${formatMoney(Number(plan.price_local ?? plan.price_usd), hotelCurrency)} (≈ $${plan.price_usd.toFixed(2)})`}</span>
+                    <span>{isUsdHotel ? `$${effectivePriceUsd.toFixed(2)}` : `${formatMoney(Number(plan.price_local ?? plan.price_usd), hotelCurrency)} (≈ $${effectivePriceUsd.toFixed(2)})`}</span>
                   </div>
                   <div class="flex justify-between text-gray-600">
                     <span>決済手数料</span>
