@@ -1868,7 +1868,13 @@ function escHtml(s) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      var data = await res.json();
+      var rawText = await res.text();
+      var data;
+      try { data = JSON.parse(rawText); } catch (parseErr) {
+        removeTyping();
+        addMsg('⚠️ Server error (HTTP ' + res.status + '). Please try again in a moment. [' + String(rawText || '').replace(/<[^>]+>/g, ' ').trim().slice(0, 160) + ']', 'assistant');
+        return;
+      }
       removeTyping();
       addMsg(data.response || data.reply || data.message || (data.error ? '⚠️ ' + data.error : 'Sorry, something went wrong. Please try again.'), 'assistant', data.metadata);
 
@@ -1883,7 +1889,7 @@ function escHtml(s) {
       uploadStatus.classList.add('hidden');
     } catch (e) {
       removeTyping();
-      addMsg('Connection error. Please try again.', 'assistant');
+      addMsg('⚠️ Network error: ' + (e && e.message ? e.message : 'connection failed') + ' — please try again.', 'assistant');
     } finally {
       isSending = false;
       sendBtn.disabled = false;

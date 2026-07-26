@@ -449,7 +449,7 @@ const isJa = Astro.url.pathname.startsWith('/ja');
       addMessage(replyText, "assistant", data.metadata);
     } catch (e) {
       removeTyping();
-      addMessage('Connection error. Please try again.', 'assistant');
+      addMessage('⚠️ ' + (e && e.message ? ('Network error: ' + e.message) : 'Connection error') + ' — please try again.', 'assistant');
     } finally {
       isTyping = false;
       sendBtn.disabled = false;
