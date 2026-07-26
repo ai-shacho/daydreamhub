@@ -1306,10 +1306,10 @@ function escHtml(s) {
         var label = escHtml(h.name || '');
         var detailPath = '/hotel/' + h.slug;
         var price = (h.min_price != null && h.min_price !== '') ? ('$' + h.min_price + '〜') : (pageLocale === 'ja' ? '未設定' : 'N/A');
-        return '<a href="' + detailPath + '" class="block bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-2 transition-colors">' +
+        return '<a href="' + detailPath + '" target="_blank" rel="noopener" class="block bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-2 transition-colors">' +
           '<p class="text-white text-xs font-bold break-words leading-relaxed">' + label + '</p>' +
-          '<p class="text-amber-300 text-xs font-semibold mt-1">' + (pageLocale === 'ja' ? '料金' : 'Min price') + ': ' + escHtml(price) + '</p>' +
-          '<p class="text-amber-200 text-[11px] mt-1 break-all">' + (pageLocale === 'ja' ? '詳細ページ' : 'Details') + ': ' + escHtml(detailPath) + '</p>' +
+          '<p class="text-white/85 text-xs mt-1">' + (pageLocale === 'ja' ? '料金' : 'Min price') + ': <span class="font-semibold text-white">' + escHtml(price) + '</span></p>' +
+          '<p class="text-teal-300 text-[11px] mt-1">' + (pageLocale === 'ja' ? '詳細を見る（新しいタブ） →' : 'View details (new tab) →') + '</p>' +
         '</a>';
       }).join('');
 
