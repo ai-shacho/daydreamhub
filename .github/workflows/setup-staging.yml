@@ -1,0 +1,28 @@
+name: Setup Staging
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Wrangler (pinned)
+        run: npm install -g wrangler@3
+
+      # All real logic lives in scripts/staging-setup.sh (a normal repo file)
+      # so this workflow file never needs to change.
+      - name: Setup staging environment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SYNC_SECRET_NAMES: ${{ vars.SYNC_SECRET_NAMES }}
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+        run: bash scripts/staging-setup.sh
