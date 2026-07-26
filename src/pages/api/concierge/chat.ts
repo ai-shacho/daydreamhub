@@ -887,6 +887,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
           status: 400, headers: { 'Content-Type': 'application/json' }
         });
       }
+      // Guest max budget (USD) is required: calls never book above it.
+      const directMaxBudget = Number(callGroupData.max_price_usd || 0);
+      if (!(directMaxBudget > 0)) {
+        return new Response(JSON.stringify({ error: locale === 'ja' ? '上限予算（USD）を入力してください。' : 'Max budget (USD) is required.' }), {
+          status: 400, headers: { 'Content-Type': 'application/json' }
+        });
+      }
       // セッション作成（なければ）
       await db.prepare(
         `INSERT INTO concierge_sessions (id, locale, created_at, updated_at)
@@ -899,6 +906,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const _adults = Number(callGroupData.adults || 0) || (normalizedGuests > 0 ? normalizedGuests : 1);
       const _children = Number(callGroupData.children || 0);
       const requestDetails = normalizeConciergeRequestDetails({
+        max_price_usd: directMaxBudget,
         guest_name: callGroupData.guest_name,
         guest_email: callGroupData.guest_email,
         guest_phone: callGroupData.guest_phone || callGroupData.phone || guest_phone || null,
@@ -984,6 +992,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (!hotels || !Array.isArray(hotels) || hotels.length === 0 || !request_details) {
         return new Response(
           JSON.stringify({ error: 'hotels array and request_details required' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      const groupMaxBudget = Number(request_details?.max_price_usd || 0);
+      if (!(groupMaxBudget > 0)) {
+        return new Response(
+          JSON.stringify({ error: locale === 'ja' ? '通話を開始する前に、お客様の上限予算（USD）を確認して request_details.max_price_usd に含めてください。' : 'Ask the guest for their maximum budget in USD and include it as request_details.max_price_usd before creating the call group.' }),
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
       }
