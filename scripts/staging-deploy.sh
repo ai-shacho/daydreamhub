@@ -12,7 +12,7 @@ echo "== D1 migrations (staging) =="
 # Applied only once the staging database exists and wrangler.toml has the
 # [env.staging] d1 binding (added during initial setup from the server).
 if grep -q "daydreamhub-db-staging" wrangler.toml 2>/dev/null; then
-  npx wrangler d1 migrations apply daydreamhub-db-staging --remote --env staging || {
+  npx wrangler d1 migrations apply daydreamhub-db-staging --remote --env preview || {
     echo "staging migrations failed" >&2
     exit 1
   }

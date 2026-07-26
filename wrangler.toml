@@ -18,6 +18,23 @@ bucket_name = "daydreamhub-images"
 [ai]
 binding = "AI"
 
+# Staging (= Pages "preview" environment, deployed from the staging branch).
+# Uses an isolated D1 database so tests never touch production data.
+[env.preview]
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "daydreamhub-db-staging"
+database_id = "7d8ea81b-448a-4c84-a325-70638cb03166"
+migrations_dir = "d1/migrations"
+
+[[env.preview.r2_buckets]]
+binding = "IMAGES"
+bucket_name = "daydreamhub-images"
+
+[env.preview.ai]
+binding = "AI"
+
 # Task #57: queue 'ddh-flight-image-jobs' は未作成で Pages デプロイが
 # "Queue not found" で失敗するため、producer/consumer 設定を一旦すべて削除。
 # upload.ts は `if (env.FLIGHT_IMAGE_QUEUE)` でガードしておりbinding無しでも安全に動作。
