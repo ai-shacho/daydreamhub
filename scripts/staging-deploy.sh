@@ -23,4 +23,4 @@ fi
 echo "== Deploy to Pages preview (branch=staging) =="
 npx wrangler pages deploy dist --project-name=daydreamhub --branch=staging
 
-echo "== Done: https://staging.daydreamhub.pages.dev =="
+echo "== Done: https://staging.daydreamhub-1sv.pages.dev =="
