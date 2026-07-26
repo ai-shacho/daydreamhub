@@ -755,7 +755,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       check_out_time: details.check_out_time || details.check_out,
       guests: details.guests ?? ((details.adults || 1) + (details.children || 0)),
       language: details.language, special_requests: details.special_requests,
-      max_price: details.max_price || "",
+      max_price: details.max_price || (details.max_price_local ? `${details.max_price_local} ${details.budget_currency || ""}`.trim() : ""),
       call_mode: details.call_mode || "initial",
       confirmed_price: details.confirmed_price || "",
       guest_phone: details.guest_phone || details.phone || details.contact_phone || details.contact?.phone || "",

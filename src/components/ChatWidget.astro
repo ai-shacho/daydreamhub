@@ -2,7 +2,9 @@
 // Floating chat widget for the homepage
 // Connects to /api/concierge/chat (separate from booking form)
 const isJa = Astro.url.pathname.startsWith('/ja');
+import { DIAL_CURRENCY } from '../lib/phoneCurrency';
 ---
+<script is:inline define:vars={{ DIAL_CURRENCY }}>window.__DIAL_CUR__ = DIAL_CURRENCY;</script>
 
 <!-- Chat Button (floating, bottom-right) -->
 <div id="chat-widget" class="fixed bottom-[76px] md:bottom-6 right-6 z-[1100] flex flex-col items-end gap-3">
@@ -253,8 +255,19 @@ const isJa = Astro.url.pathname.startsWith('/ja');
     callErr.textContent = '';
   }
 
+  function curForPhone(p) {
+    var d = String(p || '').replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^00/, '');
+    var m = window.__DIAL_CUR__ || {};
+    var ks = Object.keys(m).sort(function(a, b) { return b.length - a.length; });
+    for (var i = 0; i < ks.length; i++) { if (d.indexOf(ks[i]) === 0) return m[ks[i]][0]; }
+    return 'USD';
+  }
+
   function showCallOverlay(hotel) {
     selectedExternalHotel = hotel;
+    var bcur = curForPhone(hotel && (hotel.phone || hotel.hotel_phone));
+    var bEl = document.getElementById('cb-max-budget');
+    if (bEl) bEl.placeholder = pageLocale === 'ja' ? ('上限予算（' + bcur + '・必須）') : ('Max budget in ' + bcur + ' (required)');
     callOverlay.classList.remove('hidden');
     callOverlay.classList.add('flex');
     const dateInput = document.getElementById('cb-date');
@@ -278,8 +291,8 @@ const isJa = Astro.url.pathname.startsWith('/ja');
     if (!selectedExternalHotel) return;
     if (!guestName || !guestEmail || !guestPhone || !guests || !checkInDate || !(maxBudgetUsd > 0)) {
       callErr.textContent = pageLocale === 'ja'
-        ? '氏名・メール・電話番号・人数・日付・上限予算（USD）をすべて入力してください。'
-        : 'Please enter name, email, phone, guests, date, and max budget (USD).';
+        ? '氏名・メール・電話番号・人数・日付・上限予算をすべて入力してください。'
+        : 'Please enter name, email, phone, guests, date, and max budget.';
       callErr.classList.remove('hidden');
       return;
     }
@@ -293,7 +306,7 @@ const isJa = Astro.url.pathname.startsWith('/ja');
         guests,
         guest_phone: guestPhone,
         _call_group: {
-          max_price_usd: maxBudgetUsd,
+          max_price: maxBudgetUsd,
           guest_name: guestName,
           guest_email: guestEmail,
           guest_phone: guestPhone,

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { sendConciergeResultEmail, type ConciergeResultEmailType } from '../../../lib/email';
+import { currencyForPhone, spokenNameForCurrency } from '../../../lib/phoneCurrency';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
 type DbLike = {
@@ -656,6 +657,7 @@ async function sendResultEmailOnce(env: any, db: DbLike | null, conciergeCallId:
     checkOut: details.check_out_time || details.check_out || '',
     guests: details.guests || 1,
     priceQuoted: call.price_quoted || undefined,
+    priceCurrency: details.budget_currency || undefined,
     aiSummary: call.ai_summary || undefined,
   }).catch((e: any) => console.error('[twilio-voice] result email failed', e));
 }
@@ -1009,10 +1011,19 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (Number.isFinite(q) && q > 0) quotedAmountFromNote = q;
     }
 
-    // Guest's hard budget cap in USD (required on new concierge requests;
-    // absent on legacy rows → no budget gate).
+    // Guest's hard budget cap, denominated in the called hotel's local
+    // currency (required on new concierge requests; legacy rows may only
+    // have max_price_usd → treated as USD).
+    const budgetCurrency = String(
+      conciergeDetails.budget_currency
+        || currencyForPhone(conciergeCall?.hotel_phone).currency
+        || 'USD'
+    ).toUpperCase();
+    const spokenCurrency = spokenNameForCurrency(budgetCurrency);
     const maxBudgetUsd = phase === 'concierge'
-      ? (Number(conciergeDetails.max_price_usd) > 0 ? Number(conciergeDetails.max_price_usd) : null)
+      ? (Number(conciergeDetails.max_price_local ?? conciergeDetails.max_price_usd) > 0
+          ? Number(conciergeDetails.max_price_local ?? conciergeDetails.max_price_usd)
+          : null)
       : null;
 
     if (step === 'intro') {
@@ -1242,7 +1253,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_dayuse_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
         const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0);
-        return gatherTwiml(action, 'What is the final total price in US dollars, including all service fees and taxes? If you have several plans, you can share up to three prices — for example, say fifty, seventy and ninety dollars. On the keypad, enter amounts separated by the star key, then press the hash key. The guest will pay the hotel directly on-site.', { timeout: 10, finishOnKey: '#', preface: 'Thank you.' });
+        return gatherTwiml(action, `What is the final total price in ${spokenCurrency}, including all service fees and taxes? If you have several plans, you can share up to three prices. On the keypad, enter amounts separated by the star key, then press the hash key. The guest will pay the hotel directly on-site.`, { timeout: 10, finishOnKey: '#', preface: 'Thank you.' });
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
@@ -1269,7 +1280,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (step === 'ask_price') {
       if (isRepeat(speech, digits)) {
         const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
-        return gatherTwiml(action, 'What is the final total price in US dollars, including all service fees and taxes? If you have several plans, you can share up to three prices — for example, say fifty, seventy and ninety dollars. On the keypad, enter amounts separated by the star key, then press the hash key. The guest will pay the hotel directly on-site.', { timeout: 10, finishOnKey: '#' });
+        return gatherTwiml(action, `What is the final total price in ${spokenCurrency}, including all service fees and taxes? If you have several plans, you can share up to three prices. On the keypad, enter amounts separated by the star key, then press the hash key. The guest will pay the hotel directly on-site.`, { timeout: 10, finishOnKey: '#' });
       }
       const amounts = parsePrices(speech, digits);
       if (amounts.length > 0) {
@@ -1277,16 +1288,16 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         if (withinBudget.length === 0) {
           // Every offered plan exceeds the guest's budget — do not book.
           const lowest = Math.min(...amounts);
-          await updateCallLog(db, logId, 'declined', `twilio_prices:${amounts.join('/')}_over_budget`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: all offered plans exceed guest budget $${maxBudgetUsd}`);
+          await updateCallLog(db, logId, 'declined', `twilio_prices:${amounts.join('/')}_over_budget`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: all offered plans exceed guest budget ${maxBudgetUsd} ${budgetCurrency}`);
           if (phase === 'concierge') {
-            await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `all_plans_over_budget;prices=${amounts.join(',')};budget_usd=${maxBudgetUsd}`, { priceQuoted: lowest });
+            await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `all_plans_over_budget;prices=${amounts.join(',')};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: lowest });
           }
           return twiml(`<Say voice="${VOICE}">Thank you for the information. Unfortunately, the offered ${amounts.length === 1 ? 'plan is' : 'plans are'} above our guest's budget, so we cannot proceed with the booking this time. We appreciate your time. Goodbye.</Say><Hangup/>`);
         }
         const amount = Math.min(...withinBudget);
         await updateCallLog(db, logId, 'awaiting_response', `twilio_prices:${amounts.join('/')};twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: Confirming price ${amount} (offered: ${amounts.join(', ')})`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, 0);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
+        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
@@ -1296,7 +1307,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
-      return gatherTwiml(action, 'Could you please repeat the final total price in US dollars, including all service fees and taxes? You may share up to three plan prices. You can also enter amounts on the keypad separated by the star key, then press the hash key.');
+      return gatherTwiml(action, `Could you please repeat the final total price in ${spokenCurrency}, including all service fees and taxes? You may share up to three plan prices. You can also enter amounts on the keypad separated by the star key, then press the hash key.`);
     }
 
     if (step === 'confirm_booking') {
@@ -1304,15 +1315,15 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (amount != null && !isYes(speech, digits) && !isNo(speech, digits)) {
         if (maxBudgetUsd != null && amount > maxBudgetUsd) {
           // Corrected quote pushed the price over budget — do not book.
-          await updateCallLog(db, logId, 'declined', `twilio_price_corrected_over_budget:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount} exceeds guest budget $${maxBudgetUsd}`);
+          await updateCallLog(db, logId, 'declined', `twilio_price_corrected_over_budget:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount} exceeds guest budget ${maxBudgetUsd} ${budgetCurrency}`);
           if (phase === 'concierge') {
-            await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `corrected_price_over_budget;price=${amount};budget_usd=${maxBudgetUsd}`, { priceQuoted: amount });
+            await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `corrected_price_over_budget;price=${amount};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: amount });
           }
           return twiml(`<Say voice="${VOICE}">Thank you. Unfortunately that amount is above our guest's budget, so we cannot proceed with the booking this time. We appreciate your time. Goodbye.</Say><Hangup/>`);
         }
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price_corrected:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
+        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
       }
       if (isYes(speech, digits)) {
         const finalAmount = quotedAmountFromNote;
@@ -1334,7 +1345,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         const detailAction = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, 0);
         return twiml(
-          `${sayText(`Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${finalAmount != null ? finalAmount : 'the agreed'} dollars, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details.`)}` +
+          `${sayText(`Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${finalAmount != null ? `${finalAmount} ${spokenCurrency}` : 'the agreed amount'}, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details.`)}` +
           `<Pause length="1"/>` +
           `${sayText(`For your immediate records, I will share the guest details slowly.`)}` +
           `<Pause length="1"/>` +
@@ -1367,7 +1378,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
       if (quotedAmountFromNote != null) {
-        return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} dollars, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
+        return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
       }
       return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes to confirm. Press 2 or say no to decline. You can also provide a corrected amount.');
     }

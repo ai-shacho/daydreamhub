@@ -892,10 +892,17 @@ export async function sendConciergeResultEmail(
     checkOut?: string;
     guests?: number;
     priceQuoted?: string;
+    priceCurrency?: string;
     aiSummary?: string;
     attemptedHotels?: string[];
   }
 ): Promise<{ success: boolean; error?: string }> {
+  const fmtQuoted = (p?: string): string => {
+    const num = String(p ?? '').replace(/[^\d.]/g, '');
+    const cur = (data.priceCurrency || 'USD').toUpperCase();
+    if (!num) return String(p ?? '');
+    return cur === 'USD' ? `$${num} USD` : `${cur} ${num}`;
+  };
   const resultMeta = {
     success: {
       subject: `✅ Booking confirmed${data.hotelName ? ` - ${data.hotelName}` : ''} | DaydreamHub`,
@@ -926,8 +933,8 @@ export async function sendConciergeResultEmail(
       title: 'Over Budget',
       color: '#d97706',
       message: data.hotelName
-        ? `<strong>${escapeHtml(data.hotelName)}</strong> had availability, but every offered plan was above your maximum budget${data.priceQuoted ? ` (lowest offer: ${escapeHtml(formatQuotedPriceUsd(data.priceQuoted))})` : ''}, so we did not confirm the booking.`
-        : `The hotel had availability, but every offered plan was above your maximum budget${data.priceQuoted ? ` (lowest offer: ${escapeHtml(formatQuotedPriceUsd(data.priceQuoted))})` : ''}, so we did not confirm the booking.`,
+        ? `<strong>${escapeHtml(data.hotelName)}</strong> had availability, but every offered plan was above your maximum budget${data.priceQuoted ? ` (lowest offer: ${escapeHtml(fmtQuoted(data.priceQuoted))})` : ''}, so we did not confirm the booking.`
+        : `The hotel had availability, but every offered plan was above your maximum budget${data.priceQuoted ? ` (lowest offer: ${escapeHtml(fmtQuoted(data.priceQuoted))})` : ''}, so we did not confirm the booking.`,
     },
     all_failed: {
       subject: `⚠️ All contacted hotels were unavailable | DaydreamHub`,
@@ -948,7 +955,7 @@ export async function sendConciergeResultEmail(
     data.date ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Date</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(formatDateYyyyMmmDd(data.date))}</td></tr>` : '',
     (data.checkIn || data.checkOut) ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Time</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.checkIn || '?')} - ${escapeHtml(data.checkOut || '?')}</td></tr>` : '',
     data.guests ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${data.guests}</td></tr>` : '',
-    data.priceQuoted ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Quoted Price</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(formatQuotedPriceUsd(data.priceQuoted))}</td></tr>` : '',
+    data.priceQuoted ? `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Quoted Price</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(fmtQuoted(data.priceQuoted))}</td></tr>` : '',
   ].filter(Boolean).join('');
 
   const actionNote = data.resultType === 'success'
