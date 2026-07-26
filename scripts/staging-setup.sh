@@ -50,12 +50,38 @@ import os, re
 MAX_STMT = 95_000         # D1 hard limit is 100KB per SQL statement
 MAX_CHUNK = 4_000_000     # bytes per import chunk
 
-def split_multirow_insert(line):
-    """d1 export emits multi-row INSERTs; split into one INSERT per row so a
-    single huge batch never trips the 100KB statement limit."""
-    m = re.match(r'(INSERT INTO .*?VALUES\s*)(\(.*\));?\s*$', line, re.S)
+content = open('/tmp/prod.sql').read()
+
+def iter_statements(text):
+    """Yield complete SQL statements (quote-aware; strings may contain
+    newlines and semicolons)."""
+    cur, inq, i, n = [], False, 0, len(text)
+    while i < n:
+        ch = text[i]
+        cur.append(ch)
+        if inq:
+            if ch == "'":
+                if i + 1 < n and text[i + 1] == "'":
+                    cur.append("'"); i += 1
+                else:
+                    inq = False
+        elif ch == "'":
+            inq = True
+        elif ch == ';':
+            stmt = ''.join(cur).strip()
+            if stmt and stmt != ';':
+                yield stmt + '\n'
+            cur = []
+        i += 1
+    tail = ''.join(cur).strip()
+    if tail:
+        yield tail + '\n'
+
+def split_multirow_insert(stmt):
+    """Split a multi-row INSERT batch into one INSERT per row."""
+    m = re.match(r'(INSERT INTO .*?VALUES\s*)(\(.*\));\s*$', stmt, re.S)
     if not m:
-        return [line]
+        return [stmt]
     head, body = m.group(1), m.group(2)
     rows, cur, depth, inq, i, n = [], [], 0, False, 0, len(body)
     while i < n:
@@ -82,15 +108,16 @@ def split_multirow_insert(line):
                 cur.append(ch)
         i += 1
     if len(rows) <= 1:
-        return [line]
+        return [stmt]
     return [head + r + ';\n' for r in rows]
 
 os.makedirs('/tmp/chunks', exist_ok=True)
 skipped = {}
 idx, size, out = 0, 0, open('/tmp/chunks/chunk_000.sql', 'w')
 out.write('PRAGMA defer_foreign_keys = true;\n')
-for raw in open('/tmp/prod.sql'):
-    for line in (split_multirow_insert(raw) if len(raw.encode()) > MAX_STMT else [raw]):
+for stmt in iter_statements(content):
+    parts = split_multirow_insert(stmt) if len(stmt.encode()) > MAX_STMT else [stmt]
+    for line in parts:
         b = len(line.encode())
         if b > MAX_STMT:
             m = re.search(r'INSERT INTO "?([A-Za-z0-9_]+)', line)
