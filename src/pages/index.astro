@@ -1305,9 +1305,9 @@ function escHtml(s) {
       var internalCards = internalHotels.map(function(h) {
         var label = escHtml(h.name || '');
         var detailPath = '/hotel/' + h.slug;
-        var price = (h.min_price != null && h.min_price !== '') ? ('$' + h.min_price + '〜') : (pageLocale === 'ja' ? '未設定' : 'N/A');
+        var price = (h.min_price != null && h.min_price !== '') ? ('USD ' + h.min_price + '〜') : (pageLocale === 'ja' ? '未設定' : 'N/A');
         return '<a href="' + detailPath + '" target="_blank" rel="noopener" class="block bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg px-3 py-2 transition-colors">' +
-          '<p class="text-white text-xs font-bold break-words leading-relaxed">' + label + '</p>' +
+          '<p class="text-sky-300 text-xs font-bold break-words leading-relaxed">' + label + '</p>' +
           '<p class="text-white/85 text-xs mt-1">' + (pageLocale === 'ja' ? '料金' : 'Min price') + ': <span class="font-semibold text-white">' + escHtml(price) + '</span></p>' +
           '<p class="text-teal-300 text-[11px] mt-1">' + (pageLocale === 'ja' ? '詳細を見る（新しいタブ） →' : 'View details (new tab) →') + '</p>' +
         '</a>';
@@ -1343,7 +1343,10 @@ function escHtml(s) {
       var assistantBody = hasCardHotels
         ? ''
         : '<div class="whitespace-pre-wrap leading-relaxed">' + renderMsgContent(text) + '</div>';
-      var hotelCards = internalCards ? '<div class="grid gap-2 mt-2">' + internalCards + '</div>' : '';
+      var usdNote = internalCards
+        ? '<p class="text-[11px] text-white/60 mt-2">' + (pageLocale === 'ja' ? '💳 表示はUSD価格・お支払いもUSDで処理されます。' : '💳 Prices are in USD and payments are processed in USD.') + '</p>'
+        : '';
+      var hotelCards = internalCards ? usdNote + '<div class="grid gap-2 mt-1">' + internalCards + '</div>' : '';
 
       wrap.innerHTML =
         '<div class="w-6 h-6 bg-white/20 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-bold mt-0.5">AI</div>' +
