@@ -1,4 +1,4 @@
-import { getAccessToken, refundCapture } from './paypal';
+import { getAccessToken, refundCapture, resolvePayPalConfig } from './paypal';
 
 interface AutoRefundEnv {
   DB: D1Database;
@@ -31,12 +31,9 @@ export async function autoRefundBooking(
 
   try {
     if (booking.paypal_capture_id) {
-      const accessToken = await getAccessToken(
-        (env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID),
-        (env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET),
-        'sandbox'
-      );
-      await refundCapture(accessToken, booking.paypal_capture_id, 'sandbox');
+      const pp = resolvePayPalConfig(env);
+      const accessToken = await getAccessToken(pp.clientId, pp.secret, pp.mode);
+      await refundCapture(accessToken, booking.paypal_capture_id, pp.mode);
     }
 
     await db

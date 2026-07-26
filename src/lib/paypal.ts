@@ -7,6 +7,21 @@ function getBaseUrl(mode?: string): string {
   return PAYPAL_API_BASE[mode || 'sandbox'] || PAYPAL_API_BASE.sandbox;
 }
 
+// Central mode/credential resolution driven by env.PAYPAL_MODE.
+// 'live' → live credentials only; anything else → sandbox credentials
+// (with legacy fallbacks). Staging pins PAYPAL_MODE=sandbox in its env,
+// production gets it from the PAYPAL_MODE repo variable via deploy sync.
+export function resolvePayPalConfig(env: any): { mode: string; clientId: string; secret: string } {
+  const mode = String(env?.PAYPAL_MODE || 'sandbox').toLowerCase() === 'live' ? 'live' : 'sandbox';
+  const clientId = mode === 'live'
+    ? (env?.PAYPAL_CLIENT_ID || '')
+    : (env?.PAYPAL_SANDBOX_CLIENT_ID || env?.PAYPAL_CLIENT_ID || '');
+  const secret = mode === 'live'
+    ? (env?.PAYPAL_SECRET || env?.SECRET || '')
+    : (env?.PAYPAL_SANDBOX_SECRET || env?.PAYPAL_SECRET || env?.SECRET || '');
+  return { mode, clientId, secret };
+}
+
 export async function getAccessToken(clientId: string, secret: string, mode: string = 'sandbox'): Promise<string> {
   const base = getBaseUrl(mode);
   const res = await fetch(`${base}/v1/oauth2/token`, {

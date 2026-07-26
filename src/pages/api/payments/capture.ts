@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getAccessToken, captureOrder } from '../../../lib/paypal';
+import { getAccessToken, captureOrder, resolvePayPalConfig } from '../../../lib/paypal';
 import { sendBookingNotificationToHotel, sendGuestBookingConfirmation, sendPaymentFailureEmail } from '../../../lib/email';
 import { getBookingInfoForCall, triggerAutoCall } from '../../../lib/autoCall';
 import { resolveBookingCharge, roundForCurrency } from '../../../lib/currency';
@@ -44,10 +44,7 @@ async function logMessage(params: {
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
-  const PAYPAL_CLIENT_ID = runtime?.env?.PAYPAL_SANDBOX_CLIENT_ID || runtime?.env?.PAYPAL_CLIENT_ID;
-  // Backward compatibility: some deployments stored sandbox secret as generic SECRET
-  const PAYPAL_SECRET = runtime?.env?.PAYPAL_SANDBOX_SECRET || runtime?.env?.PAYPAL_SECRET || runtime?.env?.SECRET;
-  const PAYPAL_MODE = 'sandbox';
+  const { mode: PAYPAL_MODE, clientId: PAYPAL_CLIENT_ID, secret: PAYPAL_SECRET } = resolvePayPalConfig(runtime?.env);
   const RESEND_API_KEY = runtime?.env?.RESEND_API_KEY;
 
   if (!db || !PAYPAL_CLIENT_ID || !PAYPAL_SECRET) {

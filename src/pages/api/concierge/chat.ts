@@ -946,8 +946,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
         }), { headers: { 'Content-Type': 'application/json' } });
       }
       // 外部ホテルあり → PayPal決済 (pay.ts の create アクションと同じ処理)
-      const { getAccessToken, createOrder } = await import('../../../lib/paypal');
-      const mode = 'sandbox';
+      const { getAccessToken, createOrder, resolvePayPalConfig } = await import('../../../lib/paypal');
+      const pp = resolvePayPalConfig(env);
+      const mode = pp.mode;
       const baseUrl = new URL(request.url).origin;
       const returnQuery = new URLSearchParams({
         group_id: String(group.group_id),
@@ -958,8 +959,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const lang = String(locale || '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
       const returnPath = lang === 'ja' ? '/ja/concierge/payment/return' : '/concierge/payment/return';
       const cancelPath = lang === 'ja' ? '/ja/concierge/payment/cancel' : '/concierge/payment/cancel';
-      const paypalClientId = env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID;
-      const paypalSecret = env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET || env.SECRET;
+      const paypalClientId = pp.clientId;
+      const paypalSecret = pp.secret;
       if (!paypalClientId || !paypalSecret) {
         throw new Error('PayPal configuration missing: PAYPAL_SANDBOX_CLIENT_ID|PAYPAL_CLIENT_ID or PAYPAL_SANDBOX_SECRET|PAYPAL_SECRET|SECRET');
       }

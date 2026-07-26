@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getAccessToken, createOrder, captureOrder } from '../../../lib/paypal';
+import { getAccessToken, createOrder, captureOrder, resolvePayPalConfig } from '../../../lib/paypal';
 import { initiateCall, initiateNextGroupCall } from '../../../lib/tools';
 import { sendConciergeCallStartedEmail } from '../../../lib/email';
 
@@ -99,9 +99,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const env = runtime?.env;
   const db = env?.DB;
-  const paypalClientId = env?.PAYPAL_SANDBOX_CLIENT_ID || env?.PAYPAL_CLIENT_ID;
+  const _pp = resolvePayPalConfig(env);
+  const paypalClientId = _pp.clientId;
   // Backward compatibility: some deployments stored sandbox secret as generic SECRET
-  const paypalSecret = env?.PAYPAL_SANDBOX_SECRET || env?.PAYPAL_SECRET || env?.SECRET;
+  const paypalSecret = _pp.secret;
   if (!db || !paypalClientId || !paypalSecret) {
     const missing = [
       !db ? 'DB' : null,
@@ -124,7 +125,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
   const { action, session_id, call_id, group_id, order_id, guest_name, guest_email, locale } = body;
-  const mode = 'sandbox';
+  const mode = _pp.mode;
   const baseUrl = new URL(request.url).origin;
   const resolvedLocale = String(locale || '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
 

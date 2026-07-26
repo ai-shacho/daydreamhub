@@ -1,4 +1,4 @@
-import { getAccessToken, refundCapture } from './paypal';
+import { getAccessToken, refundCapture, resolvePayPalConfig } from './paypal';
 
 const LANGUAGE_MAP: Record<string, { code: string; name: string; nativeName: string; greeting: string; currency: string }> = {
   en: { code: "en", name: "English", nativeName: "English", greeting: "Hi there! This is Sarah from DayDreamHub. Thank you for your time.", currency: "USD" },
@@ -626,9 +626,10 @@ export async function processGroupRefund(env: any, db: any, groupId: number) {
     .first();
   if (!group || group.payment_status !== 'paid' || group.refund_status === 'refunded') return;
   if (!group.paypal_capture_id) return;
-  if (!(env?.PAYPAL_SANDBOX_CLIENT_ID || env?.PAYPAL_CLIENT_ID) || !(env?.PAYPAL_SANDBOX_SECRET || env?.PAYPAL_SECRET)) return;
-  const mode = 'sandbox';
-  const accessToken = await getAccessToken((env.PAYPAL_SANDBOX_CLIENT_ID || env.PAYPAL_CLIENT_ID), (env.PAYPAL_SANDBOX_SECRET || env.PAYPAL_SECRET), mode);
+  const pp = resolvePayPalConfig(env);
+  if (!pp.clientId || !pp.secret) return;
+  const mode = pp.mode;
+  const accessToken = await getAccessToken(pp.clientId, pp.secret, mode);
   const result = await refundCapture(accessToken, group.paypal_capture_id, mode);
   await db
     .prepare(
