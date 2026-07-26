@@ -47,7 +47,7 @@ if [ "${NEED_SEED}" = "1" ]; then
   echo "splitting dump into chunks (skipping oversized statements)..."
   python3 - <<'PYSPLIT'
 import os, re
-MAX_STMT = 900_000        # skip single statements above this (SQLITE_TOOBIG guard)
+MAX_STMT = 95_000         # D1 hard limit is 100KB per SQL statement
 MAX_CHUNK = 4_000_000     # bytes per import chunk
 os.makedirs('/tmp/chunks', exist_ok=True)
 skipped = {}
