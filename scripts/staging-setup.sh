@@ -111,14 +111,47 @@ def split_multirow_insert(stmt):
         return [stmt]
     return [head + r + ';\n' for r in rows]
 
+def trim_oversized_literals(stmt, limit=40_000):
+    # Replace any string literal larger than `limit` bytes with '' so the
+    # row survives import (giant base64 blobs are useless on staging).
+    out, cur, inq, i, n, trimmed = [], None, False, 0, len(stmt), 0
+    while i < n:
+        ch = stmt[i]
+        if inq:
+            if ch == "'":
+                if i + 1 < n and stmt[i + 1] == "'":
+                    cur.append("''"); i += 2; continue
+                lit = ''.join(cur)
+                if len(lit.encode()) > limit:
+                    out.append("''"); trimmed += 1
+                else:
+                    out.append("'" + lit + "'")
+                inq = False; cur = None
+            else:
+                cur.append(ch)
+        elif ch == "'":
+            inq = True; cur = []
+        else:
+            out.append(ch)
+        i += 1
+    return ''.join(out), trimmed
+
 os.makedirs('/tmp/chunks', exist_ok=True)
 skipped = {}
+trimmed_tables = {}
 idx, size, out = 0, 0, open('/tmp/chunks/chunk_000.sql', 'w')
 out.write('PRAGMA defer_foreign_keys = true;\n')
 for stmt in iter_statements(content):
     parts = split_multirow_insert(stmt) if len(stmt.encode()) > MAX_STMT else [stmt]
     for line in parts:
         b = len(line.encode())
+        if b > MAX_STMT:
+            line, tn = trim_oversized_literals(line)
+            b = len(line.encode())
+            mt = re.search(r'INSERT INTO "?([A-Za-z0-9_]+)', line)
+            tname = mt.group(1) if mt else '?'
+            if tn:
+                trimmed_tables[tname] = trimmed_tables.get(tname, 0) + tn
         if b > MAX_STMT:
             m = re.search(r'INSERT INTO "?([A-Za-z0-9_]+)', line)
             t = m.group(1) if m else '?'
@@ -133,6 +166,8 @@ out.close()
 print(f'chunks: {idx + 1}')
 for t, c in skipped.items():
     print(f'SKIPPED {c} oversized row(s) from table {t}')
+for t, c in trimmed_tables.items():
+    print(f'TRIMMED {c} oversized value(s) in table {t}')
 PYSPLIT
   for f in /tmp/chunks/chunk_*.sql; do
     echo "importing ${f} ($(wc -c <"${f}") bytes)..."
