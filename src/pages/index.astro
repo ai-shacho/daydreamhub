@@ -1301,6 +1301,7 @@ function escHtml(s) {
         ? _externalMeta.map(function(h){ return { name: h.name || '', phone: h.phone || '' }; })
         : extractExternalHotels(text);
 
+      var pageLocale = (document.documentElement.lang || 'en').indexOf('ja') === 0 ? 'ja' : 'en';
       var internalCards = internalHotels.map(function(h) {
         var label = escHtml(h.name || '');
         var detailPath = '/hotel/' + h.slug;
