@@ -49,20 +49,59 @@ if [ "${NEED_SEED}" = "1" ]; then
 import os, re
 MAX_STMT = 95_000         # D1 hard limit is 100KB per SQL statement
 MAX_CHUNK = 4_000_000     # bytes per import chunk
+
+def split_multirow_insert(line):
+    """d1 export emits multi-row INSERTs; split into one INSERT per row so a
+    single huge batch never trips the 100KB statement limit."""
+    m = re.match(r'(INSERT INTO .*?VALUES\s*)(\(.*\));?\s*$', line, re.S)
+    if not m:
+        return [line]
+    head, body = m.group(1), m.group(2)
+    rows, cur, depth, inq, i, n = [], [], 0, False, 0, len(body)
+    while i < n:
+        ch = body[i]
+        if inq:
+            cur.append(ch)
+            if ch == "'":
+                if i + 1 < n and body[i + 1] == "'":
+                    cur.append("'"); i += 1
+                else:
+                    inq = False
+        elif ch == "'":
+            inq = True; cur.append(ch)
+        elif ch == '(':
+            depth += 1; cur.append(ch)
+        elif ch == ')':
+            depth -= 1; cur.append(ch)
+            if depth == 0:
+                rows.append(''.join(cur)); cur = []
+                while i + 1 < n and body[i + 1] in ', \t\n':
+                    i += 1
+        else:
+            if depth > 0:
+                cur.append(ch)
+        i += 1
+    if len(rows) <= 1:
+        return [line]
+    return [head + r + ';\n' for r in rows]
+
 os.makedirs('/tmp/chunks', exist_ok=True)
 skipped = {}
 idx, size, out = 0, 0, open('/tmp/chunks/chunk_000.sql', 'w')
-for line in open('/tmp/prod.sql'):
-    b = len(line.encode())
-    if b > MAX_STMT:
-        m = re.search(r'INSERT INTO "?([A-Za-z0-9_]+)', line)
-        t = m.group(1) if m else '?'
-        skipped[t] = skipped.get(t, 0) + 1
-        continue
-    if size + b > MAX_CHUNK:
-        out.close(); idx += 1; size = 0
-        out = open(f'/tmp/chunks/chunk_{idx:03d}.sql', 'w')
-    out.write(line); size += b
+out.write('PRAGMA defer_foreign_keys = true;\n')
+for raw in open('/tmp/prod.sql'):
+    for line in (split_multirow_insert(raw) if len(raw.encode()) > MAX_STMT else [raw]):
+        b = len(line.encode())
+        if b > MAX_STMT:
+            m = re.search(r'INSERT INTO "?([A-Za-z0-9_]+)', line)
+            t = m.group(1) if m else '?'
+            skipped[t] = skipped.get(t, 0) + 1
+            continue
+        if size + b > MAX_CHUNK:
+            out.close(); idx += 1; size = 0
+            out = open(f'/tmp/chunks/chunk_{idx:03d}.sql', 'w')
+            out.write('PRAGMA defer_foreign_keys = true;\n')
+        out.write(line); size += b
 out.close()
 print(f'chunks: {idx + 1}')
 for t, c in skipped.items():
