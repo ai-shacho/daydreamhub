@@ -1,9 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { resolvePayPalConfig } from '../lib/paypal';
 import ConciergeHero from '../components/ConciergeHero.astro';
 
 const runtime = (Astro.locals as any).runtime;
-const paypalClientId = runtime?.env?.PAYPAL_SANDBOX_CLIENT_ID || runtime?.env?.PAYPAL_CLIENT_ID || '';
+const paypalClientId = resolvePayPalConfig(runtime?.env).clientId;
 ---
 
 <Layout title="AI Concierge - DayDreamHub" description="AI phone booking concierge for day-use hotels worldwide.">

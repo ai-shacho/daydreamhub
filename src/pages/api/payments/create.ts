@@ -1,14 +1,11 @@
 import type { APIRoute } from 'astro';
-import { getAccessToken, createOrder } from '../../../lib/paypal';
+import { getAccessToken, createOrder, resolvePayPalConfig } from '../../../lib/paypal';
 import { resolveBookingCharge } from '../../../lib/currency';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
-  const PAYPAL_CLIENT_ID = runtime?.env?.PAYPAL_SANDBOX_CLIENT_ID || runtime?.env?.PAYPAL_CLIENT_ID;
-  // Backward compatibility: some deployments stored sandbox secret as generic SECRET
-  const PAYPAL_SECRET = runtime?.env?.PAYPAL_SANDBOX_SECRET || runtime?.env?.PAYPAL_SECRET || runtime?.env?.SECRET;
-  const PAYPAL_MODE = 'sandbox';
+  const { mode: PAYPAL_MODE, clientId: PAYPAL_CLIENT_ID, secret: PAYPAL_SECRET } = resolvePayPalConfig(runtime?.env);
 
   if (!db || !PAYPAL_CLIENT_ID || !PAYPAL_SECRET) {
     const missing = [
