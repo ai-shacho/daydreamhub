@@ -2,7 +2,9 @@
 // Floating chat widget for the homepage
 // Connects to /api/concierge/chat (separate from booking form)
 const isJa = Astro.url.pathname.startsWith('/ja');
+import { DIAL_CURRENCY } from '../lib/phoneCurrency';
 ---
+<script is:inline define:vars={{ DIAL_CURRENCY }}>window.__DIAL_CUR__ = DIAL_CURRENCY;</script>
 
 <!-- Chat Button (floating, bottom-right) -->
 <div id="chat-widget" class="fixed bottom-[76px] md:bottom-6 right-6 z-[1100] flex flex-col items-end gap-3">
@@ -85,6 +87,7 @@ const isJa = Astro.url.pathname.startsWith('/ja');
       <input id="cb-guest-email" type="email" placeholder="Email" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <input id="cb-guest-phone" type="tel" placeholder="Phone number" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <input id="cb-guests" type="number" min="1" max="10" value="2" placeholder="Guests" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+      <input id="cb-max-budget" type="number" min="1" step="1" placeholder={isJa ? '上限予算（USD・必須）' : 'Max budget in USD (required)'} class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <input id="cb-date" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <div class="grid grid-cols-2 gap-2">
         <input id="cb-checkin" type="time" value="10:00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
@@ -252,8 +255,19 @@ const isJa = Astro.url.pathname.startsWith('/ja');
     callErr.textContent = '';
   }
 
+  function curForPhone(p) {
+    var d = String(p || '').replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^00/, '');
+    var m = window.__DIAL_CUR__ || {};
+    var ks = Object.keys(m).sort(function(a, b) { return b.length - a.length; });
+    for (var i = 0; i < ks.length; i++) { if (d.indexOf(ks[i]) === 0) return m[ks[i]][0]; }
+    return 'USD';
+  }
+
   function showCallOverlay(hotel) {
     selectedExternalHotel = hotel;
+    var bcur = curForPhone(hotel && (hotel.phone || hotel.hotel_phone));
+    var bEl = document.getElementById('cb-max-budget');
+    if (bEl) bEl.placeholder = pageLocale === 'ja' ? ('上限予算（' + bcur + '・必須）') : ('Max budget in ' + bcur + ' (required)');
     callOverlay.classList.remove('hidden');
     callOverlay.classList.add('flex');
     const dateInput = document.getElementById('cb-date');
@@ -272,12 +286,13 @@ const isJa = Astro.url.pathname.startsWith('/ja');
     const checkInDate = (document.getElementById('cb-date').value || '').trim();
     const checkInTime = (document.getElementById('cb-checkin').value || '10:00').trim();
     const checkOutTime = (document.getElementById('cb-checkout').value || '18:00').trim();
+    const maxBudgetUsd = Number(document.getElementById('cb-max-budget').value || 0);
 
     if (!selectedExternalHotel) return;
-    if (!guestName || !guestEmail || !guestPhone || !guests || !checkInDate) {
+    if (!guestName || !guestEmail || !guestPhone || !guests || !checkInDate || !(maxBudgetUsd > 0)) {
       callErr.textContent = pageLocale === 'ja'
-        ? '氏名・メール・電話番号・人数・日付を入力してください。'
-        : 'Please enter name, email, phone, guests, and date.';
+        ? '氏名・メール・電話番号・人数・日付・上限予算をすべて入力してください。'
+        : 'Please enter name, email, phone, guests, date, and max budget.';
       callErr.classList.remove('hidden');
       return;
     }
@@ -291,6 +306,7 @@ const isJa = Astro.url.pathname.startsWith('/ja');
         guests,
         guest_phone: guestPhone,
         _call_group: {
+          max_price: maxBudgetUsd,
           guest_name: guestName,
           guest_email: guestEmail,
           guest_phone: guestPhone,

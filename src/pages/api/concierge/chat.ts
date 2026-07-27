@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { currencyForPhone } from '../../../lib/phoneCurrency';
 import { initiateCall, createCallGroup, initiateNextGroupCall, searchHotelsInternal, searchHotelsExternal, searchHotelsBrave } from '../../../lib/tools';
 import { CONCIERGE_SYSTEM_PROMPT_EN, CONCIERGE_SYSTEM_PROMPT_JA } from '../../../lib/claude';
 import { filterExternalHotels } from '../../../lib/filterExternalHotels';
@@ -737,7 +738,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const callId = parseInt(callStatusMatch[1], 10);
       const call = await db
         .prepare(
-          `SELECT id, hotel_name, status, outcome, ai_summary, price_quoted, availability_info
+          `SELECT id, hotel_name, status, outcome, ai_summary, price_quoted, availability_info, request_details
            FROM concierge_calls WHERE id = ? AND session_id = ?`
         )
         .bind(callId, session_id)
@@ -777,7 +778,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       if (c.status === 'completed') {
         // ホテルが言ったこと（transcript/ai_summary）をそのまま含める
         const hotelSaid = c.availability_info ? `\n\n📋 **ホテルとの通話内容:**\n${c.availability_info}` : '';
-        const priceNote = c.price_quoted ? (locale === 'ja' ? `\n💰 **料金:** ${c.price_quoted}` : `\n💰 **Price:** ${c.price_quoted}`) : '';
+        const priceCur = (() => { try { return JSON.parse(c.request_details || '{}')?.budget_currency || 'USD'; } catch { return 'USD'; } })();
+        const priceNote = c.price_quoted ? (locale === 'ja' ? `\n💰 **料金:** ${priceCur} ${c.price_quoted}` : `\n💰 **Price:** ${priceCur} ${c.price_quoted}`) : '';
 
         if (c.outcome === 'booked' || c.outcome === 'available') {
           responseText = locale === 'ja'
@@ -887,6 +889,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
           status: 400, headers: { 'Content-Type': 'application/json' }
         });
       }
+      // Guest max budget is required and is denominated in the called
+      // hotel's local currency (derived from the phone country code).
+      const directMaxBudget = Number(callGroupData.max_price ?? callGroupData.max_price_usd ?? 0);
+      if (!(directMaxBudget > 0)) {
+        return new Response(JSON.stringify({ error: locale === 'ja' ? '上限予算を入力してください。' : 'Max budget is required.' }), {
+          status: 400, headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      const directBudgetCurrency = currencyForPhone(callGroupData.hotels?.[0]?.hotel_phone).currency;
       // セッション作成（なければ）
       await db.prepare(
         `INSERT INTO concierge_sessions (id, locale, created_at, updated_at)
@@ -899,6 +910,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const _adults = Number(callGroupData.adults || 0) || (normalizedGuests > 0 ? normalizedGuests : 1);
       const _children = Number(callGroupData.children || 0);
       const requestDetails = normalizeConciergeRequestDetails({
+        max_price_local: directMaxBudget,
+        budget_currency: directBudgetCurrency,
         guest_name: callGroupData.guest_name,
         guest_email: callGroupData.guest_email,
         guest_phone: callGroupData.guest_phone || callGroupData.phone || guest_phone || null,
@@ -988,7 +1001,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      const normalizedRequestDetails = normalizeConciergeRequestDetails(request_details);
+      const groupMaxBudget = Number(request_details?.max_price_local ?? request_details?.max_price ?? request_details?.max_price_usd ?? 0);
+      if (!(groupMaxBudget > 0)) {
+        return new Response(
+          JSON.stringify({ error: locale === 'ja' ? '通話を開始する前に、お客様の上限予算（USD）を確認して request_details.max_price_usd に含めてください。' : 'Ask the guest for their maximum budget in USD and include it as request_details.max_price_usd before creating the call group.' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      const normalizedRequestDetails = normalizeConciergeRequestDetails({
+        ...request_details,
+        max_price_local: groupMaxBudget,
+        budget_currency: request_details?.budget_currency || currencyForPhone(hotels?.[0]?.hotel_phone).currency,
+      });
       await db
         .prepare(
           `INSERT INTO concierge_sessions (id, locale, created_at, updated_at)

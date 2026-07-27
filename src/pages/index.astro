@@ -1436,6 +1436,14 @@ function escHtml(s) {
     var messagesEl = document.getElementById('hero-chat-messages');
     var formDiv = document.createElement('div');
     formDiv.className = 'flex gap-2';
+    function curForPhone(p) {
+      var d = String(p || '').replace(/[^\d+]/g, '').replace(/^\+/, '').replace(/^00/, '');
+      var m = window.__DIAL_CUR__ || {};
+      var ks = Object.keys(m).sort(function(a, b) { return b.length - a.length; });
+      for (var i = 0; i < ks.length; i++) { if (d.indexOf(ks[i]) === 0) return m[ks[i]][0]; }
+      return 'USD';
+    }
+    var budgetCur = curForPhone(selected[0] && selected[0].phone);
     var hotelListHtml = selected.map(function(h, i) {
       return '<li class="text-white/80"><span class="text-amber-300 font-bold">' + (i+1) + '.</span> ' + escHtml(h.name) + '</li>';
     }).join('');
@@ -1459,6 +1467,11 @@ function escHtml(s) {
           '<div>' +
             '<label class="text-[11px] text-white/50 block mb-0.5">Phone</label>' +
             '<input id="call-guest-phone" type="tel" placeholder="+1 555 123 4567" class="w-full bg-white/10 text-white placeholder-white/30 rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+          '</div>' +
+          '<div>' +
+            '<label class="text-[11px] text-white/50 block mb-0.5">💵 Max budget (' + budgetCur + ') <span class="text-amber-300">*</span></label>' +
+            '<input id="call-max-budget" type="number" min="1" step="1" placeholder="e.g. 80" class="w-full bg-white/10 text-white placeholder-white/30 rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none" />' +
+            '<p class="text-[10px] text-white/40 mt-0.5">We will not book any plan above this amount.</p>' +
           '</div>' +
           '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
             '<div>' +
@@ -1524,6 +1537,12 @@ function escHtml(s) {
     var checkinTime = document.getElementById('call-checkin-time')?.value || '10:00';
     var checkoutTime = document.getElementById('call-checkout-time')?.value || '18:00';
     var guests = document.getElementById('call-guests')?.value || '2';
+    var maxBudget = Number(document.getElementById('call-max-budget')?.value || 0);
+    if (!(maxBudget > 0)) {
+      resetSubmitBtn();
+      alert('Please enter your maximum budget.');
+      return;
+    }
     if (!name || !email || !date) {
       resetSubmitBtn();
       alert('Please fill in name, email, and date');
@@ -1554,6 +1573,7 @@ function escHtml(s) {
           message: '__create_call_group_direct',
           locale: document.documentElement.lang || 'en',
           _call_group: {
+            max_price: maxBudget,
             hotels: selectedHotels.map(function(h) {
               return { hotel_name: h.name, hotel_phone: h.phone, hotel_source: 'external' };
             }),

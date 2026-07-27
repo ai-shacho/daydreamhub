@@ -44,7 +44,7 @@ const COUNTRY_CURRENCY_MAP: Record<string, string> = {
 };
 
 export const BUDGET_TIER_USD: Record<string, number> = {
-  budget: 40, mid: 80, high: 200
+  budget: 40, mid: 80, high: 200, premium: 200
 };
 
 const FALLBACK_RATES: Record<string, number> = {
@@ -554,7 +554,7 @@ export async function initiateNextGroupCall(env: any, db: any, groupId: number) 
       WHERE call_group_id = ?
         AND call_order = ?
         AND telnyx_call_id IS NULL
-        AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer')
+        AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer', 'over_budget')
         AND COALESCE(status, 'pending') IN ('pending', 'calling')
       ORDER BY COALESCE(attempt, 1) DESC, id DESC
       LIMIT 1`
@@ -680,7 +680,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
     const callRow: any = await db.prepare("SELECT hotel_name, hotel_phone, hotel_source, request_details, status, outcome, telnyx_call_id, guest_name, guest_email FROM concierge_calls WHERE id = ?").bind(callId).first();
     if (!callRow) return { call_id: callId, status: "failed", message: "Call record not found" };
 
-    const terminalOutcomes = new Set(['booked', 'available', 'unavailable', 'no_answer']);
+    const terminalOutcomes = new Set(['booked', 'available', 'unavailable', 'no_answer', 'over_budget']);
     const existingProviderOrLock = String(callRow.telnyx_call_id || '');
     const lockPrefix = `lock:${callId}:`;
     const lockTtlMs = 3 * 60 * 1000;
@@ -724,13 +724,13 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
            SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now')
          WHERE id = ?
            AND telnyx_call_id = ?
-           AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer')
+           AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer', 'over_budget')
            AND COALESCE(status, 'pending') IN ('pending', 'calling')`
       : `UPDATE concierge_calls
            SET telnyx_call_id = ?, status = 'calling', updated_at = datetime('now')
          WHERE id = ?
            AND telnyx_call_id IS NULL
-           AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer')
+           AND COALESCE(outcome, '') NOT IN ('booked', 'available', 'unavailable', 'no_answer', 'over_budget')
            AND COALESCE(status, 'pending') IN ('pending', 'calling')`;
 
     const lockResult = staleLockToken
@@ -756,7 +756,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
       check_out_time: details.check_out_time || details.check_out,
       guests: details.guests ?? ((details.adults || 1) + (details.children || 0)),
       language: details.language, special_requests: details.special_requests,
-      max_price: details.max_price || "",
+      max_price: details.max_price || (details.max_price_local ? `${details.max_price_local} ${details.budget_currency || ""}`.trim() : ""),
       call_mode: details.call_mode || "initial",
       confirmed_price: details.confirmed_price || "",
       guest_phone: details.guest_phone || details.phone || details.contact_phone || details.contact?.phone || "",
