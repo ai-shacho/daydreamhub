@@ -140,7 +140,23 @@ function stripDiacritics(str: string) {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+// Japan is not serviced: block searches up-front (staging's Tokyo test
+// mocks in searchHotelsExternal take precedence for call testing).
+const JAPAN_HINTS = [
+  'japan', 'tokyo', 'osaka', 'kyoto', 'sapporo', 'fukuoka', 'nagoya', 'yokohama',
+  'kobe', 'hiroshima', 'sendai', 'okinawa', 'naha', 'shibuya', 'shinjuku', 'ginza',
+  '日本', '東京', '大阪', '京都', '札幌', '福岡', '名古屋', '横浜', '神戸', '広島', '仙台', '沖縄', '那覇',
+];
+export function isJapanQuery(q: unknown): boolean {
+  const s = String(q ?? '').toLowerCase();
+  return !!s && JAPAN_HINTS.some((h) => s.includes(h));
+}
+const JAPAN_NOTICE = "DayDreamHub does not currently list any facilities in Japan. Tell the guest that no facilities are available in this area (ja: 申し訳ありません。現在、日本国内の施設のお取り扱いはありません。) and do NOT retry other search tools for Japan.";
+
 export async function searchHotelsInternal(env: any, params: any) {
+  if (isJapanQuery(params?.city) || isJapanQuery(params?.query)) {
+    return { count: 0, source: 'internal', hotels: [], notice: JAPAN_NOTICE };
+  }
   const db = env.DB;
   const conditions = ["h.status = 'active'"];
   const binds: any[] = [];
@@ -264,6 +280,10 @@ export async function searchHotelsExternal(env: any, params: any) {
       { name: "Tokyo Test Hotel C", address: "Tokyo", phone: "+17207275686", rating: null, rating_count: 0, website: null, source: "external" },
     ];
     return { count: mockHotels.length, source: "external", hotels: mockHotels };
+  }
+
+  if (isJapanQuery(cityInput)) {
+    return { count: 0, source: "external", hotels: [], notice: JAPAN_NOTICE };
   }
 
   const apiKey = env.GOOGLE_PLACES_API_KEY;

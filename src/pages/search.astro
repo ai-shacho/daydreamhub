@@ -144,7 +144,7 @@ if (DB) {
 
     // Get filter options
     const countriesResult = await DB.prepare(
-      "SELECT DISTINCT country FROM hotels WHERE country != '' ORDER BY country"
+      "SELECT DISTINCT country FROM hotels WHERE country != '' AND status = 'active' ORDER BY country"
     ).all();
     allCountries = (countriesResult?.results || []).map((r: any) => r.country);
     // DB has case variants ('Bulgaria' / 'bulgaria') — dedupe case-insensitively, keeping the first (capitalized) form
@@ -164,7 +164,7 @@ if (DB) {
     allPropertyTypes = (ptResult?.results || []).map((r: any) => r.property_type);
 
     const cityResult = await DB.prepare(
-      "SELECT DISTINCT city FROM hotels WHERE city != '' ORDER BY city"
+      "SELECT DISTINCT city FROM hotels WHERE city != '' AND status = 'active' ORDER BY city"
     ).all();
     allCities = (cityResult?.results || []).map((r: any) => r.city);
     {
