@@ -255,9 +255,9 @@ const MAX_USER_RATING_COUNT = 5000;
 
 export async function searchHotelsExternal(env: any, params: any) {
   const cityInput = (params.city || params.query || "").toString().trim().toLowerCase();
-  // テスト用: 東京（"tokyo" or "東京"）を含むクエリで非提携ホテルのモックを返す（AI電話発信テスト用）
-  // "day use hotel Tokyo" のような自然文クエリにもヒットさせるため「含む」で判定。
-  if (cityInput.includes("tokyo") || cityInput.includes("東京")) {
+  // テスト用モック: staging 環境（DDH_ENV=staging）のみ。東京を含むクエリで
+  // AI電話発信テスト用の非提携ホテルを返す。本番では実際の外部検索が走る。
+  if ((cityInput.includes("tokyo") || cityInput.includes("東京")) && String(env?.DDH_ENV || "").toLowerCase() === "staging") {
     const mockHotels = [
       { name: "Tokyo Test Hotel A", address: "Tokyo", phone: "+817084443210", rating: null, rating_count: 0, website: null, source: "external" },
       { name: "Tokyo Test Hotel B", address: "Tokyo", phone: "+818053689489", rating: null, rating_count: 0, website: null, source: "external" },
