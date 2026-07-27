@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { currencyForPhone } from '../../../lib/phoneCurrency';
-import { initiateCall, createCallGroup, initiateNextGroupCall, searchHotelsInternal, searchHotelsExternal, searchHotelsBrave } from '../../../lib/tools';
+import { initiateCall, createCallGroup, initiateNextGroupCall, searchHotelsInternal, searchHotelsExternal, searchHotelsBrave, isJapanQuery } from '../../../lib/tools';
 import { CONCIERGE_SYSTEM_PROMPT_EN, CONCIERGE_SYSTEM_PROMPT_JA } from '../../../lib/claude';
 import { filterExternalHotels } from '../../../lib/filterExternalHotels';
 import { sendConciergeCallStartedEmail } from '../../../lib/email';
@@ -707,6 +707,36 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
   const trimmedMessage = message.trim().slice(0, 1000);
+
+  // Japan is out of service area: answer deterministically without the AI
+  // (prompt-level rules proved unreliable — the model fabricated hotels).
+  // Staging keeps its Tokyo test mocks, so no short-circuit there.
+  if (
+    !trimmedMessage.startsWith('__') &&
+    isJapanQuery(trimmedMessage) &&
+    String(env?.DDH_ENV || '').toLowerCase() !== 'staging'
+  ) {
+    const jpNotice = String(locale || '').toLowerCase().startsWith('ja')
+      ? '申し訳ありません。現在、日本国内の施設のお取り扱いはありません。バンコク、クアラルンプール、ドバイなど対応都市でのご利用をご検討ください。'
+      : "We're sorry — DayDreamHub does not currently list any facilities in Japan. Please try one of our supported cities, such as Bangkok, Kuala Lumpur, or Dubai.";
+    try {
+      await db.prepare(
+        `INSERT INTO concierge_sessions (id, locale, created_at, updated_at)
+         VALUES (?, ?, datetime('now'), datetime('now'))
+         ON CONFLICT(id) DO UPDATE SET updated_at = datetime('now')`
+      ).bind(session_id, locale).run();
+      await db.prepare(
+        `INSERT INTO concierge_messages (session_id, role, content, created_at) VALUES (?, 'user', ?, datetime('now'))`
+      ).bind(session_id, trimmedMessage).run();
+      await db.prepare(
+        `INSERT INTO concierge_messages (session_id, role, content, created_at) VALUES (?, 'assistant', ?, datetime('now'))`
+      ).bind(session_id, jpNotice).run();
+    } catch {}
+    return new Response(JSON.stringify({ response: jpNotice }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   if (!trimmedMessage) {
     return new Response(JSON.stringify({ error: 'Empty message' }), {
       status: 400,
