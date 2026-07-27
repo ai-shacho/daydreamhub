@@ -1884,7 +1884,8 @@ function escHtml(s) {
     addTyping();
 
     try {
-      var body = { session_id: sessionId, message: fullMsg, locale: 'en' };
+      var pageLoc = (document.documentElement.lang || 'en').indexOf('ja') === 0 ? 'ja' : 'en';
+      var body = { session_id: sessionId, message: fullMsg, locale: pageLoc };
       if (pendingImageKey) { body.image_key = pendingImageKey; pendingImageKey = null; }
 
       var res = await fetch('/api/concierge/chat', {
@@ -2000,19 +2001,31 @@ function escHtml(s) {
       var li = document.getElementById('location-input');
       if (li) li.focus();
       showMessages();
-      addMsg('Please enter a city or location first! 📍', 'assistant');
+      addMsg(((document.documentElement.lang || 'en').indexOf('ja') === 0) ? '都市名または場所を入力してください 📍' : 'Please enter a city or location first! 📍', 'assistant');
       return;
     }
 
-    var parts = ['Find day-use hotels in ' + location];
-    if (date) parts.push('for ' + date);
-    if (ciTime && coTime) parts.push('from ' + ciTime + ' to ' + coTime);
-    if (guests) parts.push('for ' + guests + ' guest' + (parseInt(guests) > 1 ? 's' : ''));
-    if (budget) parts.push('with ' + budget + ' budget');
-    if (spec) parts.push('(' + spec + ')');
-    parts.push('. Show all available options with price, time slot, and booking link.');
+    var isJaPage = (document.documentElement.lang || 'en').indexOf('ja') === 0;
+    var parts;
+    if (isJaPage) {
+      parts = [location + 'のデイユースホテルを探して'];
+      if (date) parts.push('（日付: ' + date + '）');
+      if (ciTime && coTime) parts.push('利用時間 ' + ciTime + '〜' + coTime);
+      if (guests) parts.push(guests + '名');
+      if (budget) parts.push('予算帯: ' + budget);
+      if (spec) parts.push('目的: ' + spec);
+      parts.push('。料金・時間帯・予約リンク付きで候補をすべて見せてください。');
+    } else {
+      parts = ['Find day-use hotels in ' + location];
+      if (date) parts.push('for ' + date);
+      if (ciTime && coTime) parts.push('from ' + ciTime + ' to ' + coTime);
+      if (guests) parts.push('for ' + guests + ' guest' + (parseInt(guests) > 1 ? 's' : ''));
+      if (budget) parts.push('with ' + budget + ' budget');
+      if (spec) parts.push('(' + spec + ')');
+      parts.push('. Show all available options with price, time slot, and booking link.');
+    }
 
-    var autoMsg = parts.join(' ');
+    var autoMsg = parts.join(isJaPage ? '' : ' ');
     inputEl.value = autoMsg;
 
     var wrapper = document.getElementById('ai-chat-wrapper');
@@ -2307,7 +2320,7 @@ function escHtml(s) {
     s.onload = function() {
       if (window.flatpickr) {
         window.flatpickr('#checkin-fp', {
-          locale: 'en',
+          locale: (document.documentElement.lang || 'en').indexOf('ja') === 0 ? 'ja' : 'en',
           dateFormat: 'Y-m-d',
           disableMobile: true,
           allowInput: true,

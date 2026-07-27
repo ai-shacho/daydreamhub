@@ -22,6 +22,9 @@ binding = "AI"
 # Uses an isolated D1 database so tests never touch production data.
 [env.preview]
 
+[env.preview.vars]
+DDH_ENV = "staging"
+
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "daydreamhub-db-staging"
