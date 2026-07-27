@@ -38,10 +38,8 @@ jobs:
           # secrets can be added without editing this workflow file.
           SYNC_SECRET_NAMES: ${{ vars.SYNC_SECRET_NAMES }}
           ALL_SECRETS: ${{ toJSON(secrets) }}
-          PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_SANDBOX_CLIENT_ID != '' && secrets.PAYPAL_SANDBOX_CLIENT_ID || secrets.PAYPAL_CLIENT_ID }}
-          PAYPAL_SANDBOX_CLIENT_ID: ${{ secrets.PAYPAL_SANDBOX_CLIENT_ID != '' && secrets.PAYPAL_SANDBOX_CLIENT_ID || secrets.PAYPAL_CLIENT_ID }}
-          PAYPAL_SECRET: ${{ secrets.PAYPAL_SANDBOX_SECRET != '' && secrets.PAYPAL_SANDBOX_SECRET || secrets.PAYPAL_SECRET != '' && secrets.PAYPAL_SECRET || secrets.SECRET }}
-          PAYPAL_SANDBOX_SECRET: ${{ secrets.PAYPAL_SANDBOX_SECRET != '' && secrets.PAYPAL_SANDBOX_SECRET || secrets.PAYPAL_SECRET != '' && secrets.PAYPAL_SECRET || secrets.SECRET }}
+          # PAYPAL_* secrets sync raw (live in PAYPAL_CLIENT_ID/SECRET,
+          # sandbox in PAYPAL_SANDBOX_*); the app picks by PAYPAL_MODE.
           PAYPAL_MODE: ${{ vars.PAYPAL_MODE || 'sandbox' }}
         run: |
           # Run from outside repository so wrangler.toml validation cannot block secret sync.
@@ -53,7 +51,7 @@ jobs:
           # is read from the secrets context JSON.
           for secret_name in $(echo "$SYNC_SECRET_NAMES" | tr ',' ' '); do
             case "$secret_name" in
-              PAYPAL_CLIENT_ID|PAYPAL_SANDBOX_CLIENT_ID|PAYPAL_SECRET|PAYPAL_SANDBOX_SECRET|PAYPAL_MODE)
+              PAYPAL_MODE)
                 secret_value="${!secret_name}"
                 ;;
               *)
