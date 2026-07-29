@@ -1,7 +1,7 @@
 ---
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from '../../../../lib/propertyTypes';
-import { supportedCurrencyCodes, ZERO_DECIMAL_CURRENCIES } from '../../../../lib/currency';
+import { supportedCurrencyCodes, ZERO_DECIMAL_CURRENCIES, formatLocalWithUsd } from '../../../../lib/currency';
 
 const { id } = Astro.params;
 const db = (Astro.locals as any).runtime?.env?.DB;
@@ -404,7 +404,7 @@ for (let h = 0; h < 24; h++) {
                   <span class="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">{plan.plan_type}</span>
                 </div>
                 <div class="text-xs text-gray-500 mt-0.5">
-                  {isUsdHotel ? `$${plan.price_usd}` : `${hotelCurrency} ${plan.price_local ?? plan.price_usd} (≈ $${plan.price_usd})`} · {plan.check_in_time}–{plan.check_out_time} · max {plan.max_guests} guests
+                  {formatLocalWithUsd(Number(plan.price_local ?? plan.price_usd), hotelCurrency, Number(plan.price_usd))} · {plan.check_in_time}–{plan.check_out_time} · max {plan.max_guests} guests
                 </div>
               </div>
               <div class="flex gap-1 flex-shrink-0">

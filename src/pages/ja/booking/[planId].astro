@@ -3,7 +3,7 @@ import Layout from '../../../layouts/Layout.astro';
 import { resolvePayPalConfig } from '../../../lib/paypal';
 import PayPalButton from '../../../components/PayPalButton.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
-import { formatMoney, convertLocalToUsd } from '../../../lib/currency';
+import { formatMoney, convertLocalToUsd, formatLocalWithUsd } from '../../../lib/currency';
 import { getExchangeRates } from '../../../lib/tools';
 
 const locale = getLocale(Astro.url);
@@ -404,7 +404,7 @@ const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_
                 <div class="space-y-1.5 text-sm mb-3">
                   <div class="flex justify-between text-gray-600">
                     <span>プラン料金</span>
-                    <span>{isUsdHotel ? `$${effectivePriceUsd.toFixed(2)}` : `${formatMoney(Number(plan.price_local ?? plan.price_usd), hotelCurrency)} (≈ $${effectivePriceUsd.toFixed(2)})`}</span>
+                    <span>{formatLocalWithUsd(Number(plan.price_local ?? plan.price_usd), hotelCurrency, effectivePriceUsd)}</span>
                   </div>
                   <div class="flex justify-between text-gray-600">
                     <span>決済手数料</span>

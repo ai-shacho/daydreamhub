@@ -2,6 +2,7 @@
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../../lib/adminAuth';
 import { formatDisplayDate } from '../../../lib/dateFormat';
+import { formatLocalWithUsd } from '../../../lib/currency';
 
 const runtime = (Astro.locals as any).runtime;
 const db = runtime?.env?.DB;
@@ -238,9 +239,7 @@ if (!hotel) {
                 </div>
                 <div class="text-right">
                   <p class="font-bold text-slate-900">
-                    {hotel.currency && hotel.currency !== 'USD'
-                      ? `${hotel.currency} ${plan.price_local ?? plan.price_usd} (≈ $${plan.price_usd})`
-                      : `$${plan.price_usd}`}
+                    {formatLocalWithUsd(Number(plan.price_local ?? plan.price_usd), String(hotel.currency || 'USD'), Number(plan.price_usd))}
                   </p>
                   <p class="text-xs text-slate-400">{plan.is_active ? 'Active' : 'Inactive'}</p>
                 </div>

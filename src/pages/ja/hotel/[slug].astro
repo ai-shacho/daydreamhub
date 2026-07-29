@@ -4,7 +4,7 @@ import ReviewSection from '../../../components/ReviewSection.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
 import { nearestAirport, airportNamesJa } from '../../../lib/airports';
 import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../../../lib/propertyTypes';
-import { formatMoney } from '../../../lib/currency';
+import { formatMoney, formatLocalWithUsd } from '../../../lib/currency';
 import { geoNameJa } from '../../../lib/geoJa';
 import { categoryColor, categoryLabel } from '../../../lib/categories';
 
@@ -496,7 +496,7 @@ for (const img of images) {
                           {isUsdHotel ? (
                             <>${plan.price_usd} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span></>
                           ) : (
-                            <>{formatMoney(Number(plan.price_local ?? plan.price_usd), hotelCurrency)} <span class="text-sm font-normal text-gray-500">(≈ {formatMoney(Number(plan.price_usd), 'USD')} USD)</span></>
+                            <span>{formatLocalWithUsd(Number(plan.price_local ?? plan.price_usd), hotelCurrency, Number(plan.price_usd))}</span>
                           )}
                         </p>
                         {/* キャンセルポリシー */}

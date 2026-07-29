@@ -4,7 +4,7 @@ import ReviewSection from '../../components/ReviewSection.astro';
 import { getLocale, t, localePath } from '../../lib/i18n';
 import { nearestAirport } from '../../lib/airports';
 import { PROPERTY_TYPE_LABELS, normalizePropertyType } from '../../lib/propertyTypes';
-import { formatMoney } from '../../lib/currency';
+import { formatMoney, formatLocalWithUsd } from '../../lib/currency';
 import { categoryColor, categoryLabel } from '../../lib/categories';
 
 const locale = getLocale(Astro.url);
@@ -519,7 +519,7 @@ for (const img of images) {
                           {isUsdHotel ? (
                             <><span data-usd={plan.price_usd}>${plan.price_usd}</span> <span class="text-sm font-normal text-gray-500" data-currency-label>USD</span></>
                           ) : (
-                            <>{formatMoney(Number(plan.price_local ?? plan.price_usd), hotelCurrency)} <span class="text-sm font-normal text-gray-500">(≈ {formatMoney(Number(plan.price_usd), 'USD')} USD)</span></>
+                            <span>{formatLocalWithUsd(Number(plan.price_local ?? plan.price_usd), hotelCurrency, Number(plan.price_usd))}</span>
                           )}
                         </p>
                         <div class="space-y-1.5 mb-4">

@@ -2,7 +2,7 @@
 import OwnerLayout from '../../../layouts/OwnerLayout.astro';
 import { verifyOwner, getOwnerHotelIds, getStaffRole, canEditHotels } from '../../../lib/ownerAuth';
 import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from '../../../lib/propertyTypes';
-import { supportedCurrencyCodes, ZERO_DECIMAL_CURRENCIES } from '../../../lib/currency';
+import { supportedCurrencyCodes, ZERO_DECIMAL_CURRENCIES, formatLocalWithUsd } from '../../../lib/currency';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -456,9 +456,7 @@ for (let h = 0; h < 24; h++) {
                       <span class="font-medium text-slate-900 text-sm">{plan.name}</span>
                       {plan.name_ja && <span class="text-xs text-slate-400">{plan.name_ja}</span>}
                       <span class="font-mono text-slate-700 text-sm">
-                        {isUsdHotel
-                          ? `$${plan.price_usd}`
-                          : `${hotelCurrency} ${plan.price_local ?? plan.price_usd} (≈ $${plan.price_usd})`}
+                        {formatLocalWithUsd(Number(plan.price_local ?? plan.price_usd), hotelCurrency, Number(plan.price_usd))}
                       </span>
                       {plan.check_in_time && plan.check_out_time && (
                         <span class="text-xs text-slate-500">{plan.check_in_time}–{plan.check_out_time}</span>

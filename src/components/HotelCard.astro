@@ -155,7 +155,7 @@ const airportCode: string | null = hotel._airport_code ?? null;
               {cardCurrency} {minPriceLocal}
             </span>
             <span class="text-base font-bold text-teal-700">〜</span>
-            <span class="text-xs font-normal text-gray-500"> (≈ ${effectiveMinPrice})</span>
+            <span class="text-xs font-normal text-gray-500"> (≈ ${Number(effectiveMinPrice).toFixed(2)} USD)</span>
           </div>
         ) : effectiveMinPrice !== null ? (
           <div>

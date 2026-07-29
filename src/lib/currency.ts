@@ -40,6 +40,16 @@ export function convertUsdToLocal(amount: number, currency: string, rates: Recor
   return roundForCurrency(amount * rate, currency);
 }
 
+// Unified guest-facing price string:
+//   USD hotel      → "$61.04"
+//   non-USD hotel  → "¥10,000 (≈ $61.04 USD)"
+// USD is always shown with 2 decimals for consistency across the site.
+export function formatLocalWithUsd(localAmount: number, currency: string, usdAmount: number): string {
+  const usd = `$${Number(usdAmount || 0).toFixed(2)}`;
+  if (!currency || String(currency).toUpperCase() === 'USD') return usd;
+  return `${formatMoney(Number(localAmount || 0), currency)} (≈ ${usd} USD)`;
+}
+
 // "EGP 2,500 (≈ $52)" for non-USD hotels; plain "$52" for USD hotels.
 export function formatDualPrice(localAmount: number, currency: string, rates: Record<string, number>): string {
   if (!currency || currency === 'USD') return formatMoney(localAmount, 'USD');
