@@ -55,10 +55,10 @@ export const GET: APIRoute = async ({ request, locals }) => {
       totalPriceUsd: 61.04, localCurrency: 'JPY', localAmount: 10000, notes: 'Late check-in please.', cancellationHours: 24,
     } as any),
     guest_booking_confirmed: () => sendGuestBookingStatusUpdate(resendKey, {
-      bookingId: 9001, guestName: 'Test Guest', guestEmail: to, ...common, totalPriceUsd: 61.04, status: 'confirmed',
+      bookingId: 9001, guestName: 'Test Guest', guestEmail: to, ...common, totalPriceUsd: 61.04, localCurrency: 'JPY', localAmount: 10000, status: 'confirmed',
     } as any),
     guest_booking_cancelled: () => sendGuestBookingStatusUpdate(resendKey, {
-      bookingId: 9001, guestName: 'Test Guest', guestEmail: to, ...common, totalPriceUsd: 61.04, status: 'cancelled',
+      bookingId: 9001, guestName: 'Test Guest', guestEmail: to, ...common, totalPriceUsd: 61.04, localCurrency: 'JPY', localAmount: 10000, status: 'cancelled',
     } as any),
     payment_failure: () => sendPaymentFailureEmail(resendKey, {
       guestName: 'Test Guest', guestEmail: to, hotelName: common.hotelName, planName: common.planName,

@@ -449,6 +449,8 @@ export async function sendGuestBookingStatusUpdate(
     adults: number;
     children: number;
     totalPriceUsd: number;
+    localCurrency?: string | null;
+    localAmount?: number | null;
     status: 'confirmed' | 'cancelled';
     cancelReason?: string;
     hotelSlug?: string;
@@ -496,7 +498,7 @@ export async function sendGuestBookingStatusUpdate(
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${formatDate(data.checkInDate)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Time</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.checkInTime)} – ${escapeHtml(data.checkOutTime)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(guestCount)}</td></tr>
-        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Amount</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px"><strong>$${data.totalPriceUsd.toFixed(2)} USD</strong></td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Amount</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px"><strong>${formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount)}</strong></td></tr>
       </table>
     </div>
 

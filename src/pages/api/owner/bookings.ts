@@ -143,6 +143,8 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           adults: fullBooking.adults || 1,
           children: fullBooking.children || 0,
           totalPriceUsd: fullBooking.total_price_usd || 0,
+          localCurrency: fullBooking.local_currency || null,
+          localAmount: fullBooking.local_amount ?? null,
           status: status as 'confirmed' | 'cancelled',
         });
       }

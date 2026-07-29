@@ -96,6 +96,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
         adults: booking.adults || 1,
         children: booking.children || 0,
         totalPriceUsd: booking.total_price_usd || 0,
+        localCurrency: booking.local_currency || null,
+        localAmount: booking.local_amount ?? null,
         status: 'cancelled',
         cancelReason: reason || 'Cancelled by guest',
       });
