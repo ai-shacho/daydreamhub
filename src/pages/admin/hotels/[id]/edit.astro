@@ -225,6 +225,7 @@ for (let h = 0; h < 24; h++) {
                 ))}
               </select>
               <p class="text-xs text-slate-400 mt-1">Plan prices are entered in this currency; guests pay in USD. Changing it auto-converts existing plan prices.</p>
+              <p class="text-xs text-amber-600 mt-1">⚠️ 通貨を変更して保存すると、表示反映のためページが自動で再読み込みされます。</p>
             </div>
           </div>
           <div>
@@ -477,7 +478,7 @@ for (let h = 0; h < 24; h++) {
   </div>
 </AdminLayout>
 
-<script is:inline define:vars={{ hotelId: id }}>
+<script is:inline define:vars={{ hotelId: id, originalCurrency: hotelCurrency }}>
 // ── Hotel Info Save ──
 async function saveHotel() {
   const btns = document.querySelectorAll('.save-btn');
@@ -505,12 +506,14 @@ async function saveHotel() {
     const res = await fetch('/api/admin/hotels', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json();
     if (res.ok && data.success) {
-      const msg = '✅ Page Updated Successfully';
+      const currencyChanged = String(body.currency || '').toUpperCase() !== String(originalCurrency || 'USD').toUpperCase();
+      const msg = currencyChanged ? '✅ 保存しました。通貨表示を反映するため、ページを再読み込みします…' : '✅ Page Updated Successfully';
       successEls.forEach(el => {
         if (!el) return;
         el.className = 'block bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3';
         el.textContent = msg;
       });
+      if (currencyChanged) setTimeout(function(){ window.location.reload(); }, 1200);
     } else {
       const msg = data.error || 'Failed to save changes.';
       errEls.forEach(el => {

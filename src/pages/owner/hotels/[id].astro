@@ -278,6 +278,7 @@ for (let h = 0; h < 24; h++) {
             All plan prices are entered in this currency. Guests always pay in USD (converted automatically at the current exchange rate).
             Changing the currency converts existing plan prices automatically — please review them afterwards.
           </p>
+          <p class="text-xs text-amber-600 mt-1">⚠️ 通貨を変更して保存すると、表示を更新するためページが自動で再読み込みされます（反映には再読み込みが必要です）。</p>
         </div>
 
         <!-- Thumbnail Upload -->
@@ -963,8 +964,13 @@ for (let h = 0; h < 24; h++) {
           throw new Error(result.error || 'Failed to submit edit request');
         }
 
-        showStatus('✅ Changes saved successfully!', false);
-        setTimeout(function() { window.location.reload(); }, 1500);
+        if (fieldChanges.currency) {
+          showStatus('✅ 保存しました。通貨表示を反映するため、ページを再読み込みします…', false);
+          setTimeout(function() { window.location.reload(); }, 1200);
+        } else {
+          showStatus('✅ Changes saved successfully!', false);
+          setTimeout(function() { window.location.reload(); }, 1500);
+        }
       } catch (err) {
         showStatus('Error: ' + err.message, true);
       } finally {
