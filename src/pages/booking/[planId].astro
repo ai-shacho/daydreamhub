@@ -348,6 +348,9 @@ try {
                   </span>
                 )}
               </div>
+              {(locale === 'ja' && plan.description_ja ? plan.description_ja : plan.description) && (
+                <p class="text-sm text-gray-600 leading-relaxed mt-2 whitespace-pre-line">{locale === 'ja' && plan.description_ja ? plan.description_ja : plan.description}</p>
+              )}
             </div>
             {timeSlot && (
               <div class="mb-4">

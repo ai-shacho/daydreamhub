@@ -336,6 +336,9 @@ const planTypeLabel = plan ? (planTypeLabels[plan.plan_type || ''] || plan.plan_
                   </span>
                 )}
               </div>
+              {(plan.description_ja || plan.description) && (
+                <p class="text-sm text-gray-600 leading-relaxed mt-2 whitespace-pre-line">{plan.description_ja || plan.description}</p>
+              )}
             </div>
             <!-- 時間帯 -->
             {timeSlot && (

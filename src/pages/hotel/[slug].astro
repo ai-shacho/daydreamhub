@@ -512,6 +512,9 @@ for (const img of images) {
                     return (
                       <div class="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow duration-200">
                         <h3 class="text-base font-semibold text-gray-900 leading-snug mb-3">{planName}</h3>
+                        {(locale === 'ja' && plan.description_ja ? plan.description_ja : plan.description) && (
+                          <p class="text-sm text-gray-600 leading-relaxed mb-3 whitespace-pre-line">{locale === 'ja' && plan.description_ja ? plan.description_ja : plan.description}</p>
+                        )}
                         <p class="text-[#45A2C1] font-bold text-xl mb-3">
                           {isUsdHotel ? (
                             <><span data-usd={plan.price_usd}>${plan.price_usd}</span> <span class="text-sm font-normal text-gray-500" data-currency-label>USD</span></>

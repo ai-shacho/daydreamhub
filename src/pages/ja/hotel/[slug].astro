@@ -183,7 +183,8 @@ if (plans.length > 0) {
     // Use dedicated plan name translator (handles 【NH】 hours correctly, no AI needed)
     const jaName = plan.name_ja || translatePlanName(plan.name);
     const jaRoomType = plan.room_type ? await translateToJa(plan.room_type) : '';
-    return { ...plan, _ja_name: jaName, _ja_room_type: jaRoomType };
+    const jaDesc = plan.description_ja || (plan.description ? await translateToJa(plan.description).catch(() => plan.description) : '');
+    return { ...plan, _ja_name: jaName, _ja_room_type: jaRoomType, _ja_desc: jaDesc };
   }));
 }
 
@@ -481,6 +482,9 @@ for (const img of images) {
                     return (
                       <div class="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow">
                         <h3 class="font-semibold text-gray-900 mb-2">{planName}</h3>
+                        {(plan._ja_desc || plan.description) && (
+                          <p class="text-sm text-gray-600 leading-relaxed mb-3 whitespace-pre-line">{plan._ja_desc || plan.description}</p>
+                        )}
                         <div class="text-sm text-gray-500 space-y-1 mb-4">
                           {plan.check_in_time && plan.check_out_time && (
                             <p>{plan.check_in_time} - {plan.check_out_time}</p>
