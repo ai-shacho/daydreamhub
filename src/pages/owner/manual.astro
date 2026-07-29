@@ -340,13 +340,24 @@ const chapters = [
 
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Editable Fields</h3>
           <ul class="space-y-2 mb-6">
-            {['Property name & description (English / Japanese)','Address, latitude, and longitude','Property type, amenities, and categories','Thumbnail URL','Gallery photos (upload up to 20 images)'].map(item => (
+            {['Property name & description (English / Japanese)','Address, latitude, and longitude','Property type, amenities, and categories','Pricing Currency (your local currency, or USD)','Thumbnail URL','Gallery photos (upload up to 20 images)'].map(item => (
               <li class="flex items-start gap-2 text-sm text-slate-700"><span class="text-indigo-500 font-bold mt-0.5">›</span><span>{item}</span></li>
             ))}
           </ul>
 
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Gallery Photos</h3>
           <p class="text-sm text-slate-600 mb-5">On the hotel detail screen, scroll to the Gallery section. You can upload up to 20 images. Drag to reorder, and click the delete button to remove individual photos.</p>
+
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Pricing Currency (Updated)</h3>
+          <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-slate-700 mb-5 space-y-2">
+            <p>💱 <strong>You can now set prices in your own local currency.</strong> On the property edit screen, choose your <strong>Pricing Currency</strong> (any currency, e.g. JPY, THB, EUR — or keep USD).</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Enter all plan prices in <strong>this currency</strong> — no need to convert to USD yourself.</li>
+              <li><strong>Guests always pay in USD.</strong> We convert your local price to USD automatically at the current exchange rate, and show guests both amounts (e.g. <span class="font-mono">¥10,000 (≈ $61.04 USD)</span>).</li>
+              <li>Payment is collected in USD via PayPal; guests may pay the on-site portion in local currency depending on your hotel.</li>
+              <li>When you change the Pricing Currency and save, existing plan prices are <strong>auto-converted</strong> once so you can review them — and the page reloads to show the new currency. Please double-check the converted prices afterwards.</li>
+            </ul>
+          </div>
 
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Managing Plans (Room Types & Pricing)</h3>
           <p class="text-sm text-slate-600 mb-3">Plans are grouped by <strong>Room Type</strong>. Each plan represents a specific booking option guests can choose.</p>
@@ -356,8 +367,7 @@ const chapters = [
               <tbody>
                 <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Room Type</td><td class="px-4 py-3 text-slate-600">Group plans by room type (e.g., Standard Twin, Deluxe Suite)</td></tr>
                 <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Plan Name</td><td class="px-4 py-3 text-slate-600">Display name for the plan (English and Japanese)</td></tr>
-                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Weekday Price</td><td class="px-4 py-3 text-slate-600">Base price in USD (Monday–Friday)</td></tr>
-                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Weekend Price</td><td class="px-4 py-3 text-slate-600">Optional higher price for Saturday/Sunday</td></tr>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Price</td><td class="px-4 py-3 text-slate-600">Plan price in your hotel's Pricing Currency. Guests are charged the USD equivalent (auto-converted at the current rate).</td></tr>
                 <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Max Guests</td><td class="px-4 py-3 text-slate-600">Maximum number of guests per booking</td></tr>
                 <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Check-in / Check-out</td><td class="px-4 py-3 text-slate-600">Available time slots (30-minute intervals)</td></tr>
                 <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Plan Type</td><td class="px-4 py-3 text-slate-600">Daycation, Morning, Afternoon, Evening, Overnight, Hourly, etc.</td></tr>
