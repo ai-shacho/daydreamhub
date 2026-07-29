@@ -48,12 +48,29 @@ export function formatDualPrice(localAmount: number, currency: string, rates: Re
   return usd == null ? local : `${local} (≈ ${formatMoney(usd, 'USD')})`;
 }
 
-// Curated choices for hotel pricing-currency selectors (owner/admin UIs).
+// Fallback list if the exchange-rate API is unavailable (owner/admin selectors
+// prefer the full live list via supportedCurrencyCodes()).
 export const CURRENCY_CHOICES = [
   'USD', 'EUR', 'GBP', 'JPY', 'GEL', 'EGP', 'AED', 'TRY', 'MAD', 'KES',
   'NGN', 'ZAR', 'THB', 'PHP', 'IDR', 'INR', 'VND', 'MXN', 'CAD', 'AUD',
   'SGD', 'HKD', 'KRW', 'CNY', 'AMD', 'AZN', 'RSD', 'UZS',
 ];
+
+// Every currency the free exchange-rate API supports (~160), USD first then
+// alphabetical. Used to populate the hotel pricing-currency selectors so any
+// hotel can price in its own currency. Falls back to CURRENCY_CHOICES.
+export async function supportedCurrencyCodes(db: any): Promise<string[]> {
+  try {
+    const { getExchangeRates } = await import('./tools');
+    const rates = await getExchangeRates(db);
+    const codes = Object.keys(rates || {}).filter((c) => /^[A-Z]{3}$/.test(c));
+    if (codes.length > 5) {
+      const rest = codes.filter((c) => c !== 'USD').sort();
+      return ['USD', ...rest];
+    }
+  } catch { /* fall through */ }
+  return CURRENCY_CHOICES;
+}
 
 export function isValidCurrencyCode(code: unknown): code is string {
   return typeof code === 'string' && /^[A-Z]{3}$/.test(code);

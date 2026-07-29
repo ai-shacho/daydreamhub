@@ -804,16 +804,7 @@ for (const img of images) {
   };
   document.head.appendChild(fpScript);
 
-  // Show currency notice only for non-USD
-  (function() {
-    var noticeEls = document.querySelectorAll('[data-currency-usd-notice]');
-    if (!noticeEls.length) return;
-    var currency = localStorage.getItem('ddh_currency') || 'USD';
-    var show = currency !== 'USD';
-    noticeEls.forEach(function(el) {
-      el.classList.toggle('hidden', !show);
-    });
-  })();
+  // USD-settlement notice visibility is server-rendered (non-USD hotels only).
 
   // Book Now button handler
   document.querySelectorAll('.book-now-btn').forEach(function(btn) {

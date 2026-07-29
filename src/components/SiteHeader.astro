@@ -78,26 +78,7 @@ const { currentPath, isJa, enPath, jaPath, currentUser, getPath } = Astro.props;
 
         <!-- Right side controls -->
         <div class="flex items-center gap-2">
-          <!-- Currency selector (custom dropdown) -->
-          <div class="hidden sm:flex items-center relative">
-            <button id="currency-btn" class="flex items-center gap-1 text-gray-600 hover:text-gray-900 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors text-xs font-medium">
-              <span id="currency-btn-label">USD $</span>
-              <svg class="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div id="currency-dropdown" class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-50 w-28 hidden max-h-72 overflow-y-auto">
-              {[
-                {v:'USD',l:'USD $'},{v:'EUR',l:'EUR €'},{v:'JPY',l:'JPY ¥'},
-                {v:'THB',l:'THB ฿'},{v:'GBP',l:'GBP £'},{v:'AUD',l:'AUD $'},
-                {v:'MYR',l:'MYR RM'},{v:'SGD',l:'SGD $'},{v:'IDR',l:'IDR Rp'},
-                {v:'VND',l:'VND ₫'},{v:'PHP',l:'PHP ₱'},{v:'KRW',l:'KRW ₩'},
-                {v:'AED',l:'AED د.إ'},{v:'INR',l:'INR ₹'}
-              ].map(c => (
-                <button data-currency={c.v} class="currency-option w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center justify-between">
-                  {c.l}
-                </button>
-              ))}
-            </div>
-          </div>
+          <!-- Currency selector removed: each hotel shows its own local currency + USD, payment in USD. -->
 
           <!-- Language toggle -->
           <div class="hidden sm:flex items-center relative">

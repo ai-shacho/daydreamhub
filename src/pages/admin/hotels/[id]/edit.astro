@@ -1,7 +1,7 @@
 ---
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from '../../../../lib/propertyTypes';
-import { CURRENCY_CHOICES, ZERO_DECIMAL_CURRENCIES } from '../../../../lib/currency';
+import { supportedCurrencyCodes, ZERO_DECIMAL_CURRENCIES } from '../../../../lib/currency';
 
 const { id } = Astro.params;
 const db = (Astro.locals as any).runtime?.env?.DB;
@@ -24,9 +24,10 @@ if (!db) {
 const hotelCurrency = String(hotel?.currency || 'USD').toUpperCase();
 const isUsdHotel = hotelCurrency === 'USD';
 const priceStep = ZERO_DECIMAL_CURRENCIES.has(hotelCurrency) ? '1' : '0.01';
-const currencyOptions = CURRENCY_CHOICES.includes(hotelCurrency)
-  ? CURRENCY_CHOICES
-  : [hotelCurrency, ...CURRENCY_CHOICES];
+const _allCurrencies = await supportedCurrencyCodes(db);
+const currencyOptions = _allCurrencies.includes(hotelCurrency)
+  ? _allCurrencies
+  : [hotelCurrency, ..._allCurrencies];
 
 const currentAmenities: string[] = hotel ? (() => { try { return JSON.parse(hotel.amenities || '[]'); } catch { return []; } })() : [];
 

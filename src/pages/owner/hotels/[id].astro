@@ -2,7 +2,7 @@
 import OwnerLayout from '../../../layouts/OwnerLayout.astro';
 import { verifyOwner, getOwnerHotelIds, getStaffRole, canEditHotels } from '../../../lib/ownerAuth';
 import { PROPERTY_TYPES, PROPERTY_TYPE_LABELS } from '../../../lib/propertyTypes';
-import { CURRENCY_CHOICES, ZERO_DECIMAL_CURRENCIES } from '../../../lib/currency';
+import { supportedCurrencyCodes, ZERO_DECIMAL_CURRENCIES } from '../../../lib/currency';
 
 const runtime = Astro.locals.runtime as any;
 const db = runtime?.env?.DB;
@@ -46,9 +46,10 @@ if (db) {
 const hotelCurrency = String((hotel as any)?.currency || 'USD').toUpperCase();
 const isUsdHotel = hotelCurrency === 'USD';
 const priceStep = ZERO_DECIMAL_CURRENCIES.has(hotelCurrency) ? '1' : '0.01';
-const currencyOptions = CURRENCY_CHOICES.includes(hotelCurrency)
-  ? CURRENCY_CHOICES
-  : [hotelCurrency, ...CURRENCY_CHOICES];
+const _allCurrencies = await supportedCurrencyCodes(db);
+const currencyOptions = _allCurrencies.includes(hotelCurrency)
+  ? _allCurrencies
+  : [hotelCurrency, ..._allCurrencies];
 
 // room_typeでプランをグループ化
 const plansByRoomType: Record<string, any[]> = {};
