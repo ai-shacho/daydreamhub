@@ -1,4 +1,5 @@
 import { getAccessToken, refundCapture, resolvePayPalConfig } from './paypal';
+import { geoNameEn } from './geoJa';
 
 const LANGUAGE_MAP: Record<string, { code: string; name: string; nativeName: string; greeting: string; currency: string }> = {
   en: { code: "en", name: "English", nativeName: "English", greeting: "Hi there! This is Sarah from DayDreamHub. Thank you for your time.", currency: "USD" },
@@ -160,7 +161,10 @@ export async function searchHotelsInternal(env: any, params: any) {
   const db = env.DB;
   const conditions = ["h.status = 'active'"];
   const binds: any[] = [];
-  const cityNormalized = stripDiacritics(params.city.toLowerCase());
+  // Accept Japanese / katakana city names (e.g. バンコク → Bangkok) so ja-page
+  // users hit the English city values stored in the DB.
+  const cityEnglish = geoNameEn(params.city);
+  const cityNormalized = stripDiacritics(String(cityEnglish).toLowerCase());
   const cityLike = `%${cityNormalized}%`;
 
   const stripAccentsSql = (col: string) =>
@@ -270,7 +274,8 @@ const MIN_USER_RATING_COUNT = 50;
 const MAX_USER_RATING_COUNT = 5000;
 
 export async function searchHotelsExternal(env: any, params: any) {
-  const cityInput = (params.city || params.query || "").toString().trim().toLowerCase();
+  const cityEnglish = geoNameEn(params.city || params.query || "");
+  const cityInput = String(cityEnglish).trim().toLowerCase();
   // テスト用モック: staging 環境（DDH_ENV=staging）のみ。東京を含むクエリで
   // AI電話発信テスト用の非提携ホテルを返す。本番では実際の外部検索が走る。
   if ((cityInput.includes("tokyo") || cityInput.includes("東京")) && String(env?.DDH_ENV || "").toLowerCase() === "staging") {

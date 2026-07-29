@@ -71,3 +71,21 @@ export function geoNameJa(name: unknown): string {
   if (!s) return s;
   return GEO_JA[s.toLowerCase()] || s;
 }
+
+// Reverse index: Japanese / katakana place name → canonical English name.
+// Lets ja-page users type "バンコク" / "東京" and still hit the English city
+// values stored in the DB. Unknown inputs fall back to the original string.
+const GEO_EN: Record<string, string> = (() => {
+  const m: Record<string, string> = {};
+  for (const [en, ja] of Object.entries(GEO_JA)) {
+    // First English spelling wins (keeps canonical casing, e.g. 'Bangkok').
+    if (!(ja in m)) m[ja] = en.charAt(0).toUpperCase() + en.slice(1);
+  }
+  return m;
+})();
+
+export function geoNameEn(name: unknown): string {
+  const s = String(name ?? '').trim();
+  if (!s) return s;
+  return GEO_EN[s] || s;
+}
