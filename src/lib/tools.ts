@@ -801,7 +801,7 @@ export async function initiateCall(env: any, db: any, sessionId: string, callId:
   }
 
   try {
-    const baseUrl = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || 'https://daydreamhub.com').replace(/\/$/, '');
+    const baseUrl = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || (String(env?.DDH_ENV || '').toLowerCase() === 'staging' ? 'https://staging.daydreamhub-1sv.pages.dev' : 'https://daydreamhub.com')).replace(/\/$/, '');
 
     let callProviderId = '';
 

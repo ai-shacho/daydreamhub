@@ -143,7 +143,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     check_out_time: String(body?.check_out_time || '').trim(),
   };
 
-  const baseUrl = toHttpsOrigin(env?.PUBLIC_BASE_URL, env?.SITE_URL);
+  // Webhook must hit the SAME environment that stored the call log, so the
+  // TwiML can read booking-test meta. Fall back to the request origin
+  // (staging→staging, prod→prod) instead of a hardcoded production URL.
+  const baseUrl = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || new URL(request.url).origin).replace(/\/$/, '');
 
   let callLogId: number | null = null;
   try {
