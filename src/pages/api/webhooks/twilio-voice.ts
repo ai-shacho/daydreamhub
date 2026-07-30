@@ -1397,7 +1397,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         const detailAction = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, 0);
         return twiml(
-          `${sayText(`Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${finalAmount != null ? `${finalAmount} ${spokenCurrency}` : 'the agreed amount'}, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. `)}` +
+          `${sayText(`Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${finalAmount != null ? `${finalAmount} ${spokenCurrency}` : 'the agreed amount'}, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details. `)}` +
           `<Pause length="1"/>` +
           `${sayText(`For your immediate records, I will share the guest details slowly.`)}` +
           `<Pause length="1"/>` +
@@ -1448,10 +1448,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         );
       }
       if (isYes(speech, digits)) {
-        return twiml(`<Say voice="${VOICE}">Thank you. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
-        return twiml(`<Say voice="${VOICE}">Thank you for your time. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, turn + 1);
       return gatherTwiml(action, 'If you want the guest details repeated slowly, press 3 or say repeat. Otherwise, press 1 or say yes to finish this call.', { slow: true });
