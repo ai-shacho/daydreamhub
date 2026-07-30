@@ -378,7 +378,7 @@ for (let h = 0; h < 24; h++) {
       <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
         <div>
           <h2 class="text-base font-semibold text-slate-900">Gallery Images</h2>
-          <p class="mt-0.5 text-xs text-slate-500">Up to 20 images. Click × to remove.</p>
+          <p class="mt-0.5 text-xs text-slate-500">Up to 20 images. Click × to remove. <span class="text-emerald-600 font-medium">Saved automatically on upload — no need to click Save Changes.</span></p>
         </div>
         <div class="flex items-center gap-2">
           <span id="gallery-count" class="text-xs text-slate-400">{galleryImages.length}/20</span>
@@ -965,7 +965,7 @@ for (let h = 0; h < 24; h++) {
 
         // Check if there are changes
         if (Object.keys(fieldChanges).length === 0) {
-          showStatus('No changes to submit.', true);
+          showStatus('No text changes to save. Note: thumbnail and gallery photos are saved automatically the moment you upload them — you do not need to click Save Changes for images.', false);
           btn.disabled = false;
           btn.innerHTML = 'Save Changes';
           btnBottom.disabled = false;
