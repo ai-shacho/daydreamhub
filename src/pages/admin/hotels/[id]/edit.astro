@@ -62,17 +62,31 @@ for (let h = 0; h < 24; h++) {
 <AdminLayout title={hotel ? `Edit: ${hotel.name}` : 'Edit Hotel'} activeNav="hotels">
   <div class="max-w-3xl mx-auto px-4 py-8">
 
-    <!-- Header -->
-    <div class="flex items-center gap-3 mb-6">
-      <a href={`/admin/hotels/${id}`} class="text-gray-400 hover:text-gray-600 transition-colors">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-        </svg>
-      </a>
-      <div>
-        <h1 class="text-xl font-bold text-slate-900">Edit Hotel Info</h1>
-        {hotel && <p class="text-sm text-slate-500">{hotel.name}</p>}
+    <!-- Sticky header: title + jump menu + save -->
+    <div class="sticky top-0 z-30 -mx-4 px-4 py-3 mb-6 bg-slate-50/95 backdrop-blur border-b border-slate-200">
+      <div class="flex items-center gap-3">
+        <a href={`/admin/hotels/${id}`} class="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+        </a>
+        <div class="min-w-0 flex-1">
+          <h1 class="text-lg font-bold text-slate-900 truncate">Edit Hotel Info</h1>
+          {hotel && <p class="text-xs text-slate-500 truncate">{hotel.name}</p>}
+        </div>
+        {hotel && (
+          <button type="button" class="save-btn flex-shrink-0 bg-teal-600 hover:bg-teal-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm shadow-sm">
+            Save Changes
+          </button>
+        )}
       </div>
+      {hotel && (
+        <nav class="mt-2 flex flex-wrap gap-1.5 text-xs">
+          {[['sec-basic','Basic Information'],['sec-gallery','Gallery Images'],['sec-description','Description'],['sec-location','Location'],['sec-contact','Contact'],['sec-system','System Settings'],['sec-amenities','Amenities'],['sec-plans','Plans']].map(([id,label]) => (
+            <a href={`#${id}`} class="px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-600 hover:border-teal-400 hover:text-teal-700 transition-colors">{label}</a>
+          ))}
+        </nav>
+      )}
     </div>
 
     {error && (
@@ -99,7 +113,7 @@ for (let h = 0; h < 24; h++) {
 
         <!-- Basic Info -->
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Basic Information</h2>
+          <span id="sec-basic" class="block -mt-24 pt-24"></span><h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Basic Information</h2>
 
           <div class="space-y-4">
             <div>
@@ -160,7 +174,7 @@ for (let h = 0; h < 24; h++) {
 
         <!-- Gallery Images -->
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Gallery Images</h2>
+          <span id="sec-gallery" class="block -mt-24 pt-24"></span><h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Gallery Images</h2>
           <p class="text-xs text-gray-500">Drag and drop to reorder. The first image will be shown as the main photo.</p>
 
           <!-- Upload button -->
@@ -182,7 +196,7 @@ for (let h = 0; h < 24; h++) {
 
         <!-- Description -->
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Description</h2>
+          <span id="sec-description" class="block -mt-24 pt-24"></span><h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Description</h2>
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">Description (EN)</label>
             <textarea name="description" rows={4}
@@ -205,7 +219,7 @@ for (let h = 0; h < 24; h++) {
 
         <!-- Location -->
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Location</h2>
+          <span id="sec-location" class="block -mt-24 pt-24"></span><h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Location</h2>
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-1">City</label>
@@ -254,7 +268,7 @@ for (let h = 0; h < 24; h++) {
 
         <!-- Contact -->
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Contact</h2>
+          <span id="sec-contact" class="block -mt-24 pt-24"></span><h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Contact</h2>
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
@@ -271,7 +285,7 @@ for (let h = 0; h < 24; h++) {
 
         <!-- System -->
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">System Settings</h2>
+          <span id="sec-system" class="block -mt-24 pt-24"></span><h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">System Settings</h2>
           <!-- ICAL_HIDDEN_START - iCal URL field hidden. Remove this comment block to restore.
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">iCal URL</label>
@@ -289,7 +303,7 @@ for (let h = 0; h < 24; h++) {
 
         <!-- Amenities -->
         <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Amenities</h2>
+          <span id="sec-amenities" class="block -mt-24 pt-24"></span><h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Amenities</h2>
           <div class="space-y-2">
             {COMMON_AMENITIES.map(a => (
               <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
@@ -326,7 +340,7 @@ for (let h = 0; h < 24; h++) {
       <!-- Plans Section (separate from main form) -->
       <div class="mt-8 bg-white rounded-xl border border-gray-200 p-6">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Plans</h2>
+          <span id="sec-plans" class="block -mt-24 pt-24"></span><h2 class="text-sm font-semibold text-teal-700 uppercase tracking-wide">Plans</h2>
           <button id="add-plan-btn" class="text-sm bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg transition-colors">
             + Add Plan
           </button>
