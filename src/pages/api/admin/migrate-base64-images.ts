@@ -61,6 +61,39 @@ export const GET: APIRoute = async ({ request, locals }) => {
     return new Response(JSON.stringify({ error: 'R2 (IMAGES) binding not available' }), { status: 503, headers: json });
   }
 
+  // ?images=1 → migrate base64 entries inside the hotels.images JSON array.
+  if (url.searchParams.get('images') === '1') {
+    const imgRows: any[] = await db.prepare(
+      "SELECT id, images FROM hotels WHERE images LIKE '%data:image%' ORDER BY id LIMIT ?"
+    ).bind(limit).all().then((r: any) => r?.results || []);
+    const done: any[] = [];
+    for (const row of imgRows) {
+      let arr: any[];
+      try { arr = JSON.parse(row.images); } catch { done.push({ id: row.id, skipped: 'images not JSON' }); continue; }
+      if (!Array.isArray(arr)) { done.push({ id: row.id, skipped: 'images not an array' }); continue; }
+      let changed = 0;
+      const out: any[] = [];
+      for (const item of arr) {
+        const parsed = typeof item === 'string' ? parseDataUri(item) : null;
+        if (!parsed) { out.push(item); continue; }
+        const key = `hotels/${row.id}/img-${Date.now()}-${out.length}.${extFromMime(parsed.mime)}`;
+        try {
+          if (!dry) await r2.put(key, parsed.bytes, { httpMetadata: { contentType: parsed.mime } });
+          out.push(`/hotel-images/${key}`); changed++;
+        } catch (e: any) {
+          console.error('[migrate-base64 images] ERROR', { id: row.id, message: e?.message || String(e) });
+          out.push(item);
+        }
+      }
+      if (changed > 0 && !dry) {
+        await db.prepare('UPDATE hotels SET images = ? WHERE id = ?').bind(JSON.stringify(out), row.id).run();
+      }
+      done.push({ id: row.id, replaced: changed, kept: out.length - changed });
+    }
+    const rem: any = await db.prepare("SELECT COUNT(*) AS c FROM hotels WHERE images LIKE '%data:image%'").first();
+    return new Response(JSON.stringify({ dry, target: 'images', processed: done.length, done, images_json_remaining: rem?.c || 0 }, null, 2), { headers: json });
+  }
+
   const rows: any[] = await db.prepare(
     "SELECT id, thumbnail_url FROM hotels WHERE thumbnail_url LIKE 'data:image%' ORDER BY id LIMIT ?"
   ).bind(limit).all().then((r: any) => r?.results || []);
