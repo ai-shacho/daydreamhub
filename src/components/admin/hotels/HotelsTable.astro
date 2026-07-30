@@ -65,6 +65,12 @@ const { hotels, error, sortLink, sortIcon } = Astro.props;
 
               <td class="px-4 py-3">
                 <a href={`/admin/hotels/${hotel.id}`} class="font-medium text-teal-700 hover:underline">{hotel.name}</a>
+                {!hotel.is_active && hotel.review_requested_at && (
+                  <span class="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200 align-middle">⏳ Review requested</span>
+                )}
+                {!hotel.is_active && !hotel.review_requested_at && hotel.review_changes_requested_at && (
+                  <span class="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200 align-middle">Changes requested</span>
+                )}
                 {hotel.name_ja && <div class="text-xs text-slate-400 mt-0.5">{hotel.name_ja}</div>}
                 <div class="text-xs text-slate-400 mt-0.5">{hotel.property_type || "Hotel"}</div>
               </td>

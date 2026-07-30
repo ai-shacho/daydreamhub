@@ -835,6 +835,53 @@ export async function sendReviewRequestNotification(
   });
 }
 
+// Sent to owner when admin reviews the listing and asks for changes before
+// publishing. Clears the "under review" state so the owner can revise and
+// re-submit. Includes the reviewer's feedback.
+export async function sendListingChangesRequestedEmail(
+  apiKey: string,
+  data: { ownerName: string; ownerEmail: string; hotelName: string; hotelId: number; feedback: string }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = `Changes requested for your listing – ${data.hotelName}`;
+  const feedbackHtml = escapeHtml(data.feedback || '').replace(/\n/g, '<br>');
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#b45309;color:white;padding:24px;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:20px">Changes requested</h1>
+    <p style="margin:8px 0 0;opacity:0.9">${escapeHtml(data.hotelName)}</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+    <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.ownerName)}</strong> 👋</p>
+    <p style="color:#374151;line-height:1.6">
+      Thank you for submitting your listing for review. Before we can publish it, our team would like you to update a few things:
+    </p>
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:16px;margin:16px 0;color:#92400e;line-height:1.6">
+      ${feedbackHtml || 'Please review your listing details and resubmit.'}
+    </div>
+    <p style="color:#374151;line-height:1.6">
+      Please open your listing, make the updates, and click <strong>Request review</strong> again. We'll take another look right away.
+    </p>
+    <div style="text-align:center;margin:24px 0">
+      <a href="${SITE_URL}/owner/hotels/${data.hotelId}"
+         style="display:inline-block;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:bold">
+        Edit my listing →
+      </a>
+    </div>
+    <p style="color:#6b7280;font-size:14px;line-height:1.6">
+      Questions? Reply to this email or contact us at <a href="mailto:contact@daydreamhub.com" style="color:#4f46e5">contact@daydreamhub.com</a>.
+    </p>
+    ${emailFooter()}
+  </div>
+</div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.ownerEmail,
+    subject,
+    html,
+  });
+}
+
 // Sent to owner when admin sets is_active = 1 (listing approved)
 export async function sendListingApprovedEmail(
   apiKey: string,

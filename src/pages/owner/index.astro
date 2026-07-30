@@ -33,7 +33,7 @@ if (db) {
   try {
     // inactive ホテル（セットアップ中）を取得
     const inactiveRes = await db.prepare(
-      "SELECT id, name, slug, description, images, review_requested_at FROM hotels WHERE email = ? AND is_active = 0 LIMIT 1"
+      "SELECT id, name, slug, description, images, review_requested_at, review_changes_requested_at, review_feedback FROM hotels WHERE email = ? AND is_active = 0 LIMIT 1"
     ).bind(owner.email).first() as any;
     if (inactiveRes) {
       setupHotel = inactiveRes;
@@ -167,9 +167,11 @@ const quickActions = [
           <h3 class="text-white font-bold text-base">Setup Guide — {setupHotel.name}</h3>
           <p class="text-teal-100 text-sm mt-0.5">Complete the steps below to get your listing published.</p>
         </div>
-        {setupHotel.review_requested_at && (
+        {setupHotel.review_requested_at ? (
           <span class="bg-amber-400 text-amber-900 text-xs font-semibold px-3 py-1 rounded-full">Under Review</span>
-        )}
+        ) : setupHotel.review_changes_requested_at ? (
+          <span class="bg-rose-100 text-rose-700 text-xs font-semibold px-3 py-1 rounded-full">Changes Requested</span>
+        ) : null}
       </div>
       <div class="divide-y divide-slate-100">
         {/* Step 1: 施設情報 */}
@@ -262,16 +264,31 @@ const quickActions = [
         {(() => {
           const allReady = !!setupHotel.description && setupPlansCount >= 1;
           const requested = !!setupHotel.review_requested_at;
+          const changesRequested = !requested && !!setupHotel.review_changes_requested_at;
+          const buttonLabel = changesRequested ? 'Resubmit for review →' : 'Request review →';
           return (
             <div class={`flex items-center gap-4 px-6 py-4 ${requested ? 'opacity-60' : ''}`}>
-              <div class={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${requested ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-400'}`}>
-                {requested ? '✓' : '5'}
+              <div class={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${requested ? 'bg-teal-100 text-teal-700' : changesRequested ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-400'}`}>
+                {requested ? '✓' : changesRequested ? '!' : '5'}
               </div>
               <div class="flex-1">
                 <p class={`text-sm font-medium ${requested ? 'text-slate-400 line-through' : 'text-slate-800'}`}>Request listing review</p>
-                <p class="text-xs text-slate-400">
-                  {requested ? `Requested on ${formatDisplayDate(setupHotel.review_requested_at)}. DayDreamHub will review and publish your listing.` : 'Submit your listing to DayDreamHub for final review.'}
-                </p>
+                {requested && (
+                  <p class="text-xs text-slate-400">
+                    Requested on {formatDisplayDate(setupHotel.review_requested_at)}. DayDreamHub will review and publish your listing.
+                  </p>
+                )}
+                {changesRequested && (
+                  <div class="mt-1">
+                    <p class="text-xs text-rose-600 font-medium">Changes requested on {formatDisplayDate(setupHotel.review_changes_requested_at)}. Please update your listing and resubmit.</p>
+                    {setupHotel.review_feedback && (
+                      <div class="mt-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 whitespace-pre-line">{setupHotel.review_feedback}</div>
+                    )}
+                  </div>
+                )}
+                {!requested && !changesRequested && (
+                  <p class="text-xs text-slate-400">Submit your listing to DayDreamHub for final review.</p>
+                )}
               </div>
               {!requested && allReady && (
                 <button
@@ -279,7 +296,7 @@ const quickActions = [
                   data-hotel-id={setupHotel.id}
                   class="flex-shrink-0 px-4 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700"
                 >
-                  Request review →
+                  {buttonLabel}
                 </button>
               )}
               {!requested && !allReady && (

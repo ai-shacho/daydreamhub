@@ -29,7 +29,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (hotel.review_requested_at) return new Response(JSON.stringify({ error: 'Review already requested' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
 
   const now = new Date().toISOString();
-  await db.prepare('UPDATE hotels SET review_requested_at = ? WHERE id = ?').bind(now, hotelId).run();
+  // (Re-)submitting for review clears any prior "changes requested" state.
+  await db.prepare(
+    'UPDATE hotels SET review_requested_at = ?, review_changes_requested_at = NULL, review_feedback = NULL WHERE id = ?'
+  ).bind(now, hotelId).run();
 
   const resendKey = env?.RESEND_API_KEY;
   if (resendKey) {

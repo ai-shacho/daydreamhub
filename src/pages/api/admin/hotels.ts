@@ -130,6 +130,15 @@ export const PUT: APIRoute = async ({ request, locals }) => {
     params.push(fields.status === 'active' ? 1 : 0);
   }
 
+  // When a hotel becomes published, clear any pending review state so it no
+  // longer shows up in the "Review requested" queue or as "Changes requested".
+  const becomingActive = fields.status === 'active' || fields.is_active == 1;
+  if (becomingActive) {
+    updates.push('review_requested_at = NULL');
+    updates.push('review_changes_requested_at = NULL');
+    updates.push('review_feedback = NULL');
+  }
+
   // If coordinates changed manually, clear the verified flag so Map Check re-evaluates.
   if ('latitude' in fields || 'longitude' in fields) {
     updates.push('coords_verified_at = NULL');
