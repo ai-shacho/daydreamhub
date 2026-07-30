@@ -1270,12 +1270,12 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
         if (phase === 'concierge') {
           await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'unavailable', 'hotel_declined_dayuse');
-          return twiml(`<Say voice="${VOICE}">Understood. We currently have guests seeking day-use stays in your area. We may follow up to discuss whether a day-use plan could work for your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
+          return twiml(`<Say voice="${VOICE}">One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
         }
         if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="${VOICE}">Understood. We currently have guests seeking day-use stays in your area. We may follow up to discuss whether a day-use plan could work for your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_dayuse_no_answer', callSid ? `twilio:${callSid}` : undefined);
@@ -1340,7 +1340,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           if (phase === 'concierge') {
             await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `all_plans_over_budget;prices=${confirmedPrices.join(',')};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: lowest });
           }
-          return twiml(`<Say voice="${VOICE}">Thank you for confirming. Unfortunately, the offered ${confirmedPrices.length === 1 ? 'plan is' : 'plans are'} above our guest's budget, so we cannot proceed with the booking this time. We appreciate your time. Goodbye.</Say><Hangup/>`);
+          return twiml(`<Say voice="${VOICE}">Thank you for confirming. Unfortunately, the offered ${confirmedPrices.length === 1 ? 'plan is' : 'plans are'} above our guest's budget, so we cannot proceed with the booking this time. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. We appreciate your time. Goodbye.</Say><Hangup/>`);
         }
         // Cheapest plan within budget wins → confirm the booking with the hotel.
         const amount = Math.min(...withinBudget);
@@ -1371,7 +1371,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           if (phase === 'concierge') {
             await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `corrected_price_over_budget;price=${amount};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: amount });
           }
-          return twiml(`<Say voice="${VOICE}">Thank you. Unfortunately that amount is above our guest's budget, so we cannot proceed with the booking this time. We appreciate your time. Goodbye.</Say><Hangup/>`);
+          return twiml(`<Say voice="${VOICE}">Thank you. Unfortunately that amount is above our guest's budget, so we cannot proceed with the booking this time. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. We appreciate your time. Goodbye.</Say><Hangup/>`);
         }
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price_corrected:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
@@ -1397,7 +1397,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         const detailAction = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, 0);
         return twiml(
-          `${sayText(`Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${finalAmount != null ? `${finalAmount} ${spokenCurrency}` : 'the agreed amount'}, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details.`)}` +
+          `${sayText(`Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${finalAmount != null ? `${finalAmount} ${spokenCurrency}` : 'the agreed amount'}, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. `)}` +
           `<Pause length="1"/>` +
           `${sayText(`For your immediate records, I will share the guest details slowly.`)}` +
           `<Pause length="1"/>` +
@@ -1419,7 +1419,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         } else if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your answer. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your answer. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_confirm_no_answer', callSid ? `twilio:${callSid}` : undefined);
