@@ -1253,7 +1253,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_dayuse_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
         const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0);
-        return gatherTwiml(action, `What is the final total price in ${spokenCurrency}, including all service fees and taxes? If you have several plans, you can share up to three prices. On the keypad, enter amounts separated by the star key, then press the hash key. The guest will pay the hotel directly on-site.`, { timeout: 10, finishOnKey: '#', preface: 'Thank you.' });
+        return gatherTwiml(action, `Please enter the total price for the guest using your phone keypad, then press the pound key. For example, for fifty ${spokenCurrency}, press five, zero, then pound. If you have more than one plan, enter each price separated by the star key, then press pound. You may also say the amount, but keypad entry is more accurate. The guest will pay the hotel directly on-site.`, { timeout: 10, finishOnKey: '#', preface: 'Thank you.' });
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
@@ -1280,7 +1280,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (step === 'ask_price') {
       if (isRepeat(speech, digits)) {
         const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
-        return gatherTwiml(action, `What is the final total price in ${spokenCurrency}, including all service fees and taxes? If you have several plans, you can share up to three prices. On the keypad, enter amounts separated by the star key, then press the hash key. The guest will pay the hotel directly on-site.`, { timeout: 10, finishOnKey: '#' });
+        return gatherTwiml(action, `Please enter the total price for the guest using your phone keypad, then press the pound key. For example, for fifty ${spokenCurrency}, press five, zero, then pound. If you have more than one plan, enter each price separated by the star key, then press pound. You may also say the amount, but keypad entry is more accurate. The guest will pay the hotel directly on-site.`, { timeout: 10, finishOnKey: '#' });
       }
       const amounts = parsePrices(speech, digits);
       if (amounts.length > 0) {
@@ -1297,7 +1297,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         const amount = Math.min(...withinBudget);
         await updateCallLog(db, logId, 'awaiting_response', `twilio_prices:${amounts.join('/')};twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: Confirming price ${amount} (offered: ${amounts.join(', ')})`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, 0);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`, { preface: 'Thank you.' });
+        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, enter the correct amount on the keypad and press the pound key, or say the amount.`, { preface: 'Thank you.' });
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
@@ -1307,7 +1307,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
-      return gatherTwiml(action, `Could you please repeat the final total price in ${spokenCurrency}, including all service fees and taxes? You may share up to three plan prices. You can also enter amounts on the keypad separated by the star key, then press the hash key.`);
+      return gatherTwiml(action, `Sorry, I didn't catch that. Please enter the total price on your phone keypad and press pound. For multiple plans, separate each price with the star key, then press pound.`);
     }
 
     if (step === 'confirm_booking') {
@@ -1323,7 +1323,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price_corrected:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
+        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, enter the correct amount on the keypad and press the pound key, or say the amount.`);
       }
       if (isYes(speech, digits)) {
         const finalAmount = quotedAmountFromNote;
@@ -1378,7 +1378,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
       if (quotedAmountFromNote != null) {
-        return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please say the correct amount, or enter the amount and then press the hash key.`);
+        return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, enter the correct amount on the keypad and press the pound key, or say the amount.`);
       }
       return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes to confirm. Press 2 or say no to decline. You can also provide a corrected amount.');
     }
