@@ -68,15 +68,21 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const migrated: any[] = [];
   for (const row of rows) {
     const parsed = parseDataUri(row.thumbnail_url);
-    if (!parsed) { migrated.push({ id: row.id, skipped: 'unparseable data URI' }); continue; }
+    if (!parsed) {
+      console.error('[migrate-base64] parse failed', { id: row.id, prefix: String(row.thumbnail_url).slice(0, 40) });
+      migrated.push({ id: row.id, skipped: 'unparseable data URI' });
+      continue;
+    }
     const key = `hotels/${row.id}/thumb-${Date.now()}.${extFromMime(parsed.mime)}`;
     const newUrl = `/hotel-images/${key}`;
     if (dry) { migrated.push({ id: row.id, bytes: parsed.bytes.length, wouldBecome: newUrl }); continue; }
     try {
       await r2.put(key, parsed.bytes, { httpMetadata: { contentType: parsed.mime } });
-      await db.prepare("UPDATE hotels SET thumbnail_url = ?, updated_at = datetime('now') WHERE id = ?").bind(newUrl, row.id).run();
-      migrated.push({ id: row.id, bytes: parsed.bytes.length, newUrl, ok: true });
+      const upd: any = await db.prepare("UPDATE hotels SET thumbnail_url = ?, updated_at = datetime('now') WHERE id = ?").bind(newUrl, row.id).run();
+      console.error('[migrate-base64] ok', { id: row.id, bytes: parsed.bytes.length, changes: upd?.meta?.changes });
+      migrated.push({ id: row.id, bytes: parsed.bytes.length, newUrl, changes: upd?.meta?.changes ?? null, ok: true });
     } catch (e: any) {
+      console.error('[migrate-base64] ERROR', { id: row.id, message: e?.message || String(e) });
       migrated.push({ id: row.id, error: e?.message || String(e) });
     }
   }
