@@ -25,6 +25,7 @@ type Step =
   | 'outreach_phase_callback_email'
   | 'ask_dayuse'
   | 'ask_price'
+  | 'confirm_prices'
   | 'confirm_booking'
   | 'confirm_booking_details';
 
@@ -92,6 +93,14 @@ function toAmPm(timeRaw: unknown): string {
   return `${h}:${min} ${suffix}`;
 }
 
+function readPricesFromNote(note: unknown): number[] {
+  const n = String(note ?? '');
+  const matches = [...n.matchAll(/twilio_prices:([0-9.\/]+)/g)];
+  if (!matches.length) return [];
+  const last = matches[matches.length - 1]?.[1] || '';
+  return last.split('/').map((x) => Number(x)).filter((v) => Number.isFinite(v) && v > 0).slice(0, 3);
+}
+
 function readQuotedAmountFromNote(note: unknown): number | null {
   const n = String(note ?? '');
   const matches = [...n.matchAll(/twilio_price(?:_corrected)?:([0-9]+(?:\.[0-9]+)?)/g)];
@@ -141,6 +150,7 @@ function normalizeStep(raw: string | null): Step {
   if (s === 'outreach_phase_callback_email') return 'outreach_phase_callback_email';
   if (s === 'ask_dayuse') return 'ask_dayuse';
   if (s === 'ask_price') return 'ask_price';
+  if (s === 'confirm_prices') return 'confirm_prices';
   if (s === 'confirm_booking') return 'confirm_booking';
   if (s === 'confirm_booking_details') return 'confirm_booking_details';
   return 'intro';
@@ -1285,20 +1295,12 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       const amounts = parsePrices(speech, digits);
       if (amounts.length > 0) {
-        const withinBudget = maxBudgetUsd != null ? amounts.filter((a) => a <= maxBudgetUsd) : amounts;
-        if (withinBudget.length === 0) {
-          // Every offered plan exceeds the guest's budget — do not book.
-          const lowest = Math.min(...amounts);
-          await updateCallLog(db, logId, 'declined', `twilio_prices:${amounts.join('/')}_over_budget`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: all offered plans exceed guest budget ${maxBudgetUsd} ${budgetCurrency}`);
-          if (phase === 'concierge') {
-            await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `all_plans_over_budget;prices=${amounts.join(',')};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: lowest });
-          }
-          return twiml(`<Say voice="${VOICE}">Thank you for the information. Unfortunately, the offered ${amounts.length === 1 ? 'plan is' : 'plans are'} above our guest's budget, so we cannot proceed with the booking this time. We appreciate your time. Goodbye.</Say><Hangup/>`);
-        }
-        const amount = Math.min(...withinBudget);
-        await updateCallLog(db, logId, 'awaiting_response', `twilio_prices:${amounts.join('/')};twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: Confirming price ${amount} (offered: ${amounts.join(', ')})`);
-        const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, 0);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please tell me the correct amount, or enter it on your keypad and press the pound key.`, { preface: 'Thank you.' });
+        // Read all captured prices back for the hotel to confirm/correct
+        // BEFORE applying the guest's budget.
+        await updateCallLog(db, logId, 'awaiting_response', `twilio_prices:${amounts.join('/')}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: read back prices ${amounts.join(', ')}`);
+        const action = makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, 0);
+        const spoken = amounts.map((a) => `${a} ${spokenCurrency}`).join(', ');
+        return gatherTwiml(action, `Let me confirm the ${amounts.length === 1 ? 'price' : 'prices'}: ${spoken}. Is that correct? Press 1 or say yes. If not, please tell me the correct ${amounts.length === 1 ? 'price' : 'prices'} again.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3', preface: 'Thank you.' });
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
@@ -1308,7 +1310,56 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
-      return gatherTwiml(action, `Sorry, I didn't catch that. Please tell me the total price. If you have several plans, tell me each price. You can also enter the amount on your keypad and press pound.`);
+      return gatherTwiml(action, `Sorry, I didn't catch that. Please tell me the total price. If you have several plans, tell me each price. You can also enter the amount on your keypad and press pound.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
+    }
+
+    if (step === 'confirm_prices') {
+      // Correction: hotel restated different prices → read them back again.
+      const newAmounts = parsePrices(speech, digits);
+      if (newAmounts.length > 0 && !isYes(speech, digits)) {
+        await updateCallLog(db, logId, 'awaiting_response', `twilio_prices:${newAmounts.join('/')}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected prices ${newAmounts.join(', ')}`);
+        const action = makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, 0);
+        const spoken = newAmounts.map((a) => `${a} ${spokenCurrency}`).join(', ');
+        return gatherTwiml(action, `Thank you. Let me confirm again: ${spoken}. Is that correct? Press 1 or say yes. If not, please tell me the correct ${newAmounts.length === 1 ? 'price' : 'prices'}.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
+      }
+      if (isNo(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0);
+        return gatherTwiml(action, `No problem. Please tell me the correct total ${spokenCurrency} price. If you have several plans, tell me each price.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
+      }
+      if (isYes(speech, digits)) {
+        // Prices confirmed by hotel → now apply the guest's budget.
+        const confirmedPrices = readPricesFromNote(logRow?.note);
+        if (!confirmedPrices.length) {
+          const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0);
+          return gatherTwiml(action, `Sorry, could you tell me the total ${spokenCurrency} price again?`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
+        }
+        const withinBudget = maxBudgetUsd != null ? confirmedPrices.filter((a) => a <= maxBudgetUsd) : confirmedPrices;
+        if (withinBudget.length === 0) {
+          const lowest = Math.min(...confirmedPrices);
+          await updateCallLog(db, logId, 'declined', `twilio_prices:${confirmedPrices.join('/')}_over_budget`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: confirmed ${confirmedPrices.join(', ')}\n[Agent]: all plans exceed guest budget ${maxBudgetUsd} ${budgetCurrency}`);
+          if (phase === 'concierge') {
+            await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `all_plans_over_budget;prices=${confirmedPrices.join(',')};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: lowest });
+          }
+          return twiml(`<Say voice="${VOICE}">Thank you for confirming. Unfortunately, the offered ${confirmedPrices.length === 1 ? 'plan is' : 'plans are'} above our guest's budget, so we cannot proceed with the booking this time. We appreciate your time. Goodbye.</Say><Hangup/>`);
+        }
+        // Cheapest plan within budget wins → confirm the booking with the hotel.
+        const amount = Math.min(...withinBudget);
+        const chosenNote = confirmedPrices.length > 1 ? ` We will proceed with the lowest plan within the guest's budget, ${amount} ${spokenCurrency}.` : '';
+        await updateCallLog(db, logId, 'awaiting_response', `twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Agent]: chosen ${amount} (offered: ${confirmedPrices.join(', ')})`);
+        const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, 0);
+        return gatherTwiml(action, `${chosenNote} To confirm the reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree and confirm the booking, press 1 or say yes. To decline, press 2 or say no.`, { preface: 'Thank you.' });
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_confirm_prices_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_price_confirmation');
+        }
+        return twiml(`<Say voice="${VOICE}">We could not confirm the prices after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const prev = readPricesFromNote(logRow?.note);
+      const action = makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, turn + 1);
+      const spoken = prev.length ? prev.map((a) => `${a} ${spokenCurrency}`).join(', ') : 'the prices you mentioned';
+      return gatherTwiml(action, `Sorry, I didn't catch that. To confirm: ${spoken}. Is that correct? Press 1 or say yes, or tell me the correct prices.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
     }
 
     if (step === 'confirm_booking') {
