@@ -117,13 +117,26 @@ for (let h = 0; h < 24; h++) {
 ---
 
 <OwnerLayout title="Edit Hotel" activeNav="hotels">
-  <div class="mb-6">
-    <nav class="flex items-center gap-2 text-sm text-slate-500">
-      <a href="/owner/hotels" class="hover:text-slate-700 transition-colors">My Hotels</a>
-      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-      </svg>
-      <span class="text-slate-900 font-medium">{hotel?.name}</span>
+  <!-- Sticky header: title + jump menu + save -->
+  <div class="sticky top-16 z-20 -mx-4 lg:-mx-8 -mt-4 lg:-mt-8 mb-6 px-4 lg:px-8 py-3 bg-white/95 backdrop-blur border-b border-slate-200">
+    <div class="flex items-center gap-3">
+      <a href="/owner/hotels" class="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0" aria-label="Back to My Hotels">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+        </svg>
+      </a>
+      <div class="min-w-0 flex-1">
+        <h1 class="text-lg font-bold text-slate-900 truncate">Edit Hotel Info</h1>
+        {hotel && <p class="text-xs text-slate-500 truncate">{hotel.name}</p>}
+      </div>
+      <button type="button" id="btn-save-sticky" class="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+        Save Changes
+      </button>
+    </div>
+    <nav class="mt-2 flex flex-wrap gap-1.5 text-xs">
+      {[['sec-published','Published Info'],['sec-basic','Basic Information'],['sec-currency','Pricing Currency'],['sec-location','Location'],['sec-gallery','Gallery Images'],['sec-plans','Plans']].map(([sid,label]) => (
+        <a href={`#${sid}`} class="px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-600 hover:border-indigo-400 hover:text-indigo-700 transition-colors">{label}</a>
+      ))}
     </nav>
   </div>
 
@@ -131,6 +144,7 @@ for (let h = 0; h < 24; h++) {
   <div id="status-msg" class="mb-6 hidden"></div>
 
   <!-- Currently Published Information -->
+  <span id="sec-published" class="block -mt-40 pt-40"></span>
   <div class="mb-8 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
     <div class="px-6 py-4 border-b border-slate-200">
       <div class="flex items-center gap-2">
@@ -195,6 +209,7 @@ for (let h = 0; h < 24; h++) {
   </div>
 
   <!-- Request Changes Form -->
+  <span id="sec-basic" class="block -mt-40 pt-40"></span>
   <form id="edit-form" class="mb-8">
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
@@ -267,6 +282,7 @@ for (let h = 0; h < 24; h++) {
         </div>
 
         <!-- Pricing Currency -->
+        <span id="sec-currency" class="block -mt-40 pt-40"></span>
         <div>
           <label for="edit_currency" class="block text-sm font-medium text-slate-700 mb-1">Pricing Currency</label>
           <select id="edit_currency" name="currency" class="w-64 px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow">
@@ -312,6 +328,7 @@ for (let h = 0; h < 24; h++) {
         </div>
 
         <!-- Address & Coordinates -->
+        <span id="sec-location" class="block -mt-40 pt-40"></span>
         <div>
           <label for="edit_address" class="block text-sm font-medium text-slate-700 mb-1">Address</label>
           <input type="text" id="edit_address" name="address" value={hotel?.address || ""} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-shadow" placeholder="Full address...">
@@ -355,6 +372,7 @@ for (let h = 0; h < 24; h++) {
   </form>
 
   <!-- Gallery Images -->
+  <span id="sec-gallery" class="block -mt-40 pt-40"></span>
   <div class="mb-8">
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -407,6 +425,7 @@ for (let h = 0; h < 24; h++) {
   </div>
 
   <!-- Plans -->
+  <span id="sec-plans" class="block -mt-40 pt-40"></span>
   <div class="mb-8">
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
       <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
@@ -868,8 +887,11 @@ for (let h = 0; h < 24; h++) {
       if (!isError) setTimeout(function() { el.classList.add('hidden'); }, 4000);
     }
 
-    // -- Bottom save button wires into the form's submit event --
+    // -- Bottom & sticky save buttons wire into the form's submit event --
     document.getElementById('btn-save-bottom').addEventListener('click', function() {
+      document.getElementById('edit-form').requestSubmit();
+    });
+    document.getElementById('btn-save-sticky').addEventListener('click', function() {
       document.getElementById('edit-form').requestSubmit();
     });
 
@@ -879,10 +901,13 @@ for (let h = 0; h < 24; h++) {
 
       var btn = document.getElementById('btn-request-changes');
       var btnBottom = document.getElementById('btn-save-bottom');
+      var btnSticky = document.getElementById('btn-save-sticky');
       btn.disabled = true;
       btn.textContent = 'Submitting...';
       btnBottom.disabled = true;
       btnBottom.textContent = 'Submitting...';
+      btnSticky.disabled = true;
+      btnSticky.textContent = 'Submitting...';
 
       try {
         var form = e.target;
@@ -945,6 +970,8 @@ for (let h = 0; h < 24; h++) {
           btn.innerHTML = 'Save Changes';
           btnBottom.disabled = false;
           btnBottom.innerHTML = 'Save Changes';
+          btnSticky.disabled = false;
+          btnSticky.innerHTML = 'Save Changes';
           return;
         }
 
@@ -978,6 +1005,8 @@ for (let h = 0; h < 24; h++) {
         btn.innerHTML = 'Save Changes';
         btnBottom.disabled = false;
         btnBottom.innerHTML = 'Save Changes';
+        btnSticky.disabled = false;
+        btnSticky.innerHTML = 'Save Changes';
       }
     });
 
