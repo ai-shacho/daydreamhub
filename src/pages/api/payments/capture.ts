@@ -267,21 +267,50 @@ export const POST: APIRoute = async ({ request, locals }) => {
           }
         }
 
-        // ② Admin notification email
+        // ② Admin (DDH) notification email. Always include the monitored DDH
+        //    inbox, sanitize ADMIN_EMAIL (secrets synced via `echo` can carry a
+        //    trailing newline that makes Resend reject the whole send), and log
+        //    the result so delivery is auditable — this used to fail silently.
         try {
-          const ADMIN_EMAIL = runtime?.env?.ADMIN_EMAIL || 'info@daydreamhub.com';
-          await fetch('https://api.resend.com/emails', {
+          const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s);
+          const adminRaw = String(runtime?.env?.ADMIN_EMAIL || '').trim();
+          const adminTo = [...new Set([
+            'contact@daydreamhub.com',
+            ...(isEmail(adminRaw) ? [adminRaw] : []),
+          ])];
+          const adminSubject = `[New Booking] #${bookingId} — ${guest_name} / ${(hotel as any)?.name || ''}`;
+          const adminRes = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               from: 'DaydreamHub <noreply@daydreamhub.com>',
-              to: [ADMIN_EMAIL],
-              subject: `[New Booking] #${bookingId} — ${guest_name} / ${(hotel as any)?.name || ''}`,
+              to: adminTo,
+              subject: adminSubject,
               html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${bookingId}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${guest_name} (${guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(planFull as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${totalAmount}</td></tr></table></div>`,
             }),
           });
-        } catch (e) {
+          const adminBody: any = await adminRes.json().catch(() => ({}));
+          await logMessage({
+            db, bookingId: bookingId!, hotelId,
+            direction: 'outbound',
+            recipientEmail: adminTo.join(', '),
+            senderEmail: 'noreply@daydreamhub.com',
+            subject: adminSubject,
+            body: `Admin booking notification for #${bookingId}`,
+            status: adminRes.ok ? 'sent' : 'failed',
+            errorDetail: adminRes.ok ? null : (adminBody?.message || `HTTP ${adminRes.status}`),
+            messageType: 'admin_booking_notification',
+          });
+        } catch (e: any) {
           console.error('Admin notification email failed:', e);
+          try {
+            await logMessage({
+              db, bookingId: bookingId!, hotelId, direction: 'outbound',
+              recipientEmail: 'contact@daydreamhub.com', senderEmail: 'noreply@daydreamhub.com',
+              subject: `[New Booking] #${bookingId}`, body: 'Admin booking notification',
+              status: 'failed', errorDetail: e?.message || String(e), messageType: 'admin_booking_notification',
+            });
+          } catch {}
         }
 
         // ③ Guest confirmation email
