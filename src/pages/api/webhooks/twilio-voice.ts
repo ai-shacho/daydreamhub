@@ -827,6 +827,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     const planIdx = Math.min(Math.max(parseInt(url.searchParams.get('pi') || '1', 10) || 1, 1), 3);
     const pendingPriceRaw = Number(url.searchParams.get('pp'));
     const pendingPrice = Number.isFinite(pendingPriceRaw) && pendingPriceRaw > 0 ? Math.round(pendingPriceRaw * 100) / 100 : null;
+    // Confirmed prices collected so far, carried in the URL (not the note) so the
+    // accumulation is self-contained per call and immune to stale log history.
+    const accPrices = (url.searchParams.get('acc') || '')
+      .split('/').map((x) => Number(x)).filter((v) => Number.isFinite(v) && v > 0).slice(0, 3);
 
     const form = await readTwilioParams(request);
     const callSid = clamp(form.get('CallSid') || '', 120);
@@ -1343,13 +1347,13 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (step === 'ask_price') {
       const planPhrase = planCount === 1 ? 'your day-use plan' : `plan ${planIdx}`;
       if (isRepeat(speech, digits)) {
-        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1), { pc: planCount, pi: planIdx });
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1), { pc: planCount, pi: planIdx, acc: accPrices.join('/') });
         return gatherTwiml(action, `What is the total price for ${planPhrase} in ${spokenCurrency}, including all service fees and taxes? You can say it, or enter it on your keypad and press the pound key.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
       }
       const amount = parsePrice(speech, digits);
       if (amount != null) {
         // Read THIS single plan's price back for confirmation before moving on.
-        const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, 0), { pc: planCount, pi: planIdx, pp: amount });
+        const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, 0), { pc: planCount, pi: planIdx, pp: amount, acc: accPrices.join('/') });
         const label = planCount === 1 ? 'The price' : `Plan ${planIdx}`;
         return gatherTwiml(action, `${label} is ${amount} ${spokenCurrency}. Is that correct? Press 1 or say yes. If not, please tell me the correct price.`, { timeout: 10, speechTimeout: '3', preface: 'Thank you.' });
       }
@@ -1360,7 +1364,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1), { pc: planCount, pi: planIdx });
+      const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1), { pc: planCount, pi: planIdx, acc: accPrices.join('/') });
       return gatherTwiml(action, `Sorry, I didn't catch that. Please tell me the total price for ${planPhrase} in ${spokenCurrency}. You can also enter it on your keypad and press the pound key.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
     }
 
@@ -1369,26 +1373,25 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       // Correction: hotel restated a different price for THIS plan (not yes/no).
       const corrected = parsePrice(speech, digits);
       if (corrected != null && !isYes(speech, digits) && !isNo(speech, digits)) {
-        const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, 0), { pc: planCount, pi: planIdx, pp: corrected });
+        const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, 0), { pc: planCount, pi: planIdx, pp: corrected, acc: accPrices.join('/') });
         return gatherTwiml(action, `Thank you. ${planPhrase} is ${corrected} ${spokenCurrency}. Is that correct? Press 1 or say yes. If not, tell me the correct price.`, { timeout: 10, speechTimeout: '3' });
       }
       if (isNo(speech, digits)) {
-        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pc: planCount, pi: planIdx });
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pc: planCount, pi: planIdx, acc: accPrices.join('/') });
         return gatherTwiml(action, `No problem. Please tell me the correct total ${spokenCurrency} price for ${planCount === 1 ? 'your day-use plan' : `plan ${planIdx}`}. You can also enter it on your keypad and press the pound key.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
       }
       if (isYes(speech, digits)) {
         if (pendingPrice == null) {
-          const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pc: planCount, pi: planIdx });
+          const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pc: planCount, pi: planIdx, acc: accPrices.join('/') });
           return gatherTwiml(action, `Sorry, could you tell me the ${spokenCurrency} price for ${planCount === 1 ? 'your day-use plan' : `plan ${planIdx}`} again?`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
         }
-        // Accumulate this confirmed plan price into the note (full list each time).
-        const prev = readPricesFromNote(logRow?.note);
-        const acc = [...prev, pendingPrice].slice(0, 3);
+        // Accumulate this confirmed plan price (carried via the URL, logged for audit).
+        const acc = [...accPrices, pendingPrice].slice(0, 3);
         await updateCallLog(db, logId, 'awaiting_response', `twilio_prices:${acc.join('/')}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: confirmed ${planPhrase.toLowerCase()} = ${pendingPrice}`);
-        // Still more plans to collect → ask the next one.
+        // Still more plans to collect → ask the next one, carrying the running total.
         if (planIdx < planCount) {
           const nextIdx = planIdx + 1;
-          const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pc: planCount, pi: nextIdx });
+          const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pc: planCount, pi: nextIdx, acc: acc.join('/') });
           return gatherTwiml(action, `Got it. Now, what is the total price for plan ${nextIdx} in ${spokenCurrency}, including all service fees and taxes? You can say it, or enter it on your keypad and press the pound key.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3', preface: 'Thank you.' });
         }
         // All plans confirmed → apply the guest's budget, pick the cheapest.
@@ -1416,7 +1419,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         return twiml(`<Say voice="${VOICE}">We could not confirm the price after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, turn + 1), { pc: planCount, pi: planIdx, pp: pendingPrice ?? '' });
+      const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, turn + 1), { pc: planCount, pi: planIdx, pp: pendingPrice ?? '', acc: accPrices.join('/') });
       const spoken = pendingPrice != null ? `${pendingPrice} ${spokenCurrency}` : 'the price you mentioned';
       return gatherTwiml(action, `Sorry, I didn't catch that. ${planPhrase} is ${spoken}. Is that correct? Press 1 or say yes, or tell me the correct price.`, { timeout: 10, speechTimeout: '3' });
     }
