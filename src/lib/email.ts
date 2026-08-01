@@ -1059,10 +1059,18 @@ export async function sendAdminBookingStatusUpdate(
   </div>
 </div>`;
 
+  // Always deliver to the monitored DDH inbox, plus the configured ADMIN_EMAIL
+  // if it is a valid address (secrets can carry stray whitespace/newlines).
+  const adminClean = String(data.adminEmail || '').trim();
+  const to = [...new Set([
+    'contact@daydreamhub.com',
+    ...(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(adminClean) ? [adminClean] : []),
+  ])];
+
   return sendEmail({
     apiKey,
     from: 'DaydreamHub <noreply@daydreamhub.com>',
-    to: data.adminEmail,
+    to,
     subject,
     html,
   });
