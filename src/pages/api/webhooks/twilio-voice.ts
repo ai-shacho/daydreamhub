@@ -24,9 +24,9 @@ type Step =
   | 'outreach_phase_callback_name'
   | 'outreach_phase_callback_email'
   | 'ask_dayuse'
-  | 'ask_count'
   | 'ask_price'
   | 'confirm_prices'
+  | 'ask_more'
   | 'confirm_booking'
   | 'confirm_booking_details';
 
@@ -150,9 +150,9 @@ function normalizeStep(raw: string | null): Step {
   if (s === 'outreach_phase_callback_name') return 'outreach_phase_callback_name';
   if (s === 'outreach_phase_callback_email') return 'outreach_phase_callback_email';
   if (s === 'ask_dayuse') return 'ask_dayuse';
-  if (s === 'ask_count') return 'ask_count';
   if (s === 'ask_price') return 'ask_price';
   if (s === 'confirm_prices') return 'confirm_prices';
+  if (s === 'ask_more') return 'ask_more';
   if (s === 'confirm_booking') return 'confirm_booking';
   if (s === 'confirm_booking_details') return 'confirm_booking_details';
   return 'intro';
@@ -1302,8 +1302,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_dayuse_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
-        const action = makeWebhookUrl(request, logId, 'ask_count', inferredPhase, 0);
-        return gatherTwiml(action, `How many different day-use plans or prices would you like to offer for this request? You can say a number, or enter it on your keypad. Up to three.`, { timeout: 8, finishOnKey: '#', speechTimeout: '3', preface: 'Thank you.' });
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pi: 1, acc: '' });
+        return gatherTwiml(action, `What is the total price for your day-use plan in ${spokenCurrency}, including all service fees and taxes? You can say it, or enter it on your keypad and press the pound key. The guest pays the hotel directly on-site.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3', preface: 'Thank you.' });
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
