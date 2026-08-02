@@ -1,0 +1,135 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+
+const runtime = (Astro.locals as any).runtime;
+const db = runtime?.env?.DB;
+const jwtSecret = runtime?.env?.JWT_SECRET || 'dev-secret';
+const admin = await verifyAdmin(Astro.request, jwtSecret);
+if (!admin) return Astro.redirect('/admin/login');
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+type Row = { id: number; name: string; status: string; booking_email: string; owner_email: string; staff_emails: string; all_emails: string[] };
+
+function emailsOf(r: any): string[] {
+  const raw: string[] = [];
+  if (r.booking_email) raw.push(String(r.booking_email).trim());
+  if (r.owner_email) raw.push(String(r.owner_email).trim());
+  for (const s of String(r.staff_emails || '').split(';')) { const v = s.trim(); if (v) raw.push(v); }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const e of raw) { const el = e.toLowerCase(); if (EMAIL_RE.test(e) && !seen.has(el)) { seen.add(el); out.push(e); } }
+  return out;
+}
+
+const SELECT = `SELECT h.id, h.name, h.status, h.email AS booking_email,
+  (SELECT u.email FROM users u WHERE u.email = h.email AND u.role = 'owner' LIMIT 1) AS owner_email,
+  (SELECT group_concat(u2.email, ';') FROM hotel_staff hs JOIN users u2 ON u2.id = hs.user_id WHERE hs.hotel_id = h.id) AS staff_emails
+  FROM hotels h`;
+
+async function loadGroup(where: string): Promise<Row[]> {
+  if (!db) return [];
+  try {
+    const res = await db.prepare(`${SELECT} WHERE ${where} ORDER BY h.name`).all();
+    return ((res?.results as any[]) || []).map((r) => ({
+      id: r.id, name: r.name || '', status: r.status || '',
+      booking_email: r.booking_email || '', owner_email: r.owner_email || '', staff_emails: r.staff_emails || '',
+      all_emails: emailsOf(r),
+    }));
+  } catch (e) { return []; }
+}
+
+const active = await loadGroup(`h.status = 'active'`);
+const owner = await loadGroup(`h.email IN (SELECT email FROM users WHERE role = 'owner')`);
+
+function flat(rows: Row[]): string[] {
+  const seen = new Set<string>(); const out: string[] = [];
+  for (const r of rows) for (const e of r.all_emails) { const el = e.toLowerCase(); if (!seen.has(el)) { seen.add(el); out.push(e); } }
+  return out;
+}
+
+const groups = [
+  { key: 'active', title: 'Active Hotels', desc: "Hotels whose status is 'active' on the Hotels page.", rows: active, flat: flat(active) },
+  { key: 'owner', title: 'Owner-Registered Hotels', desc: 'Hotels whose email is registered to an owner account (Users page).', rows: owner, flat: flat(owner) },
+];
+---
+
+<AdminLayout title="Email Lists" activeNav="email-lists">
+  <div class="mb-6">
+    <h1 class="text-xl font-bold text-slate-900">Hotel Email Lists</h1>
+    <p class="text-sm text-slate-500 mt-1">Download CSVs or copy ready-to-paste recipient lists. Each list includes the booking email (予約用), the owner account email (担当者用), and any staff emails, deduplicated.</p>
+  </div>
+
+  {groups.map((g) => (
+    <div class="mb-8 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-semibold text-slate-900">{g.title}</h2>
+          <p class="text-xs text-slate-500 mt-0.5">{g.desc}</p>
+        </div>
+        <div class="text-right flex-shrink-0">
+          <div class="text-sm font-semibold text-slate-800">{g.rows.length} hotels</div>
+          <div class="text-xs text-slate-500">{g.flat.length} unique emails</div>
+        </div>
+      </div>
+      <div class="p-6 space-y-3">
+        <div class="flex flex-wrap gap-2">
+          <button data-act="copy" data-group={g.key} class="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700 transition-colors">
+            📋 Copy all emails
+          </button>
+          <button data-act="csv" data-group={g.key} class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+            ⬇︎ Download CSV (per hotel)
+          </button>
+          <button data-act="txt" data-group={g.key} class="inline-flex items-center gap-1.5 px-4 py-2 bg-white text-slate-700 border border-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors">
+            ⬇︎ Download emails .txt
+          </button>
+        </div>
+        <textarea readonly id={`flat-${g.key}`} class="w-full h-28 px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-600 bg-slate-50" set:text={g.flat.join(', ')}></textarea>
+      </div>
+    </div>
+  ))}
+
+  <script is:inline define:vars={{ groups }}>
+    const DATA = {};
+    for (const g of groups) DATA[g.key] = g;
+
+    function csvEscape(v) {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }
+    function buildCsv(g) {
+      const header = ['hotel_id', 'name', 'status', 'booking_email', 'owner_email', 'staff_emails', 'all_emails'];
+      const lines = [header.join(',')];
+      for (const r of g.rows) {
+        lines.push([r.id, r.name, r.status, r.booking_email, r.owner_email, r.staff_emails, r.all_emails.join(';')].map(csvEscape).join(','));
+      }
+      return '﻿' + lines.join('\r\n'); // BOM for Excel
+    }
+    function download(filename, text, type) {
+      const blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    document.querySelectorAll('button[data-act]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const g = DATA[btn.dataset.group];
+        const act = btn.dataset.act;
+        if (act === 'copy') {
+          const text = g.flat.join(', ');
+          try { await navigator.clipboard.writeText(text); }
+          catch { const t = document.getElementById('flat-' + g.key); t.focus(); t.select(); document.execCommand('copy'); }
+          const orig = btn.textContent; btn.textContent = '✓ Copied!';
+          setTimeout(() => { btn.textContent = orig; }, 1500);
+        } else if (act === 'csv') {
+          download(`${g.key}_hotels_emails.csv`, buildCsv(g), 'text/csv;charset=utf-8');
+        } else if (act === 'txt') {
+          download(`${g.key}_hotels_emails.txt`, g.flat.join(', '), 'text/plain;charset=utf-8');
+        }
+      });
+    });
+  </script>
+</AdminLayout>
