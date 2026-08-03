@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { sendConciergeResultEmail, type ConciergeResultEmailType } from '../../../lib/email';
+import { sendConciergeResultEmail, sendConciergeQuoteEmail, type ConciergeResultEmailType } from '../../../lib/email';
 import { currencyForPhone, spokenNameForCurrency } from '../../../lib/phoneCurrency';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
@@ -637,6 +637,46 @@ async function updateConciergeCallStatus(db: DbLike | null, conciergeCallId: str
   });
 }
 
+// Two-call model: after call 1 quotes a price, email the guest a "Book at this
+// price" link. Idempotent via quote_email_sent. Generates the accept token.
+async function sendQuoteEmailOnce(env: any, db: DbLike | null, conciergeCallId: string | null) {
+  if (!db || !conciergeCallId || !env?.RESEND_API_KEY) return;
+  const call: any = await db.prepare(
+    `SELECT id, guest_name, guest_email, hotel_name, hotel_phone, request_details, price_quoted, accept_token
+       FROM concierge_calls WHERE id = ?`
+  ).bind(conciergeCallId).first().catch(() => null);
+  if (!call?.guest_email || call.price_quoted == null || String(call.price_quoted) === '') return;
+
+  const claim: any = await db.prepare(
+    `UPDATE concierge_calls SET quote_email_sent = 1, updated_at = datetime('now') WHERE id = ? AND quote_email_sent = 0`
+  ).bind(conciergeCallId).run().catch(() => null);
+  if (Number(claim?.meta?.changes || 0) === 0) return;
+
+  let token = String(call.accept_token || '');
+  if (!token) {
+    token = (crypto as any).randomUUID().replace(/-/g, '');
+    await db.prepare(`UPDATE concierge_calls SET accept_token = ? WHERE id = ?`).bind(token, conciergeCallId).run().catch(() => {});
+  }
+
+  const details: any = normalizeConciergeDetails(parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(quote_email)'));
+  const currency = currencyForPhone(call.hotel_phone).currency || 'USD';
+  const base = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || (String(env?.DDH_ENV || '').toLowerCase() === 'staging' ? 'https://staging.daydreamhub-1sv.pages.dev' : 'https://daydreamhub.com')).replace(/\/$/, '');
+  const acceptUrl = `${base}/concierge/accept?token=${token}`;
+
+  await sendConciergeQuoteEmail(env.RESEND_API_KEY, {
+    guestName: call.guest_name || 'Guest',
+    guestEmail: call.guest_email,
+    hotelName: call.hotel_name || 'the hotel',
+    date: details.check_in_date || details.date || '',
+    checkIn: details.check_in_time || details.check_in || '',
+    checkOut: details.check_out_time || details.check_out || '',
+    guests: details.guests || 1,
+    price: call.price_quoted,
+    priceCurrency: currency,
+    acceptUrl,
+  }).catch((e: any) => console.error('[twilio-voice] quote email failed', e));
+}
+
 async function sendResultEmailOnce(env: any, db: DbLike | null, conciergeCallId: string | null, resultType: ConciergeResultEmailType) {
   if (!db || !conciergeCallId || !env?.RESEND_API_KEY) return;
   const call: any = await db.prepare(
@@ -783,6 +823,8 @@ async function finalizeConciergeOutcome(
     await sendResultEmailOnce(env, db, conciergeCallId, 'no_answer');
   } else if (outcome === 'over_budget') {
     await sendResultEmailOnce(env, db, conciergeCallId, 'over_budget');
+  } else if (outcome === 'quoted') {
+    await sendQuoteEmailOnce(env, db, conciergeCallId);
   }
 
   const call: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id = ?`).bind(conciergeCallId).first().catch((e: any) => {
