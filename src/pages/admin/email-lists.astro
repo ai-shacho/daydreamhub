@@ -85,7 +85,34 @@ const groups = [
             ⬇︎ Download emails .txt
           </button>
         </div>
-        <textarea readonly id={`flat-${g.key}`} class="w-full h-28 px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-600 bg-slate-50" set:text={g.flat.join(', ')}></textarea>
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <div class="max-h-80 overflow-y-auto">
+            <table class="w-full text-xs">
+              <thead class="bg-slate-100 text-slate-600 sticky top-0">
+                <tr>
+                  <th class="text-left font-semibold px-3 py-2">ホテル名 (Hotel)</th>
+                  <th class="text-left font-semibold px-3 py-2">予約管理用 (Booking)</th>
+                  <th class="text-left font-semibold px-3 py-2">担当者 (Owner)</th>
+                  <th class="text-left font-semibold px-3 py-2">スタッフ (Staff)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                {g.rows.map((r) => (
+                  <tr class="hover:bg-slate-50">
+                    <td class="px-3 py-1.5 text-slate-800">{r.name}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-600">{r.booking_email || '—'}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-600">{r.owner_email || '—'}</td>
+                    <td class="px-3 py-1.5 font-mono text-slate-500">{r.staff_emails || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <details>
+          <summary class="text-xs text-slate-500 cursor-pointer">Show flat email list (for pasting into To / BCC)</summary>
+          <textarea readonly id={`flat-${g.key}`} class="mt-2 w-full h-28 px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono text-slate-600 bg-slate-50" set:text={g.flat.join(', ')}></textarea>
+        </details>
       </div>
     </div>
   ))}
@@ -99,10 +126,10 @@ const groups = [
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     }
     function buildCsv(g) {
-      const header = ['hotel_id', 'name', 'status', 'booking_email', 'owner_email', 'staff_emails', 'all_emails'];
+      const header = ['hotel_id', 'ホテル名 (Hotel Name)', '予約管理用メール (Booking)', '担当者メール (Owner)', 'スタッフメール (Staff)', 'ステータス (Status)'];
       const lines = [header.join(',')];
       for (const r of g.rows) {
-        lines.push([r.id, r.name, r.status, r.booking_email, r.owner_email, r.staff_emails, r.all_emails.join(';')].map(csvEscape).join(','));
+        lines.push([r.id, r.name, r.booking_email, r.owner_email, r.staff_emails, r.status].map(csvEscape).join(','));
       }
       return '﻿' + lines.join('\r\n'); // BOM for Excel
     }
