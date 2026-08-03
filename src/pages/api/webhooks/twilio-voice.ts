@@ -840,9 +840,15 @@ async function finalizeConciergeOutcome(
     // Terminal for this group: 'quoted' waits for the guest to accept by email
     // (which triggers call 2); 'booked'/'available' are already done. Either way
     // we do NOT roll over to the next hotel in the group.
-    const groupStatus = outcome === 'quoted' ? 'quoted' : 'success';
-    await db.prepare("UPDATE concierge_call_groups SET status = ?, updated_at = datetime('now') WHERE id = ? AND status NOT IN ('success','quoted')")
-      .bind(groupStatus, groupId).run().catch(() => {});
+    if (outcome === 'quoted') {
+      // Mark quoted unless the group is already finalized.
+      await db.prepare("UPDATE concierge_call_groups SET status = 'quoted', updated_at = datetime('now') WHERE id = ? AND status NOT IN ('success')")
+        .bind(groupId).run().catch(() => {});
+    } else {
+      // Booking succeeded — promote to success even from 'quoted'/'confirming'.
+      await db.prepare("UPDATE concierge_call_groups SET status = 'success', updated_at = datetime('now') WHERE id = ? AND status != 'success'")
+        .bind(groupId).run().catch(() => {});
+    }
     return true;
   }
 
