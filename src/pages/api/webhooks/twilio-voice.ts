@@ -25,6 +25,7 @@ type Step =
   | 'outreach_phase_callback_email'
   | 'ask_dayuse'
   | 'ask_availability'
+  | 'confirm2'
   | 'ask_price'
   | 'confirm_prices'
   | 'ask_more'
@@ -152,6 +153,7 @@ function normalizeStep(raw: string | null): Step {
   if (s === 'outreach_phase_callback_email') return 'outreach_phase_callback_email';
   if (s === 'ask_dayuse') return 'ask_dayuse';
   if (s === 'ask_availability') return 'ask_availability';
+  if (s === 'confirm2') return 'confirm2';
   if (s === 'ask_price') return 'ask_price';
   if (s === 'confirm_prices') return 'confirm_prices';
   if (s === 'ask_more') return 'ask_more';
@@ -1131,11 +1133,58 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         return gatherTwiml(action, 'Hello. We are DayDreamHub, a platform that matches guests with hotel day-use rooms. We are calling today to invite your property to be listed on our site. Is the manager or person in charge available? Press 1 if available now, or press 2 if not available. You can also answer by voice.');
       }
 
+      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+      // Two-call model: call 2 confirms an already-quoted, guest-accepted booking.
+      if (phase === 'concierge' && String(conciergeDetails?.call_mode || '') === 'confirm') {
+        const cprice = conciergeDetails?.confirmed_price;
+        const ccur = spokenNameForCurrency(String(conciergeDetails?.price_currency || budgetCurrency || 'USD'));
+        await updateCallLog(db, logId, 'awaiting_response', 'twilio_confirm2_intro', callSid ? `twilio:${callSid}` : undefined);
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, 0);
+        return gatherTwiml(action, `Hello, this is DayDreamHub, calling back about the day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Our guest has accepted your price of ${cprice} ${ccur}. Can we go ahead and confirm this booking? Press 1 or say yes to confirm. Press 2 or say no. Press 3 to hear this again.`);
+      }
+
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
       const action = makeWebhookUrl(request, logId, 'ask_dayuse', inferredPhase, 0);
-      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
       const prompt = `Hello, this is DayDreamHub, an online platform specializing in day-use hotel bookings. We have a guest looking to book a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
       return gatherTwiml(action, prompt);
+    }
+
+    if (step === 'confirm2') {
+      const cprice = conciergeDetails?.confirmed_price;
+      const ccur = spokenNameForCurrency(String(conciergeDetails?.price_currency || budgetCurrency || 'USD'));
+      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+      if (isRepeat(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, turn + 1);
+        return gatherTwiml(action, `Our guest has accepted your price of ${cprice} ${ccur} for a day-use on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Can we confirm this booking? Press 1 or say yes. Press 2 or say no.`);
+      }
+      if (isYes(speech, digits)) {
+        const guestName = bookingGuestName;
+        const guestPhoneSpeech = formatPhoneForSpeech(bookingGuestPhone);
+        const guestEmailSpeech = formatEmailForSpeech(bookingGuestEmail);
+        await updateCallLog(db, logId, 'confirmed', 'twilio_confirm2_booked', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
+        await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'booked', `confirm2_booked;price=${cprice}`, { priceQuoted: cprice, sendAdminBooked: true });
+        return twiml(`<Say voice="${VOICE}">Thank you, the booking is confirmed at ${cprice} ${ccur}, to be paid on-site at check-in. For your records, the guest is ${guestName}. Contact phone, ${guestPhoneSpeech}. Email, ${guestEmailSpeech}. We will email the guest their confirmation now. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Goodbye.</Say><Hangup/>`);
+      }
+      if (isNo(speech, digits)) {
+        await updateCallLog(db, logId, 'declined', 'twilio_confirm2_declined', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
+        // Terminal — the guest accepted THIS hotel; do not roll over to others.
+        if (phase === 'concierge') {
+          await db.prepare(`UPDATE concierge_calls SET status='completed', outcome='unavailable', ai_summary=?, updated_at=datetime('now') WHERE id=? AND COALESCE(outcome,'') NOT IN ('booked','available','unavailable','no_answer','over_budget','quoted')`).bind('confirm_declined_by_hotel', resolvedConciergeCallId || logId).run().catch(() => {});
+          const grp: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id=?`).bind(resolvedConciergeCallId || logId).first().catch(() => null);
+          if (grp?.call_group_id) await db.prepare("UPDATE concierge_call_groups SET status='confirm_failed', updated_at=datetime('now') WHERE id=? AND status NOT IN ('success')").bind(grp.call_group_id).run().catch(() => {});
+          await sendResultEmailOnce(env, db, resolvedConciergeCallId || logId, 'declined');
+        }
+        return twiml(`<Say voice="${VOICE}">Understood, thank you for letting us know. We will inform our guest. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_confirm2_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_confirm2_answer');
+        }
+        return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, turn + 1);
+      return gatherTwiml(action, `Sorry, I didn't catch that. Can we confirm the booking at ${cprice} ${ccur}? Press 1 or say yes. Press 2 or say no.`);
     }
 
     if (step === 'outreach_phase_0') {

@@ -1,0 +1,110 @@
+---
+// Guest lands here from the quote email. Shows the quoted price and a button to
+// pay the $7 DDH fee (PayPal redirect). On return, captures and triggers call 2.
+const url = new URL(Astro.request.url);
+const token = url.searchParams.get('token') || '';
+const ppreturn = url.searchParams.get('ppreturn') === '1';
+const ppcancel = url.searchParams.get('ppcancel') === '1';
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Confirm your day-use booking — DayDreamHub</title>
+  <script is:inline src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div class="bg-teal-600 text-white px-6 py-5">
+      <div class="text-lg font-bold">DayDream<span class="text-teal-200">Hub</span></div>
+      <p class="text-teal-100 text-sm mt-0.5">Confirm your day-use booking</p>
+    </div>
+    <div id="root" class="p-6">
+      <div id="loading" class="text-center text-slate-500 text-sm py-8">Loading your quote…</div>
+
+      <div id="quote" class="hidden">
+        <table class="w-full text-sm mb-4">
+          <tbody id="quote-rows" class="divide-y divide-slate-100"></tbody>
+        </table>
+        <div class="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3 mb-4">
+          <div class="text-xs text-teal-700">Quoted price (paid to the hotel on-site)</div>
+          <div id="price" class="text-2xl font-bold text-teal-700"></div>
+        </div>
+        <p class="text-xs text-slate-500 mb-4">A <strong>$7 DayDreamHub booking fee</strong> is charged now. After payment we call the hotel again to finalize your booking and email you the confirmation.</p>
+        <button id="pay-btn" class="w-full px-4 py-3 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 transition-colors">Book at this price — pay $7 fee →</button>
+        <div id="err" class="hidden mt-3 text-sm text-red-600"></div>
+      </div>
+
+      <div id="done" class="hidden text-center py-6">
+        <div class="text-4xl mb-3">✅</div>
+        <h2 class="text-lg font-bold text-slate-900">Payment received</h2>
+        <p class="text-sm text-slate-600 mt-2">We're calling the hotel now to finalize your booking. You'll get a confirmation email shortly.</p>
+      </div>
+
+      <div id="already" class="hidden text-center py-6">
+        <div class="text-4xl mb-3">👍</div>
+        <h2 class="text-lg font-bold text-slate-900">Already confirmed</h2>
+        <p class="text-sm text-slate-600 mt-2">This quote has already been accepted. Check your email for the booking confirmation.</p>
+      </div>
+
+      <div id="cancelled" class="hidden text-center py-6">
+        <div class="text-4xl mb-3">↩︎</div>
+        <h2 class="text-lg font-bold text-slate-900">Payment cancelled</h2>
+        <p class="text-sm text-slate-600 mt-2">No charge was made. You can come back to this link anytime to book at the quoted price.</p>
+      </div>
+
+      <div id="fatal" class="hidden text-center py-6">
+        <div class="text-4xl mb-3">⚠️</div>
+        <h2 class="text-lg font-bold text-slate-900">Quote not found</h2>
+        <p class="text-sm text-slate-600 mt-2">This link may have expired. Please contact us at <a href="mailto:contact@daydreamhub.com" class="text-teal-600">contact@daydreamhub.com</a>.</p>
+      </div>
+    </div>
+  </div>
+
+  <script is:inline define:vars={{ token, ppreturn, ppcancel }}>
+    const $ = (id) => document.getElementById(id);
+    function show(id) { ['loading','quote','done','already','cancelled','fatal'].forEach((k) => $(k).classList.toggle('hidden', k !== id)); }
+    async function api(action, extra) {
+      const res = await fetch('/api/concierge/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token, ...(extra || {}) }) });
+      return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
+    }
+    function row(label, value) { return `<tr><td class="py-1.5 pr-3 text-slate-400">${label}</td><td class="py-1.5 text-slate-800 font-medium text-right">${value}</td></tr>`; }
+
+    (async function init() {
+      if (!token) { show('fatal'); return; }
+      if (ppcancel) { show('cancelled'); return; }
+      if (ppreturn) {
+        show('loading');
+        const r = await api('capture');
+        if (r.ok && r.data.status === 'accepted') { show(r.data.idempotent ? 'already' : 'done'); }
+        else if (r.status === 202) { $('loading').textContent = 'Finalizing payment… please wait a moment and refresh.'; }
+        else { show('quote'); await renderQuote(); showErr(r.data.error || 'Could not confirm payment. Please try again.'); }
+        return;
+      }
+      await renderQuote();
+    })();
+
+    async function renderQuote() {
+      const r = await api('info');
+      if (!r.ok) { show('fatal'); return; }
+      const d = r.data;
+      if (d.accepted) { show('already'); return; }
+      const when = [d.date, [d.check_in, d.check_out].filter(Boolean).join(' – ')].filter(Boolean).join('  ·  ');
+      $('quote-rows').innerHTML = row('Hotel', d.hotel_name || '') + row('When', when || '—') + row('Guests', d.guests || 1);
+      $('price').textContent = (d.price != null ? d.price : '') + ' ' + (d.currency || '');
+      show('quote');
+    }
+    function showErr(m) { const e = $('err'); e.textContent = m; e.classList.remove('hidden'); }
+
+    document.addEventListener('click', async (ev) => {
+      if (ev.target && ev.target.id === 'pay-btn') {
+        const btn = ev.target; btn.disabled = true; btn.textContent = 'Redirecting to PayPal…';
+        const r = await api('create');
+        if (r.ok && r.data.approve_url) { window.location.href = r.data.approve_url; }
+        else { btn.disabled = false; btn.textContent = 'Book at this price — pay $7 fee →'; showErr(r.data.error || 'Could not start payment. Please try again.'); }
+      }
+    });
+  </script>
+</body>
+</html>
