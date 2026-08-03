@@ -919,14 +919,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
           status: 400, headers: { 'Content-Type': 'application/json' }
         });
       }
-      // Guest max budget is required and is denominated in the called
-      // hotel's local currency (derived from the phone country code).
-      const directMaxBudget = Number(callGroupData.max_price ?? callGroupData.max_price_usd ?? 0);
-      if (!(directMaxBudget > 0)) {
-        return new Response(JSON.stringify({ error: locale === 'ja' ? '上限予算を入力してください。' : 'Max budget is required.' }), {
-          status: 400, headers: { 'Content-Type': 'application/json' }
-        });
-      }
+      // Two-call model: no guest budget. The inquiry call (call 1) is free; the
+      // $7 fee is collected later when the guest accepts the quote by email.
       const directBudgetCurrency = currencyForPhone(callGroupData.hotels?.[0]?.hotel_phone).currency;
       // セッション作成（なければ）
       await db.prepare(
@@ -940,7 +934,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const _adults = Number(callGroupData.adults || 0) || (normalizedGuests > 0 ? normalizedGuests : 1);
       const _children = Number(callGroupData.children || 0);
       const requestDetails = normalizeConciergeRequestDetails({
-        max_price_local: directMaxBudget,
         budget_currency: directBudgetCurrency,
         guest_name: callGroupData.guest_name,
         guest_email: callGroupData.guest_email,
@@ -962,63 +955,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
           status: 500, headers: { 'Content-Type': 'application/json' }
         });
       }
-      const allInternal = callGroupData.hotels.every((h: any) => h.hotel_source === 'internal');
-      if (allInternal) {
-        // 全員自社 → 無料
-        return new Response(JSON.stringify({
-          response: locale === 'ja' ? '予約代行を開始しました（無料）。' : 'Starting free booking call...',
-          message_type: 'call_group_created',
-          group_id: group.group_id,
-          call_ids: group.call_ids,
-          payment_required: false,
-          is_free: true,
-          amount_usd: 0,
-        }), { headers: { 'Content-Type': 'application/json' } });
-      }
-      // 外部ホテルあり → PayPal決済 (pay.ts の create アクションと同じ処理)
-      const { getAccessToken, createOrder, resolvePayPalConfig } = await import('../../../lib/paypal');
-      const pp = resolvePayPalConfig(env);
-      const mode = pp.mode;
-      const baseUrl = new URL(request.url).origin;
-      const returnQuery = new URLSearchParams({
-        group_id: String(group.group_id),
-        session_id: String(session_id),
-        ...(callGroupData.guest_name ? { guest_name: String(callGroupData.guest_name) } : {}),
-        ...(callGroupData.guest_email ? { guest_email: String(callGroupData.guest_email) } : {}),
-      }).toString();
-      const lang = String(locale || '').toLowerCase().startsWith('ja') ? 'ja' : 'en';
-      const returnPath = lang === 'ja' ? '/ja/concierge/payment/return' : '/concierge/payment/return';
-      const cancelPath = lang === 'ja' ? '/ja/concierge/payment/cancel' : '/concierge/payment/cancel';
-      const paypalClientId = pp.clientId;
-      const paypalSecret = pp.secret;
-      if (!paypalClientId || !paypalSecret) {
-        throw new Error('PayPal configuration missing: PAYPAL_SANDBOX_CLIENT_ID|PAYPAL_CLIENT_ID or PAYPAL_SANDBOX_SECRET|PAYPAL_SECRET|SECRET');
-      }
-      const accessToken = await getAccessToken(paypalClientId, paypalSecret, mode);
-      const paypalOrderId = await createOrder(
-        accessToken,
-        7,
-        mode,
-        'DaydreamHub AI Phone Booking Service',
-        undefined,
-        {
-          returnUrl: `${baseUrl}${returnPath}?${returnQuery}`,
-          cancelUrl: `${baseUrl}${cancelPath}?${returnQuery}`,
-        },
-      );
-      await db.prepare(
-        `UPDATE concierge_call_groups SET paypal_order_id = ?, updated_at = datetime('now') WHERE id = ?`
-      ).bind(paypalOrderId, group.group_id).run();
-      const paypalBase = mode === 'live' ? 'https://www.paypal.com' : 'https://www.sandbox.paypal.com';
+      // Two-call model: start the free inquiry call (call 1) immediately for all
+      // hotels. No upfront payment — the $7 fee is charged later at the accept
+      // step, when the guest confirms the quoted price by email.
+      await db.prepare(`UPDATE concierge_call_groups SET payment_status = 'free', updated_at = datetime('now') WHERE id = ?`).bind(group.group_id).run().catch(() => {});
+      await db.prepare(`UPDATE concierge_calls SET payment_status = 'free', updated_at = datetime('now') WHERE call_group_id = ?`).bind(group.group_id).run().catch(() => {});
+      const call1Trigger = await initiateNextGroupCall(env, db, group.group_id).catch((e: any) => { console.error('[chat] call1 trigger failed', e); return null; });
       return new Response(JSON.stringify({
-        response: locale === 'ja' ? 'PayPalでお支払い後、AIが電話予約を代行します。' : 'Please complete PayPal payment to proceed with AI phone booking.',
-        message_type: 'payment_required',
+        response: locale === 'ja' ? 'ホテルへ確認のお電話を開始しました。金額が分かり次第、メールでお知らせします。' : 'We are calling the hotel to check availability and the price. We will email you the quote shortly.',
+        message_type: 'call_group_created',
         group_id: group.group_id,
-        payment_required: true,
-        is_free: false,
-        amount_usd: 7,
-        paypal_url: `${paypalBase}/checkoutnow?token=${paypalOrderId}`,
-        paypal_order_id: paypalOrderId,
+        call_ids: group.call_ids,
+        payment_required: false,
+        is_free: true,
+        amount_usd: 0,
+        call_triggered: String(call1Trigger?.status || '') === 'calling',
       }), { headers: { 'Content-Type': 'application/json' } });
     }
 

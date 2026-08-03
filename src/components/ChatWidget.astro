@@ -87,7 +87,6 @@ import { DIAL_CURRENCY } from '../lib/phoneCurrency';
       <input id="cb-guest-email" type="email" placeholder="Email" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <input id="cb-guest-phone" type="tel" placeholder="Phone number" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <input id="cb-guests" type="number" min="1" max="10" value="2" placeholder="Guests" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-      <input id="cb-max-budget" type="number" min="1" step="1" placeholder={isJa ? '上限予算（USD・必須）' : 'Max budget in USD (required)'} class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <input id="cb-date" type="date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
       <div class="grid grid-cols-2 gap-2">
         <input id="cb-checkin" type="time" value="10:00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
@@ -265,9 +264,6 @@ import { DIAL_CURRENCY } from '../lib/phoneCurrency';
 
   function showCallOverlay(hotel) {
     selectedExternalHotel = hotel;
-    var bcur = curForPhone(hotel && (hotel.phone || hotel.hotel_phone));
-    var bEl = document.getElementById('cb-max-budget');
-    if (bEl) bEl.placeholder = pageLocale === 'ja' ? ('上限予算（' + bcur + '・必須）') : ('Max budget in ' + bcur + ' (required)');
     callOverlay.classList.remove('hidden');
     callOverlay.classList.add('flex');
     const dateInput = document.getElementById('cb-date');
@@ -286,13 +282,12 @@ import { DIAL_CURRENCY } from '../lib/phoneCurrency';
     const checkInDate = (document.getElementById('cb-date').value || '').trim();
     const checkInTime = (document.getElementById('cb-checkin').value || '10:00').trim();
     const checkOutTime = (document.getElementById('cb-checkout').value || '18:00').trim();
-    const maxBudgetUsd = Number(document.getElementById('cb-max-budget').value || 0);
 
     if (!selectedExternalHotel) return;
-    if (!guestName || !guestEmail || !guestPhone || !guests || !checkInDate || !(maxBudgetUsd > 0)) {
+    if (!guestName || !guestEmail || !guestPhone || !guests || !checkInDate) {
       callErr.textContent = pageLocale === 'ja'
-        ? '氏名・メール・電話番号・人数・日付・上限予算をすべて入力してください。'
-        : 'Please enter name, email, phone, guests, date, and max budget.';
+        ? '氏名・メール・電話番号・人数・日付をすべて入力してください。'
+        : 'Please enter name, email, phone, guests, and date.';
       callErr.classList.remove('hidden');
       return;
     }
@@ -306,7 +301,6 @@ import { DIAL_CURRENCY } from '../lib/phoneCurrency';
         guests,
         guest_phone: guestPhone,
         _call_group: {
-          max_price: maxBudgetUsd,
           guest_name: guestName,
           guest_email: guestEmail,
           guest_phone: guestPhone,
