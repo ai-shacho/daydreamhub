@@ -16,9 +16,9 @@ const ppcancel = url.searchParams.get('ppcancel') === '1';
 </head>
 <body class="bg-slate-50 min-h-screen flex items-center justify-center p-4">
   <div class="w-full max-w-md bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-    <div class="bg-teal-600 text-white px-6 py-5">
-      <div class="text-lg font-bold">DayDream<span class="text-teal-200">Hub</span></div>
-      <p class="text-teal-100 text-sm mt-0.5">Confirm your day-use booking</p>
+    <div class="bg-[#46a3c2] text-white px-6 py-5">
+      <div class="text-lg font-bold">DayDream<span class="text-[#cfeaf3]">Hub</span></div>
+      <p class="text-[#d3edf5] text-sm mt-0.5">Confirm your day-use booking</p>
     </div>
     <div id="root" class="p-6">
       <div id="loading" class="text-center text-slate-500 text-sm py-8">Loading your quote…</div>
@@ -27,12 +27,12 @@ const ppcancel = url.searchParams.get('ppcancel') === '1';
         <table class="w-full text-sm mb-4">
           <tbody id="quote-rows" class="divide-y divide-slate-100"></tbody>
         </table>
-        <div class="bg-teal-50 border border-teal-200 rounded-lg px-4 py-3 mb-4">
-          <div class="text-xs text-teal-700">Quoted price (paid to the hotel on-site)</div>
-          <div id="price" class="text-2xl font-bold text-teal-700"></div>
+        <div class="bg-[#eef7fb] border border-[#cfeaf3] rounded-lg px-4 py-3 mb-4">
+          <div class="text-xs text-[#37879f]">Quoted price (paid to the hotel on-site)</div>
+          <div id="price" class="text-2xl font-bold text-[#37879f]"></div>
         </div>
         <p class="text-xs text-slate-500 mb-4">A <strong>$7 DayDreamHub booking fee</strong> is charged now. After payment we call the hotel again to finalize your booking and email you the confirmation.</p>
-        <button id="pay-btn" class="w-full px-4 py-3 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 transition-colors">Book at this price — pay $7 fee →</button>
+        <button id="pay-btn" class="w-full px-4 py-3 bg-[#46a3c2] text-white font-semibold rounded-lg hover:bg-[#37879f] transition-colors">Book at this price — pay $7 fee →</button>
         <div id="err" class="hidden mt-3 text-sm text-red-600"></div>
       </div>
 
@@ -57,7 +57,7 @@ const ppcancel = url.searchParams.get('ppcancel') === '1';
       <div id="fatal" class="hidden text-center py-6">
         <div class="text-4xl mb-3">⚠️</div>
         <h2 class="text-lg font-bold text-slate-900">Quote not found</h2>
-        <p class="text-sm text-slate-600 mt-2">This link may have expired. Please contact us at <a href="mailto:contact@daydreamhub.com" class="text-teal-600">contact@daydreamhub.com</a>.</p>
+        <p class="text-sm text-slate-600 mt-2">This link may have expired. Please contact us at <a href="mailto:contact@daydreamhub.com" class="text-[#46a3c2]">contact@daydreamhub.com</a>.</p>
       </div>
     </div>
   </div>
