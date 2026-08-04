@@ -982,16 +982,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      const groupMaxBudget = Number(request_details?.max_price_local ?? request_details?.max_price ?? request_details?.max_price_usd ?? 0);
-      if (!(groupMaxBudget > 0)) {
-        return new Response(
-          JSON.stringify({ error: locale === 'ja' ? '通話を開始する前に、お客様の上限予算（USD）を確認して request_details.max_price_usd に含めてください。' : 'Ask the guest for their maximum budget in USD and include it as request_details.max_price_usd before creating the call group.' }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
+      // Two-call model: no guest budget; the inquiry call is free.
       const normalizedRequestDetails = normalizeConciergeRequestDetails({
         ...request_details,
-        max_price_local: groupMaxBudget,
         budget_currency: request_details?.budget_currency || currencyForPhone(hotels?.[0]?.hotel_phone).currency,
       });
       await db
@@ -1008,8 +1001,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
         hotels: hotelsSlice,
         request_details: normalizedRequestDetails,
       });
-      // 全てDDH登録ホテルなら無料
-      const allInternal = hotelsSlice.every((h: any) => h.hotel_source === 'internal');
+      // Two-call model: start the free inquiry call immediately; the $7 fee is
+      // charged later at the accept step.
+      await db.prepare(`UPDATE concierge_call_groups SET payment_status = 'free', updated_at = datetime('now') WHERE id = ?`).bind(result.group_id).run().catch(() => {});
+      await db.prepare(`UPDATE concierge_calls SET payment_status = 'free', updated_at = datetime('now') WHERE call_group_id = ?`).bind(result.group_id).run().catch(() => {});
+      const c1 = await initiateNextGroupCall(env, db, result.group_id).catch((e: any) => { console.error('[chat] __create_call_group call1 trigger failed', e); return null; });
       return new Response(
         JSON.stringify({
           response: '',
@@ -1017,9 +1013,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           metadata: {
             group_id: result.group_id,
             call_ids: result.call_ids,
-            payment_required: !allInternal,
-            is_free: allInternal,
-            amount_usd: allInternal ? 0 : 7,
+            payment_required: false,
+            is_free: true,
+            amount_usd: 0,
+            call_triggered: String(c1?.status || '') === 'calling',
             budget_info: result.budget_info,
           },
         }),
