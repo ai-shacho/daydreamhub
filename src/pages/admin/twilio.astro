@@ -106,6 +106,11 @@ const statusColor: Record<string, string> = {
             class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
           <p class="text-xs text-slate-400 mt-0.5">通話①で金額が取れたら、この宛先へ見積りメール（「Book at this price」リンク）が届きます。承認→$7→通話②で確定。</p>
         </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">ゲスト電話番号（テスト用）</label>
+          <input id="guest-phone" type="tel" value="+81 8012345678" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          <p class="text-xs text-slate-400 mt-0.5">確定時の通話で読み上げられるゲストの電話番号。</p>
+        </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-sm font-medium text-slate-700 mb-1">ゲスト名</label>
@@ -210,6 +215,7 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
   const note = document.getElementById('call-note').value.trim();
   const guestName = document.getElementById('guest-name').value.trim();
   const guestEmail = document.getElementById('guest-email').value.trim();
+  const guestPhone = (document.getElementById('guest-phone').value || '').trim();
   const guestCount = Number(document.getElementById('guest-count').value || 1);
   const checkInDate = document.getElementById('check-in-date').value;
   const checkInTime = document.getElementById('check-in-time').value;
@@ -238,6 +244,7 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
         to_number: toNumber,
         guest_name: guestName || 'Test Guest',
         guest_email: guestEmail || null,
+        guest_phone: guestPhone || '+81 8012345678',
         guest_count: Number.isFinite(guestCount) ? Math.max(1, guestCount) : 1,
         check_in_date: checkInDate,
         check_in_time: checkInTime,

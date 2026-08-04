@@ -140,6 +140,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const conciergeMeta = {
     guest_name: String(body?.guest_name || 'Test Guest').trim() || 'Test Guest',
     guest_email: String(body?.guest_email || '').trim(),
+    guest_phone: String(body?.guest_phone || '+81 8012345678').trim() || '+81 8012345678',
     guest_count: Math.max(1, Number(body?.guest_count || body?.guests || 1) || 1),
     check_in_date: String(body?.check_in_date || '').trim(),
     check_in_time: String(body?.check_in_time || '').trim(),
@@ -175,6 +176,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       const reqDetails = JSON.stringify({
         check_in_date: conciergeMeta.check_in_date, check_in_time: conciergeMeta.check_in_time, check_out_time: conciergeMeta.check_out_time,
         guests: conciergeMeta.guest_count, guest_name: conciergeMeta.guest_name, guest_email: conciergeMeta.guest_email,
+        guest_phone: conciergeMeta.guest_phone,
         budget_currency: currencyForPhone(toNumber).currency,
       });
       await db.prepare(`INSERT INTO concierge_calls (session_id, call_group_id, call_order, hotel_name, hotel_phone, hotel_source, request_details, status, guest_name, guest_email, created_at, updated_at) VALUES (?, ?, 1, 'Test Hotel', ?, 'external', ?, 'calling', ?, ?, datetime('now'), datetime('now'))`).bind(sessId, gid, toNumber, reqDetails, conciergeMeta.guest_name, conciergeMeta.guest_email || null).run().catch(() => {});
