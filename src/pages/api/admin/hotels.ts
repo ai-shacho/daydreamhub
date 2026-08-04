@@ -116,7 +116,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   }
 
   const allowed = ['name','name_ja','slug','description','description_ja','city','country','address',
-    'thumbnail_url','property_type','email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy','is_active','status','currency'];
+    'thumbnail_url','property_type','email','contact_email','phone','latitude','longitude','ical_url','auto_call_enabled','amenities','cancellation_policy','is_active','status','currency'];
   const updates: string[] = [];
   const params: any[] = [];
   for (const key of allowed) {

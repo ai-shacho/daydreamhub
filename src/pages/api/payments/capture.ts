@@ -210,7 +210,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
       if (RESEND_API_KEY) {
         const hotel = await db
-          .prepare(`SELECT h.name, h.email, h.city, h.country, u.email as owner_login_email
+          .prepare(`SELECT h.name, h.email, h.contact_email, h.city, h.country, u.email as owner_login_email
                     FROM hotels h LEFT JOIN users u ON u.email = h.email
                     WHERE h.id = ?`)
           .bind(hotelId)
@@ -225,9 +225,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
         // ① Hotel notification email
         if (planFull) {
           try {
+            // Notify BOTH the booking-management email (予約管理) and the
+            // person-in-charge email (担当者), plus the owner login, deduped.
             const bookingEmail: string = (hotel as any)?.email || '';
-            const contactEmail: string = (hotel as any)?.owner_login_email || '';
-            const notifyEmails = [...new Set([bookingEmail, contactEmail].filter(Boolean))];
+            const contactEmail: string = (hotel as any)?.contact_email || '';
+            const ownerLoginEmail: string = (hotel as any)?.owner_login_email || '';
+            const notifyEmails = [...new Set([bookingEmail, contactEmail, ownerLoginEmail].filter(Boolean))];
             if (notifyEmails.length > 0) {
               const subject = `New Booking #${bookingId} - ${guest_name} on ${check_in_date}`;
               const emailResult = await sendBookingNotificationToHotel(RESEND_API_KEY, {
