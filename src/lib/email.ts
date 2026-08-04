@@ -944,7 +944,7 @@ export async function sendConciergeQuoteEmail(
   const subject = `Your day-use quote for ${data.hotelName} — ${priceStr}`;
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
-  <div style="background:#0d9488;color:white;padding:24px;border-radius:8px 8px 0 0">
+  <div style="background:#46a3c2;color:white;padding:24px;border-radius:8px 8px 0 0">
     <h1 style="margin:0;font-size:20px">We found a price for you</h1>
     <p style="margin:8px 0 0;opacity:0.9">${escapeHtml(data.hotelName)}</p>
   </div>
@@ -955,15 +955,15 @@ export async function sendConciergeQuoteEmail(
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">When</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(when)}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(String(data.guests))}</td></tr>
-      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Quoted price</td><td style="padding:8px 12px;border:1px solid #ddd;font-size:18px;font-weight:700;color:#0d9488">${priceStr}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Quoted price</td><td style="padding:8px 12px;border:1px solid #ddd;font-size:18px;font-weight:700;color:#37879f">${priceStr}</td></tr>
     </table>
     <p style="color:#374151;line-height:1.6">If this works for you, tap below to book. A <strong>$7 DayDreamHub booking fee</strong> applies; the room price above is paid directly to the hotel on-site.</p>
     <div style="text-align:center;margin:24px 0">
-      <a href="${data.acceptUrl}" style="display:inline-block;padding:14px 32px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px">
+      <a href="${data.acceptUrl}" style="display:inline-block;padding:14px 32px;background:#46a3c2;color:white;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px">
         Book at this price →
       </a>
     </div>
-    <p style="color:#6b7280;font-size:13px;line-height:1.6">After you confirm, we call the hotel again to finalize your booking and email you the confirmation. If you have any questions, reply to this email or contact us at <a href="mailto:contact@daydreamhub.com" style="color:#0d9488">contact@daydreamhub.com</a>.</p>
+    <p style="color:#6b7280;font-size:13px;line-height:1.6">After you confirm, we call the hotel again to finalize your booking and email you the confirmation. If you have any questions, reply to this email or contact us at <a href="mailto:contact@daydreamhub.com" style="color:#46a3c2">contact@daydreamhub.com</a>.</p>
     ${emailFooter()}
   </div>
 </div>`;
