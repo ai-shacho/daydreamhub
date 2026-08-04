@@ -939,7 +939,13 @@ export async function sendConciergeQuoteEmail(
     price: string | number; priceCurrency: string; acceptUrl: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  const when = [data.date, [data.checkIn, data.checkOut].filter(Boolean).join(' – ')].filter(Boolean).join('  ·  ');
+  const fmtQuoteDate = (iso: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    if (!m) return String(iso || '');
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${months[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+  };
+  const when = [fmtQuoteDate(data.date), [data.checkIn, data.checkOut].filter(Boolean).join(' – ')].filter(Boolean).join('  ·  ');
   const priceStr = `${data.price} ${escapeHtml(data.priceCurrency || '')}`.trim();
   const subject = `Your day-use quote for ${data.hotelName} — ${priceStr}`;
   const html = `
@@ -957,7 +963,7 @@ export async function sendConciergeQuoteEmail(
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(String(data.guests))}</td></tr>
       <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Quoted price</td><td style="padding:8px 12px;border:1px solid #ddd;font-size:18px;font-weight:700;color:#37879f">${priceStr}</td></tr>
     </table>
-    <p style="color:#374151;line-height:1.6">If this works for you, tap below to book. A <strong>$7 DayDreamHub booking fee</strong> applies; the room price above is paid directly to the hotel on-site.</p>
+    <p style="color:#374151;line-height:1.6">If this works for you, tap below to book. A <strong>$7 DayDreamHub booking fee</strong> applies; the room price above is paid directly to the hotel on-site. <strong>If the hotel cannot confirm your booking, this $7 fee is refunded in full.</strong></p>
     <div style="text-align:center;margin:24px 0">
       <a href="${data.acceptUrl}" style="display:inline-block;padding:14px 32px;background:#46a3c2;color:white;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px">
         Book at this price →

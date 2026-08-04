@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { sendConciergeResultEmail, sendConciergeQuoteEmail, type ConciergeResultEmailType } from '../../../lib/email';
+import { getAccessToken, refundCapture, resolvePayPalConfig } from '../../../lib/paypal';
 import { currencyForPhone, spokenNameForCurrency } from '../../../lib/phoneCurrency';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
@@ -799,6 +800,26 @@ async function sendAdminConciergeBookedEmail(env: any, db: DbLike | null, concie
   }).catch((e: any) => console.error('[twilio-voice] admin concierge email failed', e));
 }
 
+// Two-call model: if the confirmation call fails (hotel declines / no answer),
+// refund the $7 DDH fee the guest paid at the accept step (as promised). The fee
+// capture is stored on the accept-step call in the same group.
+async function refundAcceptFeeIfPaid(env: any, db: DbLike | null, groupId: number | null) {
+  if (!db || !groupId || !env) return;
+  try {
+    const paid: any = await db.prepare(
+      `SELECT id, paypal_capture_id FROM concierge_calls WHERE call_group_id = ? AND fee_payment_status = 'paid' AND paypal_capture_id IS NOT NULL ORDER BY id ASC LIMIT 1`
+    ).bind(groupId).first().catch(() => null);
+    if (!paid?.paypal_capture_id) return;
+    const pp = resolvePayPalConfig(env);
+    if (!pp.clientId || !pp.secret) return;
+    const at = await getAccessToken(pp.clientId, pp.secret, pp.mode);
+    await refundCapture(at, String(paid.paypal_capture_id), pp.mode, 7);
+    await db.prepare(`UPDATE concierge_calls SET fee_payment_status = 'refunded', updated_at = datetime('now') WHERE id = ?`).bind(paid.id).run().catch(() => {});
+  } catch (e) {
+    console.error('[twilio-voice] refundAcceptFeeIfPaid failed', { groupId, message: (e as any)?.message || String(e) });
+  }
+}
+
 async function finalizeConciergeOutcome(
   env: any,
   db: DbLike | null,
@@ -1186,6 +1207,8 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           await db.prepare(`UPDATE concierge_calls SET status='completed', outcome='unavailable', ai_summary=?, updated_at=datetime('now') WHERE id=? AND COALESCE(outcome,'') NOT IN ('booked','available','unavailable','no_answer','over_budget','quoted')`).bind('confirm_declined_by_hotel', resolvedConciergeCallId || logId).run().catch(() => {});
           const grp: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id=?`).bind(resolvedConciergeCallId || logId).first().catch(() => null);
           if (grp?.call_group_id) await db.prepare("UPDATE concierge_call_groups SET status='confirm_failed', updated_at=datetime('now') WHERE id=? AND status NOT IN ('success')").bind(grp.call_group_id).run().catch(() => {});
+          // Booking not approved → refund the $7 fee in full (as promised).
+          await refundAcceptFeeIfPaid(env, db, grp?.call_group_id || null);
           await sendResultEmailOnce(env, db, resolvedConciergeCallId || logId, 'declined');
         }
         return twiml(`<Say voice="${VOICE}">Understood, thank you for letting us know. We will inform our guest. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye.</Say><Hangup/>`);
@@ -1193,6 +1216,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_confirm2_no_answer', callSid ? `twilio:${callSid}` : undefined);
         if (phase === 'concierge') {
+          const grp: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id=?`).bind(resolvedConciergeCallId || logId).first().catch(() => null);
+          // Booking not confirmed → refund the $7 fee in full (as promised).
+          await refundAcceptFeeIfPaid(env, db, grp?.call_group_id || null);
           await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_confirm2_answer');
         }
         return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
