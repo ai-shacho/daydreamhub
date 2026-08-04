@@ -137,6 +137,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const conciergeMeta = {
     guest_name: String(body?.guest_name || 'Test Guest').trim() || 'Test Guest',
+    guest_email: String(body?.guest_email || '').trim(),
     guest_count: Math.max(1, Number(body?.guest_count || body?.guests || 1) || 1),
     check_in_date: String(body?.check_in_date || '').trim(),
     check_in_time: String(body?.check_in_time || '').trim(),

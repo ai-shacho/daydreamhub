@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { sendConciergeResultEmail, sendConciergeQuoteEmail, type ConciergeResultEmailType } from '../../../lib/email';
+import { sendConciergeResultEmail, sendConciergeQuoteEmail, sendGuestBookingConfirmation, type ConciergeResultEmailType } from '../../../lib/email';
 import { currencyForPhone, spokenNameForCurrency } from '../../../lib/phoneCurrency';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
@@ -114,7 +114,7 @@ function readQuotedAmountFromNote(note: unknown): number | null {
   return Math.round(v * 100) / 100;
 }
 
-function readBookingTestMetaFromNote(note: unknown): { guest_name?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null {
+function readBookingTestMetaFromNote(note: unknown): { guest_name?: string; guest_email?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null {
   const text = String(note ?? '');
   const m = text.match(/\[booking-test:(\{.*\})\]/);
   if (!m?.[1]) return null;
@@ -122,6 +122,7 @@ function readBookingTestMetaFromNote(note: unknown): { guest_name?: string; gues
     const parsed = JSON.parse(m[1]);
     return {
       guest_name: String(parsed?.guest_name || '').trim() || undefined,
+      guest_email: String(parsed?.guest_email || '').trim() || undefined,
       guest_count: Number(parsed?.guest_count || parsed?.guests || 0) || undefined,
       check_in_date: String(parsed?.check_in_date || '').trim() || undefined,
       check_in_time: String(parsed?.check_in_time || '').trim() || undefined,
@@ -1108,7 +1109,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       : (booking?.guest_name || bookingTestMeta?.guest_name || 'the guest');
     const bookingGuestEmail = phase === 'concierge'
       ? (conciergeCall?.guest_email || conciergeDetails.guest_email || '')
-      : (booking?.guest_email || '');
+      : (booking?.guest_email || bookingTestMeta?.guest_email || '');
     const bookingGuestPhone = phase === 'concierge'
       ? (conciergeCall?.guest_phone || conciergeDetails.guest_phone || '')
       : (booking?.guest_phone || '');
@@ -1617,6 +1618,25 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           );
         } else if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='confirmed_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
+        }
+        // Admin test call (booking phase): email the entered guest address so the
+        // email path can be verified end-to-end.
+        if (phase !== 'concierge' && env?.RESEND_API_KEY && bookingGuestEmail) {
+          await sendGuestBookingConfirmation(env.RESEND_API_KEY, {
+            bookingId: booking?.id || 0,
+            guestName: bookingGuestName || 'Test Guest',
+            guestEmail: bookingGuestEmail,
+            hotelName: 'DayDreamHub Test Hotel',
+            hotelCity: '', hotelCountry: '',
+            planName: 'Day-use (test)',
+            checkInDate: bookingCheckInDate || '',
+            checkInTime: bookingCheckInTime || '',
+            checkOutTime: bookingCheckOutTime || '',
+            adults: bookingGuests || 1, children: 0,
+            totalPriceUsd: finalAmount || 0,
+            localCurrency: budgetCurrency, localAmount: finalAmount || 0,
+            notes: 'Admin test call', cancellationHours: 24,
+          } as any).catch((e: any) => console.error('[twilio-voice] test guest email failed', e));
         }
         const detailAction = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, 0);
         return twiml(

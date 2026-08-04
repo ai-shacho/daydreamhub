@@ -95,20 +95,16 @@ const statusColor: Record<string, string> = {
       <h3 class="font-semibold text-slate-800 mb-4">📲 Concierge テスト発信</h3>
       <form id="dial-form" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1">ホテル選択（任意）</label>
-          <select id="hotel-select" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm">
-            <option value="">— ホテルを選択 —</option>
-            {hotels.map(h => (
-              <option value={h.id} data-phone={h.phone} data-name={h.name}>
-                {h.name} ({h.city}) — {h.phone}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">電話番号 *</label>
           <input id="to-number" type="tel" placeholder="+81312345678" required
             class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono" />
+          <p class="text-xs text-slate-400 mt-0.5">誤発信防止のため、番号は手入力してください。</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">ゲストメール（テスト用）</label>
+          <input id="guest-email" type="email" placeholder="test@example.com"
+            class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          <p class="text-xs text-slate-400 mt-0.5">入力すると、予約確定時にこの宛先へ確認メールを送信します。</p>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -206,21 +202,14 @@ const statusColor: Record<string, string> = {
   }
 })();
 
-document.getElementById('hotel-select')?.addEventListener('change', function() {
-  const opt = this.options[this.selectedIndex];
-  const phone = opt?.getAttribute('data-phone') || '';
-  document.getElementById('to-number').value = phone;
-});
-
 document.getElementById('dial-form')?.addEventListener('submit', async function(e) {
   e.preventDefault();
   const btn = document.getElementById('dial-btn');
   const result = document.getElementById('dial-result');
-  const hotelSelect = document.getElementById('hotel-select');
-  const hotelId = hotelSelect?.value || null;
   const toNumber = document.getElementById('to-number').value.trim();
   const note = document.getElementById('call-note').value.trim();
   const guestName = document.getElementById('guest-name').value.trim();
+  const guestEmail = document.getElementById('guest-email').value.trim();
   const guestCount = Number(document.getElementById('guest-count').value || 1);
   const checkInDate = document.getElementById('check-in-date').value;
   const checkInTime = document.getElementById('check-in-time').value;
@@ -247,8 +236,8 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
         action: 'dial',
         phase: 'booking',
         to_number: toNumber,
-        hotel_id: hotelId ? parseInt(hotelId) : null,
         guest_name: guestName || 'Test Guest',
+        guest_email: guestEmail || null,
         guest_count: Number.isFinite(guestCount) ? Math.max(1, guestCount) : 1,
         check_in_date: checkInDate,
         check_in_time: checkInTime,
