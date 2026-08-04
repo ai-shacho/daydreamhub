@@ -26,6 +26,7 @@ type Step =
   | 'outreach_phase_callback_email'
   | 'ask_dayuse'
   | 'ask_availability'
+  | 'confirm2_person'
   | 'confirm2'
   | 'ask_price'
   | 'confirm_prices'
@@ -162,6 +163,7 @@ function normalizeStep(raw: string | null): Step {
   if (s === 'outreach_phase_callback_email') return 'outreach_phase_callback_email';
   if (s === 'ask_dayuse') return 'ask_dayuse';
   if (s === 'ask_availability') return 'ask_availability';
+  if (s === 'confirm2_person') return 'confirm2_person';
   if (s === 'confirm2') return 'confirm2';
   if (s === 'ask_price') return 'ask_price';
   if (s === 'confirm_prices') return 'confirm_prices';
@@ -1171,17 +1173,43 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
       // Two-call model: call 2 confirms an already-quoted, guest-accepted booking.
       if (phase === 'concierge' && String(conciergeDetails?.call_mode || '') === 'confirm') {
-        const cprice = conciergeDetails?.confirmed_price;
-        const ccur = spokenNameForCurrency(String(conciergeDetails?.price_currency || budgetCurrency || 'USD'));
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_confirm2_intro', callSid ? `twilio:${callSid}` : undefined);
-        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, 0);
-        return gatherTwiml(action, `Hello, this is DayDreamHub, calling back about the day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Our guest has accepted your price of ${cprice} ${ccur}. Can we go ahead and confirm this booking? Press 1 or say yes to confirm. Press 2 or say no. Press 3 to hear this again.`);
+        // The person answering call 2 may differ from call 1 — check first.
+        const action = makeWebhookUrl(request, logId, 'confirm2_person', inferredPhase, 0);
+        return gatherTwiml(action, `Hello, this is DayDreamHub, calling back about the day-use inquiry we discussed with your property earlier for ${bookingCheckInDate}${timeInfo}. Are you the same person we spoke with on that call? Press 1 or say yes. Press 2 or say no.`);
       }
 
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
       const action = makeWebhookUrl(request, logId, 'ask_dayuse', inferredPhase, 0);
       const prompt = `Hello, this is DayDreamHub, an online platform specializing in day-use hotel bookings. Do you offer day-use plans for guests? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
       return gatherTwiml(action, prompt);
+    }
+
+    if (step === 'confirm2_person') {
+      const cprice = conciergeDetails?.confirmed_price;
+      const ccur = spokenNameForCurrency(String(conciergeDetails?.price_currency || budgetCurrency || 'USD'));
+      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+      if (isRepeat(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm2_person', inferredPhase, turn + 1);
+        return gatherTwiml(action, `Are you the same person we spoke with earlier about the day-use inquiry? Press 1 or say yes. Press 2 or say no.`);
+      }
+      // Same person → go straight to confirmation.
+      if (isYes(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, 0);
+        return gatherTwiml(action, `Thank you. Our guest has accepted your price of ${cprice} ${ccur} for the day-use on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Can we go ahead and confirm this booking? Press 1 or say yes to confirm. Press 2 or say no.`);
+      }
+      // Different person → ask to hand the phone to the right person, then confirm.
+      if (isNo(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, 0);
+        return gatherTwiml(action, `No problem. Could you please pass the phone to the person who handled our earlier call, or to anyone who can confirm this booking? When they are ready: our guest has accepted the price of ${cprice} ${ccur} for the day-use on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. To confirm the booking, press 1 or say yes. To decline, press 2 or say no.`, { timeout: 15 });
+      }
+      if (turn >= MAX_RETRY) {
+        // Could not tell — proceed to confirmation anyway (details are re-stated).
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, 0);
+        return gatherTwiml(action, `Our guest has accepted your price of ${cprice} ${ccur} for the day-use on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Can we go ahead and confirm this booking? Press 1 or say yes. Press 2 or say no.`);
+      }
+      const action = makeWebhookUrl(request, logId, 'confirm2_person', inferredPhase, turn + 1);
+      return gatherTwiml(action, `Sorry, I didn't catch that. Are you the same person we spoke with earlier about the day-use inquiry? Press 1 or say yes. Press 2 or say no.`);
     }
 
     if (step === 'confirm2') {
