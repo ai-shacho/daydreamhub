@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { sendConciergeResultEmail, sendConciergeQuoteEmail, sendGuestBookingConfirmation, type ConciergeResultEmailType } from '../../../lib/email';
+import { sendConciergeResultEmail, sendConciergeQuoteEmail, type ConciergeResultEmailType } from '../../../lib/email';
 import { currencyForPhone, spokenNameForCurrency } from '../../../lib/phoneCurrency';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
@@ -1625,25 +1625,6 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           );
         } else if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='confirmed_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
-        }
-        // Admin test call (booking phase): email the entered guest address so the
-        // email path can be verified end-to-end.
-        if (phase !== 'concierge' && env?.RESEND_API_KEY && bookingGuestEmail) {
-          await sendGuestBookingConfirmation(env.RESEND_API_KEY, {
-            bookingId: booking?.id || 0,
-            guestName: bookingGuestName || 'Test Guest',
-            guestEmail: bookingGuestEmail,
-            hotelName: 'DayDreamHub Test Hotel',
-            hotelCity: '', hotelCountry: '',
-            planName: 'Day-use (test)',
-            checkInDate: bookingCheckInDate || '',
-            checkInTime: bookingCheckInTime || '',
-            checkOutTime: bookingCheckOutTime || '',
-            adults: bookingGuests || 1, children: 0,
-            totalPriceUsd: finalAmount || 0,
-            localCurrency: budgetCurrency, localAmount: finalAmount || 0,
-            notes: 'Admin test call', cancellationHours: 24,
-          } as any).catch((e: any) => console.error('[twilio-voice] test guest email failed', e));
         }
         const detailAction = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, 0);
         return twiml(
