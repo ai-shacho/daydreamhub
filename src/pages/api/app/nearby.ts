@@ -89,6 +89,18 @@ function resolveQueryToCoords(raw: string): { lat: number; lng: number; label: s
 // urgency) and is worth an extra Workers AI round-trip to interpret.
 const INTENT_RE = /[0-9０-９]|[$￥¥]|ドル|円|予算|以内|以下|まで|安[いく]|cheap|budget|under|営業中|今すぐ|いますぐ|open now|right now/i;
 
+// Deterministic budget extraction — preferred over the LLM's numbers, which
+// sometimes arrive silently currency-converted despite instructions.
+function parseBudgetFromText(q: string): { amount: number; currency: string } | null {
+  let m = q.match(/(\d[\d,]*)\s*円/);
+  if (m) return { amount: Number(m[1].replace(/,/g, '')), currency: 'JPY' };
+  m = q.match(/[$＄]\s*(\d[\d,]*)/) || q.match(/(\d[\d,]*)\s*(?:ドル|dollars?|usd|bucks)/i);
+  if (m) return { amount: Number(m[1].replace(/,/g, '')), currency: 'USD' };
+  m = q.match(/(\d[\d,]*)\s*(?:ユーロ|euros?|eur)/i);
+  if (m) return { amount: Number(m[1].replace(/,/g, '')), currency: 'EUR' };
+  return null;
+}
+
 // Extract structured intent from a natural-language voice query. Best-effort:
 // any failure returns null and the caller falls back to the plain resolvers.
 async function extractIntent(
@@ -117,12 +129,16 @@ async function extractIntent(
       const m = text.match(/\{[\s\S]*?\}/);
       if (!m) continue;
       const j = JSON.parse(m[0]);
-      // Convert the stated budget to USD ourselves — LLM currency math is
-      // unreliable (observed 5000 JPY → $49). Rates are USD-based.
+      // Budget: trust the regex over the LLM (observed the model converting
+      // currency on its own despite instructions), then convert to USD with
+      // real rates.
       let budgetUsd: number | null = null;
-      const amount = Number(j.budget);
+      const fromText = parseBudgetFromText(q);
+      const amount = fromText ? fromText.amount : Number(j.budget);
+      const cur = fromText
+        ? fromText.currency
+        : typeof j.currency === 'string' ? j.currency.toUpperCase() : 'USD';
       if (Number.isFinite(amount) && amount > 0) {
-        const cur = typeof j.currency === 'string' ? j.currency.toUpperCase() : 'USD';
         if (cur === 'USD') {
           budgetUsd = Math.round(amount);
         } else {
