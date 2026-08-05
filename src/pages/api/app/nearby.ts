@@ -331,6 +331,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
       city: h.city,
       country: h.country,
       thumbnail: h.thumbnail_url || null,
+      lat: h.latitude ?? null,
+      lng: h.longitude ?? null,
       km: h.km,
       minPrice: h.min_price ?? null,
       checkIn: h.check_in || null,

@@ -34,6 +34,8 @@ const t = isJa
       sortPrice: '料金順',
       openOnly: '営業時間内',
       budgetAny: '予算上限なし',
+      mapView: '🗺 マップ',
+      listView: '📋 リスト',
       budgetUnder: '〜',
       installBanner: 'このアプリをホーム画面に追加できます',
       installBtn: '追加する',
@@ -64,6 +66,8 @@ const t = isJa
       sortPrice: 'By price',
       openOnly: 'Open now',
       budgetAny: 'Any budget',
+      mapView: '🗺 Map',
+      listView: '📋 List',
       budgetUnder: 'Under ',
       installBanner: 'Add this app to your home screen',
       installBtn: 'Install',
@@ -196,7 +200,18 @@ const quickChips: Array<{ label: string; q: string }> = isJa
       }
       #installBanner button.x { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; }
       #status { margin: 12px 0 10px; color: var(--muted); font-size: 12px; min-height: 16px; }
+      #map { display: none; height: 62vh; border-radius: 14px; z-index: 0; }
+      #map.show { display: block; }
+      .price-pin {
+        display: inline-block; background: var(--accent); color: #0b1120;
+        font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 999px;
+        border: 2px solid #0b1120; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.5);
+      }
+      .leaflet-popup-content-wrapper { background: var(--card); color: var(--text); border-radius: 12px; }
+      .leaflet-popup-tip { background: var(--card); }
+      .leaflet-popup-content a { color: var(--accent); font-weight: 700; }
       #results { display: flex; flex-direction: column; gap: 10px; }
+      #results.hide { display: none; }
       a.card {
         display: flex; align-items: center; gap: 12px; background: var(--card);
         border-radius: 14px; padding: 10px; text-decoration: none; color: var(--text);
@@ -238,6 +253,7 @@ const quickChips: Array<{ label: string; q: string }> = isJa
       </div>
 
       <div class="filters" id="filters">
+        <button id="mapBtn">{t.mapView}</button>
         <button id="sortBtn">{t.sortDist} ⇅</button>
         <button id="openBtn">✓ {t.openOnly}</button>
         <select id="budgetSel">
@@ -249,6 +265,7 @@ const quickChips: Array<{ label: string; q: string }> = isJa
       </div>
 
       <div id="status"></div>
+      <div id="map"></div>
       <div id="results"></div>
 
       <div id="installBanner">
@@ -321,6 +338,8 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         hotels.sort((a, b) => sortBy === 'price'
           ? nullLast(a.minPrice) - nullLast(b.minPrice)
           : nullLast(a.km) - nullLast(b.km));
+        currentView = hotels;
+        if (mapMode && map) updateMap(hotels);
 
         const label = data.center && data.center.label
           ? `${data.center.label}${t.nearLabel}`
@@ -380,6 +399,92 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         }
         track('app_ai_intent', { budget: intent.budgetUsd || '', open: !!intent.openNow });
       }
+
+      // Map view — Leaflet is loaded only when the user first opens the map.
+      let mapMode = false;
+      let map = null;
+      let markerLayer = null;
+      let currentView = [];
+      let leafletPromise = null;
+
+      function loadLeaflet() {
+        if (leafletPromise) return leafletPromise;
+        leafletPromise = new Promise((resolve, reject) => {
+          const css = document.createElement('link');
+          css.rel = 'stylesheet';
+          css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+          document.head.appendChild(css);
+          const s = document.createElement('script');
+          s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+        return leafletPromise;
+      }
+
+      function updateMap(hotels) {
+        if (!map) return;
+        markerLayer.clearLayers();
+        const pts = [];
+        hotels.forEach((h) => {
+          if (h.lat == null || h.lng == null) return;
+          pts.push([h.lat, h.lng]);
+          const name = isJa && h.nameJa ? h.nameJa : h.name;
+          const href = (isJa ? '/ja/hotel/' : '/hotel/') + encodeURIComponent(h.slug);
+          const pin = L.divIcon({
+            className: '',
+            html: `<span class="price-pin">${h.minPrice != null ? '$' + h.minPrice : '●'}</span>`,
+            iconAnchor: [18, 12],
+          });
+          L.marker([h.lat, h.lng], { icon: pin })
+            .bindPopup(
+              `<div style="min-width:140px"><b>${esc(name)}</b><br>` +
+              `${h.km != null ? h.km + 'km ・ ' : ''}${h.minPrice != null ? '$' + h.minPrice + t.from : ''}<br>` +
+              `<a href="${href}">${isJa ? '詳細を見る' : 'View details'}</a></div>`
+            )
+            .addTo(markerLayer);
+        });
+        const c = lastData && lastData.center;
+        if (c) {
+          L.circleMarker([c.lat, c.lng], { radius: 7, color: '#38bdf8', fillColor: '#38bdf8', fillOpacity: 0.9 })
+            .addTo(markerLayer);
+          pts.push([c.lat, c.lng]);
+        }
+        if (pts.length) map.fitBounds(pts, { padding: [36, 36], maxZoom: 14 });
+      }
+
+      $('mapBtn').addEventListener('click', async () => {
+        mapMode = !mapMode;
+        $('mapBtn').textContent = mapMode ? t.listView : t.mapView;
+        $('mapBtn').classList.toggle('on', mapMode);
+        track('app_map_toggle', { on: mapMode });
+        if (!mapMode) {
+          $('map').classList.remove('show');
+          results.classList.remove('hide');
+          return;
+        }
+        try {
+          await loadLeaflet();
+        } catch (e) {
+          mapMode = false;
+          $('mapBtn').textContent = t.mapView;
+          $('mapBtn').classList.remove('on');
+          status.textContent = '⚠️ map load failed';
+          return;
+        }
+        $('map').classList.add('show');
+        results.classList.add('hide');
+        if (!map) {
+          map = L.map('map');
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            maxZoom: 19,
+          }).addTo(map);
+          markerLayer = L.layerGroup().addTo(map);
+        }
+        setTimeout(() => { map.invalidateSize(); updateMap(currentView); }, 60);
+      });
 
       // Filter bar
       $('sortBtn').addEventListener('click', () => {
