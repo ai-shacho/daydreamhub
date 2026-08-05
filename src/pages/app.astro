@@ -344,6 +344,32 @@ const quickChips: Array<{ label: string; q: string }> = isJa
           .join('');
       }
 
+      // Voice queries like "予算50ドルで今すぐ" come back with a server-parsed
+      // intent — flip the visible filter controls so the user sees what was
+      // understood and can undo it.
+      function applyIntent(intent) {
+        if (!intent) return;
+        if (intent.budgetUsd) {
+          const sel = $('budgetSel');
+          let opt = sel.querySelector('option[data-ai]');
+          if (!opt) {
+            opt = document.createElement('option');
+            opt.setAttribute('data-ai', '');
+            sel.appendChild(opt);
+          }
+          opt.value = String(intent.budgetUsd);
+          opt.textContent = t.budgetUnder + '$' + intent.budgetUsd;
+          sel.value = opt.value;
+          sel.classList.add('on');
+          budget = opt.value;
+        }
+        if (intent.openNow) {
+          openOnly = true;
+          $('openBtn').classList.add('on');
+        }
+        track('app_ai_intent', { budget: intent.budgetUsd || '', open: !!intent.openNow });
+      }
+
       // Filter bar
       $('sortBtn').addEventListener('click', () => {
         sortBy = sortBy === 'km' ? 'price' : 'km';
@@ -369,7 +395,10 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         if (a) track('app_card_tap', { slug: a.dataset.slug });
       });
 
+      let userSearched = false;
+
       async function search(params) {
+        userSearched = true;
         status.textContent = t.searching;
         results.innerHTML = '';
         try {
@@ -377,6 +406,7 @@ const quickChips: Array<{ label: string; q: string }> = isJa
           const data = await res.json();
           if (data.error) throw new Error(data.error);
           track('app_search', { mode: data.mode, q: params.q || '' });
+          applyIntent(data.intent);
           render(data);
         } catch (e) {
           status.textContent = '⚠️ ' + e.message;
@@ -432,9 +462,9 @@ const quickChips: Array<{ label: string; q: string }> = isJa
 
       // Instant results on open: server-side IP geolocation, no permission
       // prompt. Quietly does nothing when the location can't be estimated.
-      fetch('/api/app/nearby')
+      fetch('/api/app/nearby?limit=24')
         .then((r) => r.json())
-        .then((d) => { if (d.hotels && d.hotels.length && !results.innerHTML) render(d); })
+        .then((d) => { if (d.hotels && d.hotels.length && !userSearched) render(d); })
         .catch(() => {});
 
       // PWA service worker (scoped to /app so the main site is untouched)
