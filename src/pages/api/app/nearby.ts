@@ -91,6 +91,20 @@ const INTENT_RE = /[0-9０-９]|[$￥¥]|ドル|円|予算|以内|以下|まで|
 
 // Deterministic budget extraction — preferred over the LLM's numbers, which
 // sometimes arrive silently currency-converted despite instructions.
+const OPEN_NOW_RE = /今すぐ|いますぐ|営業中|open now|right now/i;
+
+async function toUsd(env: any, amount: number, currency: string): Promise<number | null> {
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  if (currency === 'USD') return Math.round(amount);
+  try {
+    const rates = await getExchangeRates(env.DB);
+    if (rates?.[currency]) return Math.round(amount / rates[currency]);
+  } catch {
+    // no rate available — drop the budget rather than guess
+  }
+  return null;
+}
+
 function parseBudgetFromText(q: string): { amount: number; currency: string } | null {
   let m = q.match(/(\d[\d,]*)\s*円/);
   if (m) return { amount: Number(m[1].replace(/,/g, '')), currency: 'JPY' };
@@ -132,28 +146,15 @@ async function extractIntent(
       // Budget: trust the regex over the LLM (observed the model converting
       // currency on its own despite instructions), then convert to USD with
       // real rates.
-      let budgetUsd: number | null = null;
       const fromText = parseBudgetFromText(q);
       const amount = fromText ? fromText.amount : Number(j.budget);
       const cur = fromText
         ? fromText.currency
         : typeof j.currency === 'string' ? j.currency.toUpperCase() : 'USD';
-      if (Number.isFinite(amount) && amount > 0) {
-        if (cur === 'USD') {
-          budgetUsd = Math.round(amount);
-        } else {
-          try {
-            const rates = await getExchangeRates(env.DB);
-            if (rates?.[cur]) budgetUsd = Math.round(amount / rates[cur]);
-          } catch {
-            // no rate available — drop the budget rather than guess
-          }
-        }
-      }
       return {
         place: typeof j.place === 'string' && j.place.trim() ? j.place.trim() : null,
-        budgetUsd,
-        openNow: j.open_now === true,
+        budgetUsd: await toUsd(env, amount, cur),
+        openNow: j.open_now === true || OPEN_NOW_RE.test(q),
       };
     } catch {
       // try next model
@@ -221,7 +222,21 @@ export const GET: APIRoute = async ({ request, locals }) => {
     // Bare place names skip the AI round-trip; richer queries ("予算50ドルで
     // 今すぐ") get interpreted, which can also rescue an unresolved place.
     if (!center || INTENT_RE.test(q)) {
-      intent = await extractIntent((locals as any).runtime?.env, q);
+      const env = (locals as any).runtime?.env;
+      intent = await extractIntent(env, q);
+      if (!intent) {
+        // LLM output is flaky — budget and urgency are still recoverable
+        // deterministically, only the fuzzy place rescue is lost.
+        const fromText = parseBudgetFromText(q);
+        const openNow = OPEN_NOW_RE.test(q);
+        if (fromText || openNow) {
+          intent = {
+            place: null,
+            budgetUsd: fromText ? await toUsd(env, fromText.amount, fromText.currency) : null,
+            openNow,
+          };
+        }
+      }
       if (!center && intent?.place) center = resolveQueryToCoords(intent.place);
     }
     if (center) {
