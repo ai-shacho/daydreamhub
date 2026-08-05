@@ -3,12 +3,18 @@
 // Light travel-app visual language (white surfaces, teal brand accent, photo
 // area tiles). Two screens: a launcher home and a full-screen map results view
 // with a draggable bottom sheet (Google Maps / Airbnb pattern).
+import { resolvePayPalConfig } from '../lib/paypal';
+
 const acceptLang = Astro.request.headers.get('accept-language') || '';
 const urlLang = Astro.url.searchParams.get('lang');
 const isJa = urlLang ? urlLang === 'ja' : /(^|,)\s*ja/i.test(acceptLang);
 // Same GA4 property as the main site (Layout.astro) so app usage shows up
 // alongside site traffic, distinguished by the app_* event names.
 const ga4Id = ((Astro.locals as any).runtime?.env?.GA4_MEASUREMENT_ID as string) || 'G-5C6B1R3H1Q';
+// In-app checkout: same server-resolved PayPal client id the booking page uses.
+const paypalClientId = (resolvePayPalConfig((Astro.locals as any).runtime?.env).clientId || '').trim();
+// ?test_pay=1 — staging/E2E only: replaces PayPal with the test-capture simulator.
+const testPay = Astro.url.searchParams.get('test_pay') === '1';
 
 const t = isJa
   ? {
@@ -41,6 +47,28 @@ const t = isJa
       installBtn: '追加する',
       iosHint: 'iPhoneの方：共有ボタン（□↑）→「ホーム画面に追加」でアプリになります',
       mapFail: '地図を読み込めませんでした',
+      selectPlan: 'プランを選択',
+      hoursLabel: '利用可能時間',
+      upTo: '最大',
+      ppl: '名',
+      hrs: '時間',
+      bookTitle: '予約内容の入力',
+      dateLabel: '利用日',
+      guestsLabel: '人数',
+      nameLabel: 'お名前',
+      emailLabel: 'メールアドレス',
+      phoneLabel: '電話番号（任意）',
+      total: '合計',
+      fillAll: 'お名前・メール・利用日を入力してください',
+      paying: '決済処理中…',
+      payFailed: '決済に失敗しました。もう一度お試しください。',
+      doneTitle: '予約リクエスト完了！',
+      doneNote: '確認メールをお送りしました。ホテルの確認がとれ次第、確定のご連絡をします。',
+      bookingNo: '予約番号',
+      close: '閉じる',
+      webDetail: 'Web版で写真や詳細を見る →',
+      testPayBtn: 'テスト決済を実行（PayPalなし）',
+      noPlans: '現在予約できるプランがありません',
     }
   : {
       title: 'DayDreamHub — Day-use now',
@@ -72,6 +100,28 @@ const t = isJa
       installBtn: 'Install',
       iosHint: 'On iPhone: Share button (□↑) → "Add to Home Screen"',
       mapFail: 'Could not load the map',
+      selectPlan: 'Choose a plan',
+      hoursLabel: 'Usable hours',
+      upTo: 'Up to ',
+      ppl: ' guests',
+      hrs: 'h',
+      bookTitle: 'Booking details',
+      dateLabel: 'Date',
+      guestsLabel: 'Guests',
+      nameLabel: 'Name',
+      emailLabel: 'Email',
+      phoneLabel: 'Phone (optional)',
+      total: 'Total',
+      fillAll: 'Please fill in name, email and date',
+      paying: 'Processing payment…',
+      payFailed: 'Payment failed. Please try again.',
+      doneTitle: 'Booking requested!',
+      doneNote: 'A confirmation email is on its way. We will notify you once the hotel confirms.',
+      bookingNo: 'Booking #',
+      close: 'Close',
+      webDetail: 'See photos & details on the web →',
+      testPayBtn: 'Run test payment (no PayPal)',
+      noPlans: 'No bookable plans right now',
     };
 
 // Japan is intentionally absent — DDH does not plan to list Japanese hotels.
@@ -270,6 +320,77 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       }
       .price-pin.sel { background: #0f172a; transform: scale(1.15); }
 
+      /* ---------- In-app booking panels ---------- */
+      .panel {
+        position: fixed; inset: 0; z-index: 30; background: var(--bg);
+        transform: translateY(100%); transition: transform .3s cubic-bezier(.25,.8,.35,1);
+        overflow-y: auto; overscroll-behavior: contain;
+      }
+      .panel.open { transform: translateY(0); }
+      #bookPanel { z-index: 40; }
+      #donePanel { z-index: 50; }
+      .panel-hero { position: relative; height: 210px; background: var(--line); }
+      .panel-hero img { width: 100%; height: 100%; object-fit: cover; }
+      .panel-close {
+        position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 10px;
+        width: 40px; height: 40px; border-radius: 12px; border: 0; cursor: pointer;
+        background: rgba(255,255,255,.95); color: var(--text); font-size: 17px;
+        box-shadow: 0 2px 8px rgba(15,23,42,.25); z-index: 2;
+      }
+      .panel-body { padding: 16px 18px calc(28px + env(safe-area-inset-bottom)); max-width: 560px; margin: 0 auto; }
+      .panel-body h2 { font-size: 19px; font-weight: 800; line-height: 1.35; }
+      .panel-meta { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+      .sec-title { font-size: 14px; font-weight: 700; margin: 14px 0 8px; }
+      .plan {
+        display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+        background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
+        padding: 13px 14px; margin-bottom: 10px; cursor: pointer; color: var(--text);
+      }
+      .plan:active { border-color: var(--teal); }
+      .plan .pinfo { flex: 1; min-width: 0; }
+      .plan .pname { font-size: 14px; font-weight: 700; }
+      .plan .pmeta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+      .plan .pprice { flex: none; text-align: right; }
+      .plan .pprice .usd { color: var(--teal-dark); font-size: 15px; font-weight: 800; }
+      .plan .pprice .yen { color: var(--muted); font-size: 11px; margin-top: 2px; }
+      .plan .go { flex: none; color: var(--teal); font-size: 18px; }
+      .web-link { display: block; text-align: center; color: var(--teal-dark); font-size: 13px; font-weight: 600; margin-top: 14px; text-decoration: none; }
+      .sum-box {
+        background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
+        padding: 13px 14px; margin-bottom: 14px; font-size: 14px;
+      }
+      .sum-box .row { display: flex; justify-content: space-between; gap: 10px; margin: 3px 0; }
+      .sum-box .row .k { color: var(--muted); font-size: 13px; flex: none; }
+      .sum-box .row.total { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; font-weight: 800; }
+      .sum-box .row.total .v { color: var(--teal-dark); }
+      .field { margin-bottom: 12px; }
+      .field label { display: block; font-size: 13px; font-weight: 600; color: #475569; margin-bottom: 5px; }
+      .field input, .field select {
+        width: 100%; padding: 13px; border-radius: 12px; border: 1.5px solid var(--line);
+        background: var(--surface); color: var(--text); font-size: 16px;
+      }
+      .field input:focus, .field select:focus { outline: none; border-color: var(--teal); }
+      #payArea { margin-top: 16px; }
+      #payHint { color: var(--warn); font-size: 13px; margin-bottom: 8px; min-height: 17px; }
+      #paypalBox.locked { opacity: .45; pointer-events: none; }
+      .test-pay-btn {
+        width: 100%; padding: 15px; border: 0; border-radius: 14px; cursor: pointer;
+        background: linear-gradient(135deg, #0d9488, #0891b2); color: #fff; font-size: 15px; font-weight: 700;
+      }
+      .done-wrap { text-align: center; padding-top: calc(80px + env(safe-area-inset-top)); }
+      .done-mark {
+        width: 74px; height: 74px; border-radius: 50%; margin: 0 auto 18px;
+        background: var(--teal-soft); border: 2px solid var(--teal);
+        display: flex; align-items: center; justify-content: center; font-size: 34px; color: var(--teal-dark);
+      }
+      .done-wrap h2 { font-size: 21px; font-weight: 800; margin-bottom: 10px; }
+      .done-wrap p { color: var(--muted); font-size: 14px; line-height: 1.7; margin: 0 24px 16px; }
+      .done-box { margin: 0 18px 22px; text-align: left; }
+      .done-close {
+        margin: 0 18px; width: calc(100% - 36px); padding: 15px; border: 0; border-radius: 14px;
+        background: linear-gradient(135deg, #0d9488, #0891b2); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+      }
+
       #installBanner {
         position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
         background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
@@ -351,13 +472,73 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       </div>
     </div>
 
+    <!-- In-app hotel detail -->
+    <div class="panel" id="detailPanel">
+      <div class="panel-hero">
+        <button class="panel-close" id="detailClose">←</button>
+        <img id="detailImg" src="" alt="" />
+      </div>
+      <div class="panel-body">
+        <h2 id="detailName"></h2>
+        <div class="panel-meta" id="detailMeta"></div>
+        <div class="sec-title">{t.selectPlan}</div>
+        <div id="planList"></div>
+        <a class="web-link" id="detailWebLink" href="#">{t.webDetail}</a>
+      </div>
+    </div>
+
+    <!-- In-app booking form + payment -->
+    <div class="panel" id="bookPanel">
+      <div class="panel-body" style="padding-top: calc(14px + env(safe-area-inset-top));">
+        <button class="panel-close" id="bookClose" style="position:static;margin-bottom:12px;">←</button>
+        <h2>{t.bookTitle}</h2>
+        <div class="panel-meta" id="bookHotelLine"></div>
+        <div class="sum-box" id="bookSummary"></div>
+        <div class="field">
+          <label for="bkDate">{t.dateLabel}</label>
+          <input id="bkDate" type="date" />
+        </div>
+        <div class="field">
+          <label for="bkGuests">{t.guestsLabel}</label>
+          <select id="bkGuests"></select>
+        </div>
+        <div class="field">
+          <label for="bkName">{t.nameLabel}</label>
+          <input id="bkName" type="text" autocomplete="name" />
+        </div>
+        <div class="field">
+          <label for="bkEmail">{t.emailLabel}</label>
+          <input id="bkEmail" type="email" autocomplete="email" inputmode="email" />
+        </div>
+        <div class="field">
+          <label for="bkPhone">{t.phoneLabel}</label>
+          <input id="bkPhone" type="tel" autocomplete="tel" inputmode="tel" />
+        </div>
+        <div id="payArea">
+          <div id="payHint"></div>
+          <div id="paypalBox" class="locked"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Booking complete -->
+    <div class="panel" id="donePanel">
+      <div class="done-wrap">
+        <div class="done-mark">✓</div>
+        <h2>{t.doneTitle}</h2>
+        <p>{t.doneNote}</p>
+        <div class="sum-box done-box" id="doneBox"></div>
+        <button class="done-close" id="doneClose">{t.close}</button>
+      </div>
+    </div>
+
     <div id="installBanner">
       <div class="grow" id="installText"></div>
       <button class="primary" id="installGo"></button>
       <button class="x" id="installX" aria-label="close">✕</button>
     </div>
 
-    <script define:vars={{ t, isJa }}>
+    <script define:vars={{ t, isJa, paypalClientId, testPay }}>
       const $ = (id) => document.getElementById(id);
       const list = $('list');
       const sheet = $('sheet');
@@ -555,9 +736,13 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         updateMap(hotels);
       }
 
+      // Cards open the in-app detail/booking flow; the href stays for
+      // open-in-new-tab semantics only.
       list.addEventListener('click', (e) => {
         const a = e.target.closest && e.target.closest('a.card');
-        if (a) track('app_card_tap', { slug: a.dataset.slug });
+        if (!a) return;
+        e.preventDefault();
+        openDetail(a.dataset.slug);
       });
 
       // ---------- search flow ----------
@@ -685,6 +870,207 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         };
         $('micBtn').addEventListener('click', () => startVoice($('micBtn')));
         $('micFab').addEventListener('click', () => startVoice($('micFab')));
+      }
+
+      // ---------- in-app detail / booking / payment ----------
+      let selHotel = null;
+      let selPlan = null;
+      let paypalSdkPromise = null;
+      let buttonsRendered = false;
+
+      const yenOf = (usd) => {
+        if (!isJa || !rateJPY || usd == null) return '';
+        const v = usd * rateJPY;
+        return '約¥' + (v >= 1000 ? Math.round(v / 100) * 100 : Math.round(v / 10) * 10).toLocaleString();
+      };
+      const openPanel = (id) => $(id).classList.add('open');
+      const closePanel = (id) => $(id).classList.remove('open');
+
+      async function openDetail(slug) {
+        track('app_card_tap', { slug });
+        const cur = currentView.find((h) => h.slug === slug) || {};
+        $('detailImg').src = cur.thumbnail || '';
+        $('detailName').textContent = (isJa && cur.nameJa) || cur.name || '';
+        const km = cur.km != null ? (cur.km < 1 ? Math.round(cur.km * 1000) + 'm' : cur.km + 'km') : '';
+        const state = cur.openNow === true ? t.openShort : cur.openNow === false ? t.closed : '';
+        $('detailMeta').textContent = [cur.city, km, state].filter(Boolean).join(' ・ ');
+        $('detailWebLink').href = (isJa ? '/ja/hotel/' : '/hotel/') + encodeURIComponent(slug);
+        $('planList').innerHTML = `<div class="panel-meta">${t.searching}</div>`;
+        openPanel('detailPanel');
+        try {
+          const r = await fetch(`/api/hotels/${encodeURIComponent(slug)}/plans`);
+          const d = await r.json();
+          if (d.error) throw new Error(d.error);
+          selHotel = d.hotel;
+          const plans = d.plans || [];
+          if (!plans.length) {
+            $('planList').innerHTML = `<div class="panel-meta">${t.noPlans}</div>`;
+            return;
+          }
+          $('planList').innerHTML = plans
+            .map((p) => {
+              const name = isJa && p.name_ja ? p.name_ja : p.name;
+              const bits = [];
+              if (p.check_in_time && p.check_out_time) bits.push(`${p.check_in_time}–${p.check_out_time}`);
+              if (p.duration_hours) bits.push(`${p.duration_hours}${t.hrs}`);
+              if (p.max_guests) bits.push(`${t.upTo}${p.max_guests}${t.ppl}`);
+              return `<button class="plan" data-plan="${p.id}">
+                <div class="pinfo"><div class="pname">${esc(name)}</div><div class="pmeta">${esc(bits.join(' ・ '))}</div></div>
+                <div class="pprice"><div class="usd">$${p.price_usd}</div><div class="yen">${yenOf(p.price_usd)}</div></div>
+                <div class="go">›</div>
+              </button>`;
+            })
+            .join('');
+          $('planList').querySelectorAll('.plan').forEach((btn) =>
+            btn.addEventListener('click', () => {
+              const p = plans.find((x) => String(x.id) === btn.dataset.plan);
+              if (p) openBook(p);
+            })
+          );
+        } catch (e) {
+          $('planList').innerHTML = `<div class="panel-meta">⚠️ ${esc(e.message)}</div>`;
+        }
+      }
+      $('detailClose').addEventListener('click', () => closePanel('detailPanel'));
+
+      function openBook(plan) {
+        selPlan = plan;
+        track('app_book_open', { plan: plan.id });
+        const pname = isJa && plan.name_ja ? plan.name_ja : plan.name;
+        $('bookHotelLine').textContent = selHotel ? selHotel.name : '';
+        const hours = plan.check_in_time && plan.check_out_time ? `${plan.check_in_time}–${plan.check_out_time}` : '';
+        $('bookSummary').innerHTML =
+          `<div class="row"><span class="k">${t.selectPlan}</span><span>${esc(pname)}</span></div>` +
+          (hours ? `<div class="row"><span class="k">${t.hoursLabel}</span><span>${esc(hours)}</span></div>` : '') +
+          `<div class="row total"><span>${t.total}</span><span class="v">$${plan.price_usd} <small style="color:var(--muted);font-weight:400">${yenOf(plan.price_usd)}</small></span></div>`;
+        const d = new Date();
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const bkDate = $('bkDate');
+        bkDate.min = iso;
+        if (!bkDate.value) bkDate.value = iso;
+        const maxG = Math.min(plan.max_guests || 4, 8);
+        $('bkGuests').innerHTML = Array.from({ length: maxG }, (_, i) => `<option value="${i + 1}">${i + 1}${t.ppl}</option>`).join('');
+        openPanel('bookPanel');
+        setupPay();
+      }
+      $('bookClose').addEventListener('click', () => closePanel('bookPanel'));
+
+      const formValid = () =>
+        !!($('bkName').value.trim() && /.+@.+\..+/.test($('bkEmail').value.trim()) && $('bkDate').value);
+      function updateLock() {
+        const ok = formValid();
+        $('paypalBox').classList.toggle('locked', !ok);
+        $('payHint').textContent = ok ? '' : t.fillAll;
+      }
+      ['bkName', 'bkEmail', 'bkDate'].forEach((id) => $(id).addEventListener('input', updateLock));
+
+      const bookingPayload = () => ({
+        plan_id: selPlan.id,
+        guest_name: $('bkName').value.trim(),
+        guest_email: $('bkEmail').value.trim(),
+        guest_phone: $('bkPhone').value.trim(),
+        check_in_date: $('bkDate').value,
+        adults: Number($('bkGuests').value || 1),
+        children: 0,
+        infants: 0,
+        notes: '',
+      });
+
+      function showDone(bookingId) {
+        const pname = isJa && selPlan.name_ja ? selPlan.name_ja : selPlan.name;
+        $('doneBox').innerHTML =
+          `<div class="row"><span class="k">${t.bookingNo}</span><span>${esc(String(bookingId))}</span></div>` +
+          `<div class="row"><span class="k">Hotel</span><span>${esc(selHotel ? selHotel.name : '')}</span></div>` +
+          `<div class="row"><span class="k">${t.selectPlan}</span><span>${esc(pname)}</span></div>` +
+          `<div class="row"><span class="k">${t.dateLabel}</span><span>${esc($('bkDate').value)}</span></div>` +
+          `<div class="row total"><span>${t.total}</span><span class="v">$${selPlan.price_usd}</span></div>`;
+        openPanel('donePanel');
+        track('app_booking_done', { booking: bookingId });
+      }
+      $('doneClose').addEventListener('click', () => {
+        ['donePanel', 'bookPanel', 'detailPanel'].forEach(closePanel);
+      });
+
+      function loadPayPalSdk() {
+        if (paypalSdkPromise) return paypalSdkPromise;
+        paypalSdkPromise = new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          const locale = isJa ? 'ja_JP' : 'en_US';
+          s.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(paypalClientId)}&currency=USD&locale=${locale}&intent=capture&commit=true`;
+          s.onload = () => (window.paypal ? resolve() : reject(new Error('paypal sdk')));
+          s.onerror = () => { paypalSdkPromise = null; reject(new Error('paypal sdk')); };
+          document.head.appendChild(s);
+        });
+        return paypalSdkPromise;
+      }
+
+      async function setupPay() {
+        updateLock();
+        // Test mode (?test_pay=1) or missing client id: simulator button.
+        if (testPay || !paypalClientId || paypalClientId.length < 10) {
+          $('paypalBox').innerHTML = `<button class="test-pay-btn" id="testPayGo">${t.testPayBtn}</button>`;
+          $('testPayGo').addEventListener('click', async () => {
+            if (!formValid()) { updateLock(); return; }
+            $('payHint').textContent = t.paying;
+            try {
+              const r = await fetch('/api/payments/test-capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(bookingPayload()),
+              });
+              const d = await r.json();
+              if (!d.success) throw new Error(d.error || 'failed');
+              $('payHint').textContent = '';
+              showDone(d.booking_id);
+            } catch (e) {
+              $('payHint').textContent = '⚠️ ' + t.payFailed;
+            }
+          });
+          return;
+        }
+        if (buttonsRendered) return;
+        try {
+          await loadPayPalSdk();
+        } catch (e) {
+          $('payHint').textContent = '⚠️ ' + t.payFailed;
+          return;
+        }
+        window.paypal.Buttons({
+          style: { layout: 'vertical', height: 44, label: 'paypal' },
+          onClick: (data, actions) => {
+            if (formValid()) return actions.resolve();
+            updateLock();
+            return actions.reject();
+          },
+          createOrder: async () => {
+            const r = await fetch('/api/payments/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ plan_id: selPlan.id }),
+            });
+            const d = await r.json();
+            if (!d.order_id) throw new Error(d.error || 'order failed');
+            return d.order_id;
+          },
+          onApprove: async (data) => {
+            $('payHint').textContent = t.paying;
+            try {
+              const r = await fetch('/api/payments/capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order_id: data.orderID, ...bookingPayload() }),
+              });
+              const d = await r.json();
+              if (!d.success) throw new Error(d.error || 'capture failed');
+              $('payHint').textContent = '';
+              showDone(d.booking_id);
+            } catch (e) {
+              $('payHint').textContent = '⚠️ ' + t.payFailed;
+            }
+          },
+          onError: () => { $('payHint').textContent = '⚠️ ' + t.payFailed; },
+        }).render('#paypalBox');
+        buttonsRendered = true;
       }
 
       // PWA service worker (scoped to /app so the main site is untouched)
