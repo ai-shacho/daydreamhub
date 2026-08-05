@@ -1,3 +1,5 @@
+import { INTL_AIRPORTS } from './data/internationalAirports';
+
 // Major airport coordinates by city name
 // [latitude, longitude]
 export const airportByCity: Record<string, [number, number]> = {
@@ -432,14 +434,24 @@ export const airportNamesJa: Record<string, string> = {
   'AKL': 'オークランド空港', 'PER': 'パース空港', 'BNE': 'ブリスベン空港',
 };
 
-// Find nearest airport from hotel coordinates
+// Find the nearest international airport from hotel coordinates.
+//
+// Uses the comprehensive INTL_AIRPORTS list (every airport with scheduled
+// service that is a large airport or is named "International"), so the result
+// is the nearest real international airport rather than one of a handful of
+// hand-picked hubs. `name` is the airport's full name, and for the few codes
+// that also have a curated short/JA name the callers can still override via
+// airportNames / airportNamesJa (they fall back to this name otherwise).
 export function nearestAirport(hotelLat: number, hotelLng: number): { code: string; name: string; km: number } | null {
-  let best: { code: string; name: string; km: number } | null = null;
-  for (const ap of airportList) {
-    const km = haversineKm(hotelLat, hotelLng, ap.lat, ap.lng);
-    if (!best || km < best.km) {
-      best = { code: ap.code, name: airportNames[ap.code] || ap.code, km };
-    }
+  if (hotelLat == null || hotelLng == null || Number.isNaN(hotelLat) || Number.isNaN(hotelLng)) return null;
+  let bestIdx = -1;
+  let bestKm = Infinity;
+  for (let i = 0; i < INTL_AIRPORTS.length; i++) {
+    const ap = INTL_AIRPORTS[i];
+    const km = haversineKm(hotelLat, hotelLng, ap[2], ap[3]);
+    if (km < bestKm) { bestKm = km; bestIdx = i; }
   }
-  return best;
+  if (bestIdx < 0) return null;
+  const b = INTL_AIRPORTS[bestIdx];
+  return { code: b[0], name: b[1], km: bestKm };
 }
