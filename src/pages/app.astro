@@ -33,12 +33,12 @@ const t = isJa
       nearLabel: 'の近く',
       results: '件',
       popular: '人気エリアから選ぶ',
-      openShort: '営業中',
+      openShort: '利用時間内',
       closed: '時間外',
       from: '〜',
       sortDist: '距離順',
       sortPrice: '料金順',
-      openOnly: '営業時間内',
+      openOnly: '利用時間内',
       budgetAny: '予算上限なし',
       budgetUnder: '〜',
       viewSite: 'Webサイト版はこちら',
@@ -53,12 +53,12 @@ const t = isJa
       chatFound: '{label}の近くで{n}件見つかりました。{cheap}条件があれば「もっと安く」「営業中だけ」などと言ってください。',
       chatCheap: '最安は${p}〜です。',
       chatSorted: '料金の安い順に並べ替えました。',
-      chatOpenOnly: '営業時間内の施設だけに絞りました。',
+      chatOpenOnly: 'いま利用時間内の施設だけに絞りました。',
       chatBudget: '予算${b}以下で絞り込みました（{n}件）。',
       chatNoHit: 'ごめんなさい、うまく見つけられませんでした。都市名や空港名を入れて話してみてください（例：バンコク、チャンギ空港）。',
       chatShowMap: '🗺 地図で全件見る',
       chipCheaper: '💰 安い順',
-      chipOpen: '🟢 営業中だけ',
+      chipOpen: '🟢 利用時間内だけ',
       chipMap: '🗺 地図で見る',
       selectPlan: 'プランを選択',
       planLabel: 'プラン',
@@ -101,12 +101,12 @@ const t = isJa
       nearLabel: '',
       results: ' places',
       popular: 'Popular areas',
-      openShort: 'Open',
-      closed: 'Closed now',
+      openShort: 'Usable now',
+      closed: 'Outside hours',
       from: 'From ',
       sortDist: 'By distance',
       sortPrice: 'By price',
-      openOnly: 'Open now',
+      openOnly: 'Usable now',
       budgetAny: 'Any budget',
       budgetUnder: 'Under ',
       viewSite: 'Open full website',
@@ -121,12 +121,12 @@ const t = isJa
       chatFound: 'Found {n} places near {label}. {cheap}Say "cheaper" or "open now" to refine.',
       chatCheap: 'Cheapest from ${p}. ',
       chatSorted: 'Sorted by price, cheapest first.',
-      chatOpenOnly: 'Showing only places open right now.',
+      chatOpenOnly: 'Showing only places within their day-use hours right now.',
       chatBudget: 'Filtered to under ${b} ({n} places).',
       chatNoHit: "Sorry, I couldn't find that. Try including a city or airport name (e.g. Bangkok, Changi Airport).",
       chatShowMap: '🗺 See all on the map',
       chipCheaper: '💰 Cheapest',
-      chipOpen: '🟢 Open now',
+      chipOpen: '🟢 Usable now',
       chipMap: '🗺 Map view',
       selectPlan: 'Choose a plan',
       planLabel: 'Plan',
@@ -366,11 +366,6 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         background: var(--bg); color: var(--text); font-size: 17px;
       }
       .chat-head .ttl { flex: 1; font-size: 15px; font-weight: 800; }
-      .chat-head .tts {
-        width: 40px; height: 40px; border-radius: 12px; border: 1.5px solid var(--line);
-        background: var(--surface); font-size: 17px; cursor: pointer;
-      }
-      .chat-head .tts.on { border-color: var(--teal); background: var(--teal-soft); }
       #chatLog { flex: 1; overflow-y: auto; padding: 14px 14px 10px; }
       .msg { max-width: 86%; margin-bottom: 10px; clear: both; }
       .msg .bubble {
@@ -563,7 +558,6 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       <div class="chat-head">
         <button class="back" id="chatBack">←</button>
         <div class="ttl">💬 {t.chatTitle}</div>
-        <button class="tts on" id="ttsToggle" title="voice">🔊</button>
       </div>
       <div id="chatLog"></div>
       <div class="chat-bar">
@@ -929,47 +923,21 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       // ---------- conversational concierge ----------
       const chatLog = $('chatLog');
       let greeted = false;
-      let lastInputVoice = false;
       let cameFromChat = false;
-      let ttsOn = localStorage.getItem('ddhTts') !== '0';
-      $('ttsToggle').classList.toggle('on', ttsOn);
-      $('ttsToggle').textContent = ttsOn ? '🔊' : '🔇';
       const fmt = (s, vars) => s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : ''));
 
-      function speak(text) {
-        if (!ttsOn || !window.speechSynthesis) return;
-        speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        u.lang = isJa ? 'ja-JP' : 'en-US';
-        // Conversation loop: after speaking, listen again if the user spoke last.
-        u.onend = () => {
-          if (lastInputVoice && $('chatScreen').classList.contains('open')) {
-            setTimeout(() => startVoice($('chatMic'), (x) => handleUtterance(x, true)), 300);
-          }
-        };
-        speechSynthesis.speak(u);
-      }
-      $('ttsToggle').addEventListener('click', () => {
-        ttsOn = !ttsOn;
-        localStorage.setItem('ddhTts', ttsOn ? '1' : '0');
-        $('ttsToggle').classList.toggle('on', ttsOn);
-        $('ttsToggle').textContent = ttsOn ? '🔊' : '🔇';
-        if (!ttsOn && window.speechSynthesis) speechSynthesis.cancel();
-      });
+      // Deliberately no text-to-speech: replies are silent. Voice is an input
+      // method only — unexpected audio in public spaces is hostile UX.
 
-      function openChat(viaVoice) {
+      function openChat() {
         $('chatScreen').classList.add('open');
         if (!greeted) {
           greeted = true;
-          // Greeting is visual only — speaking it would collide with the mic
-          // that opens right after a voice entry.
-          aiSay(t.chatGreeting, { speak: false });
+          aiSay(t.chatGreeting, {});
         }
       }
       function closeChat() {
         $('chatScreen').classList.remove('open');
-        lastInputVoice = false;
-        if (window.speechSynthesis) speechSynthesis.cancel();
       }
       $('chatBack').addEventListener('click', closeChat);
 
@@ -1002,7 +970,6 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         if (chips.length) inner += `<div class="chat-chips">${chips.join('')}</div>`;
         chatLog.insertAdjacentHTML('beforeend', `<div class="msg ai">${inner}</div>`);
         scrollChat();
-        if (o.speak !== false) speak(text);
       }
 
       function performAct(act) {
@@ -1040,7 +1007,6 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       async function handleUtterance(text, voice) {
         text = (text || '').trim();
         if (!text) return;
-        lastInputVoice = !!voice;
         addUserMsg(text);
         track('app_chat_msg', { voice: !!voice });
 
