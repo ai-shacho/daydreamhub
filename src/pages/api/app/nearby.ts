@@ -84,6 +84,19 @@ function resolveQueryToCoords(raw: string): { lat: number; lng: number; label: s
   return best ? { lat: best.lat, lng: best.lng, label: best.label } : null;
 }
 
+// Hotel names in the DB sometimes contain HTML entities ("SPA&amp;Wellness");
+// decode them so clients that escape for display don't double-escape.
+function decodeEntities(s: string | null): string | null {
+  if (!s) return s;
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
 // Approximate the hotel's local time from its longitude (15° ≈ 1 hour). Good
 // enough to badge "open now" without a per-hotel timezone column.
 function isOpenNow(lng: number, checkIn: string | null, checkOut: string | null): boolean | null {
@@ -119,14 +132,51 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '12'), 30);
 
   let center: { lat: number; lng: number; label: string } | null = null;
-  let mode: 'geo' | 'place' | 'text' = 'text';
+  let mode: 'geo' | 'place' | 'ip' | 'text' = 'text';
 
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
     center = { lat, lng, label: '' };
     mode = 'geo';
   } else if (q) {
     center = resolveQueryToCoords(q);
-    if (center) mode = 'place';
+    if (center) {
+      mode = 'place';
+    } else {
+      // Unknown place name (any language) — fall back to Google geocoding,
+      // same key the site's /api/geocode uses.
+      const apiKey = (locals as any).runtime?.env?.GOOGLE_PLACES_API_KEY;
+      if (apiKey) {
+        try {
+          const res = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${apiKey}`
+          );
+          const data = (await res.json()) as any;
+          const loc = data?.results?.[0]?.geometry?.location;
+          if (data?.status === 'OK' && loc) {
+            center = { lat: loc.lat, lng: loc.lng, label: data.results[0].formatted_address || q };
+            mode = 'place';
+          }
+        } catch {
+          // geocoding is best-effort; text search below still answers
+        }
+      }
+    }
+  } else {
+    // No query at all — use Cloudflare's IP geolocation so the app can show
+    // nearby results the moment it opens, before any permission prompt.
+    const cf = (locals as any).runtime?.cf || (request as any).cf;
+    const cfLat = parseFloat(cf?.latitude);
+    const cfLng = parseFloat(cf?.longitude);
+    if (Number.isFinite(cfLat) && Number.isFinite(cfLng)) {
+      center = { lat: cfLat, lng: cfLng, label: cf?.city || '' };
+      mode = 'ip';
+    }
+  }
+
+  if (!center && !q) {
+    return new Response(JSON.stringify({ mode: 'text', center: null, hotels: [] }), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
   }
 
   try {
@@ -175,8 +225,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
     const hotels = rows.map((h: any) => ({
       id: h.id,
-      name: h.name,
-      nameJa: h.name_ja || null,
+      name: decodeEntities(h.name),
+      nameJa: decodeEntities(h.name_ja) || null,
       slug: h.slug,
       city: h.city,
       country: h.country,

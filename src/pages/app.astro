@@ -18,6 +18,7 @@ const t = isJa
       noGeo: '位置情報が取得できませんでした。場所名で検索してください。',
       listening: '聞き取り中…どうぞ',
       noResults: '該当する施設が見つかりませんでした。',
+      farNote: 'お近くに施設がないため、最寄りの対応エリアを表示しています。',
       nearLabel: 'の近くのデイユース施設',
       openNow: '営業時間内',
       closed: '時間外',
@@ -36,6 +37,7 @@ const t = isJa
       noGeo: 'Could not get your location. Try searching by place name.',
       listening: 'Listening…',
       noResults: 'No facilities found.',
+      farNote: 'No facilities near you — showing the closest covered area instead.',
       nearLabel: ' — nearby day-use hotels',
       openNow: 'Open now',
       closed: 'Outside hours',
@@ -44,22 +46,24 @@ const t = isJa
       install: 'Add to Home Screen to use this as an app.',
     };
 
+// Japan is intentionally absent — DDH does not plan to list Japanese hotels.
 const quickChips: Array<{ label: string; q: string }> = isJa
   ? [
-      { label: '羽田', q: 'HND' },
-      { label: '成田', q: 'NRT' },
-      { label: '関空', q: 'KIX' },
+      { label: 'バンコク', q: 'BKK' },
       { label: 'チャンギ', q: 'SIN' },
-      { label: 'スワンナプーム', q: 'BKK' },
-      { label: '仁川', q: 'ICN' },
+      { label: 'クアラルンプール', q: 'KUL' },
+      { label: 'セブ', q: 'CEB' },
+      { label: '香港', q: 'HKG' },
+      { label: 'バリ', q: 'DPS' },
       { label: 'ドバイ', q: 'DXB' },
     ]
   : [
-      { label: 'Changi (SIN)', q: 'SIN' },
       { label: 'Suvarnabhumi (BKK)', q: 'BKK' },
+      { label: 'Changi (SIN)', q: 'SIN' },
       { label: 'KLIA (KUL)', q: 'KUL' },
-      { label: 'Haneda (HND)', q: 'HND' },
-      { label: 'Incheon (ICN)', q: 'ICN' },
+      { label: 'Cebu (CEB)', q: 'CEB' },
+      { label: 'Hong Kong (HKG)', q: 'HKG' },
+      { label: 'Bali (DPS)', q: 'DPS' },
       { label: 'Dubai (DXB)', q: 'DXB' },
     ];
 ---
@@ -199,9 +203,12 @@ const quickChips: Array<{ label: string; q: string }> = isJa
           return;
         }
         const label = data.center && data.center.label
-          ? (isJa ? `${data.center.label}${t.nearLabel}` : `${data.center.label}${t.nearLabel}`)
+          ? `${data.center.label}${t.nearLabel}`
           : '';
-        status.textContent = label;
+        // Coverage is far from many places (no Japan listings planned) — say so
+        // instead of silently showing hotels thousands of km away.
+        const far = hotels[0].km != null && hotels[0].km > 150;
+        status.textContent = far ? `${t.farNote}${label ? ' ' + label : ''}` : label;
         results.innerHTML = hotels
           .map((h) => {
             const name = isJa && h.nameJa ? h.nameJa : h.name;
@@ -282,6 +289,13 @@ const quickChips: Array<{ label: string; q: string }> = isJa
           rec.start();
         });
       }
+
+      // Instant results on open: server-side IP geolocation, no permission
+      // prompt. Quietly does nothing when the location can't be estimated.
+      fetch('/api/app/nearby')
+        .then((r) => r.json())
+        .then((d) => { if (d.hotels && d.hotels.length && !results.innerHTML) render(d); })
+        .catch(() => {});
 
       // PWA service worker (scoped to /app so the main site is untouched)
       if ('serviceWorker' in navigator) {
