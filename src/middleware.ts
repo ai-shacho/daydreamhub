@@ -61,7 +61,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   newHeaders.set('X-Content-Type-Options', 'nosniff');
   newHeaders.set('X-Frame-Options', 'SAMEORIGIN');
   newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // self を許可：/app（PWA）の音声検索＝マイクと現在地検索＝位置情報が必要。
+  // 第三者iframeからは引き続き利用不可。カメラは全面ブロックのまま。
+  newHeaders.set('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(self)');
   newHeaders.set(
     'Content-Security-Policy',
     "default-src 'self' https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https:; img-src 'self' data: https: blob:; connect-src 'self' https:; frame-src https://www.paypal.com https://www.sandbox.paypal.com; object-src 'none'; base-uri 'self';"
