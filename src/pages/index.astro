@@ -557,20 +557,47 @@ for (const region of Object.keys(citiesByRegion)) {
 const availableRegions = regionOrder.filter(r => citiesByRegion[r]?.length > 0);
 // 'Other' は表示しない
 
-// Pre-compute city data with images for JS dynamic rendering (non-default tabs)
-const citiesDataForJS: Record<string, Array<{city: string; country: string; hotel_count: number; image: string; href: string}>> = {};
-for (const [region, cities] of Object.entries(citiesByRegion)) {
-  citiesDataForJS[region] = (cities as any[]).map((city) => ({
-    city: city.city,
-    cityLabel: geoL(city.city),
-    country: city.country,
-    countryLabel: geoL(city.country),
-    hotel_count: city.hotel_count,
-    countText: isJa ? `${city.hotel_count}軒` : `${city.hotel_count} ${city.hotel_count === 1 ? 'hotel' : 'hotels'}`,
-    image: getCityImage(city.city),
-    href: `/city/${city.city.toLowerCase().replace(/\s+/g, '-')}`
-  }));
-}
+// Region hero images for the drill-down cards
+const REGION_IMAGES: Record<string, string> = {
+  'Asia': 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=600&q=80&fm=webp', // Fushimi Inari torii
+  'Middle East': 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=600&q=80&fm=webp', // Burj Khalifa
+  'Europe': 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=600&q=80&fm=webp', // Eiffel Tower
+  'Africa': 'https://images.unsplash.com/photo-1580060839134-75a5edca2e99?w=600&q=80&fm=webp', // Table Mountain
+  'Oceania': 'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?w=600&q=80&fm=webp', // Sydney Opera House
+  'Americas': 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=600&q=80&fm=webp', // Manhattan skyline
+};
+
+// Region → Country → City drill-down data (cities within a country are already sorted by hotel_count desc)
+const geoDrillData = availableRegions.map((region) => {
+  const cities = citiesByRegion[region] as any[];
+  const byCountry: Record<string, any[]> = {};
+  for (const c of cities) {
+    const key = c.country || 'Other';
+    if (!byCountry[key]) byCountry[key] = [];
+    byCountry[key].push(c);
+  }
+  const countries = Object.entries(byCountry).map(([country, cs]) => ({
+    country,
+    countryLabel: geoL(country),
+    image: getCityImage(cs[0].city),
+    hotelCount: cs.reduce((s, c) => s + (c.hotel_count || 0), 0),
+    cityCount: cs.length,
+    cities: cs.map((c) => ({
+      cityLabel: geoL(c.city),
+      countText: isJa ? `${c.hotel_count}軒` : `${c.hotel_count} ${c.hotel_count === 1 ? 'hotel' : 'hotels'}`,
+      image: getCityImage(c.city),
+      href: `/city/${c.city.toLowerCase().replace(/\s+/g, '-')}`,
+    })),
+  })).sort((a, b) => b.hotelCount - a.hotelCount);
+  return {
+    region,
+    regionLabel: isJa ? (REGION_JA[region] || region) : region,
+    image: REGION_IMAGES[region] || 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=600&q=80&fm=webp',
+    hotelCount: countries.reduce((s, c) => s + c.hotelCount, 0),
+    countryCount: countries.length,
+    countries,
+  };
+});
 
 // Unique city count
 const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85;
@@ -814,45 +841,40 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
     </div>
   </section>
 
-  <!-- Search by City (Region tabs) -->
+  <!-- Search by City (Region → Country → City drill-down) -->
   <section class="py-12 bg-gray-50">
     <div class="max-w-7xl mx-auto px-4">
       <h2 class="text-2xl font-bold text-gray-800 mb-2">{isJa ? '都市から探す' : 'Search by City'}</h2>
-      <p class="text-sm text-gray-500 mb-6">{isJa ? '人気の都市からデイユースホテルを探せます' : 'Find day-use hotels in popular destinations'}</p>
+      <p class="text-sm text-gray-500 mb-6">{isJa ? '地域 → 国 → 都市の順に絞り込めます' : 'Pick a region, then a country, then a city'}</p>
 
-      <!-- Region tabs -->
-      <div class="flex flex-wrap gap-2 mb-6" id="region-tabs">
-        {availableRegions.map((region, i) => (
-          <button
-            data-region={region}
-            class={`region-tab px-4 py-2 rounded-full text-sm font-medium border transition-colors ${i === 0 ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-300 hover:border-teal-400 hover:text-teal-600'}`}
-          >
-            {isJa ? (REGION_JA[region] || region) : region} <span class="opacity-70">({citiesByRegion[region]?.length})</span>
+      <!-- Breadcrumb (hidden on top level) -->
+      <div id="geo-breadcrumb" class="hidden items-center flex-wrap gap-1.5 mb-5 text-sm"></div>
+
+      <!-- Level 1: regions (SSR) -->
+      <div id="geo-regions" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+        {geoDrillData.map((r, i) => (
+          <button type="button" data-region-idx={i}
+            class="geo-region-card group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow text-left cursor-pointer">
+            <img src={r.image} alt={r.regionLabel} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+            <div class="absolute bottom-0 left-0 right-0 p-3">
+              <h3 class="text-white font-semibold text-base">{r.regionLabel}</h3>
+              <p class="text-white/70 text-xs">{isJa ? `${r.countryCount}カ国・${r.hotelCount}軒` : `${r.countryCount} ${r.countryCount === 1 ? 'country' : 'countries'} · ${r.hotelCount} hotels`}</p>
+            </div>
           </button>
         ))}
       </div>
 
-      <!-- City grids per region — default tab SSR only, others rendered dynamically by JS -->
-      <div id="region-panels-container">
-        <div data-region-panel={availableRegions[0]}>
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-            {citiesByRegion[availableRegions[0]].map((city: any) => (
-              <a href={`/city/${city.city.toLowerCase().replace(/\s+/g, '-')}`} class="group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow">
-                <img src={getCityImage(city.city)} alt={city.city} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-                <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-                <div class="absolute bottom-0 left-0 right-0 p-3">
-                  <h3 class="text-white font-semibold text-sm">{geoL(city.city)}</h3>
-                  <p class="text-white/60 text-xs">{geoL(city.country)}</p>
-                  <p class="text-white/70 text-xs">{isJa ? `${city.hotel_count}軒` : `${city.hotel_count} ${city.hotel_count === 1 ? 'hotel' : 'hotels'}`}</p>
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
-      </div>
-      <script define:vars={{ citiesDataForJS, defaultRegion: availableRegions[0] }}>
-        window.__CITIES_DATA__ = citiesDataForJS;
-        window.__DEFAULT_REGION__ = defaultRegion;
+      <!-- Levels 2 & 3: countries / cities, rendered by JS -->
+      <div id="geo-dynamic" class="hidden grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4"></div>
+
+      <script define:vars={{ geoDrillData, geoText: {
+        all: isJa ? 'すべての地域' : 'All regions',
+        back: isJa ? '← 戻る' : '← Back',
+        countrySub: isJa ? '{c}都市・{h}軒' : '{c} {cw} · {h} hotels',
+      } }}>
+        window.__GEO_DATA__ = geoDrillData;
+        window.__GEO_TEXT__ = geoText;
       </script>
     </div>
   </section>
@@ -880,52 +902,120 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
   </section>
 
   <script is:inline>
-    document.querySelectorAll('.region-tab').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var region = btn.getAttribute('data-region');
-        var container = document.getElementById('region-panels-container');
+    (function() {
+      var data = window.__GEO_DATA__ || [];
+      var T = window.__GEO_TEXT__ || {};
+      var regionsEl = document.getElementById('geo-regions');
+      var dynEl = document.getElementById('geo-dynamic');
+      var bcEl = document.getElementById('geo-breadcrumb');
+      if (!regionsEl || !dynEl || !bcEl) return;
 
-        // Create panel on demand if not yet rendered
-        var existingPanel = container.querySelector('[data-region-panel="' + region + '"]');
-        if (!existingPanel) {
-          var cities = (window.__CITIES_DATA__ || {})[region] || [];
-          var panel = document.createElement('div');
-          panel.setAttribute('data-region-panel', region);
-          var grid = document.createElement('div');
-          grid.className = 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4';
-          cities.forEach(function(city) {
-            var a = document.createElement('a');
-            a.href = city.href;
-            a.className = 'group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow';
-            a.innerHTML =
-              '<img src="' + city.image + '" alt="' + city.city.replace(/"/g, '&quot;') + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
-              '<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>' +
-              '<div class="absolute bottom-0 left-0 right-0 p-3">' +
-                '<h3 class="text-white font-semibold text-sm">' + (city.cityLabel || city.city).replace(/</g, '&lt;') + '</h3>' +
-                '<p class="text-white/60 text-xs">' + (city.countryLabel || city.country).replace(/</g, '&lt;') + '</p>' +
-                '<p class="text-white/70 text-xs">' + (city.countText || (city.hotel_count + ' hotels')) + '</p>' +
-              '</div>';
-            grid.appendChild(a);
-          });
-          panel.appendChild(grid);
-          container.appendChild(panel);
-          existingPanel = panel;
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      }
+
+      function cardInner(img, alt, title, sub) {
+        return '<img src="' + esc(img) + '" alt="' + esc(alt) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
+          '<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>' +
+          '<div class="absolute bottom-0 left-0 right-0 p-3">' +
+            '<h3 class="text-white font-semibold text-sm">' + esc(title) + '</h3>' +
+            '<p class="text-white/70 text-xs">' + esc(sub) + '</p>' +
+          '</div>';
+      }
+
+      function setBreadcrumb(parts) {
+        bcEl.innerHTML = '';
+        if (!parts.length) {
+          bcEl.classList.add('hidden');
+          bcEl.classList.remove('flex');
+          return;
         }
-
-        // Show this panel, hide others
-        container.querySelectorAll('[data-region-panel]').forEach(function(p) {
-          p.classList.toggle('hidden', p.getAttribute('data-region-panel') !== region);
+        bcEl.classList.remove('hidden');
+        bcEl.classList.add('flex');
+        parts.forEach(function(p, i) {
+          if (i > 0) {
+            var sep = document.createElement('span');
+            sep.className = 'text-gray-400';
+            sep.textContent = '›';
+            bcEl.appendChild(sep);
+          }
+          if (p.onClick) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'text-teal-600 hover:text-teal-700 hover:underline font-medium cursor-pointer';
+            b.textContent = p.label;
+            b.addEventListener('click', p.onClick);
+            bcEl.appendChild(b);
+          } else {
+            var s = document.createElement('span');
+            s.className = 'text-gray-700 font-semibold';
+            s.textContent = p.label;
+            bcEl.appendChild(s);
+          }
         });
+      }
 
-        // Switch tab styles
-        document.querySelectorAll('.region-tab').forEach(function(t) {
-          t.classList.remove('bg-teal-600', 'text-white', 'border-teal-600');
-          t.classList.add('bg-white', 'text-gray-600', 'border-gray-300', 'hover:border-teal-400', 'hover:text-teal-600');
+      function showRegions() {
+        dynEl.classList.add('hidden');
+        dynEl.innerHTML = '';
+        regionsEl.classList.remove('hidden');
+        setBreadcrumb([]);
+      }
+
+      function countrySubText(c) {
+        return (T.countrySub || '{c} {cw} · {h} hotels')
+          .replace('{c}', c.cityCount)
+          .replace('{cw}', c.cityCount === 1 ? 'city' : 'cities')
+          .replace('{h}', c.hotelCount);
+      }
+
+      function showCountries(ri) {
+        var r = data[ri];
+        if (!r) return;
+        regionsEl.classList.add('hidden');
+        dynEl.classList.remove('hidden');
+        dynEl.innerHTML = '';
+        r.countries.forEach(function(c, ci) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow text-left cursor-pointer';
+          b.innerHTML = cardInner(c.image, c.countryLabel, c.countryLabel, countrySubText(c));
+          b.addEventListener('click', function() { showCities(ri, ci); });
+          dynEl.appendChild(b);
         });
-        btn.classList.remove('bg-white', 'text-gray-600', 'border-gray-300', 'hover:border-teal-400', 'hover:text-teal-600');
-        btn.classList.add('bg-teal-600', 'text-white', 'border-teal-600');
+        setBreadcrumb([
+          { label: T.all || 'All regions', onClick: showRegions },
+          { label: r.regionLabel, onClick: null },
+        ]);
+      }
+
+      function showCities(ri, ci) {
+        var r = data[ri];
+        var c = r && r.countries[ci];
+        if (!c) return;
+        regionsEl.classList.add('hidden');
+        dynEl.classList.remove('hidden');
+        dynEl.innerHTML = '';
+        c.cities.forEach(function(city) {
+          var a = document.createElement('a');
+          a.href = city.href;
+          a.className = 'group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow';
+          a.innerHTML = cardInner(city.image, city.cityLabel, city.cityLabel, city.countText);
+          dynEl.appendChild(a);
+        });
+        setBreadcrumb([
+          { label: T.all || 'All regions', onClick: showRegions },
+          { label: r.regionLabel, onClick: function() { showCountries(ri); } },
+          { label: c.countryLabel, onClick: null },
+        ]);
+      }
+
+      document.querySelectorAll('.geo-region-card').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          showCountries(parseInt(btn.getAttribute('data-region-idx'), 10));
+        });
       });
-    });
+    })();
   </script>
 
   <!-- Search by Room Type -->
@@ -1932,16 +2022,55 @@ function escHtml(s) {
   }
 
   // --- send message ---
+  // --- guided conversation state: concierge asks one time-question before searching ---
+  var pendingLocationMsg = null;
+  var askedTimeQuestion = false;
+  var conversationStarted = false;
+
+  function mentionsTimeOrPurpose(t) {
+    return /(\d{1,2}\s*[:時]|時間|時から|午前|午後|朝|昼|夜|深夜|おまかせ|お任せ|仕事|休憩|デート|乗継|トランジット|hour|hrs?\b|am\b|pm\b|morning|afternoon|evening|night|anytime|whenever|work|rest|transit|layover)/i.test(t);
+  }
+
   async function sendMessage() {
     var text = inputEl.value.trim();
     if (!text || isSending) return;
+
+    var isJaChat = (document.documentElement.lang || 'en').indexOf('ja') === 0;
+
+    // Step 1: first message looks like just a destination → concierge asks for the time (no API call)
+    if (!conversationStarted && !askedTimeQuestion && pendingLocationMsg === null && !mentionsTimeOrPurpose(text) && text.length <= 60) {
+      inputEl.value = '';
+      addMsg(text, 'user');
+      pendingLocationMsg = text;
+      askedTimeQuestion = true;
+      setTimeout(function() {
+        addMsg(
+          isJaChat
+            ? 'ありがとうございます！😊\n**何時ごろから、何時間くらい**のご利用ですか？\n（例:「14時から3時間」／「おまかせ」でもOKです）'
+            : 'Great! 😊\nAround **what time and for how many hours** will you use it?\n(e.g. "from 2pm for 3 hours" — or just say "anytime")',
+          'assistant'
+        );
+        inputEl.placeholder = isJaChat ? '例: 14時から3時間／おまかせ' : 'e.g. from 2pm for 3 hours / anytime';
+        inputEl.focus();
+      }, 350);
+      return;
+    }
 
     isSending = true;
     sendBtn.disabled = true;
     inputEl.value = '';
 
     var ctx = getFormContext();
-    var fullMsg = ctx + text;
+    // Step 2: combine the stored destination with the time answer into one search request
+    var userQuery = text;
+    if (pendingLocationMsg !== null) {
+      userQuery = isJaChat
+        ? pendingLocationMsg + ' で、利用時間は「' + text + '」でホテルを探して'
+        : 'Find day-use hotels in ' + pendingLocationMsg + ', usage time: ' + text;
+      pendingLocationMsg = null;
+    }
+    var fullMsg = ctx + userQuery;
+    conversationStarted = true;
     addMsg(text, 'user');
     addTyping();
 
@@ -2102,6 +2231,18 @@ function escHtml(s) {
       uploadStatus.textContent = 'Upload error';
     }
   });
+
+  // --- opening greeting: the concierge speaks first ---
+  (function() {
+    var isJaGreet = (document.documentElement.lang || 'en').indexOf('ja') === 0;
+    addMsg(
+      isJaGreet
+        ? '👋 こんにちは！AIコンシェルジュです。\nどちらの**都市・空港**でホテルをお探しですか？（例: 東京、ドバイ、バンコク）'
+        : "👋 Hi! I'm your AI concierge.\nWhich **city or airport** are you visiting? (e.g. Tokyo, Dubai, Bangkok)",
+      'assistant'
+    );
+    showMessages();
+  })();
 })();
 </script>
 
