@@ -395,7 +395,10 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         if (a) track('app_card_tap', { slug: a.dataset.slug });
       });
 
+      let userSearched = false;
+
       async function search(params) {
+        userSearched = true;
         status.textContent = t.searching;
         results.innerHTML = '';
         try {
@@ -459,9 +462,9 @@ const quickChips: Array<{ label: string; q: string }> = isJa
 
       // Instant results on open: server-side IP geolocation, no permission
       // prompt. Quietly does nothing when the location can't be estimated.
-      fetch('/api/app/nearby')
+      fetch('/api/app/nearby?limit=24')
         .then((r) => r.json())
-        .then((d) => { if (d.hotels && d.hotels.length && !results.innerHTML) render(d); })
+        .then((d) => { if (d.hotels && d.hotels.length && !userSearched) render(d); })
         .catch(() => {});
 
       // PWA service worker (scoped to /app so the main site is untouched)
