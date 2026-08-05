@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { getAirportCoords, haversineKm, nearestAirport, airportList } from '../lib/airports';
+import { getAirportCoords, haversineKm, nearestAirportInfo, airportList } from '../lib/airports';
 import HotelCard from '../components/HotelCard.astro';
 import { getLocale } from '../lib/i18n';
 import { geoNameJa } from '../lib/geoJa';
@@ -131,8 +131,14 @@ if (DB) {
     // Compute nearest airport for each hotel using shared airport list
     allResults = allResults.map((h: any) => {
       if (h.latitude == null || h.longitude == null) return { ...h, _airport_km: null, _airport_code: null };
-      const ap = nearestAirport(Number(h.latitude), Number(h.longitude));
-      return { ...h, _airport_km: ap?.km ?? null, _airport_code: ap?.code ?? null };
+      const info = nearestAirportInfo(Number(h.latitude), Number(h.longitude));
+      return {
+        ...h,
+        _airport_km: info?.primary.km ?? null,
+        _airport_code: info?.primary.code ?? null,
+        _airport_alt_km: info?.alt?.km ?? null,
+        _airport_alt_code: info?.alt?.code ?? null,
+      };
     });
 
     if (isAirportSort) {

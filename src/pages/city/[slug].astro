@@ -1,6 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { nearestAirport } from '../../lib/airports';
+import { nearestAirportInfo } from '../../lib/airports';
 import HotelCard from '../../components/HotelCard.astro';
 
 const { slug } = Astro.params;
@@ -127,8 +127,8 @@ function getHotelImage(hotel: any): string {
       {hotels.length > 0 && (
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
           {hotels.map((hotel: any) => {
-            const ap = (hotel.latitude && hotel.longitude) ? nearestAirport(hotel.latitude, hotel.longitude) : null;
-            const enriched = ap ? { ...hotel, _airport_km: ap.km, _airport_code: ap.code } : hotel;
+            const info = (hotel.latitude && hotel.longitude) ? nearestAirportInfo(hotel.latitude, hotel.longitude) : null;
+            const enriched = info ? { ...hotel, _airport_km: info.primary.km, _airport_code: info.primary.code, _airport_alt_km: info.alt?.km ?? null, _airport_alt_code: info.alt?.code ?? null } : hotel;
             return <HotelCard hotel={enriched} minPrice={hotel.min_price} locale="en" />;
           })}
         </div>

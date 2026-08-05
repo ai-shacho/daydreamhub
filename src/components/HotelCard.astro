@@ -71,9 +71,12 @@ const propertyTypeLabel = hotel.property_type
       : String(hotel.property_type).replace(/_/g, ' '))
   : '';
 
-// airport distance (populated by nearestAirport enrichment in some pages)
+// airport distance (populated by nearestAirportInfo enrichment in some pages)
 const airportKm: number | null = hotel._airport_km ?? null;
 const airportCode: string | null = hotel._airport_code ?? null;
+// nearest international airport, shown alongside when a comparable distance away
+const airportAltKm: number | null = hotel._airport_alt_km ?? null;
+const airportAltCode: string | null = hotel._airport_alt_code ?? null;
 ---
 
 <div class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-100 relative">
@@ -119,6 +122,9 @@ const airportCode: string | null = hotel._airport_code ?? null;
     {airportKm !== null && airportCode !== null && airportKm < 500 && (
       <p class="text-xs text-teal-700 mb-1 flex items-center gap-1">
         <span>✈</span>{locale === 'ja' ? `${airportCode}から約${Math.round(airportKm)}km` : `~${Math.round(airportKm)}km from ${airportCode}`}
+        {airportAltKm !== null && airportAltCode !== null && (
+          <span class="text-gray-400">{locale === 'ja' ? `・${airportAltCode} 約${Math.round(airportAltKm)}km` : `· ${airportAltCode} ~${Math.round(airportAltKm)}km`}</span>
+        )}
       </p>
     )}
 

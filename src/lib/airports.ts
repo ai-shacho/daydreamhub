@@ -1,4 +1,4 @@
-import { INTL_AIRPORTS } from './data/internationalAirports';
+import { AIRPORTS } from './data/airportsData';
 
 // Major airport coordinates by city name
 // [latitude, longitude]
@@ -434,24 +434,44 @@ export const airportNamesJa: Record<string, string> = {
   'AKL': 'オークランド空港', 'PER': 'パース空港', 'BNE': 'ブリスベン空港',
 };
 
-// Find the nearest international airport from hotel coordinates.
-//
-// Uses the comprehensive INTL_AIRPORTS list (every airport with scheduled
-// service that is a large airport or is named "International"), so the result
-// is the nearest real international airport rather than one of a handful of
-// hand-picked hubs. `name` is the airport's full name, and for the few codes
-// that also have a curated short/JA name the callers can still override via
-// airportNames / airportNamesJa (they fall back to this name otherwise).
-export function nearestAirport(hotelLat: number, hotelLng: number): { code: string; name: string; km: number } | null {
+export type NearbyAirport = { code: string; name: string; km: number; intl: boolean };
+
+// When the nearest usable airport is a regional one, also surface the nearest
+// international airport if it is a comparable distance away (roughly the same
+// distance): within 25% farther, or within 10 km. Tuned so a clearly-closer
+// regional airport (e.g. a local domestic field) does not drag in a far hub,
+// but a downtown airport paired with a major hub nearby shows both.
+function intlIsComparable(regionalKm: number, intlKm: number): boolean {
+  return intlKm <= regionalKm * 1.25 || intlKm - regionalKm <= 10;
+}
+
+// Find the nearest airport a general traveller can fly into (any airport with
+// scheduled passenger service — international or regional), plus the nearest
+// international airport when it is a comparable distance away, so both can be
+// shown side by side. `name` is the airport's full name; callers may still map
+// the code to a curated short/JA name (falling back to this name otherwise).
+export function nearestAirportInfo(
+  hotelLat: number,
+  hotelLng: number,
+): { primary: NearbyAirport; alt: NearbyAirport | null } | null {
   if (hotelLat == null || hotelLng == null || Number.isNaN(hotelLat) || Number.isNaN(hotelLng)) return null;
-  let bestIdx = -1;
-  let bestKm = Infinity;
-  for (let i = 0; i < INTL_AIRPORTS.length; i++) {
-    const ap = INTL_AIRPORTS[i];
+  let primary: NearbyAirport | null = null;
+  let intl: NearbyAirport | null = null;
+  for (const ap of AIRPORTS) {
     const km = haversineKm(hotelLat, hotelLng, ap[2], ap[3]);
-    if (km < bestKm) { bestKm = km; bestIdx = i; }
+    if (!primary || km < primary.km) primary = { code: ap[0], name: ap[1], km, intl: ap[4] === 1 };
+    if (ap[4] === 1 && (!intl || km < intl.km)) intl = { code: ap[0], name: ap[1], km, intl: true };
   }
-  if (bestIdx < 0) return null;
-  const b = INTL_AIRPORTS[bestIdx];
-  return { code: b[0], name: b[1], km: bestKm };
+  if (!primary) return null;
+  let alt: NearbyAirport | null = null;
+  if (!primary.intl && intl && intl.code !== primary.code && intlIsComparable(primary.km, intl.km)) {
+    alt = intl;
+  }
+  return { primary, alt };
+}
+
+// Backwards-compatible helper: just the nearest usable airport.
+export function nearestAirport(hotelLat: number, hotelLng: number): { code: string; name: string; km: number } | null {
+  const info = nearestAirportInfo(hotelLat, hotelLng);
+  return info ? { code: info.primary.code, name: info.primary.name, km: info.primary.km } : null;
 }
