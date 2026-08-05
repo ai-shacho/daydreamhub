@@ -39,12 +39,15 @@ if (db && id) {
       ).bind(id).all();
       bookings = bookingsResult?.results || [];
 
+      // List every owner account so the dropdown always reflects the latest
+      // state — including owners who don't own any hotel yet. (Previously this
+      // was restricted to emails already present in the hotels table, which
+      // hid every newly-created / unassigned owner.)
       const ownersResult = await db.prepare(
-        `SELECT DISTINCT u.id, u.name, u.email
+        `SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.email
          FROM users u
          WHERE u.role IN ('owner', 'inactive')
-           AND u.email IN (SELECT DISTINCT email FROM hotels WHERE email IS NOT NULL AND email != '')
-         ORDER BY u.name ASC`
+         ORDER BY name COLLATE NOCASE ASC`
       ).all();
       owners = ownersResult?.results || [];
     }
