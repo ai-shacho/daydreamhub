@@ -191,7 +191,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       .install-hint { margin-top: 10px; font-size: 11px; }
 
       /* ---------- Results: full-screen map + bottom sheet ---------- */
-      #resultsScreen { position: fixed; inset: 0; display: none; background: var(--bg); }
+      #resultsScreen { position: fixed; inset: 0; display: none; background: var(--bg); z-index: 10; }
       #resultsScreen.active { display: block; }
       #map { position: absolute; inset: 0; z-index: 0; background: #e5e7eb; }
       .topbar {
