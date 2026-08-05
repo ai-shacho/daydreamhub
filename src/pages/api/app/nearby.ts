@@ -1,0 +1,205 @@
+import type { APIRoute } from 'astro';
+import { AIRPORTS } from '../../../lib/data/airportsData';
+import { airportNames, airportNamesJa, airportByCity, haversineKm } from '../../../lib/airports';
+
+// Mobile-app search endpoint: given user coordinates (?lat&lng) or a free-text /
+// voice query (?q), return active hotels sorted by distance with price and
+// open-now information. Used by /app (PWA).
+
+// Japanese city aliases → English city/airport keys used across the site data.
+const JA_CITY_ALIASES: Record<string, string> = {
+  '東京': 'Tokyo', '渋谷': 'Shibuya', '京都': 'Kyoto',
+  'バンコク': 'Bangkok', 'シンガポール': 'Singapore', 'ソウル': 'Seoul',
+  '香港': 'Hong Kong', '台北': 'Taipei', 'ドバイ': 'Dubai',
+  'クアラルンプール': 'Kuala Lumpur', 'ジャカルタ': 'Jakarta', 'バリ': 'Bali',
+  'マニラ': 'Manila', 'セブ': 'Cebu City', 'ホーチミン': 'Ho Chi Minh City',
+  'ハノイ': 'Hanoi', 'ダナン': 'Da Nang', 'プーケット': 'Phuket',
+  'サムイ': 'Koh Samui', 'プノンペン': 'Phnom Penh', '上海': 'Shanghai',
+  '北京': 'Beijing', 'デリー': 'Delhi', 'ムンバイ': 'Mumbai',
+  'ドーハ': 'Doha', 'カイロ': 'Cairo', 'ナイロビ': 'Nairobi',
+  'ロンドン': 'London', 'パリ': 'Paris', 'アムステルダム': 'Amsterdam',
+  'プラハ': 'Prague', 'ポルト': 'Porto', 'バレンシア': 'Valencia',
+  'ニューヨーク': 'New York', 'ロサンゼルス': 'Los Angeles',
+  'シドニー': 'Sydney', 'メルボルン': 'Melbourne', 'オークランド': 'Auckland',
+  'トビリシ': 'Tbilisi', 'タシケント': 'Tashkent', 'アルマティ': 'Almaty',
+};
+
+// Words that carry no place information in a voice query.
+const NOISE_RE = /(の近く|の周辺|周辺|付近|近く|辺り|あたり|で休憩|休憩できる|休憩|デイユース|ホテル|を?探して|探す|教えて|したい|できる|お願いします?|near|nearby|around|close to|day ?use|hotels?|rest|find|me|please|at|in|the)/gi;
+
+function norm(s: string): string {
+  return s.toLowerCase().replace(/[\s　、。,.！!？?]/g, '');
+}
+
+// Resolve a free-text query to coordinates: airport code, airport name (EN/JA),
+// then city name (EN key or JA alias). Longest match wins to avoid false hits.
+function resolveQueryToCoords(raw: string): { lat: number; lng: number; label: string } | null {
+  const q = norm(raw.replace(NOISE_RE, ' '));
+  if (!q) return null;
+
+  const airportByCode = new Map(AIRPORTS.map((a) => [a[0], a]));
+
+  // Exact IATA code ("HND", "kix")
+  const codeMatch = raw.toUpperCase().match(/\b([A-Z]{3})\b/);
+  if (codeMatch && airportByCode.has(codeMatch[1])) {
+    const a = airportByCode.get(codeMatch[1])!;
+    return { lat: a[2], lng: a[3], label: airportNamesJa[a[0]] || airportNames[a[0]] || a[1] };
+  }
+
+  type Cand = { key: string; lat: number; lng: number; label: string };
+  const cands: Cand[] = [];
+
+  for (const [code, ja] of Object.entries(airportNamesJa)) {
+    const a = airportByCode.get(code);
+    if (!a) continue;
+    const stripped = ja.replace(/国際空港|空港/g, '');
+    cands.push({ key: norm(stripped), lat: a[2], lng: a[3], label: ja });
+  }
+  for (const [code, en] of Object.entries(airportNames)) {
+    const a = airportByCode.get(code);
+    if (!a) continue;
+    const stripped = en.replace(/International Airport|Airport/gi, '');
+    cands.push({ key: norm(stripped), lat: a[2], lng: a[3], label: en });
+  }
+  // Full airport dataset names ("Narita International Airport" etc.)
+  for (const a of AIRPORTS) {
+    const stripped = a[1].replace(/International Airport|Airport/gi, '');
+    if (stripped.length >= 4) cands.push({ key: norm(stripped), lat: a[2], lng: a[3], label: a[1] });
+  }
+  for (const [ja, en] of Object.entries(JA_CITY_ALIASES)) {
+    const coords = airportByCity[en];
+    if (coords) cands.push({ key: norm(ja), lat: coords[0], lng: coords[1], label: en });
+  }
+  for (const [city, coords] of Object.entries(airportByCity)) {
+    cands.push({ key: norm(city), lat: coords[0], lng: coords[1], label: city });
+  }
+
+  let best: Cand | null = null;
+  for (const c of cands) {
+    if (c.key.length < 2) continue;
+    if (q.includes(c.key) || (c.key.length >= 4 && c.key.includes(q) && q.length >= 3)) {
+      if (!best || c.key.length > best.key.length) best = c;
+    }
+  }
+  return best ? { lat: best.lat, lng: best.lng, label: best.label } : null;
+}
+
+// Approximate the hotel's local time from its longitude (15° ≈ 1 hour). Good
+// enough to badge "open now" without a per-hotel timezone column.
+function isOpenNow(lng: number, checkIn: string | null, checkOut: string | null): boolean | null {
+  if (!checkIn || !checkOut) return null;
+  const utc = new Date();
+  const localMinutes =
+    ((utc.getUTCHours() + Math.round(lng / 15)) * 60 + utc.getUTCMinutes() + 24 * 60) % (24 * 60);
+  const toMin = (t: string) => {
+    const m = t.match(/^(\d{1,2}):(\d{2})/);
+    return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : null;
+  };
+  const start = toMin(checkIn);
+  const end = toMin(checkOut);
+  if (start === null || end === null) return null;
+  return start <= end
+    ? localMinutes >= start && localMinutes < end
+    : localMinutes >= start || localMinutes < end; // overnight window
+}
+
+export const GET: APIRoute = async ({ request, locals }) => {
+  const db = (locals as any).runtime?.env?.DB;
+  if (!db) {
+    return new Response(JSON.stringify({ error: 'Database not available' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const url = new URL(request.url);
+  const lat = parseFloat(url.searchParams.get('lat') || '');
+  const lng = parseFloat(url.searchParams.get('lng') || '');
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 120);
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '12'), 30);
+
+  let center: { lat: number; lng: number; label: string } | null = null;
+  let mode: 'geo' | 'place' | 'text' = 'text';
+
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    center = { lat, lng, label: '' };
+    mode = 'geo';
+  } else if (q) {
+    center = resolveQueryToCoords(q);
+    if (center) mode = 'place';
+  }
+
+  try {
+    let rows: any[];
+    if (center) {
+      const result = await db
+        .prepare(
+          `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.thumbnail_url,
+                  h.rating, h.latitude, h.longitude,
+                  MIN(p.price_usd) AS min_price,
+                  MIN(p.check_in_time) AS check_in, MAX(p.check_out_time) AS check_out
+           FROM hotels h
+           LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+           WHERE h.status = 'active' AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL
+           GROUP BY h.id`
+        )
+        .all();
+      rows = (result?.results || [])
+        .map((h: any) => ({
+          ...h,
+          km: Math.round(haversineKm(center!.lat, center!.lng, h.latitude, h.longitude) * 10) / 10,
+        }))
+        .sort((a: any, b: any) => a.km - b.km)
+        .slice(0, limit);
+    } else {
+      // No coordinates resolvable — plain text search over names and cities.
+      const like = `%${q}%`;
+      const result = await db
+        .prepare(
+          `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.thumbnail_url,
+                  h.rating, h.latitude, h.longitude,
+                  MIN(p.price_usd) AS min_price,
+                  MIN(p.check_in_time) AS check_in, MAX(p.check_out_time) AS check_out
+           FROM hotels h
+           LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+           WHERE h.status = 'active'
+             AND (h.name LIKE ? OR h.name_ja LIKE ? OR h.city LIKE ? OR h.country LIKE ?)
+           GROUP BY h.id
+           ORDER BY h.rating DESC
+           LIMIT ?`
+        )
+        .bind(like, like, like, like, limit)
+        .all();
+      rows = (result?.results || []).map((h: any) => ({ ...h, km: null }));
+    }
+
+    const hotels = rows.map((h: any) => ({
+      id: h.id,
+      name: h.name,
+      nameJa: h.name_ja || null,
+      slug: h.slug,
+      city: h.city,
+      country: h.country,
+      thumbnail: h.thumbnail_url || null,
+      rating: h.rating || null,
+      km: h.km,
+      minPrice: h.min_price ?? null,
+      checkIn: h.check_in || null,
+      checkOut: h.check_out || null,
+      openNow:
+        h.latitude != null && h.longitude != null
+          ? isOpenNow(h.longitude, h.check_in, h.check_out)
+          : null,
+    }));
+
+    return new Response(JSON.stringify({ mode, center, hotels }), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: 'Search failed', details: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+};
