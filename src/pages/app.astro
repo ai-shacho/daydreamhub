@@ -5,6 +5,9 @@
 const acceptLang = Astro.request.headers.get('accept-language') || '';
 const urlLang = Astro.url.searchParams.get('lang');
 const isJa = urlLang ? urlLang === 'ja' : /(^|,)\s*ja/i.test(acceptLang);
+// Same GA4 property as the main site (Layout.astro) so app usage shows up
+// alongside site traffic, distinguished by the app_* event names.
+const ga4Id = ((Astro.locals as any).runtime?.env?.GA4_MEASUREMENT_ID as string) || 'G-5C6B1R3H1Q';
 
 const t = isJa
   ? {
@@ -25,6 +28,15 @@ const t = isJa
       from: '〜',
       viewSite: 'Webサイト版はこちら',
       install: 'ホーム画面に追加すると、アプリとして使えます。',
+      sortDist: '距離順',
+      sortPrice: '料金順',
+      openOnly: '営業時間内',
+      budgetAny: '予算上限なし',
+      budgetUnder: '〜',
+      installBanner: 'このアプリをホーム画面に追加できます',
+      installBtn: '追加する',
+      iosHint: 'iPhoneの方：共有ボタン（□↑）→「ホーム画面に追加」でアプリになります',
+      dismiss: '閉じる',
     }
   : {
       title: 'DayDreamHub — Day-use now',
@@ -44,6 +56,15 @@ const t = isJa
       from: 'From ',
       viewSite: 'Open full website',
       install: 'Add to Home Screen to use this as an app.',
+      sortDist: 'By distance',
+      sortPrice: 'By price',
+      openOnly: 'Open now',
+      budgetAny: 'Any budget',
+      budgetUnder: 'Under ',
+      installBanner: 'Add this app to your home screen',
+      installBtn: 'Install',
+      iosHint: 'On iPhone: Share button (□↑) → "Add to Home Screen"',
+      dismiss: 'Dismiss',
     };
 
 // Japan is intentionally absent — DDH does not plan to list Japanese hotels.
@@ -80,6 +101,13 @@ const quickChips: Array<{ label: string; q: string }> = isJa
     <meta name="apple-mobile-web-app-title" content="DayDreamHub" />
     <link rel="apple-touch-icon" href="/app-icon-180.png" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script async src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}></script>
+    <script is:inline define:vars={{ ga4Id }}>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', ga4Id);
+    </script>
     <style is:global>
       :root {
         --bg: #0f172a;
@@ -133,6 +161,28 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid #334155;
         background: transparent; color: var(--muted); font-size: 13px; cursor: pointer;
       }
+      .filters { display: none; gap: 8px; overflow-x: auto; margin: 4px 0; padding-bottom: 4px; }
+      .filters.show { display: flex; }
+      .filters button, .filters select {
+        flex: none; padding: 7px 12px; border-radius: 999px; border: 1px solid #334155;
+        background: transparent; color: var(--muted); font-size: 13px; cursor: pointer;
+        appearance: none; -webkit-appearance: none;
+      }
+      .filters .on { background: #0c4a6e; border-color: var(--accent); color: var(--accent); }
+      .price .yen { color: var(--muted); font-weight: 400; font-size: 11px; }
+      #installBanner {
+        position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+        background: var(--card); border: 1px solid #334155; border-radius: 14px;
+        padding: 12px 14px; display: none; align-items: center; gap: 10px; z-index: 20;
+        box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 13px;
+      }
+      #installBanner.show { display: flex; }
+      #installBanner .grow { flex: 1; min-width: 0; }
+      #installBanner button.primary {
+        border: 0; border-radius: 10px; padding: 8px 14px; font-weight: 700; cursor: pointer;
+        background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #0b1120;
+      }
+      #installBanner button.x { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; }
       #status { margin: 14px 0; color: var(--muted); font-size: 14px; min-height: 20px; }
       #results { display: flex; flex-direction: column; gap: 12px; }
       a.card {
@@ -176,8 +226,25 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         {quickChips.map((c) => <button data-q={c.q}>{c.label}</button>)}
       </div>
 
+      <div class="filters" id="filters">
+        <button id="sortBtn">{t.sortDist} ⇅</button>
+        <button id="openBtn">✓ {t.openOnly}</button>
+        <select id="budgetSel">
+          <option value="">{t.budgetAny}</option>
+          <option value="25">{t.budgetUnder}$25</option>
+          <option value="50">{t.budgetUnder}$50</option>
+          <option value="100">{t.budgetUnder}$100</option>
+        </select>
+      </div>
+
       <div id="status"></div>
       <div id="results"></div>
+
+      <div id="installBanner">
+        <div class="grow" id="installText"></div>
+        <button class="primary" id="installGo"></button>
+        <button class="x" id="installX" aria-label="close">✕</button>
+      </div>
 
       <footer>
         <a href={isJa ? '/ja' : '/'}>{t.viewSite}</a>
@@ -195,20 +262,67 @@ const quickChips: Array<{ label: string; q: string }> = isJa
           ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       }
 
+      const track = (name, params) => { try { window.gtag && window.gtag('event', name, params || {}); } catch (e) {} };
+
+      // View state: last API result + client-side sort/filter settings.
+      let lastData = null;
+      let sortBy = 'km';
+      let openOnly = false;
+      let budget = '';
+      let rateJPY = null;
+
+      fetch('/api/exchange-rates')
+        .then((r) => r.json())
+        .then((d) => { rateJPY = (d.rates && d.rates.JPY) || null; if (lastData) renderView(); })
+        .catch(() => {});
+
+      function priceHtml(h) {
+        if (h.minPrice == null) return '';
+        let yen = '';
+        if (isJa && rateJPY) {
+          const v = h.minPrice * rateJPY;
+          const rounded = v >= 1000 ? Math.round(v / 100) * 100 : Math.round(v / 10) * 10;
+          yen = ` <span class="yen">約¥${rounded.toLocaleString()}</span>`;
+        }
+        return `<span class="price">${isJa ? '$' + h.minPrice + t.from : t.from + '$' + h.minPrice}${yen}</span>`;
+      }
+
       function render(data) {
-        const hotels = data.hotels || [];
-        if (!hotels.length) {
+        lastData = data;
+        renderView();
+      }
+
+      function renderView() {
+        const data = lastData;
+        const all = (data && data.hotels) || [];
+        if (!all.length) {
           status.textContent = t.noResults;
           results.innerHTML = '';
           return;
         }
+        $('filters').classList.add('show');
+
+        let hotels = all.slice();
+        // "Open now" keeps unknown-hours listings; it only drops known-closed.
+        if (openOnly) hotels = hotels.filter((h) => h.openNow !== false);
+        if (budget) hotels = hotels.filter((h) => h.minPrice != null && h.minPrice <= Number(budget));
+        const nullLast = (v) => (v == null ? Infinity : v);
+        hotels.sort((a, b) => sortBy === 'price'
+          ? nullLast(a.minPrice) - nullLast(b.minPrice)
+          : nullLast(a.km) - nullLast(b.km));
+
         const label = data.center && data.center.label
           ? `${data.center.label}${t.nearLabel}`
           : '';
         // Coverage is far from many places (no Japan listings planned) — say so
         // instead of silently showing hotels thousands of km away.
-        const far = hotels[0].km != null && hotels[0].km > 150;
+        const far = all[0].km != null && all[0].km > 150;
         status.textContent = far ? `${t.farNote}${label ? ' ' + label : ''}` : label;
+        if (!hotels.length) {
+          status.textContent = t.noResults;
+          results.innerHTML = '';
+          return;
+        }
         results.innerHTML = hotels
           .map((h) => {
             const name = isJa && h.nameJa ? h.nameJa : h.name;
@@ -216,28 +330,53 @@ const quickChips: Array<{ label: string; q: string }> = isJa
             const km = h.km != null ? `<span class="badge km">${h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km'}</span>` : '';
             const open = h.openNow === true ? `<span class="badge open">${t.openNow}</span>`
                        : h.openNow === false ? `<span class="badge closed">${t.closed}</span>` : '';
-            const price = h.minPrice != null ? `<span class="price">${isJa ? '$' + h.minPrice + t.from : t.from + '$' + h.minPrice}</span>` : '';
             const img = h.thumbnail ? `<img class="thumb" src="${esc(h.thumbnail)}" alt="" loading="lazy" />` : `<div class="thumb"></div>`;
             const hours = h.checkIn && h.checkOut ? ` ・ ${esc(h.checkIn)}–${esc(h.checkOut)}` : '';
-            return `<a class="card" href="${href}">
+            return `<a class="card" href="${href}" data-slug="${esc(h.slug)}">
               ${img}
               <div class="info">
                 <div class="name">${esc(name)}</div>
                 <div class="meta">${esc(h.city || '')}${h.country ? ', ' + esc(h.country) : ''}${hours}</div>
-                <div class="badges">${km}${open}${price}</div>
+                <div class="badges">${km}${open}${priceHtml(h)}</div>
               </div>
             </a>`;
           })
           .join('');
       }
 
+      // Filter bar
+      $('sortBtn').addEventListener('click', () => {
+        sortBy = sortBy === 'km' ? 'price' : 'km';
+        $('sortBtn').textContent = (sortBy === 'km' ? t.sortDist : t.sortPrice) + ' ⇅';
+        track('app_sort', { by: sortBy });
+        renderView();
+      });
+      $('openBtn').addEventListener('click', () => {
+        openOnly = !openOnly;
+        $('openBtn').classList.toggle('on', openOnly);
+        track('app_filter_open', { on: openOnly });
+        renderView();
+      });
+      $('budgetSel').addEventListener('change', () => {
+        budget = $('budgetSel').value;
+        $('budgetSel').classList.toggle('on', !!budget);
+        track('app_filter_budget', { max: budget || 'any' });
+        renderView();
+      });
+
+      results.addEventListener('click', (e) => {
+        const a = e.target.closest && e.target.closest('a.card');
+        if (a) track('app_card_tap', { slug: a.dataset.slug });
+      });
+
       async function search(params) {
         status.textContent = t.searching;
         results.innerHTML = '';
         try {
-          const res = await fetch('/api/app/nearby?' + new URLSearchParams(params));
+          const res = await fetch('/api/app/nearby?' + new URLSearchParams({ ...params, limit: 24 }));
           const data = await res.json();
           if (data.error) throw new Error(data.error);
+          track('app_search', { mode: data.mode, q: params.q || '' });
           render(data);
         } catch (e) {
           status.textContent = '⚠️ ' + e.message;
@@ -282,6 +421,7 @@ const quickChips: Array<{ label: string; q: string }> = isJa
           rec.onresult = (e) => {
             const text = e.results[0][0].transcript;
             $('q').value = text;
+            track('app_voice_search');
             search({ q: text });
           };
           rec.onerror = () => { status.textContent = t.noGeo; };
@@ -300,6 +440,42 @@ const quickChips: Array<{ label: string; q: string }> = isJa
       // PWA service worker (scoped to /app so the main site is untouched)
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/app-sw.js', { scope: '/app' }).catch(() => {});
+      }
+
+      // Install promotion. Android/Chrome fires beforeinstallprompt; iOS never
+      // does, so show a one-time "Add to Home Screen" walkthrough instead.
+      const banner = $('installBanner');
+      const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+      const dismissed = localStorage.getItem('ddhAppInstallDismissed');
+      $('installText').textContent = t.installBanner;
+      $('installGo').textContent = t.installBtn;
+      let deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        if (!standalone && !dismissed) {
+          banner.classList.add('show');
+          track('app_install_prompt_shown');
+        }
+      });
+      $('installGo').addEventListener('click', async () => {
+        banner.classList.remove('show');
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        track('app_install_' + choice.outcome);
+        deferredPrompt = null;
+      });
+      $('installX').addEventListener('click', () => {
+        banner.classList.remove('show');
+        localStorage.setItem('ddhAppInstallDismissed', '1');
+        track('app_install_dismissed');
+      });
+      if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !standalone && !dismissed) {
+        $('installText').textContent = t.iosHint;
+        $('installGo').style.display = 'none';
+        banner.classList.add('show');
+        track('app_install_ios_hint_shown');
       }
     </script>
   </body>
