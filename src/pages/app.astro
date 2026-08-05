@@ -15,6 +15,7 @@ const t = isJa
       tagline: 'いま休める場所を、すぐに。',
       sub: '空港や街なかで空いた時間に。時間貸しのホテルをすぐ探せます。',
       here: '現在地から探す',
+      voice: '音声で探す',
       placeholder: '例：バンコク / チャンギ空港',
       micHint: 'タップして話す',
       searching: '検索中…',
@@ -44,6 +45,7 @@ const t = isJa
       tagline: 'A place to rest, right now.',
       sub: 'Got spare time at the airport or in town? Find hourly day-use hotels instantly.',
       here: 'Search near me',
+      voice: 'Search by voice',
       placeholder: 'e.g. Changi Airport / Bangkok',
       micHint: 'Tap to speak',
       searching: 'Searching…',
@@ -147,6 +149,15 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         margin-bottom: 12px;
       }
       .geo-btn:active { transform: scale(.98); }
+      .voice-btn {
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        width: 100%; padding: 14px; border-radius: 14px; cursor: pointer;
+        background: var(--card); border: 1px solid var(--accent);
+        color: var(--accent); font-size: 16px; font-weight: 700;
+        margin-bottom: 12px;
+      }
+      .voice-btn:active { transform: scale(.98); }
+      .voice-btn.listening { background: #b91c1c; border-color: #ef4444; color: #fff; animation: pulse 1s infinite; }
       .search-row { display: flex; gap: 8px; }
       .search-row input {
         flex: 1; padding: 14px; border-radius: 12px; border: 1px solid #334155;
@@ -215,10 +226,10 @@ const quickChips: Array<{ label: string; q: string }> = isJa
       <h1>{t.tagline}</h1>
 
       <button class="geo-btn" id="geoChip">📍 {t.here}</button>
+      <button class="voice-btn" id="micBtn" title={t.micHint}>🎤 {t.voice}</button>
 
       <div class="search-row">
         <input id="q" type="search" placeholder={t.placeholder} enterkeyhint="search" />
-        <button class="icon-btn" id="micBtn" title={t.micHint} aria-label={t.micHint}>🎤</button>
         <button class="icon-btn" id="goBtn" aria-label="search">🔍</button>
       </div>
 
@@ -395,10 +406,7 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         if (a) track('app_card_tap', { slug: a.dataset.slug });
       });
 
-      let userSearched = false;
-
       async function search(params) {
-        userSearched = true;
         status.textContent = t.searching;
         results.innerHTML = '';
         try {
@@ -459,13 +467,6 @@ const quickChips: Array<{ label: string; q: string }> = isJa
           rec.start();
         });
       }
-
-      // Instant results on open: server-side IP geolocation, no permission
-      // prompt. Quietly does nothing when the location can't be estimated.
-      fetch('/api/app/nearby?limit=24')
-        .then((r) => r.json())
-        .then((d) => { if (d.hotels && d.hotels.length && !userSearched) render(d); })
-        .catch(() => {});
 
       // PWA service worker (scoped to /app so the main site is untouched)
       if ('serviceWorker' in navigator) {
