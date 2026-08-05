@@ -24,6 +24,7 @@ const t = isJa
       farNote: 'お近くに施設がないため、最寄りの対応エリアを表示しています。',
       nearLabel: 'の近くのデイユース施設',
       openNow: '営業時間内',
+      openShort: '営業中',
       closed: '時間外',
       from: '〜',
       viewSite: 'Webサイト版はこちら',
@@ -52,7 +53,8 @@ const t = isJa
       farNote: 'No facilities near you — showing the closest covered area instead.',
       nearLabel: ' — nearby day-use hotels',
       openNow: 'Open now',
-      closed: 'Outside hours',
+      openShort: 'Open',
+      closed: 'Closed now',
       from: 'From ',
       viewSite: 'Open full website',
       install: 'Add to Home Screen to use this as an app.',
@@ -136,16 +138,8 @@ const quickChips: Array<{ label: string; q: string }> = isJa
       header.bar img { width: 28px; height: 28px; border-radius: 6px; }
       header.bar strong { font-size: 16px; letter-spacing: .02em; }
       main { padding: 8px 16px 40px; max-width: 560px; margin: 0 auto; }
-      h1 { font-size: 24px; line-height: 1.3; margin: 10px 0 6px; }
-      p.sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
-      .geo-btn {
-        display: flex; align-items: center; justify-content: center; gap: 8px;
-        width: 100%; padding: 16px; border: 0; border-radius: 14px;
-        background: linear-gradient(135deg, var(--accent), var(--accent2));
-        color: #0b1120; font-size: 17px; font-weight: 700; cursor: pointer;
-      }
-      .geo-btn:active { transform: scale(.98); }
-      .search-row { display: flex; gap: 8px; margin-top: 12px; }
+      h1 { font-size: 20px; line-height: 1.3; margin: 8px 0 14px; }
+      .search-row { display: flex; gap: 8px; }
       .search-row input {
         flex: 1; padding: 14px; border-radius: 12px; border: 1px solid #334155;
         background: var(--card); color: var(--text); font-size: 16px; min-width: 0;
@@ -156,11 +150,12 @@ const quickChips: Array<{ label: string; q: string }> = isJa
       }
       .icon-btn.listening { background: #b91c1c; border-color: #ef4444; animation: pulse 1s infinite; }
       @keyframes pulse { 50% { opacity: .6; } }
-      .chips { display: flex; gap: 8px; overflow-x: auto; margin: 14px 0 4px; padding-bottom: 4px; }
+      .chips { display: flex; gap: 8px; overflow-x: auto; margin: 12px 0 4px; padding-bottom: 4px; }
       .chips button {
         flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid #334155;
         background: transparent; color: var(--muted); font-size: 13px; cursor: pointer;
       }
+      .chips button.geo { border-color: var(--accent); color: var(--accent); font-weight: 600; }
       .filters { display: none; gap: 8px; overflow-x: auto; margin: 4px 0; padding-bottom: 4px; }
       .filters.show { display: flex; }
       .filters button, .filters select {
@@ -169,7 +164,6 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         appearance: none; -webkit-appearance: none;
       }
       .filters .on { background: #0c4a6e; border-color: var(--accent); color: var(--accent); }
-      .price .yen { color: var(--muted); font-weight: 400; font-size: 11px; }
       #installBanner {
         position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
         background: var(--card); border: 1px solid #334155; border-radius: 14px;
@@ -183,23 +177,23 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #0b1120;
       }
       #installBanner button.x { background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; }
-      #status { margin: 14px 0; color: var(--muted); font-size: 14px; min-height: 20px; }
-      #results { display: flex; flex-direction: column; gap: 12px; }
+      #status { margin: 12px 0 10px; color: var(--muted); font-size: 12px; min-height: 16px; }
+      #results { display: flex; flex-direction: column; gap: 10px; }
       a.card {
-        display: flex; gap: 12px; background: var(--card); border-radius: 14px;
-        overflow: hidden; text-decoration: none; color: var(--text);
+        display: flex; align-items: center; gap: 12px; background: var(--card);
+        border-radius: 14px; padding: 10px; text-decoration: none; color: var(--text);
       }
       a.card:active { opacity: .8; }
-      .thumb { width: 96px; height: 96px; flex: none; object-fit: cover; background: #334155; }
-      .info { padding: 10px 12px 10px 0; min-width: 0; flex: 1; }
-      .info .name { font-size: 15px; font-weight: 700; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-      .info .meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
-      .badges { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; align-items: center; }
-      .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-      .badge.km { background: #0c4a6e; color: #7dd3fc; }
-      .badge.open { background: #064e3b; color: var(--ok); }
-      .badge.closed { background: #451a03; color: var(--warn); }
-      .price { font-size: 13px; color: var(--accent); font-weight: 700; margin-left: auto; }
+      .thumb { width: 64px; height: 64px; flex: none; object-fit: cover; background: #334155; border-radius: 10px; }
+      .info { min-width: 0; flex: 1; }
+      .info .name { font-size: 14px; font-weight: 600; line-height: 1.35; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .info .meta { color: var(--muted); font-size: 12px; margin-top: 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 3px; vertical-align: 1px; }
+      .dot.open { background: var(--ok); }
+      .dot.closed { background: var(--warn); }
+      .pcol { flex: none; text-align: right; }
+      .pcol .usd { font-size: 14px; color: var(--accent); font-weight: 700; }
+      .pcol .yen { color: var(--muted); font-size: 11px; margin-top: 2px; }
       footer { margin-top: 28px; text-align: center; font-size: 12px; color: var(--muted); }
       footer a { color: var(--accent); }
       .install-hint { margin-top: 10px; font-size: 11px; }
@@ -212,9 +206,6 @@ const quickChips: Array<{ label: string; q: string }> = isJa
     </header>
     <main>
       <h1>{t.tagline}</h1>
-      <p class="sub">{t.sub}</p>
-
-      <button class="geo-btn" id="geoBtn">📍 {t.here}</button>
 
       <div class="search-row">
         <input id="q" type="search" placeholder={t.placeholder} enterkeyhint="search" />
@@ -223,6 +214,7 @@ const quickChips: Array<{ label: string; q: string }> = isJa
       </div>
 
       <div class="chips" id="chips">
+        <button class="geo" id="geoChip">📍 {t.here}</button>
         {quickChips.map((c) => <button data-q={c.q}>{c.label}</button>)}
       </div>
 
@@ -277,14 +269,14 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         .catch(() => {});
 
       function priceHtml(h) {
-        if (h.minPrice == null) return '';
+        if (h.minPrice == null) return '<div class="pcol"></div>';
         let yen = '';
         if (isJa && rateJPY) {
           const v = h.minPrice * rateJPY;
           const rounded = v >= 1000 ? Math.round(v / 100) * 100 : Math.round(v / 10) * 10;
-          yen = ` <span class="yen">約¥${rounded.toLocaleString()}</span>`;
+          yen = `<div class="yen">約¥${rounded.toLocaleString()}</div>`;
         }
-        return `<span class="price">${isJa ? '$' + h.minPrice + t.from : t.from + '$' + h.minPrice}${yen}</span>`;
+        return `<div class="pcol"><div class="usd">${isJa ? '$' + h.minPrice + t.from : t.from + '$' + h.minPrice}</div>${yen}</div>`;
       }
 
       function render(data) {
@@ -327,18 +319,18 @@ const quickChips: Array<{ label: string; q: string }> = isJa
           .map((h) => {
             const name = isJa && h.nameJa ? h.nameJa : h.name;
             const href = (isJa ? '/ja/hotel/' : '/hotel/') + encodeURIComponent(h.slug);
-            const km = h.km != null ? `<span class="badge km">${h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km'}</span>` : '';
-            const open = h.openNow === true ? `<span class="badge open">${t.openNow}</span>`
-                       : h.openNow === false ? `<span class="badge closed">${t.closed}</span>` : '';
+            const km = h.km != null ? (h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km') : '';
+            const state = h.openNow === true ? `<span class="dot open"></span>${t.openShort}`
+                        : h.openNow === false ? `<span class="dot closed"></span>${t.closed}` : '';
             const img = h.thumbnail ? `<img class="thumb" src="${esc(h.thumbnail)}" alt="" loading="lazy" />` : `<div class="thumb"></div>`;
-            const hours = h.checkIn && h.checkOut ? ` ・ ${esc(h.checkIn)}–${esc(h.checkOut)}` : '';
+            const meta = [state, km, esc(h.city || '')].filter(Boolean).join('<span style="opacity:.5"> ・ </span>');
             return `<a class="card" href="${href}" data-slug="${esc(h.slug)}">
               ${img}
               <div class="info">
                 <div class="name">${esc(name)}</div>
-                <div class="meta">${esc(h.city || '')}${h.country ? ', ' + esc(h.country) : ''}${hours}</div>
-                <div class="badges">${km}${open}${priceHtml(h)}</div>
+                <div class="meta">${meta}</div>
               </div>
+              ${priceHtml(h)}
             </a>`;
           })
           .join('');
@@ -413,7 +405,7 @@ const quickChips: Array<{ label: string; q: string }> = isJa
         }
       }
 
-      $('geoBtn').addEventListener('click', () => {
+      $('geoChip').addEventListener('click', () => {
         status.textContent = t.searching;
         navigator.geolocation.getCurrentPosition(
           (pos) => search({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
