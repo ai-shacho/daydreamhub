@@ -671,7 +671,16 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         // keep the list's visible height in sync so the last card can scroll into view
         list.style.paddingBottom = `${Math.round(SNAPS[snapIndex] * window.innerHeight) + 20}px`;
       }
+      function snapNearest(frac, dy) {
+        let best = 0;
+        SNAPS.forEach((s, i) => { if (Math.abs(s - frac) < Math.abs(SNAPS[best] - frac)) best = i; });
+        // a decisive fling moves at least one snap in the drag direction
+        if (dy < -60 && best >= snapIndex) best = Math.max(0, snapIndex - 1);
+        if (dy > 60 && best <= snapIndex) best = Math.min(SNAPS.length - 1, snapIndex + 1);
+        setSheet(best);
+      }
       (() => {
+        // Desktop: drag via the grabber.
         const grabber = $('grabber');
         let startY = 0, startFrac = 0, dragging = false;
         grabber.addEventListener('pointerdown', (e) => {
@@ -687,12 +696,41 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         grabber.addEventListener('pointerup', (e) => {
           if (!dragging) return;
           dragging = false;
-          const frac = startFrac + (e.clientY - startY) / window.innerHeight;
-          let best = 0;
-          SNAPS.forEach((s, i) => { if (Math.abs(s - frac) < Math.abs(SNAPS[best] - frac)) best = i; });
+          const dy = e.clientY - startY;
           // a light tap (no real drag) toggles between half and full
-          if (Math.abs(e.clientY - startY) < 6) best = snapIndex === 1 ? 0 : 1;
-          setSheet(best);
+          if (Math.abs(dy) < 6) { setSheet(snapIndex === 1 ? 0 : 1); return; }
+          snapNearest(startFrac + dy / window.innerHeight, dy);
+        });
+
+        // Touch: drag anywhere on the sheet (Google Maps behaviour). Below
+        // full, any mostly-vertical swipe moves the sheet; at full, the list
+        // scrolls natively and pulling down from its top collapses the sheet.
+        let tX = 0, tY = 0, tFrac = 0, tTaken = false, tDecided = false;
+        sheet.addEventListener('touchstart', (e) => {
+          tX = e.touches[0].clientX; tY = e.touches[0].clientY;
+          tFrac = SNAPS[snapIndex]; tTaken = false; tDecided = false;
+        }, { passive: true });
+        sheet.addEventListener('touchmove', (e) => {
+          const x = e.touches[0].clientX, y = e.touches[0].clientY;
+          const dx = x - tX, dy = y - tY;
+          if (!tDecided) {
+            if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+            tDecided = true;
+            const vertical = Math.abs(dy) > Math.abs(dx);
+            const fromFull = snapIndex === 0 && list.scrollTop <= 0 && dy > 0;
+            tTaken = vertical && (snapIndex > 0 || fromFull);
+            if (tTaken) sheet.classList.add('dragging');
+          }
+          if (!tTaken) return;
+          e.preventDefault();
+          const frac = Math.max(0.04, Math.min(0.88, tFrac + (y - tY) / window.innerHeight));
+          sheet.style.transform = `translateY(${frac * 100}%)`;
+        }, { passive: false });
+        sheet.addEventListener('touchend', (e) => {
+          if (!tTaken) return;
+          tTaken = false;
+          const dy = e.changedTouches[0].clientY - tY;
+          snapNearest(tFrac + dy / window.innerHeight, dy);
         });
       })();
 
@@ -787,8 +825,12 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         const name = isJa && h.nameJa ? h.nameJa : h.name;
         const href = (isJa ? '/ja/hotel/' : '/hotel/') + encodeURIComponent(h.slug);
         const km = h.km != null ? (h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km') : '';
-        const state = h.openNow === true ? `<span class="dot open"></span>${t.openShort}`
-                    : h.openNow === false ? `<span class="dot closed"></span>${t.closed}` : '';
+        // Always show the plan's usable window — "outside hours" alone hides
+        // the option of coming back later.
+        const win = h.checkIn && h.checkOut ? ` ${esc(h.checkIn)}–${esc(h.checkOut)}` : '';
+        const state = h.openNow === true ? `<span class="dot open"></span>${t.openShort}${win}`
+                    : h.openNow === false ? `<span class="dot closed"></span>${t.closed}${win}`
+                    : win.trim();
         const img = h.thumbnail ? `<img class="thumb" src="${esc(h.thumbnail)}" alt="" loading="lazy" />` : `<div class="thumb"></div>`;
         const meta = [state, km, esc(h.city || '')].filter(Boolean).join('<span style="opacity:.5"> ・ </span>');
         return `<a class="card" href="${href}" data-slug="${esc(h.slug)}">
