@@ -39,14 +39,15 @@ if (db && id) {
       ).bind(id).all();
       bookings = bookingsResult?.results || [];
 
-      // List every owner account so the dropdown always reflects the latest
-      // state — including owners who don't own any hotel yet. (Previously this
-      // was restricted to emails already present in the hotels table, which
-      // hid every newly-created / unassigned owner.)
+      // Mirror the "owner" tag in the Users admin exactly: every user whose
+      // role is 'owner' appears here, whether or not they own a hotel yet, and
+      // a single owner can be assigned to multiple hotels. Re-tagging a user as
+      // owner in /admin/users makes them appear here on the next load (SSR
+      // queries the DB every request, so it's always in sync).
       const ownersResult = await db.prepare(
         `SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.email
          FROM users u
-         WHERE u.role IN ('owner', 'inactive')
+         WHERE u.role = 'owner'
          ORDER BY name COLLATE NOCASE ASC`
       ).all();
       owners = ownersResult?.results || [];
