@@ -84,6 +84,50 @@ function resolveQueryToCoords(raw: string): { lat: number; lng: number; label: s
   return best ? { lat: best.lat, lng: best.lng, label: best.label } : null;
 }
 
+// Signals that a query carries intent beyond a bare place name (budget,
+// urgency) and is worth an extra Workers AI round-trip to interpret.
+const INTENT_RE = /[0-9０-９]|[$￥¥]|ドル|円|予算|以内|以下|まで|安[いく]|cheap|budget|under|営業中|今すぐ|いますぐ|open now|right now/i;
+
+// Extract structured intent from a natural-language voice query. Best-effort:
+// any failure returns null and the caller falls back to the plain resolvers.
+async function extractIntent(
+  env: any,
+  q: string
+): Promise<{ place: string | null; budgetUsd: number | null; openNow: boolean } | null> {
+  if (!env?.AI) return null;
+  const sys =
+    'You extract search intent from day-use hotel queries (Japanese or English). ' +
+    'Reply with ONLY a JSON object, no prose: ' +
+    '{"place": string|null (location/airport/city mentioned, keep original language), ' +
+    '"budget_usd": number|null (max budget converted to USD, assume 150 JPY = 1 USD), ' +
+    '"open_now": boolean (true if they want somewhere usable right now)}';
+  const models = ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1'];
+  for (const model of models) {
+    try {
+      const r = await env.AI.run(model, {
+        messages: [
+          { role: 'system', content: sys },
+          { role: 'user', content: q.slice(0, 200) },
+        ],
+        max_tokens: 120,
+      });
+      const text = r?.response || r?.result?.response || '';
+      const m = text.match(/\{[\s\S]*?\}/);
+      if (!m) continue;
+      const j = JSON.parse(m[0]);
+      const budget = Number(j.budget_usd);
+      return {
+        place: typeof j.place === 'string' && j.place.trim() ? j.place.trim() : null,
+        budgetUsd: Number.isFinite(budget) && budget > 0 ? Math.round(budget) : null,
+        openNow: j.open_now === true,
+      };
+    } catch {
+      // try next model
+    }
+  }
+  return null;
+}
+
 // Hotel names in the DB sometimes contain HTML entities ("SPA&amp;Wellness");
 // decode them so clients that escape for display don't double-escape.
 function decodeEntities(s: string | null): string | null {
@@ -133,12 +177,19 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
   let center: { lat: number; lng: number; label: string } | null = null;
   let mode: 'geo' | 'place' | 'ip' | 'text' = 'text';
+  let intent: { place: string | null; budgetUsd: number | null; openNow: boolean } | null = null;
 
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
     center = { lat, lng, label: '' };
     mode = 'geo';
   } else if (q) {
     center = resolveQueryToCoords(q);
+    // Bare place names skip the AI round-trip; richer queries ("予算50ドルで
+    // 今すぐ") get interpreted, which can also rescue an unresolved place.
+    if (!center || INTENT_RE.test(q)) {
+      intent = await extractIntent((locals as any).runtime?.env, q);
+      if (!center && intent?.place) center = resolveQueryToCoords(intent.place);
+    }
     if (center) {
       mode = 'place';
     } else {
@@ -148,7 +199,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
       if (apiKey) {
         try {
           const res = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${apiKey}`
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(intent?.place || q)}&key=${apiKey}`
           );
           const data = (await res.json()) as any;
           const loc = data?.results?.[0]?.geometry?.location;
@@ -241,7 +292,14 @@ export const GET: APIRoute = async ({ request, locals }) => {
           : null,
     }));
 
-    return new Response(JSON.stringify({ mode, center, hotels }), {
+    return new Response(JSON.stringify({
+      mode,
+      center,
+      intent: intent && (intent.budgetUsd || intent.openNow)
+        ? { budgetUsd: intent.budgetUsd, openNow: intent.openNow }
+        : null,
+      hotels,
+    }), {
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
   } catch (err) {
