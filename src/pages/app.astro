@@ -47,6 +47,19 @@ const t = isJa
       installBtn: '追加する',
       iosHint: 'iPhoneの方：共有ボタン（□↑）→「ホーム画面に追加」でアプリになります',
       mapFail: '地図を読み込めませんでした',
+      chatTitle: 'AIコンシェルジュ',
+      chatGreeting: 'こんにちは！どこで休憩したいですか？「バンコク」や「チャンギ空港の近くで安いところ」のように話しかけてください。',
+      chatPlaceholder: 'メッセージを入力…',
+      chatFound: '{label}の近くで{n}件見つかりました。{cheap}条件があれば「もっと安く」「営業中だけ」などと言ってください。',
+      chatCheap: '最安は${p}〜です。',
+      chatSorted: '料金の安い順に並べ替えました。',
+      chatOpenOnly: '営業時間内の施設だけに絞りました。',
+      chatBudget: '予算${b}以下で絞り込みました（{n}件）。',
+      chatNoHit: 'ごめんなさい、うまく見つけられませんでした。都市名や空港名を入れて話してみてください（例：バンコク、チャンギ空港）。',
+      chatShowMap: '🗺 地図で全件見る',
+      chipCheaper: '💰 安い順',
+      chipOpen: '🟢 営業中だけ',
+      chipMap: '🗺 地図で見る',
       selectPlan: 'プランを選択',
       planLabel: 'プラン',
       hotelLabel: 'ホテル',
@@ -102,6 +115,19 @@ const t = isJa
       installBtn: 'Install',
       iosHint: 'On iPhone: Share button (□↑) → "Add to Home Screen"',
       mapFail: 'Could not load the map',
+      chatTitle: 'AI Concierge',
+      chatGreeting: 'Hi! Where would you like to rest? Try "Bangkok" or "somewhere cheap near Changi Airport".',
+      chatPlaceholder: 'Type a message…',
+      chatFound: 'Found {n} places near {label}. {cheap}Say "cheaper" or "open now" to refine.',
+      chatCheap: 'Cheapest from ${p}. ',
+      chatSorted: 'Sorted by price, cheapest first.',
+      chatOpenOnly: 'Showing only places open right now.',
+      chatBudget: 'Filtered to under ${b} ({n} places).',
+      chatNoHit: "Sorry, I couldn't find that. Try including a city or airport name (e.g. Bangkok, Changi Airport).",
+      chatShowMap: '🗺 See all on the map',
+      chipCheaper: '💰 Cheapest',
+      chipOpen: '🟢 Open now',
+      chipMap: '🗺 Map view',
       selectPlan: 'Choose a plan',
       planLabel: 'Plan',
       hotelLabel: 'Hotel',
@@ -324,6 +350,62 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       }
       .price-pin.sel { background: #0f172a; transform: scale(1.15); }
 
+      /* ---------- Conversational (chat) screen ---------- */
+      #chatScreen {
+        position: fixed; inset: 0; z-index: 15; background: var(--bg);
+        display: none; flex-direction: column;
+      }
+      #chatScreen.open { display: flex; }
+      .chat-head {
+        display: flex; align-items: center; gap: 10px;
+        padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
+        background: var(--surface); border-bottom: 1px solid var(--line); flex: none;
+      }
+      .chat-head .back {
+        width: 40px; height: 40px; border-radius: 12px; border: 0; cursor: pointer;
+        background: var(--bg); color: var(--text); font-size: 17px;
+      }
+      .chat-head .ttl { flex: 1; font-size: 15px; font-weight: 800; }
+      .chat-head .tts {
+        width: 40px; height: 40px; border-radius: 12px; border: 1.5px solid var(--line);
+        background: var(--surface); font-size: 17px; cursor: pointer;
+      }
+      .chat-head .tts.on { border-color: var(--teal); background: var(--teal-soft); }
+      #chatLog { flex: 1; overflow-y: auto; padding: 14px 14px 10px; }
+      .msg { max-width: 86%; margin-bottom: 10px; clear: both; }
+      .msg .bubble {
+        padding: 11px 14px; border-radius: 16px; font-size: 14px; line-height: 1.55;
+        word-break: break-word;
+      }
+      .msg.user { float: right; }
+      .msg.user .bubble { background: linear-gradient(135deg, #0d9488, #0891b2); color: #fff; border-bottom-right-radius: 6px; }
+      .msg.ai { float: left; }
+      .msg.ai .bubble { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+      .msg .cards { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+      .msg .cards a.card { padding: 8px; border-radius: 13px; }
+      .msg .cards .thumb { width: 56px; height: 56px; border-radius: 9px; }
+      .chat-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+      .chat-chips button {
+        padding: 8px 13px; border-radius: 999px; border: 1.5px solid var(--line);
+        background: var(--surface); color: #475569; font-size: 13px; font-weight: 600; cursor: pointer;
+      }
+      .chat-chips button.primary { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
+      .chat-bar {
+        display: flex; gap: 8px; padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
+        background: var(--surface); border-top: 1px solid var(--line); flex: none;
+      }
+      .chat-bar input {
+        flex: 1; min-width: 0; padding: 12px 14px; border-radius: 999px;
+        border: 1.5px solid var(--line); background: var(--bg); color: var(--text); font-size: 16px;
+      }
+      .chat-bar button {
+        width: 46px; height: 46px; flex: none; border-radius: 50%; border: 0; cursor: pointer;
+        font-size: 18px; background: var(--bg); color: var(--text); border: 1.5px solid var(--line);
+      }
+      .chat-bar button.send { background: linear-gradient(135deg, #0d9488, #0891b2); color: #fff; border: 0; }
+      .chat-bar button.listening { background: #dc2626 !important; color: #fff !important; border: 0; animation: pulse 1s infinite; }
+      .typing { color: var(--muted); font-size: 13px; }
+
       /* ---------- In-app booking panels ---------- */
       .panel {
         position: fixed; inset: 0; z-index: 30; background: var(--bg);
@@ -473,6 +555,21 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           </div>
         </div>
         <div class="sheet-list" id="list"></div>
+      </div>
+    </div>
+
+    <!-- Conversational concierge -->
+    <div id="chatScreen">
+      <div class="chat-head">
+        <button class="back" id="chatBack">←</button>
+        <div class="ttl">💬 {t.chatTitle}</div>
+        <button class="tts on" id="ttsToggle" title="voice">🔊</button>
+      </div>
+      <div id="chatLog"></div>
+      <div class="chat-bar">
+        <input id="chatInput" type="text" placeholder={t.chatPlaceholder} enterkeyhint="send" />
+        <button id="chatMic" aria-label="mic">🎤</button>
+        <button class="send" id="chatSend" aria-label="send">↑</button>
       </div>
     </div>
 
@@ -692,6 +789,24 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         return `<div class="pcol"><div class="usd">${isJa ? '$' + h.minPrice + t.from : t.from + '$' + h.minPrice}</div>${yen}</div>`;
       }
 
+      function cardHtml(h) {
+        const name = isJa && h.nameJa ? h.nameJa : h.name;
+        const href = (isJa ? '/ja/hotel/' : '/hotel/') + encodeURIComponent(h.slug);
+        const km = h.km != null ? (h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km') : '';
+        const state = h.openNow === true ? `<span class="dot open"></span>${t.openShort}`
+                    : h.openNow === false ? `<span class="dot closed"></span>${t.closed}` : '';
+        const img = h.thumbnail ? `<img class="thumb" src="${esc(h.thumbnail)}" alt="" loading="lazy" />` : `<div class="thumb"></div>`;
+        const meta = [state, km, esc(h.city || '')].filter(Boolean).join('<span style="opacity:.5"> ・ </span>');
+        return `<a class="card" href="${href}" data-slug="${esc(h.slug)}">
+          ${img}
+          <div class="info">
+            <div class="name">${esc(name)}</div>
+            <div class="meta">${meta}</div>
+          </div>
+          ${priceHtml(h)}
+        </a>`;
+      }
+
       function render(data) {
         lastData = data;
         renderView();
@@ -718,25 +833,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           : t.noResults;
         $('queryPill').querySelector('.q').textContent = label || ($('q').value || '');
 
-        list.innerHTML = hotels
-          .map((h) => {
-            const name = isJa && h.nameJa ? h.nameJa : h.name;
-            const href = (isJa ? '/ja/hotel/' : '/hotel/') + encodeURIComponent(h.slug);
-            const km = h.km != null ? (h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km') : '';
-            const state = h.openNow === true ? `<span class="dot open"></span>${t.openShort}`
-                        : h.openNow === false ? `<span class="dot closed"></span>${t.closed}` : '';
-            const img = h.thumbnail ? `<img class="thumb" src="${esc(h.thumbnail)}" alt="" loading="lazy" />` : `<div class="thumb"></div>`;
-            const meta = [state, km, esc(h.city || '')].filter(Boolean).join('<span style="opacity:.5"> ・ </span>');
-            return `<a class="card" href="${href}" data-slug="${esc(h.slug)}">
-              ${img}
-              <div class="info">
-                <div class="name">${esc(name)}</div>
-                <div class="meta">${meta}</div>
-              </div>
-              ${priceHtml(h)}
-            </a>`;
-          })
-          .join('');
+        list.innerHTML = hotels.map(cardHtml).join('');
         updateMap(hotels);
       }
 
@@ -759,8 +856,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         $('resultsScreen').classList.remove('active');
         document.body.style.overflow = '';
       }
-      $('backBtn').addEventListener('click', goHome);
-      $('queryPill').addEventListener('click', () => { goHome(); $('q').focus(); });
+      $('backBtn').addEventListener('click', () => {
+        goHome();
+        if (cameFromChat) { cameFromChat = false; openChat(false); }
+      });
+      $('queryPill').addEventListener('click', () => { cameFromChat = false; goHome(); $('q').focus(); });
 
       async function search(params) {
         $('homeStatus').textContent = t.searching;
@@ -826,6 +926,168 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         renderView();
       });
 
+      // ---------- conversational concierge ----------
+      const chatLog = $('chatLog');
+      let greeted = false;
+      let lastInputVoice = false;
+      let cameFromChat = false;
+      let ttsOn = localStorage.getItem('ddhTts') !== '0';
+      $('ttsToggle').classList.toggle('on', ttsOn);
+      $('ttsToggle').textContent = ttsOn ? '🔊' : '🔇';
+      const fmt = (s, vars) => s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? vars[k] : ''));
+
+      function speak(text) {
+        if (!ttsOn || !window.speechSynthesis) return;
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = isJa ? 'ja-JP' : 'en-US';
+        // Conversation loop: after speaking, listen again if the user spoke last.
+        u.onend = () => {
+          if (lastInputVoice && $('chatScreen').classList.contains('open')) {
+            setTimeout(() => startVoice($('chatMic'), (x) => handleUtterance(x, true)), 300);
+          }
+        };
+        speechSynthesis.speak(u);
+      }
+      $('ttsToggle').addEventListener('click', () => {
+        ttsOn = !ttsOn;
+        localStorage.setItem('ddhTts', ttsOn ? '1' : '0');
+        $('ttsToggle').classList.toggle('on', ttsOn);
+        $('ttsToggle').textContent = ttsOn ? '🔊' : '🔇';
+        if (!ttsOn && window.speechSynthesis) speechSynthesis.cancel();
+      });
+
+      function openChat(viaVoice) {
+        $('chatScreen').classList.add('open');
+        if (!greeted) {
+          greeted = true;
+          // Greeting is visual only — speaking it would collide with the mic
+          // that opens right after a voice entry.
+          aiSay(t.chatGreeting, { speak: false });
+        }
+      }
+      function closeChat() {
+        $('chatScreen').classList.remove('open');
+        lastInputVoice = false;
+        if (window.speechSynthesis) speechSynthesis.cancel();
+      }
+      $('chatBack').addEventListener('click', closeChat);
+
+      function scrollChat() { chatLog.scrollTop = chatLog.scrollHeight; }
+      function addUserMsg(text) {
+        chatLog.insertAdjacentHTML('beforeend', `<div class="msg user"><div class="bubble">${esc(text)}</div></div>`);
+        scrollChat();
+      }
+      let typingEl = null;
+      function showTyping() {
+        chatLog.insertAdjacentHTML('beforeend', `<div class="msg ai" id="typingMsg"><div class="bubble typing">…</div></div>`);
+        typingEl = document.getElementById('typingMsg');
+        scrollChat();
+      }
+      function hideTyping() { if (typingEl) { typingEl.remove(); typingEl = null; } }
+
+      function aiSay(text, opts) {
+        const o = opts || {};
+        hideTyping();
+        let inner = `<div class="bubble">${esc(text)}</div>`;
+        if (o.cards && currentView.length) {
+          inner += `<div class="cards">${currentView.slice(0, 3).map(cardHtml).join('')}</div>`;
+        }
+        const chips = [];
+        if (o.chips) {
+          chips.push(`<button class="primary" data-act="map">${t.chatShowMap}</button>`);
+          if (sortBy !== 'price') chips.push(`<button data-act="cheaper">${t.chipCheaper}</button>`);
+          if (!openOnly) chips.push(`<button data-act="open">${t.chipOpen}</button>`);
+        }
+        if (chips.length) inner += `<div class="chat-chips">${chips.join('')}</div>`;
+        chatLog.insertAdjacentHTML('beforeend', `<div class="msg ai">${inner}</div>`);
+        scrollChat();
+        if (o.speak !== false) speak(text);
+      }
+
+      function performAct(act) {
+        if (!lastData) return;
+        if (act === 'map') {
+          cameFromChat = true;
+          closeChat();
+          enterResults().then(() => { setSheet(1); renderView(); });
+          track('app_chat_map');
+          return;
+        }
+        if (act === 'cheaper') {
+          sortBy = 'price';
+          $('sortBtn').textContent = t.sortPrice + ' ⇅';
+          renderView();
+          aiSay(t.chatSorted, { cards: true, chips: true });
+        }
+        if (act === 'open') {
+          openOnly = true;
+          $('openBtn').classList.add('on');
+          renderView();
+          aiSay(t.chatOpenOnly, { cards: true, chips: true });
+        }
+        track('app_chat_refine', { act });
+      }
+      chatLog.addEventListener('click', (e) => {
+        const chip = e.target.closest && e.target.closest('button[data-act]');
+        if (chip) { performAct(chip.dataset.act); return; }
+        const a = e.target.closest && e.target.closest('a.card');
+        if (a) { e.preventDefault(); openDetail(a.dataset.slug); }
+      });
+
+      // Short refinement utterances tweak the current results; anything longer
+      // goes through the full search (which has its own AI intent parsing).
+      async function handleUtterance(text, voice) {
+        text = (text || '').trim();
+        if (!text) return;
+        lastInputVoice = !!voice;
+        addUserMsg(text);
+        track('app_chat_msg', { voice: !!voice });
+
+        if (lastData) {
+          const short = text.length <= 12;
+          if (/地図|マップ|全件|全部見|map/i.test(text) && short) { performAct('map'); return; }
+          if (/安い順|もっと安|cheap/i.test(text) && short) { performAct('cheaper'); return; }
+          if (/^(営業中|今すぐ|いま|open now).{0,6}$/i.test(text)) { performAct('open'); return; }
+          const bm = text.match(/^\D*(\d[\d,]*)\s*(ドル|\$|dollars?|円)\D*$/i);
+          if (bm && short) {
+            let usd = Number(bm[1].replace(/,/g, ''));
+            if (/円/.test(bm[2]) && rateJPY) usd = Math.round(usd / rateJPY);
+            budget = String(usd);
+            $('budgetSel').classList.add('on');
+            renderView();
+            aiSay(fmt(t.chatBudget, { b: usd, n: currentView.length }), { cards: true, chips: true });
+            return;
+          }
+        }
+
+        showTyping();
+        try {
+          const res = await fetch('/api/app/nearby?' + new URLSearchParams({ q: text, limit: 24 }));
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          track('app_search', { mode: data.mode, q: text });
+          if (!data.hotels || !data.hotels.length) { aiSay(t.chatNoHit, {}); return; }
+          applyIntent(data.intent);
+          render(data);
+          const label = (data.center && data.center.label) || text;
+          const prices = currentView.map((h) => h.minPrice).filter((v) => v != null);
+          const cheap = prices.length ? fmt(t.chatCheap, { p: Math.min(...prices) }) : '';
+          aiSay(fmt(t.chatFound, { label, n: currentView.length, cheap }), { cards: true, chips: true });
+        } catch (e) {
+          aiSay(t.chatNoHit, {});
+        }
+      }
+
+      const sendChat = () => {
+        const v = $('chatInput').value.trim();
+        if (!v) return;
+        $('chatInput').value = '';
+        handleUtterance(v, false);
+      };
+      $('chatSend').addEventListener('click', sendChat);
+      $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
+
       // ---------- inputs ----------
       $('geoBtn').addEventListener('click', () => {
         $('homeStatus').textContent = t.searching;
@@ -836,9 +1098,13 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         );
       });
 
+      // Text queries flow through the concierge conversation.
       const doTextSearch = () => {
         const q = $('q').value.trim();
-        if (q) search({ q });
+        if (!q) return;
+        $('q').value = '';
+        openChat(false);
+        handleUtterance(q, false);
       };
       $('goBtn').addEventListener('click', doTextSearch);
       $('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') doTextSearch(); });
@@ -847,33 +1113,38 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         b.addEventListener('click', () => { $('q').value = b.dataset.q; search({ q: b.dataset.q }); })
       );
 
-      // Voice input (Web Speech API) — from home button or results mic
+      // Voice = conversation. Recognition results go through handleUtterance,
+      // and speak() auto-relistens after the reply for a hands-free loop.
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      function startVoice(btn, onText) {
+        if (!SR) return;
+        if (window.__ddhRec) { try { window.__ddhRec.stop(); } catch (e) {} return; }
+        const rec = new SR();
+        window.__ddhRec = rec;
+        rec.lang = isJa ? 'ja-JP' : 'en-US';
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+        btn.classList.add('listening');
+        rec.onresult = (e) => {
+          track('app_voice_search');
+          onText(e.results[0][0].transcript);
+        };
+        rec.onend = () => { btn.classList.remove('listening'); window.__ddhRec = null; };
+        rec.onerror = () => {};
+        rec.start();
+      }
       if (!SR) {
         $('micBtn').style.display = 'none';
         $('micFab').style.display = 'none';
+        $('chatMic').style.display = 'none';
       } else {
-        let rec = null;
-        const startVoice = (btn) => {
-          if (rec) { rec.stop(); return; }
-          rec = new SR();
-          rec.lang = isJa ? 'ja-JP' : 'en-US';
-          rec.interimResults = false;
-          rec.maxAlternatives = 1;
-          btn.classList.add('listening');
-          $('homeStatus').textContent = t.listening;
-          rec.onresult = (e) => {
-            const text = e.results[0][0].transcript;
-            $('q').value = text;
-            track('app_voice_search');
-            search({ q: text });
-          };
-          rec.onerror = () => { $('homeStatus').textContent = t.noGeo; };
-          rec.onend = () => { btn.classList.remove('listening'); rec = null; };
-          rec.start();
+        const voiceToChat = () => {
+          openChat(true);
+          startVoice($('chatMic'), (x) => handleUtterance(x, true));
         };
-        $('micBtn').addEventListener('click', () => startVoice($('micBtn')));
-        $('micFab').addEventListener('click', () => startVoice($('micFab')));
+        $('micBtn').addEventListener('click', voiceToChat);
+        $('micFab').addEventListener('click', voiceToChat);
+        $('chatMic').addEventListener('click', () => startVoice($('chatMic'), (x) => handleUtterance(x, true)));
       }
 
       // ---------- in-app detail / booking / payment ----------
