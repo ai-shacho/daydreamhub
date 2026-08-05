@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { AIRPORTS } from '../../../lib/data/airportsData';
 import { airportNames, airportNamesJa, airportByCity, haversineKm } from '../../../lib/airports';
+import { getExchangeRates } from '../../../lib/tools';
 
 // Mobile-app search endpoint: given user coordinates (?lat&lng) or a free-text /
 // voice query (?q), return active hotels sorted by distance with price and
@@ -99,7 +100,8 @@ async function extractIntent(
     'You extract search intent from day-use hotel queries (Japanese or English). ' +
     'Reply with ONLY a JSON object, no prose: ' +
     '{"place": string|null (location/airport/city mentioned, keep original language), ' +
-    '"budget_usd": number|null (max budget converted to USD, assume 150 JPY = 1 USD), ' +
+    '"budget": number|null (max budget as stated, NO currency conversion), ' +
+    '"currency": string|null (ISO code of the stated budget, e.g. "USD", "JPY"), ' +
     '"open_now": boolean (true if they want somewhere usable right now)}';
   const models = ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1'];
   for (const model of models) {
@@ -115,10 +117,26 @@ async function extractIntent(
       const m = text.match(/\{[\s\S]*?\}/);
       if (!m) continue;
       const j = JSON.parse(m[0]);
-      const budget = Number(j.budget_usd);
+      // Convert the stated budget to USD ourselves — LLM currency math is
+      // unreliable (observed 5000 JPY → $49). Rates are USD-based.
+      let budgetUsd: number | null = null;
+      const amount = Number(j.budget);
+      if (Number.isFinite(amount) && amount > 0) {
+        const cur = typeof j.currency === 'string' ? j.currency.toUpperCase() : 'USD';
+        if (cur === 'USD') {
+          budgetUsd = Math.round(amount);
+        } else {
+          try {
+            const rates = await getExchangeRates(env.DB);
+            if (rates?.[cur]) budgetUsd = Math.round(amount / rates[cur]);
+          } catch {
+            // no rate available — drop the budget rather than guess
+          }
+        }
+      }
       return {
         place: typeof j.place === 'string' && j.place.trim() ? j.place.trim() : null,
-        budgetUsd: Number.isFinite(budget) && budget > 0 ? Math.round(budget) : null,
+        budgetUsd,
         openNow: j.open_now === true,
       };
     } catch {
