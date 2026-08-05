@@ -599,6 +599,22 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
 
       <!-- Search Bar (Agoda-style) -->
       <div class="max-w-4xl mx-auto">
+        <!-- Mode tabs: AI Concierge (flagship, default) / Filter search -->
+        <div class="flex justify-center mb-4">
+          <div class="inline-flex bg-white/15 backdrop-blur-sm border border-white/20 rounded-full p-1 gap-1">
+            <button type="button" id="tab-ai"
+              class="hero-tab px-5 py-2 rounded-full text-sm font-bold transition-colors flex items-center gap-2 bg-amber-500 text-white shadow">
+              <span class="inline-block w-2 h-2 rounded-full bg-green-300 animate-pulse"></span>
+              ✨ {isJa ? 'AIコンシェルジュ' : 'AI Concierge'}
+            </button>
+            <button type="button" id="tab-search"
+              class="hero-tab px-5 py-2 rounded-full text-sm font-bold transition-colors flex items-center gap-2 text-white/90 hover:bg-white/10">
+              🔍 {isJa ? '条件で検索' : 'Search by filters'}
+            </button>
+          </div>
+        </div>
+
+        <div id="search-panel" class="hidden">
         <form action="/search" method="get" onsubmit="event.preventDefault(); window._heroNormalSearch();"
           class="bg-white rounded-2xl md:rounded-full shadow-xl p-2 flex flex-col md:flex-row md:items-center gap-2 md:gap-0">
           <!-- Location -->
@@ -652,16 +668,11 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
           </div>
         </form>
 
-        <!-- Sub actions: advanced filters & AI concierge -->
+        <!-- Sub actions: advanced filters -->
         <div class="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" id="toggle-advanced"
             class="text-xs text-white/80 hover:text-white border border-white/30 hover:border-white/60 rounded-full px-3 py-1.5 transition-colors bg-white/10 hover:bg-white/20">
             {isJa ? '＋ 詳細条件（目的・予算）' : '+ More filters (purpose / budget)'}
-          </button>
-          <button type="button" id="toggle-ai"
-            class="text-xs font-semibold text-gray-900 bg-amber-400 hover:bg-amber-300 rounded-full px-3 py-1.5 transition-colors flex items-center gap-1.5">
-            <span class="inline-block w-2 h-2 rounded-full bg-green-600 animate-pulse"></span>
-            💬 {isJa ? 'AIコンシェルジュに相談' : 'Ask AI Concierge'}
           </button>
         </div>
 
@@ -687,15 +698,18 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
           </div>
         </div>
 
-        <!-- AI Concierge (hidden by default) -->
-        <div id="ai-chat-wrapper" class="hidden mt-3">
+        </div><!-- /search-panel -->
+
+        <!-- AI Concierge (flagship, default visible) -->
+        <div id="ai-chat-wrapper">
+          <p class="text-center text-white/90 text-sm mb-3">{isJa ? '行き先を送るだけで、AIがあなたにぴったりのデイユースプランを提案します' : 'Just tell the AI where you are going — it finds the perfect day-use plan for you'}</p>
           <!-- AI Messages (hidden until chat starts) -->
           <div id="hero-chat-messages" class="hidden bg-gray-900/75 backdrop-blur-sm border border-white/20 rounded-xl p-4 mb-3 space-y-3 max-h-[480px] overflow-y-auto">
             <!-- messages injected here -->
           </div>
 
           <!-- AI Input Row -->
-          <div class="bg-white border border-amber-400/60 shadow-lg shadow-amber-500/20 rounded-xl p-3 flex items-center gap-2 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/40 transition-all">
+          <div class="bg-white border-2 border-amber-400 shadow-xl shadow-amber-500/30 rounded-2xl p-3 md:p-4 flex items-center gap-2 focus-within:ring-4 focus-within:ring-amber-400/40 transition-all">
             <!-- Upload flight photo -->
             <label for="hero-flight-upload" class="flex-shrink-0 cursor-pointer text-gray-400 hover:text-amber-500 transition-colors p-1.5 rounded-lg hover:bg-amber-50" title={isJa ? '航空券の写真をアップロード' : 'Upload flight photo'}>
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -714,14 +728,14 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
               type="text"
               id="hero-chat-input"
               placeholder={isJa ? '例: 東京、ドバイ、バンコク、パリ' : 'e.g. Tokyo, Dubai, Bangkok, Paris, New York'}
-              class="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm focus:outline-none font-medium"
+              class="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm md:text-base focus:outline-none font-medium"
               maxlength="300"
             />
 
             <!-- Send button -->
             <button
               id="hero-chat-send"
-              class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white font-bold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+              class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white font-bold text-sm md:text-base px-5 py-2.5 rounded-xl transition-colors flex items-center gap-1.5"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -753,20 +767,40 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
 
         <script is:inline>
           (function() {
-            function wireToggle(btnId, panelId) {
-              var btn = document.getElementById(btnId);
-              var panel = document.getElementById(panelId);
-              if (!btn || !panel) return;
-              btn.addEventListener('click', function() {
-                panel.classList.toggle('hidden');
-                if (!panel.classList.contains('hidden')) {
-                  var inp = panel.querySelector('input[type="text"], select');
-                  if (inp) inp.focus();
-                }
+            // Advanced filters toggle (inside filter-search panel)
+            var advBtn = document.getElementById('toggle-advanced');
+            var advPanel = document.getElementById('advanced-panel');
+            if (advBtn && advPanel) {
+              advBtn.addEventListener('click', function() {
+                advPanel.classList.toggle('hidden');
               });
             }
-            wireToggle('toggle-advanced', 'advanced-panel');
-            wireToggle('toggle-ai', 'ai-chat-wrapper');
+
+            // Hero mode tabs: AI concierge <-> filter search
+            var tabAi = document.getElementById('tab-ai');
+            var tabSearch = document.getElementById('tab-search');
+            var aiPanel = document.getElementById('ai-chat-wrapper');
+            var searchPanel = document.getElementById('search-panel');
+            if (!tabAi || !tabSearch || !aiPanel || !searchPanel) return;
+
+            var ACTIVE = ['bg-amber-500', 'text-white', 'shadow'];
+            var INACTIVE = ['text-white/90', 'hover:bg-white/10'];
+
+            function setTab(mode) {
+              var showAi = mode === 'ai';
+              aiPanel.classList.toggle('hidden', !showAi);
+              searchPanel.classList.toggle('hidden', showAi);
+              [[tabAi, showAi], [tabSearch, !showAi]].forEach(function(pair) {
+                var btn = pair[0], on = pair[1];
+                ACTIVE.forEach(function(c) { btn.classList.toggle(c, on); });
+                INACTIVE.forEach(function(c) { btn.classList.toggle(c, !on); });
+              });
+              var inp = showAi ? document.getElementById('hero-chat-input') : document.getElementById('location-input');
+              if (inp) inp.focus();
+            }
+
+            tabAi.addEventListener('click', function() { setTab('ai'); });
+            tabSearch.addEventListener('click', function() { setTab('search'); });
           })();
         </script>
 
