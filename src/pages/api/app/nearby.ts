@@ -135,7 +135,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
       const result = await db
         .prepare(
           `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.thumbnail_url,
-                  h.rating, h.latitude, h.longitude,
+                  h.latitude, h.longitude,
                   MIN(p.price_usd) AS min_price,
                   MIN(p.check_in_time) AS check_in, MAX(p.check_out_time) AS check_out
            FROM hotels h
@@ -157,7 +157,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
       const result = await db
         .prepare(
           `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.thumbnail_url,
-                  h.rating, h.latitude, h.longitude,
+                  h.latitude, h.longitude,
                   MIN(p.price_usd) AS min_price,
                   MIN(p.check_in_time) AS check_in, MAX(p.check_out_time) AS check_out
            FROM hotels h
@@ -165,7 +165,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
            WHERE h.status = 'active'
              AND (h.name LIKE ? OR h.name_ja LIKE ? OR h.city LIKE ? OR h.country LIKE ?)
            GROUP BY h.id
-           ORDER BY h.rating DESC
+           ORDER BY h.name ASC
            LIMIT ?`
         )
         .bind(like, like, like, like, limit)
@@ -181,7 +181,6 @@ export const GET: APIRoute = async ({ request, locals }) => {
       city: h.city,
       country: h.country,
       thumbnail: h.thumbnail_url || null,
-      rating: h.rating || null,
       km: h.km,
       minPrice: h.min_price ?? null,
       checkIn: h.check_in || null,
