@@ -41,6 +41,9 @@ const specialities = (isJa ? [
   { value: 'workspace', label: 'Workspace' },
 ]);
 
+// Hour options for the search bar time selects
+const HOURS = ['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'];
+
 // Category sections to display
 const categoryDefs = [
   { planType: 'daycation',    title: 'Daycation',       subtitle: 'Day trips & leisure',          icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
@@ -594,153 +597,178 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         </div>
       </div>
 
-      <!-- AI Chat Box -->
-      <div class="max-w-4xl mx-auto mb-4" id="ai-chat-wrapper">
-        <!-- AI Messages (hidden until chat starts) -->
-        <div id="hero-chat-messages" class="hidden bg-gray-900/75 backdrop-blur-sm border border-white/20 rounded-xl p-4 mb-3 space-y-3 max-h-[480px] overflow-y-auto">
-          <!-- messages injected here -->
-        </div>
-
-        <!-- AI Input Row -->
-        <!-- Chat input label -->
-        <p class="text-white font-semibold text-sm mb-2 pl-1 flex items-center gap-2">
-          <span class="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-          💬 Ask the AI Concierge — Enter city or airport name
-        </p>
-        <div class="bg-white border border-amber-400/60 shadow-lg shadow-amber-500/20 rounded-xl p-3 flex items-center gap-2 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/40 transition-all">
-          <!-- Upload flight photo -->
-          <label for="hero-flight-upload" class="flex-shrink-0 cursor-pointer text-gray-400 hover:text-amber-500 transition-colors p-1.5 rounded-lg hover:bg-amber-50" title={isJa ? '航空券の写真をアップロード' : 'Upload flight photo'}>
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-            <input type="file" id="hero-flight-upload" accept="image/*" class="hidden" />
-          </label>
-
-          <!-- Upload status -->
-          <span id="hero-upload-status" class="hidden text-xs text-amber-500 flex-shrink-0">{isJa ? 'アップロード中…' : 'Uploading...'}</span>
-          <span id="hero-upload-name" class="hidden text-xs text-teal-600 flex-shrink-0 max-w-[80px] truncate"></span>
-
-          <!-- Text input -->
-          <input
-            type="text"
-            id="hero-chat-input"
-            placeholder={isJa ? '例: 東京、ドバイ、バンコク、パリ' : 'e.g. Tokyo, Dubai, Bangkok, Paris, New York'}
-            class="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm focus:outline-none font-medium"
-            maxlength="300"
-          />
-
-          <!-- Send button -->
-          <button
-            id="hero-chat-send"
-            class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white font-bold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-            </svg>
-            Send
-          </button>
-        </div>
-      </div>
-
-      <!-- Search Form -->
+      <!-- Search Bar (Agoda-style) -->
       <div class="max-w-4xl mx-auto">
-        <form action="/search" method="get" class="bg-white/95 backdrop-blur-sm rounded-2xl p-4 shadow-xl">
-          <!-- Row 1: Location, Date, Check-in time, Check-out time, Guests, Budget, Search -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-            <div class="relative col-span-2 md:col-span-1" id="location-wrapper">
-              <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? '場所' : 'Location'}</label>
-              <input type="text" name="location" id="location-input" placeholder={isJa ? '都市名または国名…' : 'City or country...'} autocomplete="off"
-                class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
-              <ul id="location-suggestions"
-                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm">
-              </ul>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? '日付' : 'Date'}</label>
-              <input type="text" name="checkin" id="checkin-fp" placeholder="YYYY-MM-DD" autocomplete="off" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400" />
-            </div>
-            <div>
-              <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? 'チェックイン' : 'Check-in'}</label>
-              <select name="checkin_time" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                {['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'].map(t => (
+        <form action="/search" method="get" onsubmit="event.preventDefault(); window._heroNormalSearch();"
+          class="bg-white rounded-2xl md:rounded-full shadow-xl p-2 flex flex-col md:flex-row md:items-center gap-2 md:gap-0">
+          <!-- Location -->
+          <div class="relative flex-1 min-w-0 px-4 py-1.5 md:border-r md:border-gray-200" id="location-wrapper">
+            <label class="block text-[11px] text-gray-500 font-semibold">{isJa ? '場所' : 'Where'}</label>
+            <input type="text" name="location" id="location-input" placeholder={isJa ? '都市名または空港名' : 'City or airport'} autocomplete="off"
+              class="w-full bg-transparent text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none" />
+            <ul id="location-suggestions"
+              class="hidden absolute left-0 right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm">
+            </ul>
+          </div>
+          <!-- Date -->
+          <div class="px-4 py-1.5 md:w-40 md:border-r md:border-gray-200">
+            <label class="block text-[11px] text-gray-500 font-semibold">{isJa ? '日付' : 'Date'}</label>
+            <input type="text" name="checkin" id="checkin-fp" placeholder="YYYY-MM-DD" autocomplete="off"
+              class="w-full bg-transparent text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none" />
+          </div>
+          <!-- Time range -->
+          <div class="px-4 py-1.5 md:w-48 md:border-r md:border-gray-200">
+            <label class="block text-[11px] text-gray-500 font-semibold">{isJa ? '利用時間' : 'Time'}</label>
+            <div class="flex items-center gap-1">
+              <select name="checkin_time" class="bg-transparent text-sm font-medium text-gray-800 focus:outline-none cursor-pointer">
+                {HOURS.map(t => (
                   <option value={t} selected={t === '10:00'}>{t}</option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? 'チェックアウト' : 'Check-out'}</label>
-              <select name="checkout_time" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                {['00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00'].map(t => (
+              <span class="text-gray-400 text-sm">〜</span>
+              <select name="checkout_time" class="bg-transparent text-sm font-medium text-gray-800 focus:outline-none cursor-pointer">
+                {HOURS.map(t => (
                   <option value={t} selected={t === '18:00'}>{t}</option>
                 ))}
               </select>
             </div>
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? '目的' : 'Speciality'}</label>
-              <select name="speciality" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                <option value="">{isJa ? 'すべて' : 'All Types'}</option>
-                {specialities.filter(s => s.value).map(s => (
-                  <option value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? '人数' : 'Guests'}</label>
-              <select name="guests" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                {[1, 2, 3, 4, 5].map(n => (
-                  <option value={n}>{isJa ? `${n === 5 ? '5+' : n}名` : `${n === 5 ? '5+' : n} ${n === 1 ? 'guest' : 'guests'}`}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? '予算' : 'Budget'}</label>
-              <select name="budget" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
-                <option value="">{isJa ? '指定なし' : 'Any Budget'}</option>
-                <option value="budget">{isJa ? '節約（$30未満）' : 'Budget (under $30)'}</option>
-                <option value="mid">{isJa ? 'ミドル（$30–$100）' : 'Mid-range ($30–$100)'}</option>
-                <option value="premium">{isJa ? 'プレミアム（$100+）' : 'Premium ($100+)'}</option>
-              </select>
-            </div>
-            <div class="flex items-end">
-              <!-- Split button: Ask AI | Search -->
-              <div class="flex w-full rounded-lg overflow-hidden shadow-sm text-sm font-semibold">
-                <button type="button" id="mode-ai" onclick="window._heroAskAI()"
-                  class="flex-1 py-2.5 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-gray-900 transition-colors border-r border-amber-600">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                  Ask AI
-                </button>
-                <button type="button" id="mode-search" onclick="window._heroNormalSearch()"
-                  class="flex-1 py-2.5 flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white transition-colors">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                  Search
-                </button>
-              </div>
-            </div>
+          <!-- Guests -->
+          <div class="px-4 py-1.5 md:w-28">
+            <label class="block text-[11px] text-gray-500 font-semibold">{isJa ? '人数' : 'Guests'}</label>
+            <select name="guests" class="w-full bg-transparent text-sm font-medium text-gray-800 focus:outline-none cursor-pointer">
+              {[1, 2, 3, 4, 5].map(n => (
+                <option value={n}>{isJa ? `${n === 5 ? '5+' : n}名` : `${n === 5 ? '5+' : n} ${n === 1 ? 'guest' : 'guests'}`}</option>
+              ))}
+            </select>
+          </div>
+          <!-- Search button -->
+          <div class="p-1 md:pl-2 flex-shrink-0">
+            <button type="submit"
+              class="w-full md:w-auto bg-amber-500 hover:bg-amber-400 text-white font-bold text-base px-8 py-3 rounded-xl md:rounded-full transition-colors flex items-center justify-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              {isJa ? '検索' : 'Search'}
+            </button>
           </div>
         </form>
 
-        <!-- Airport Shortcuts -->
+        <!-- Sub actions: advanced filters & AI concierge -->
         <div class="mt-3 flex flex-wrap items-center gap-2">
-          <span class="text-white font-semibold text-xs">{isJa ? '✈️ いまここ:' : "✈️ I'm at:"}</span>
-          {[
-            { label: isJa ? 'ドバイ(DXB)' : 'Dubai(DXB)', city: 'Dubai', airport: 'I need a hotel near Dubai International Airport Dubai' },
-            { label: isJa ? 'バンコク(BKK)' : 'Bangkok(BKK)', city: 'Bangkok', airport: 'I need a hotel near Suvarnabhumi Airport Bangkok' },
-            { label: isJa ? 'クアラルンプール(KUL)' : 'Kuala Lumpur(KUL)', city: 'Kuala Lumpur', airport: 'I need a hotel near Kuala Lumpur International Airport Kuala Lumpur' },
-            { label: isJa ? 'ナイロビ(NBO)' : 'Nairobi(NBO)', city: 'Nairobi', airport: 'I need a hotel near Jomo Kenyatta Airport Nairobi' },
-            { label: isJa ? 'ドーハ(DOH)' : 'Doha(DOH)', city: 'Doha', airport: 'I need a hotel near Hamad International Airport Doha' },
-            { label: isJa ? 'バーミンガム(BHX)' : 'Birmingham(BHX)', city: 'Birmingham', airport: 'I need a hotel near Birmingham Airport Birmingham' },
-          ].map(airport => (
-            <button
-              type="button"
-              data-airport={airport.airport}
-              class="text-xs text-white/80 hover:text-white border border-white/30 hover:border-white/60 rounded-full px-3 py-1 transition-colors bg-white/10 hover:bg-white/20">
-              {airport.label}
-            </button>
-          ))}
+          <button type="button" id="toggle-advanced"
+            class="text-xs text-white/80 hover:text-white border border-white/30 hover:border-white/60 rounded-full px-3 py-1.5 transition-colors bg-white/10 hover:bg-white/20">
+            {isJa ? '＋ 詳細条件（目的・予算）' : '+ More filters (purpose / budget)'}
+          </button>
+          <button type="button" id="toggle-ai"
+            class="text-xs font-semibold text-gray-900 bg-amber-400 hover:bg-amber-300 rounded-full px-3 py-1.5 transition-colors flex items-center gap-1.5">
+            <span class="inline-block w-2 h-2 rounded-full bg-green-600 animate-pulse"></span>
+            💬 {isJa ? 'AIコンシェルジュに相談' : 'Ask AI Concierge'}
+          </button>
         </div>
+
+        <!-- Advanced filters (hidden by default) -->
+        <div id="advanced-panel" class="hidden mt-3 bg-white/95 backdrop-blur-sm rounded-xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+          <div>
+            <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? '目的' : 'Speciality'}</label>
+            <select name="speciality" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white border border-gray-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+              <option value="">{isJa ? 'すべて' : 'All Types'}</option>
+              {specialities.filter(s => s.value).map(s => (
+                <option value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-gray-600 mb-1 font-semibold">{isJa ? '予算' : 'Budget'}</label>
+            <select name="budget" class="w-full rounded-lg px-3 py-2.5 text-sm bg-white border border-gray-200 text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-400">
+              <option value="">{isJa ? '指定なし' : 'Any Budget'}</option>
+              <option value="budget">{isJa ? '節約（$30未満）' : 'Budget (under $30)'}</option>
+              <option value="mid">{isJa ? 'ミドル（$30–$100）' : 'Mid-range ($30–$100)'}</option>
+              <option value="premium">{isJa ? 'プレミアム（$100+）' : 'Premium ($100+)'}</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- AI Concierge (hidden by default) -->
+        <div id="ai-chat-wrapper" class="hidden mt-3">
+          <!-- AI Messages (hidden until chat starts) -->
+          <div id="hero-chat-messages" class="hidden bg-gray-900/75 backdrop-blur-sm border border-white/20 rounded-xl p-4 mb-3 space-y-3 max-h-[480px] overflow-y-auto">
+            <!-- messages injected here -->
+          </div>
+
+          <!-- AI Input Row -->
+          <div class="bg-white border border-amber-400/60 shadow-lg shadow-amber-500/20 rounded-xl p-3 flex items-center gap-2 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-400/40 transition-all">
+            <!-- Upload flight photo -->
+            <label for="hero-flight-upload" class="flex-shrink-0 cursor-pointer text-gray-400 hover:text-amber-500 transition-colors p-1.5 rounded-lg hover:bg-amber-50" title={isJa ? '航空券の写真をアップロード' : 'Upload flight photo'}>
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+              </svg>
+              <input type="file" id="hero-flight-upload" accept="image/*" class="hidden" />
+            </label>
+
+            <!-- Upload status -->
+            <span id="hero-upload-status" class="hidden text-xs text-amber-500 flex-shrink-0">{isJa ? 'アップロード中…' : 'Uploading...'}</span>
+            <span id="hero-upload-name" class="hidden text-xs text-teal-600 flex-shrink-0 max-w-[80px] truncate"></span>
+
+            <!-- Text input -->
+            <input
+              type="text"
+              id="hero-chat-input"
+              placeholder={isJa ? '例: 東京、ドバイ、バンコク、パリ' : 'e.g. Tokyo, Dubai, Bangkok, Paris, New York'}
+              class="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm focus:outline-none font-medium"
+              maxlength="300"
+            />
+
+            <!-- Send button -->
+            <button
+              id="hero-chat-send"
+              class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white font-bold text-sm px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
+              Send
+            </button>
+          </div>
+
+          <!-- Airport Shortcuts -->
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <span class="text-white font-semibold text-xs">{isJa ? '✈️ いまここ:' : "✈️ I'm at:"}</span>
+            {[
+              { label: isJa ? 'ドバイ(DXB)' : 'Dubai(DXB)', city: 'Dubai', airport: 'I need a hotel near Dubai International Airport Dubai' },
+              { label: isJa ? 'バンコク(BKK)' : 'Bangkok(BKK)', city: 'Bangkok', airport: 'I need a hotel near Suvarnabhumi Airport Bangkok' },
+              { label: isJa ? 'クアラルンプール(KUL)' : 'Kuala Lumpur(KUL)', city: 'Kuala Lumpur', airport: 'I need a hotel near Kuala Lumpur International Airport Kuala Lumpur' },
+              { label: isJa ? 'ナイロビ(NBO)' : 'Nairobi(NBO)', city: 'Nairobi', airport: 'I need a hotel near Jomo Kenyatta Airport Nairobi' },
+              { label: isJa ? 'ドーハ(DOH)' : 'Doha(DOH)', city: 'Doha', airport: 'I need a hotel near Hamad International Airport Doha' },
+              { label: isJa ? 'バーミンガム(BHX)' : 'Birmingham(BHX)', city: 'Birmingham', airport: 'I need a hotel near Birmingham Airport Birmingham' },
+            ].map(airport => (
+              <button
+                type="button"
+                data-airport={airport.airport}
+                class="text-xs text-white/80 hover:text-white border border-white/30 hover:border-white/60 rounded-full px-3 py-1 transition-colors bg-white/10 hover:bg-white/20">
+                {airport.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <script is:inline>
+          (function() {
+            function wireToggle(btnId, panelId) {
+              var btn = document.getElementById(btnId);
+              var panel = document.getElementById(panelId);
+              if (!btn || !panel) return;
+              btn.addEventListener('click', function() {
+                panel.classList.toggle('hidden');
+                if (!panel.classList.contains('hidden')) {
+                  var inp = panel.querySelector('input[type="text"], select');
+                  if (inp) inp.focus();
+                }
+              });
+            }
+            wireToggle('toggle-advanced', 'advanced-panel');
+            wireToggle('toggle-ai', 'ai-chat-wrapper');
+          })();
+        </script>
 
         <!-- Stats inline -->
         <div class="flex items-center justify-center gap-8 mt-5 text-white/80 text-base md:text-lg">
@@ -1674,39 +1702,6 @@ function escHtml(s) {
   inputEl.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') { e.preventDefault(); sendMessage(); }
   });
-
-  // Search mode toggle
-  var _searchMode = 'ai';
-  window._setSearchMode = function(mode) {
-    _searchMode = mode;
-    var modeAi = document.getElementById('mode-ai');
-    var modeSearch = document.getElementById('mode-search');
-    var btnLabel = document.getElementById('hero-btn-label');
-    var btnIcon = document.getElementById('hero-btn-icon');
-    if (mode === 'ai') {
-      modeAi.classList.add('bg-amber-500', 'text-gray-900');
-      modeAi.classList.remove('bg-white', 'text-gray-500');
-      modeSearch.classList.add('bg-white', 'text-gray-500');
-      modeSearch.classList.remove('bg-amber-500', 'text-gray-900');
-      btnLabel.textContent = 'Ask AI';
-      btnIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>';
-    } else {
-      modeSearch.classList.add('bg-amber-500', 'text-gray-900');
-      modeSearch.classList.remove('bg-white', 'text-gray-500');
-      modeAi.classList.add('bg-white', 'text-gray-500');
-      modeAi.classList.remove('bg-amber-500', 'text-gray-900');
-      btnLabel.textContent = 'Search';
-      btnIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>';
-    }
-  };
-
-  window._heroSearchAction = function() {
-    if (_searchMode === 'ai') {
-      window._heroAskAI();
-    } else {
-      window._heroNormalSearch();
-    }
-  };
 
   window._heroNormalSearch = function() {
     var location = document.getElementById('location-input') ? document.getElementById('location-input').value.trim() : '';
