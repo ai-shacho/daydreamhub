@@ -875,6 +875,21 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       }
       const track = (name, params) => { try { window.gtag && window.gtag('event', name, params || {}); } catch (e) {} };
+      // City names come back in English from the DB; show Japanese for ja UI.
+      const CITY_JA = {
+        'Bangkok': 'バンコク', 'Lat Krabang': 'ラートクラバン', 'Phuket': 'プーケット', 'Pattaya': 'パタヤ',
+        'Koh Samui': 'サムイ島', 'Chiang Mai': 'チェンマイ', 'Singapore': 'シンガポール',
+        'Kuala Lumpur': 'クアラルンプール', 'Petaling Jaya': 'ペタリンジャヤ', 'Jakarta': 'ジャカルタ',
+        'Bali': 'バリ', 'Denpasar': 'デンパサール', 'Ubud': 'ウブド', 'Manila': 'マニラ', 'Makati': 'マカティ',
+        'Cebu': 'セブ', 'Cebu City': 'セブ', 'Ho Chi Minh City': 'ホーチミン', 'Ho Chi Minh': 'ホーチミン',
+        'Hanoi': 'ハノイ', 'Da Nang': 'ダナン', 'Hong Kong': '香港', 'Taipei': '台北', 'Seoul': 'ソウル',
+        'Shanghai': '上海', 'Beijing': '北京', 'Dubai': 'ドバイ', 'Abu Dhabi': 'アブダビ', 'Doha': 'ドーハ',
+        'Cairo': 'カイロ', 'Giza': 'ギザ', 'Nairobi': 'ナイロビ', 'London': 'ロンドン', 'Paris': 'パリ',
+        'Amsterdam': 'アムステルダム', 'Prague': 'プラハ', 'Venice': 'ヴェネツィア', 'Porto': 'ポルト',
+        'New York': 'ニューヨーク', 'Los Angeles': 'ロサンゼルス', 'Sydney': 'シドニー',
+        'Melbourne': 'メルボルン', 'Auckland': 'オークランド', 'Tbilisi': 'トビリシ', 'Almaty': 'アルマティ',
+      };
+      const cityJa = (c) => (isJa && c && CITY_JA[c]) || c || '';
 
       // ---------- state ----------
       let lastData = null;
@@ -1093,7 +1108,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
                     : h.openNow === false ? `<span class="dot closed"></span>${t.closed}${win}`
                     : win.trim();
         const img = h.thumbnail ? `<img class="thumb" src="${esc(h.thumbnail)}" alt="" loading="lazy" />` : `<div class="thumb"></div>`;
-        const meta = `<span class="ofc">${t.ofcBadge}</span>` + [state, km, esc(h.city || '')].filter(Boolean).join('<span style="opacity:.5"> ・ </span>');
+        const meta = `<span class="ofc">${t.ofcBadge}</span>` + [state, km, esc(cityJa(h.city))].filter(Boolean).join('<span style="opacity:.5"> ・ </span>');
         return `<a class="card" href="${href}" data-slug="${esc(h.slug)}">
           ${img}
           <div class="info">
@@ -1650,12 +1665,12 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         $('detailName').textContent = (isJa && cur.nameJa) || cur.name || '';
         const km = cur.km != null ? (cur.km < 1 ? Math.round(cur.km * 1000) + 'm' : cur.km + 'km') : '';
         const state = cur.openNow === true ? t.openShort : cur.openNow === false ? t.closed : '';
-        $('detailMeta').textContent = [cur.city, km, state].filter(Boolean).join(' ・ ');
+        $('detailMeta').textContent = [cityJa(cur.city), km, state].filter(Boolean).join(' ・ ');
         $('detailWebLink').href = (isJa ? '/ja/hotel/' : '/hotel/') + encodeURIComponent(slug);
         $('planList').innerHTML = `<div class="panel-meta">${t.searching}</div>`;
         openPanel('detailPanel');
         try {
-          const r = await fetch(`/api/hotels/${encodeURIComponent(slug)}/plans`);
+          const r = await fetch(`/api/hotels/${encodeURIComponent(slug)}/plans${isJa ? '?lang=ja' : ''}`);
           const d = await r.json();
           if (d.error) throw new Error(d.error);
           selHotel = d.hotel;
