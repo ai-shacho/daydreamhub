@@ -72,6 +72,7 @@ const t = isJa
       cgSubmit: '電話確認を依頼する（無料）',
       cgNote: 'AIがホテルに電話し、デイユースの可否と料金を確認します。結果はメールでお知らせし、金額に納得した場合のみメール内リンクから確定（その時点で手数料$7）。',
       cgFail: 'リクエストに失敗しました。時間をおいて再度お試しください。',
+      bookNote: '決済後、AIがホテルへ電話して空きを確認し、確定をご連絡します。満室などで利用できない場合は自動で全額返金されます。',
       chipCheaper: '💰 安い順',
       chipOpen: '🟢 利用時間内だけ',
       chipMap: '🗺 地図で見る',
@@ -164,6 +165,7 @@ const t = isJa
       cgSubmit: 'Request the call (free)',
       cgNote: 'Our AI calls the hotel to confirm day-use and the price. We email you the quote; you only pay the $7 fee if you accept it via the email link.',
       cgFail: 'Request failed. Please try again shortly.',
+      bookNote: 'After payment, our AI phones the hotel to confirm availability and we notify you once confirmed. If the hotel cannot take the booking, you are automatically refunded in full.',
       chipCheaper: '💰 Cheapest',
       chipOpen: '🟢 Usable now',
       chipMap: '🗺 Map view',
@@ -709,6 +711,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         <h2>{t.bookTitle}</h2>
         <div class="panel-meta" id="bookHotelLine"></div>
         <div class="sum-box" id="bookSummary"></div>
+        <div class="cg-note">{t.bookNote}</div>
         <div class="field">
           <label for="bkDate">{t.dateLabel}</label>
           <input id="bkDate" type="date" />
