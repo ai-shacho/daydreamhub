@@ -57,6 +57,19 @@ const t = isJa
       chatBudget: '予算${b}以下で絞り込みました（{n}件）。',
       chatNoHit: 'ごめんなさい、うまく見つけられませんでした。都市名や空港名を入れて話してみてください（例：バンコク、チャンギ空港）。',
       chatShowMap: '🗺 地図で全件見る',
+      chipConcierge: '🤖 未掲載ホテルも探す',
+      cgSearching: '未掲載ホテルを含めて調べています…（10〜20秒ほどかかります）',
+      cgIntro: '掲載外でデイユースに使えそうなホテルが見つかりました。AIが電話で「デイユース可否・本日の空き・料金」を確認できます（確認の電話は無料）。',
+      cgNone: '追加の候補は見つかりませんでした。エリア名を変えて試してみてください。',
+      cgBadge: '未掲載',
+      cgCallBtn: '📞 AIに電話で確認してもらう',
+      cgTitle: 'AI電話確認のリクエスト',
+      cgHotel: '対象ホテル',
+      cgTimeFrom: '利用開始',
+      cgTimeTo: '利用終了',
+      cgSubmit: '電話確認を依頼する（無料）',
+      cgNote: 'AIがホテルに電話し、デイユースの可否と料金を確認します。結果はメールでお知らせし、金額に納得した場合のみメール内リンクから確定（その時点で手数料$7）。',
+      cgFail: 'リクエストに失敗しました。時間をおいて再度お試しください。',
       chipCheaper: '💰 安い順',
       chipOpen: '🟢 利用時間内だけ',
       chipMap: '🗺 地図で見る',
@@ -134,6 +147,19 @@ const t = isJa
       chatBudget: 'Filtered to under ${b} ({n} places).',
       chatNoHit: "Sorry, I couldn't find that. Try including a city or airport name (e.g. Bangkok, Changi Airport).",
       chatShowMap: '🗺 See all on the map',
+      chipConcierge: '🤖 Search unlisted hotels',
+      cgSearching: 'Searching beyond our listings… (takes 10–20s)',
+      cgIntro: 'Found unlisted hotels that may offer day-use. Our AI can phone them to confirm day-use, availability and price (the inquiry call is free).',
+      cgNone: 'No extra candidates found. Try a different area name.',
+      cgBadge: 'Unlisted',
+      cgCallBtn: '📞 Have AI call to confirm',
+      cgTitle: 'AI phone confirmation',
+      cgHotel: 'Hotel',
+      cgTimeFrom: 'From',
+      cgTimeTo: 'To',
+      cgSubmit: 'Request the call (free)',
+      cgNote: 'Our AI calls the hotel to confirm day-use and the price. We email you the quote; you only pay the $7 fee if you accept it via the email link.',
+      cgFail: 'Request failed. Please try again shortly.',
       chipCheaper: '💰 Cheapest',
       chipOpen: '🟢 Usable now',
       chipMap: '🗺 Map view',
@@ -419,6 +445,27 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       .chat-bar button.listening { background: #dc2626 !important; color: #fff !important; border: 0; animation: pulse 1s infinite; }
       .typing { color: var(--muted); font-size: 13px; }
 
+      /* ---------- Concierge (unlisted hotels + AI call) ---------- */
+      .ext-card {
+        background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
+        padding: 12px 13px; margin-top: 8px;
+      }
+      .ext-card .top { display: flex; align-items: center; gap: 8px; }
+      .ext-card .ename { font-size: 14px; font-weight: 700; flex: 1; min-width: 0; }
+      .ext-badge {
+        flex: none; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+        background: #fff7ed; color: #c2410c; border: 1px solid #fdba74;
+      }
+      .ext-card .emeta { color: var(--muted); font-size: 12px; margin-top: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .ext-card .call-cta {
+        display: block; width: 100%; margin-top: 9px; padding: 11px; border: 0; border-radius: 11px;
+        background: linear-gradient(135deg, #0d9488, #0891b2); color: #fff;
+        font-size: 13px; font-weight: 700; cursor: pointer;
+      }
+      .cg-note { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 10px 0 14px; }
+      .time-row { display: flex; gap: 8px; }
+      .time-row .field { flex: 1; }
+
       /* ---------- In-app booking panels ---------- */
       .panel {
         position: fixed; inset: 0; z-index: 30; background: var(--bg);
@@ -669,6 +716,48 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           <div id="payHint"></div>
           <div id="paypalBox" class="locked"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- AI phone confirmation request (unlisted hotels) -->
+    <div class="panel" id="callPanel" style="z-index:45">
+      <div class="panel-body" style="padding-top: calc(14px + env(safe-area-inset-top));">
+        <button class="panel-close" id="callClose" style="position:static;margin-bottom:12px;">←</button>
+        <h2>{t.cgTitle}</h2>
+        <div class="panel-meta" id="callHotelLine"></div>
+        <div class="cg-note">{t.cgNote}</div>
+        <div class="field">
+          <label for="cgDate">{t.dateLabel}</label>
+          <input id="cgDate" type="date" />
+        </div>
+        <div class="time-row">
+          <div class="field">
+            <label for="cgFrom">{t.cgTimeFrom}</label>
+            <select id="cgFrom"></select>
+          </div>
+          <div class="field">
+            <label for="cgTo">{t.cgTimeTo}</label>
+            <select id="cgTo"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="cgGuests">{t.guestsLabel}</label>
+          <select id="cgGuests"></select>
+        </div>
+        <div class="field">
+          <label for="cgName">{t.nameLabel}</label>
+          <input id="cgName" type="text" autocomplete="name" />
+        </div>
+        <div class="field">
+          <label for="cgEmail">{t.emailLabel}</label>
+          <input id="cgEmail" type="email" autocomplete="email" inputmode="email" />
+        </div>
+        <div class="field">
+          <label for="cgPhone">{t.phoneLabel}</label>
+          <input id="cgPhone" type="tel" autocomplete="tel" inputmode="tel" />
+        </div>
+        <div id="cgHint" style="color:var(--warn);font-size:13px;min-height:17px;margin-bottom:8px;"></div>
+        <button class="test-pay-btn" id="cgSubmit">{t.cgSubmit}</button>
       </div>
     </div>
 
@@ -1074,13 +1163,143 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           chips.push(`<button class="primary" data-act="map">${t.chatShowMap}</button>`);
           if (sortBy !== 'price') chips.push(`<button data-act="cheaper">${t.chipCheaper}</button>`);
           if (!openOnly) chips.push(`<button data-act="open">${t.chipOpen}</button>`);
+          chips.push(`<button data-act="concierge">${t.chipConcierge}</button>`);
         }
+        if (o.cgChip) chips.push(`<button class="primary" data-act="concierge">${t.chipConcierge}</button>`);
         if (chips.length) inner += `<div class="chat-chips">${chips.join('')}</div>`;
         chatLog.insertAdjacentHTML('beforeend', `<div class="msg ai">${inner}</div>`);
         scrollChat();
       }
 
+      // ---------- concierge: unlisted hotels + AI phone confirmation ----------
+      const cgSessionId = (crypto.randomUUID && crypto.randomUUID()) || 'app-' + Date.now() + '-' + String(Math.random()).slice(2, 8);
+      let lastPlaceLabel = '';
+      let cgHotels = [];
+      let cgTarget = null;
+      const GUEST_KEY = 'ddhGuest';
+      const getGuest = () => { try { return JSON.parse(localStorage.getItem(GUEST_KEY) || '{}'); } catch (e) { return {}; } };
+      const saveGuest = (g) => { try { localStorage.setItem(GUEST_KEY, JSON.stringify(g)); } catch (e) {} };
+
+      async function conciergeSearch() {
+        track('app_cg_search', { q: lastPlaceLabel });
+        aiSay(t.cgSearching, {});
+        showTyping();
+        try {
+          const q = lastPlaceLabel || $('q').value || '';
+          const msg = (isJa ? 'デイユースで使えるホテルを探して: ' : 'find day use hotels near ') + q;
+          const r = await fetch('/api/concierge/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: cgSessionId, message: msg, locale: isJa ? 'ja' : 'en' }),
+          });
+          const d = await r.json();
+          hideTyping();
+          const ext = ((d.metadata && d.metadata.hotels) || []).filter((h) => h.source === 'external' && h.phone && h.name);
+          if (!ext.length) { aiSay(t.cgNone, {}); return; }
+          cgHotels = ext.slice(0, 3);
+          let inner = `<div class="bubble">${esc(t.cgIntro)}</div>`;
+          inner += cgHotels
+            .map((h, i) => `<div class="ext-card">
+              <div class="top"><div class="ename">${esc(h.name)}</div><span class="ext-badge">${t.cgBadge}</span></div>
+              ${h.address ? `<div class="emeta">📍 ${esc(h.address)}</div>` : ''}
+              ${h.rating ? `<div class="emeta">⭐ ${esc(String(h.rating))}</div>` : ''}
+              <button class="call-cta" data-cg="${i}">${t.cgCallBtn}</button>
+            </div>`)
+            .join('');
+          chatLog.insertAdjacentHTML('beforeend', `<div class="msg ai">${inner}</div>`);
+          scrollChat();
+          track('app_cg_results', { n: cgHotels.length });
+        } catch (e) {
+          hideTyping();
+          aiSay(t.cgFail, {});
+        }
+      }
+
+      const hourOpts = (from, to, sel) => {
+        let s = '';
+        for (let h = from; h <= to; h++) {
+          const v = String(h).padStart(2, '0') + ':00';
+          s += `<option value="${v}"${v === sel ? ' selected' : ''}>${v}</option>`;
+        }
+        return s;
+      };
+      function openCallPanel(h) {
+        cgTarget = h;
+        $('callHotelLine').textContent = h.name;
+        const d = new Date();
+        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        $('cgDate').min = iso;
+        if (!$('cgDate').value) $('cgDate').value = iso;
+        $('cgFrom').innerHTML = hourOpts(6, 22, '10:00');
+        $('cgTo').innerHTML = hourOpts(7, 23, '18:00');
+        $('cgGuests').innerHTML = Array.from({ length: 4 }, (_, i) => `<option value="${i + 1}">${i + 1}${t.ppl}</option>`).join('');
+        const g = getGuest();
+        if (g.name && !$('cgName').value) $('cgName').value = g.name;
+        if (g.email && !$('cgEmail').value) $('cgEmail').value = g.email;
+        if (g.phone && !$('cgPhone').value) $('cgPhone').value = g.phone;
+        $('cgHint').textContent = '';
+        openPanel('callPanel');
+        track('app_cg_form_open', { hotel: h.name });
+      }
+      $('callClose').addEventListener('click', () => closePanel('callPanel'));
+      $('cgSubmit').addEventListener('click', async () => {
+        const name = $('cgName').value.trim();
+        const email = $('cgEmail').value.trim();
+        if (!name || !/.+@.+\..+/.test(email) || !$('cgDate').value || !cgTarget) {
+          $('cgHint').textContent = t.fillAll;
+          return;
+        }
+        if ($('cgFrom').value >= $('cgTo').value) {
+          $('cgHint').textContent = `${t.cgTimeFrom} < ${t.cgTimeTo}`;
+          return;
+        }
+        saveGuest({ name, email, phone: $('cgPhone').value.trim() });
+        $('cgSubmit').disabled = true;
+        $('cgHint').textContent = t.searching;
+        try {
+          const guests = Number($('cgGuests').value || 1);
+          const r = await fetch('/api/concierge/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_id: cgSessionId,
+              message: '__create_call_group_direct',
+              locale: isJa ? 'ja' : 'en',
+              guests,
+              guest_phone: $('cgPhone').value.trim(),
+              _call_group: {
+                guest_name: name,
+                guest_email: email,
+                guest_phone: $('cgPhone').value.trim(),
+                guests,
+                adults: guests,
+                children: 0,
+                check_in_date: $('cgDate').value,
+                check_in_time: $('cgFrom').value,
+                check_out_time: $('cgTo').value,
+                hotels: [{
+                  hotel_name: cgTarget.name,
+                  hotel_phone: cgTarget.phone,
+                  hotel_source: 'external',
+                  recommendation_reason: 'Requested via mobile app',
+                }],
+              },
+            }),
+          });
+          const d = await r.json();
+          if (d.error) throw new Error(d.error);
+          closePanel('callPanel');
+          aiSay(d.response || t.cgNote, {});
+          track('app_cg_call_requested', { hotel: cgTarget.name });
+        } catch (e) {
+          $('cgHint').textContent = '⚠️ ' + t.cgFail;
+        } finally {
+          $('cgSubmit').disabled = false;
+        }
+      });
+
       function performAct(act) {
+        if (act === 'concierge') { conciergeSearch(); return; }
         if (!lastData) return;
         if (act === 'map') {
           cameFromChat = true;
@@ -1104,6 +1323,8 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         track('app_chat_refine', { act });
       }
       chatLog.addEventListener('click', (e) => {
+        const cta = e.target.closest && e.target.closest('button.call-cta');
+        if (cta) { const h = cgHotels[Number(cta.dataset.cg)]; if (h) openCallPanel(h); return; }
         const chip = e.target.closest && e.target.closest('button[data-act]');
         if (chip) { performAct(chip.dataset.act); return; }
         const a = e.target.closest && e.target.closest('a.card');
@@ -1141,10 +1362,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           const data = await res.json();
           if (data.error) throw new Error(data.error);
           track('app_search', { mode: data.mode, q: text });
-          if (!data.hotels || !data.hotels.length) { aiSay(t.chatNoHit, {}); return; }
+          if (!data.hotels || !data.hotels.length) { aiSay(t.chatNoHit, { cgChip: true }); return; }
           applyIntent(data.intent);
           render(data);
           const label = (data.center && data.center.label) || text;
+          lastPlaceLabel = label;
           const prices = currentView.map((h) => h.minPrice).filter((v) => v != null);
           const cheap = prices.length ? fmt(t.chatCheap, { p: Math.min(...prices) }) : '';
           aiSay(fmt(t.chatFound, { label, n: currentView.length, cheap }), { cards: true, chips: true });
