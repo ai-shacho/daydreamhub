@@ -21,6 +21,14 @@ function stripInternalModelBlocks(text: string): string {
   text = text.replace(/\[?\{[\s\S]*?"tool_name"[\s\S]*?\}\]?/g, '');
   text = text.replace(/\[?\{[\s\S]*?"tool_use_id"[\s\S]*?\}\]?/g, '');
 
+  // Remove leaked role-play prefixes ("DaydreamHub: ...", "Concierge: ...") — keep the content
+  text = text.replace(/^\s*(?:DaydreamHub|AIコンシェルジュ|コンシェルジュ|Assistant|Concierge)\s*[:：]\s*/gim, '');
+  // Remove stage-direction lines like "（ゲストのメッセージに〜の場合）" / "(if the guest ...)"
+  text = text.replace(/^\s*[（(][^（）()\n]*(?:ゲスト|お客様|場合|guest|if the)[^（）()\n]*[）)]\s*$/gim, '');
+  // If a scenario-script leak still remains mid-text, cut the reply at the first stage direction
+  const leakIdx = text.search(/[（(]\s*(?:ゲスト|お客様)(?:の|が)|[（(]\s*if the guest/i);
+  if (leakIdx > 0) text = text.slice(0, leakIdx);
+
   return text.trim();
 }
 
@@ -293,7 +301,7 @@ async function buildStructuredHotelResults(
 async function cfAiChat(env: any, messages: any[], systemPrompt: string): Promise<string> {
   if (!env?.AI) throw new Error('CF AI binding not available');
   const cfMessages = [
-    { role: 'system', content: systemPrompt.slice(0, 2000) },
+    { role: 'system', content: systemPrompt.slice(0, 3500) },
     ...messages.slice(-8).map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 500) })),
   ];
   // リトライ最大3回
