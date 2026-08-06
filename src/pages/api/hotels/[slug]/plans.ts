@@ -56,10 +56,12 @@ async function ensureJapanese(env: any, db: any, hotel: any, plans: any[]) {
       JSON.stringify(missing.map((p) => p.name)),
       400
     );
+    let batchOk = false;
     try {
       const m = out && out.match(/\[[\s\S]*\]/);
       const arr = m ? JSON.parse(m[0]) : null;
       if (Array.isArray(arr) && arr.length === missing.length) {
+        batchOk = true;
         for (let i = 0; i < missing.length; i++) {
           const ja = String(arr[i] || '').trim();
           if (!ja || !looksJapanese(ja)) continue;
@@ -68,6 +70,21 @@ async function ensureJapanese(env: any, db: any, hotel: any, plans: any[]) {
         }
       }
     } catch {}
+    // Batch JSON output is flaky — translate one by one as a fallback.
+    if (!batchOk) {
+      for (const p of missing.slice(0, 6)) {
+        const ja = await aiTranslate(
+          env,
+          'Translate this day-use hotel plan name into Japanese. Keep prefixes like 【6H】, times, and proper nouns as-is. Reply with ONLY the translated name.',
+          p.name,
+          80
+        );
+        if (ja && looksJapanese(ja)) {
+          p.name_ja = ja;
+          await db.prepare('UPDATE plans SET name_ja = ? WHERE id = ?').bind(ja, p.id).run().catch(() => {});
+        }
+      }
+    }
   }
 }
 
