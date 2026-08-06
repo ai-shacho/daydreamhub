@@ -1072,25 +1072,21 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           : t.noResults;
         $('queryPill').querySelector('.q').textContent = label || ($('q').value || '');
 
-        // Concierge entry also lives at the end of the map-results list, so
-        // geolocation searches (which bypass the chat) can reach it too.
-        list.innerHTML = hotels.map(cardHtml).join('') +
-          extHotels.map(extCardHtml).join('') +
-          `<button class="cg-inline">${t.chipConcierge}</button>`;
+        // Official and unlisted interleave by distance — the user wants the
+        // nearest place to rest; the badges carry the recommendation. On price
+        // sort, unlisted (no price data) go last.
+        const merged = [
+          ...hotels.map((h) => ({ ext: false, h })),
+          ...extHotels.map((h, i) => ({ ext: true, h, i })),
+        ];
+        if (sortBy === 'km') merged.sort((a, b) => nullLast(a.h.km) - nullLast(b.h.km));
+        list.innerHTML = merged.map((m) => (m.ext ? extCardHtml(m.h, m.i) : cardHtml(m.h))).join('');
         updateMap(hotels);
       }
 
       // Cards open the in-app detail/booking flow; the href stays for
       // open-in-new-tab semantics only.
       list.addEventListener('click', (e) => {
-        const cg = e.target.closest && e.target.closest('button.cg-inline');
-        if (cg) {
-          // Chat overlays the results screen; closing it drops back here.
-          openChat();
-          conciergeSearch();
-          track('app_cg_from_results');
-          return;
-        }
         const a = e.target.closest && e.target.closest('a.card');
         if (!a) return;
         e.preventDefault();
@@ -1232,7 +1228,6 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           chips.push(`<button class="primary" data-act="map">${t.chatShowMap}</button>`);
           if (sortBy !== 'price') chips.push(`<button data-act="cheaper">${t.chipCheaper}</button>`);
           if (!openOnly) chips.push(`<button data-act="open">${t.chipOpen}</button>`);
-          chips.push(`<button data-act="concierge">${t.chipConcierge}</button>`);
         }
         if (o.cgChip) chips.push(`<button class="primary" data-act="concierge">${t.chipConcierge}</button>`);
         if (chips.length) inner += `<div class="chat-chips">${chips.join('')}</div>`;
