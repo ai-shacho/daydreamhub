@@ -1,7 +1,67 @@
 import type { APIRoute } from 'astro';
 
-export const GET: APIRoute = async ({ params, locals }) => {
-  const db = (locals as any).runtime?.env?.DB;
+// Workers AI translation with model fallback. Best-effort: null on failure.
+async function aiTranslate(env: any, prompt: string, text: string, maxTokens: number): Promise<string | null> {
+  if (!env?.AI || !text) return null;
+  for (const model of ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1']) {
+    try {
+      const r = await env.AI.run(model, {
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: text.slice(0, 1500) },
+        ],
+        max_tokens: maxTokens,
+      });
+      const out = String(r?.response || r?.result?.response || '').trim();
+      if (out) return out;
+    } catch {
+      // try next model
+    }
+  }
+  return null;
+}
+
+// Fill missing Japanese fields once and cache them back into D1, so the
+// translation cost is paid a single time per hotel.
+async function ensureJapanese(env: any, db: any, hotel: any, plans: any[]) {
+  if (hotel.description && !hotel.description_ja) {
+    const ja = await aiTranslate(
+      env,
+      'Translate this hotel description into natural, concise Japanese for travellers. Reply with ONLY the Japanese translation, no preamble.',
+      hotel.description,
+      600
+    );
+    if (ja && ja.length > 10) {
+      hotel.description_ja = ja;
+      await db.prepare('UPDATE hotels SET description_ja = ? WHERE id = ?').bind(ja, hotel.id).run().catch(() => {});
+    }
+  }
+  const missing = plans.filter((p) => p.name && !p.name_ja);
+  if (missing.length) {
+    const out = await aiTranslate(
+      env,
+      'Translate these day-use hotel plan names into Japanese. Keep prefixes like 【6H】, times, and proper nouns (airport/hotel names) as-is. Reply with ONLY a JSON array of strings, same order and length as the input.',
+      JSON.stringify(missing.map((p) => p.name)),
+      400
+    );
+    try {
+      const m = out && out.match(/\[[\s\S]*\]/);
+      const arr = m ? JSON.parse(m[0]) : null;
+      if (Array.isArray(arr) && arr.length === missing.length) {
+        for (let i = 0; i < missing.length; i++) {
+          const ja = String(arr[i] || '').trim();
+          if (!ja) continue;
+          missing[i].name_ja = ja;
+          await db.prepare('UPDATE plans SET name_ja = ? WHERE id = ?').bind(ja, missing[i].id).run().catch(() => {});
+        }
+      }
+    } catch {}
+  }
+}
+
+export const GET: APIRoute = async ({ params, locals, url }) => {
+  const env = (locals as any).runtime?.env;
+  const db = env?.DB;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500 });
 
   const { slug } = params;
@@ -35,7 +95,12 @@ export const GET: APIRoute = async ({ params, locals }) => {
       'SELECT id, name, name_ja, price_usd, check_in_time, check_out_time, plan_type, max_guests, duration_hours FROM plans WHERE hotel_id = ? AND is_active = 1 ORDER BY price_usd ASC'
     ).bind(hotel.id).all();
 
-    return new Response(JSON.stringify({ hotel, plans: plans.results || [] }), {
+    const planRows = plans.results || [];
+    if (url.searchParams.get('lang') === 'ja') {
+      await ensureJapanese(env, db, hotel, planRows).catch(() => {});
+    }
+
+    return new Response(JSON.stringify({ hotel, plans: planRows }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (e: any) {
