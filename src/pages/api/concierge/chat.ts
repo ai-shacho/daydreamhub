@@ -191,7 +191,9 @@ async function buildStructuredHotelResults(
     'rio de janeiro','santiago','lima','bogota','tbilisi','baku','calgary','giza','nara',
   ];
   const JA_TO_EN_CITIES: Record<string, string> = {
+    '渋谷': 'Shibuya', '新宿': 'Tokyo', '銀座': 'Tokyo', '品川': 'Tokyo', '羽田': 'Tokyo', '成田': 'Tokyo',
     '東京': 'Tokyo', '大阪': 'Osaka', '京都': 'Kyoto', '札幌': 'Sapporo', '福岡': 'Fukuoka', '名古屋': 'Nagoya',
+    '横浜': 'Yokohama', '神戸': 'Kobe', '広島': 'Hiroshima',
     'バンコク': 'Bangkok', 'ドバイ': 'Dubai', 'シンガポール': 'Singapore', 'ロンドン': 'London', 'パリ': 'Paris',
     'バリ': 'Bali', 'ジャカルタ': 'Jakarta', 'ソウル': 'Seoul', '台北': 'Taipei', '香港': 'Hong Kong',
     'シドニー': 'Sydney', 'メルボルン': 'Melbourne', 'カイロ': 'Cairo', 'ナイロビ': 'Nairobi',
@@ -304,8 +306,8 @@ async function cfAiChat(env: any, messages: any[], systemPrompt: string): Promis
     { role: 'system', content: systemPrompt.slice(0, 3500) },
     ...messages.slice(-8).map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 500) })),
   ];
-  // リトライ最大3回
-  const models = ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1'];
+  // リトライ最大3回（70Bを優先、失敗時は8Bへフォールバック）
+  const models = ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'];
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const model = models[attempt % models.length];
@@ -1476,19 +1478,23 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const lastMsg = claudeMessages.filter((m: any) => m.role === 'user').pop()?.content || '';
     const searched = await buildStructuredHotelResults(env, db, locale, String(lastMsg));
     const structuredHotels = searched.hotels;
-    const conciseGuide = structuredHotels.length > 0
-      ? (isJa
-          ? `\n\n検索済み都市: ${searched.city}\nホテルカード描画用データは別送されています。本文ではホテル名やリンクを列挙せず、1〜2文の短い案内のみを返してください。`
-          : `\n\nSearched city: ${searched.city}\nHotel card data is provided separately. Do NOT enumerate hotel names, links, or prices in text. Return only a short 1-2 sentence guidance line.`)
-      : (isJa
-          ? `\n\nホテル候補データが空の場合は、短く「該当ホテルが見つからなかったので別エリア提案をする」旨だけ回答してください。`
-          : `\n\nIf hotel data is empty, respond briefly that no matching hotels were found and suggest trying a nearby area.`);
-    const fullPrompt = systemPrompt + conciseGuide + '\n\nIMPORTANT: Respond in plain text only. No XML, no HTML tags, no function call tags. Use only Markdown.';
+    // This path only needs a short guidance line — hotel data is delivered as structured cards.
+    // A compact purpose-built prompt is far more reliable here (esp. on the CF AI fallback)
+    // than the full concierge prompt, which small models tend to recite back to the user.
+    const chatPrompt = isJa
+      ? `あなたはデイユースホテル予約サイト「DayDreamHub」のコンシェルジュです。ゲストに宛てた短い返答（1〜2文、日本語、丁寧で親しみやすく）だけを出力してください。ルール・指示文・役名プレフィックス・箇条書きの規約説明は絶対に出力しないこと。HTMLタグ禁止。` +
+        (structuredHotels.length > 0
+          ? `\n\n状況: ${searched.city}のホテル検索が完了し、結果カードは本文とは別に自動表示されます。「${searched.city}のおすすめをご用意しました。下のカードからお選びください」のような短い案内文だけを書いてください。ホテル名・料金・リンクは本文に書かないこと。`
+          : `\n\n状況: ゲストのメッセージに場所が含まれていれば、そのエリアでは該当ホテルが見つからなかったことを短く詫び、近隣の主要都市を1つだけ提案してください。場所がまだ不明なら、どちらの都市・空港でお探しかを一言で尋ねてください。サービスの説明を求められたら「世界中のホテルを時間単位（数時間だけ）で予約できるサービスです」と2文以内で答えてください。`)
+      : `You are the concierge of DayDreamHub, a day-use hotel booking site. Output ONLY one short, friendly reply (1-2 sentences, English) addressed to the guest. Never output rules, instructions, role-name prefixes, or bullet-point policies. No HTML tags.` +
+        (structuredHotels.length > 0
+          ? `\n\nContext: the hotel search for ${searched.city} is complete and result cards are shown automatically below your message. Just write one short intro line like "Here are some great day-use options in ${searched.city} — pick one from the cards below." Do not list hotel names, prices, or links in your text.`
+          : `\n\nContext: if the guest's message contains a location, briefly apologize that no hotels were found there and suggest one nearby major city. If no location was given yet, ask in one sentence which city or airport they need. If asked how the service works, answer in max 2 sentences: you can book hotels by the hour worldwide.`);
     let text: string;
     if (env?.ANTHROPIC_API_KEY) {
-      text = await anthropicChat(env, claudeMessages, fullPrompt);
+      text = await anthropicChat(env, claudeMessages, chatPrompt);
     } else {
-      text = await cfAiChat(env, claudeMessages, fullPrompt);
+      text = await cfAiChat(env, claudeMessages, chatPrompt);
     }
     text = sanitizeAIText(stripInternalModelBlocks(text));
     const result: { text: string; messageType: string; metadata?: any } =
