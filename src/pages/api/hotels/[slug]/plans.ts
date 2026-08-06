@@ -1,9 +1,17 @@
 import type { APIRoute } from 'astro';
 
+// Rough Japanese-character ratio; used as a quality gate so a bad model
+// output (romaji soup) never gets cached as a "translation".
+function looksJapanese(s: string): boolean {
+  if (!s) return false;
+  const ja = (s.match(/[\u3040-\u30ff\u4e00-\u9fff]/g) || []).length;
+  return ja / s.length >= 0.2;
+}
+
 // Workers AI translation with model fallback. Best-effort: null on failure.
 async function aiTranslate(env: any, prompt: string, text: string, maxTokens: number): Promise<string | null> {
   if (!env?.AI || !text) return null;
-  for (const model of ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1']) {
+  for (const model of ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct']) {
     try {
       const r = await env.AI.run(model, {
         messages: [
@@ -24,16 +32,20 @@ async function aiTranslate(env: any, prompt: string, text: string, maxTokens: nu
 // Fill missing Japanese fields once and cache them back into D1, so the
 // translation cost is paid a single time per hotel.
 async function ensureJapanese(env: any, db: any, hotel: any, plans: any[]) {
-  if (hotel.description && !hotel.description_ja) {
+  // Re-translate when the cached value is missing OR fails the quality gate
+  // (self-heals rows polluted by a bad model run).
+  if (hotel.description && !looksJapanese(hotel.description_ja || '')) {
     const ja = await aiTranslate(
       env,
       'Translate this hotel description into natural, concise Japanese for travellers. Reply with ONLY the Japanese translation, no preamble.',
       hotel.description,
       600
     );
-    if (ja && ja.length > 10) {
+    if (ja && ja.length > 10 && looksJapanese(ja)) {
       hotel.description_ja = ja;
       await db.prepare('UPDATE hotels SET description_ja = ? WHERE id = ?').bind(ja, hotel.id).run().catch(() => {});
+    } else if (!looksJapanese(hotel.description_ja || '')) {
+      hotel.description_ja = null; // fall back to English rather than show garbage
     }
   }
   const missing = plans.filter((p) => p.name && !p.name_ja);
@@ -50,7 +62,7 @@ async function ensureJapanese(env: any, db: any, hotel: any, plans: any[]) {
       if (Array.isArray(arr) && arr.length === missing.length) {
         for (let i = 0; i < missing.length; i++) {
           const ja = String(arr[i] || '').trim();
-          if (!ja) continue;
+          if (!ja || !looksJapanese(ja)) continue;
           missing[i].name_ja = ja;
           await db.prepare('UPDATE plans SET name_ja = ? WHERE id = ?').bind(ja, missing[i].id).run().catch(() => {});
         }
