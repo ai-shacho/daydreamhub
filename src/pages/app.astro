@@ -62,6 +62,8 @@ const t = isJa
       cgIntro: '掲載外でデイユースに使えそうなホテルが見つかりました。AIが電話で「デイユース可否・本日の空き・料金」を確認できます（確認の電話は無料）。',
       cgNone: '追加の候補は見つかりませんでした。エリア名を変えて試してみてください。',
       cgBadge: '未掲載',
+      ofcBadge: '公式',
+      cgShort: '☎ AIが電話確認',
       cgCallBtn: '📞 AIに電話で確認してもらう',
       cgTitle: 'AI電話確認のリクエスト',
       cgHotel: '対象ホテル',
@@ -70,6 +72,7 @@ const t = isJa
       cgSubmit: '電話確認を依頼する（無料）',
       cgNote: 'AIがホテルに電話し、デイユースの可否と料金を確認します。結果はメールでお知らせし、金額に納得した場合のみメール内リンクから確定（その時点で手数料$7）。',
       cgFail: 'リクエストに失敗しました。時間をおいて再度お試しください。',
+      bookNote: '決済後、AIがホテルへ電話して空きを確認し、確定をご連絡します。満室などで利用できない場合は自動で全額返金されます。',
       chipCheaper: '💰 安い順',
       chipOpen: '🟢 利用時間内だけ',
       chipMap: '🗺 地図で見る',
@@ -152,6 +155,8 @@ const t = isJa
       cgIntro: 'Found unlisted hotels that may offer day-use. Our AI can phone them to confirm day-use, availability and price (the inquiry call is free).',
       cgNone: 'No extra candidates found. Try a different area name.',
       cgBadge: 'Unlisted',
+      ofcBadge: 'Official',
+      cgShort: '☎ AI will call',
       cgCallBtn: '📞 Have AI call to confirm',
       cgTitle: 'AI phone confirmation',
       cgHotel: 'Hotel',
@@ -160,6 +165,7 @@ const t = isJa
       cgSubmit: 'Request the call (free)',
       cgNote: 'Our AI calls the hotel to confirm day-use and the price. We email you the quote; you only pay the $7 fee if you accept it via the email link.',
       cgFail: 'Request failed. Please try again shortly.',
+      bookNote: 'After payment, our AI phones the hotel to confirm availability and we notify you once confirmed. If the hotel cannot take the booking, you are automatically refunded in full.',
       chipCheaper: '💰 Cheapest',
       chipOpen: '🟢 Usable now',
       chipMap: '🗺 Map view',
@@ -393,6 +399,14 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         cursor: pointer;
       }
       .price-pin.sel { background: #0f172a; transform: scale(1.15); }
+      .price-pin.ext { background: #c2410c; }
+      .ofc {
+        display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px;
+        border-radius: 999px; background: var(--teal-soft); color: var(--teal-dark);
+        border: 1px solid var(--teal); margin-right: 4px; vertical-align: 1px;
+      }
+      .meta .ext-badge { margin-right: 4px; vertical-align: 1px; }
+      .thumb.tel { display: flex; align-items: center; justify-content: center; font-size: 24px; }
 
       /* ---------- Conversational (chat) screen ---------- */
       #chatScreen {
@@ -697,6 +711,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         <h2>{t.bookTitle}</h2>
         <div class="panel-meta" id="bookHotelLine"></div>
         <div class="sum-box" id="bookSummary"></div>
+        <div class="cg-note">{t.bookNote}</div>
         <div class="field">
           <label for="bkDate">{t.dateLabel}</label>
           <input id="bkDate" type="date" />
@@ -953,6 +968,17 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           m.on('click', () => selectHotel(h.slug));
           markersBySlug[h.slug] = m;
         });
+        extHotels.forEach((h, i) => {
+          if (h.lat == null || h.lng == null) return;
+          const pin = L.divIcon({
+            className: '',
+            html: `<span class="price-pin ext">☎</span>`,
+            iconAnchor: [14, 12],
+          });
+          const m = L.marker([h.lat, h.lng], { icon: pin }).addTo(markerLayer);
+          m.on('click', () => selectHotel('ext-' + i));
+          markersBySlug['ext-' + i] = m;
+        });
         const c = lastData && lastData.center;
         if (c) {
           L.circleMarker([c.lat, c.lng], { radius: 7, color: '#0d9488', fillColor: '#0d9488', fillOpacity: 0.9 })
@@ -992,7 +1018,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
                     : h.openNow === false ? `<span class="dot closed"></span>${t.closed}${win}`
                     : win.trim();
         const img = h.thumbnail ? `<img class="thumb" src="${esc(h.thumbnail)}" alt="" loading="lazy" />` : `<div class="thumb"></div>`;
-        const meta = [state, km, esc(h.city || '')].filter(Boolean).join('<span style="opacity:.5"> ・ </span>');
+        const meta = `<span class="ofc">${t.ofcBadge}</span>` + [state, km, esc(h.city || '')].filter(Boolean).join('<span style="opacity:.5"> ・ </span>');
         return `<a class="card" href="${href}" data-slug="${esc(h.slug)}">
           ${img}
           <div class="info">
@@ -1000,6 +1026,23 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             <div class="meta">${meta}</div>
           </div>
           ${priceHtml(h)}
+        </a>`;
+      }
+
+      // Unlisted (external) hotels merge into the same results — the user just
+      // wants somewhere nearby; the badge and CTA make the difference clear.
+      function extCardHtml(h, i) {
+        const bits = [];
+        if (h.rating) bits.push('⭐' + h.rating);
+        if (h.km != null) bits.push(h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km');
+        if (h.address) bits.push(esc(String(h.address).split(',')[0]));
+        return `<a class="card" href="#" data-ext="${i}" data-slug="ext-${i}">
+          <div class="thumb tel">📞</div>
+          <div class="info">
+            <div class="name">${esc(h.name)}</div>
+            <div class="meta"><span class="ext-badge">${t.cgBadge}</span>${bits.join('<span style="opacity:.5"> ・ </span>')}</div>
+          </div>
+          <div class="pcol"><div class="yen">${t.cgShort}</div></div>
         </a>`;
       }
 
@@ -1032,6 +1075,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         // Concierge entry also lives at the end of the map-results list, so
         // geolocation searches (which bypass the chat) can reach it too.
         list.innerHTML = hotels.map(cardHtml).join('') +
+          extHotels.map(extCardHtml).join('') +
           `<button class="cg-inline">${t.chipConcierge}</button>`;
         updateMap(hotels);
       }
@@ -1050,6 +1094,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         const a = e.target.closest && e.target.closest('a.card');
         if (!a) return;
         e.preventDefault();
+        if (a.dataset.ext != null) {
+          const h = extHotels[Number(a.dataset.ext)];
+          if (h) openCallPanel(h);
+          return;
+        }
         openDetail(a.dataset.slug);
       });
 
@@ -1084,6 +1133,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           await enterResults();
           setSheet(1);
           render(data);
+          loadExternal();
         } catch (e) {
           $('homeStatus').textContent = '⚠️ ' + e.message;
           goHome();
@@ -1193,11 +1243,35 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       // ---------- concierge: unlisted hotels + AI phone confirmation ----------
       const cgSessionId = (crypto.randomUUID && crypto.randomUUID()) || 'app-' + Date.now() + '-' + String(Math.random()).slice(2, 8);
       let lastPlaceLabel = '';
+      let extHotels = [];
+      let extSeq = 0;
       let cgHotels = [];
       let cgTarget = null;
       const GUEST_KEY = 'ddhGuest';
       const getGuest = () => { try { return JSON.parse(localStorage.getItem(GUEST_KEY) || '{}'); } catch (e) { return {}; } };
       const saveGuest = (g) => { try { localStorage.setItem(GUEST_KEY, JSON.stringify(g)); } catch (e) {} };
+
+      // Background fetch of unlisted hotels for the merged results. Official
+      // results render instantly; these append when Google Places answers.
+      async function loadExternal() {
+        extHotels = [];
+        const seq = ++extSeq;
+        const q = (lastData && lastData.hotels && lastData.hotels[0] && lastData.hotels[0].city) || lastPlaceLabel;
+        if (!q) return;
+        const c = lastData && lastData.center;
+        try {
+          const params = { q };
+          if (c) { params.lat = c.lat; params.lng = c.lng; }
+          const r = await fetch('/api/app/external?' + new URLSearchParams(params));
+          const d = await r.json();
+          if (seq !== extSeq) return;
+          extHotels = (d.hotels || []).slice(0, 5);
+          if (extHotels.length) {
+            renderView();
+            track('app_ext_results', { n: extHotels.length });
+          }
+        } catch (e) {}
+      }
 
       async function conciergeSearch() {
         track('app_cg_search', { q: lastPlaceLabel });
@@ -1386,6 +1460,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           render(data);
           const label = (data.center && data.center.label) || text;
           lastPlaceLabel = label;
+          loadExternal();
           const prices = currentView.map((h) => h.minPrice).filter((v) => v != null);
           const cheap = prices.length ? fmt(t.chatCheap, { p: Math.min(...prices) }) : '';
           aiSay(fmt(t.chatFound, { label, n: currentView.length, cheap }), { cards: true, chips: true });

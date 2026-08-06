@@ -392,6 +392,8 @@ function processPlacesResults(data: any) {
       rating: p.rating || null,
       rating_count: p.userRatingCount || 0,
       website: p.websiteUri || null,
+      lat: p.location?.latitude ?? null,
+      lng: p.location?.longitude ?? null,
       source: "external"
     }));
   return { count: hotels.length, source: "external", hotels };
