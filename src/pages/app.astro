@@ -1758,20 +1758,43 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         try { localStorage.setItem(BK_KEY, JSON.stringify(bks.slice(0, 10))); } catch (e) {}
         refreshBkBtn();
       }
+      const INQ_KEY = 'ddhInquiries';
+      const getInquiries = () => {
+        try { return JSON.parse(localStorage.getItem(INQ_KEY) || '[]'); } catch (e) { return []; }
+      };
+      function saveInquiry(q) {
+        const list = getInquiries().filter((x) => x.g !== q.g);
+        list.unshift(q);
+        try { localStorage.setItem(INQ_KEY, JSON.stringify(list.slice(0, 10))); } catch (e) {}
+        refreshBkBtn();
+      }
       function refreshBkBtn() {
-        $('myBookingsBtn').classList.toggle('show', getBookings().length > 0);
+        $('myBookingsBtn').classList.toggle('show', getBookings().length + getInquiries().length > 0);
       }
       refreshBkBtn();
       $('bkListClose').addEventListener('click', () => closePanel('bkListPanel'));
       $('myBookingsBtn').addEventListener('click', () => {
         const bks = getBookings();
+        const inqs = getInquiries();
         openPanel('bkListPanel');
-        track('app_bookings_open', { n: bks.length });
-        if (!bks.length) {
+        track('app_bookings_open', { n: bks.length, inq: inqs.length });
+        if (!bks.length && !inqs.length) {
           $('bkList').innerHTML = `<div class="panel-meta">${t.noBookings}</div>`;
           return;
         }
-        $('bkList').innerHTML = bks
+        let inqHtml = '';
+        if (inqs.length) {
+          inqHtml = `<div class="sec-title">${t.inqTitle}</div>` + inqs
+            .map((q) => `<div class="bk-item">
+              <div class="top"><div class="hname">${esc(q.hotel || '')}</div><span class="st pending" id="inq-st-${esc(String(q.g))}">${t.stChecking}</span></div>
+              <div class="meta2">${esc(q.date || '')}</div>
+              <div id="inq-act-${esc(String(q.g))}"></div>
+            </div>`)
+            .join('') + (bks.length ? `<div class="sec-title">${t.bookingsTitle}</div>` : '');
+          setTimeout(pollInquiries, 50);
+        }
+        $('bkList').innerHTML = inqHtml + (bks.length ? '' : '');
+        $('bkList').innerHTML += bks
           .map((b) => `<div class="bk-item">
             <div class="top"><div class="hname">${esc(b.hotel || '')}</div><span class="st pending" id="st-${esc(String(b.id))}">${t.stChecking}</span></div>
             <div class="meta2">${esc(b.plan || '')}</div>
@@ -1793,6 +1816,85 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             el.textContent = t.stPending;
           }
         });
+      });
+
+      // Poll inquiry-call results and surface the quote with a book CTA.
+      let acceptTarget = null;
+      async function pollInquiries() {
+        for (const q of getInquiries()) {
+          const st = document.getElementById('inq-st-' + q.g);
+          const act = document.getElementById('inq-act-' + q.g);
+          if (!st) continue;
+          try {
+            const r = await fetch('/api/app/call-status?' + new URLSearchParams({ group: String(q.g), session: q.s }));
+            const d = await r.json();
+            if (d.error) throw new Error(d.error);
+            const calls = d.calls || [];
+            const quoted = calls.find((c) => c.price != null && c.accept_token);
+            const accepted = calls.find((c) => c.accepted);
+            const allDead = calls.length && calls.every((c) => ['unavailable', 'no_answer', 'over_budget', 'voicemail'].includes(c.outcome || ''));
+            if (accepted) {
+              st.textContent = t.inqAccepted;
+              st.className = 'st confirmed';
+              if (act) act.innerHTML = '';
+            } else if (quoted) {
+              st.textContent = t.inqQuoted;
+              st.className = 'st confirmed';
+              if (act) act.innerHTML = `<button class="call-cta" data-token="${esc(quoted.accept_token)}" data-hotel="${esc(quoted.hotel)}" style="margin-top:8px">${t.inqBook} — ${esc(quoted.currency || '')} ${esc(String(quoted.price))}</button>`;
+            } else if (allDead) {
+              st.textContent = t.inqNA;
+              st.className = 'st cancelled';
+              if (act) act.innerHTML = '';
+            } else {
+              st.textContent = t.inqCalling;
+              st.className = 'st pending';
+            }
+          } catch (e) {
+            st.textContent = t.inqCalling;
+          }
+        }
+      }
+      $('bkList').addEventListener('click', (e) => {
+        const btn = e.target.closest && e.target.closest('button.call-cta');
+        if (!btn) return;
+        acceptTarget = { token: btn.dataset.token, hotel: btn.dataset.hotel };
+        $('acceptHotelLine').textContent = acceptTarget.hotel || '';
+        const g = getGuest();
+        if (g.name && !$('acName').value) $('acName').value = g.name;
+        if (g.email && !$('acEmail').value) $('acEmail').value = g.email;
+        if (g.phone && !$('acPhone').value) $('acPhone').value = g.phone;
+        $('acHint').textContent = '';
+        openPanel('acceptPanel');
+        track('app_inq_accept_open');
+      });
+      $('acceptClose').addEventListener('click', () => closePanel('acceptPanel'));
+      $('acGo').addEventListener('click', async () => {
+        const name = $('acName').value.trim();
+        const email = $('acEmail').value.trim();
+        if (!acceptTarget || !name || !/.+@.+\..+/.test(email)) {
+          $('acHint').textContent = t.fillAll;
+          return;
+        }
+        $('acGo').disabled = true;
+        $('acHint').textContent = t.searching;
+        try {
+          saveGuest({ name, email, phone: $('acPhone').value.trim() });
+          const r = await fetch('/api/app/call-contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: acceptTarget.token, name, email, phone: $('acPhone').value.trim() }),
+          });
+          const d = await r.json();
+          if (!d.ok) throw new Error(d.error || 'failed');
+          $('acHint').textContent = '';
+          closePanel('acceptPanel');
+          window.open('/concierge/accept?token=' + encodeURIComponent(acceptTarget.token), '_blank');
+          track('app_inq_accept_go');
+        } catch (e) {
+          $('acHint').textContent = '⚠️ ' + t.cgFail;
+        } finally {
+          $('acGo').disabled = false;
+        }
       });
 
       $('descMore').addEventListener('click', () => {
