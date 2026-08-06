@@ -1442,7 +1442,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             saveInquiry({ g: d.group_id, s: cgSessionId, hotel: cgTarget.name, date: $('cgDate').value, ts: Date.now() });
           }
           closePanel('callPanel');
-          aiSay(t.cgDone, {});
+          if ($('chatScreen').classList.contains('open')) aiSay(t.cgDone, {});
+          // Land the user where the result will appear.
+          $('myBookingsBtn').click();
           track('app_cg_call_requested', { hotel: cgTarget.name });
         } catch (e) {
           $('cgHint').textContent = '⚠️ ' + t.cgFail;
