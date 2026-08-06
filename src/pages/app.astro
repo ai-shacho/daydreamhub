@@ -73,8 +73,18 @@ const t = isJa
       cgTimeFrom: '利用開始',
       cgTimeTo: '利用終了',
       cgSubmit: '電話確認を依頼する（無料）',
-      cgNote: 'AIがホテルに電話し、デイユースの可否と料金を確認します。結果はメールでお知らせし、金額に納得した場合のみメール内リンクから確定（その時点で手数料$7）。',
+      cgNote: 'AIが無料でホテルに電話し、デイユースの可否と料金を確認します。結果はこのアプリの「📋 予約の確認」に届きます。連絡先の入力は、予約を確定するときだけでOKです。',
       cgFail: 'リクエストに失敗しました。時間をおいて再度お試しください。',
+      cgDone: '電話確認を開始しました！結果（デイユース可否・料金）は「📋 予約の確認」でいつでも見られます。数分で回答が届くことが多いです。',
+      inqTitle: 'AI電話確認',
+      inqCalling: '☎️ 確認中…',
+      inqQuoted: '料金回答あり',
+      inqBook: 'この料金で予約する',
+      inqNA: '確認できませんでした',
+      inqAccepted: '予約手続き中',
+      acceptTitle: '予約の確定にすすむ',
+      acceptNote: '確定のご連絡のため、お名前とメールアドレスをご入力ください。このあと手数料$7の決済ページが開きます（宿泊料金はホテルで現地払い）。',
+      acceptGo: '決済ページへ進む →',
       bookNote: '決済後、AIがホテルへ電話して空きを確認し、確定をご連絡します。満室などで利用できない場合は自動で全額返金されます。',
       chipCheaper: '💰 安い順',
       chipOpen: '🟢 利用時間内だけ',
@@ -169,8 +179,18 @@ const t = isJa
       cgTimeFrom: 'From',
       cgTimeTo: 'To',
       cgSubmit: 'Request the call (free)',
-      cgNote: 'Our AI calls the hotel to confirm day-use and the price. We email you the quote; you only pay the $7 fee if you accept it via the email link.',
+      cgNote: 'Our AI calls the hotel free of charge to confirm day-use and the price. The result appears in "📋 My bookings" in this app. Contact details are only needed when you decide to book.',
       cgFail: 'Request failed. Please try again shortly.',
+      cgDone: 'The AI call has started! Check "📋 My bookings" anytime for the result (day-use availability and price). Answers usually arrive within minutes.',
+      inqTitle: 'AI phone inquiries',
+      inqCalling: '☎️ Checking…',
+      inqQuoted: 'Price quoted',
+      inqBook: 'Book at this price',
+      inqNA: 'Could not confirm',
+      inqAccepted: 'Booking in progress',
+      acceptTitle: 'Proceed to booking',
+      acceptNote: 'Enter your name and email for the confirmation. A $7 fee checkout opens next (the room is paid at the hotel).',
+      acceptGo: 'Continue to payment →',
       bookNote: 'After payment, our AI phones the hotel to confirm availability and we notify you once confirmed. If the hotel cannot take the booking, you are automatically refunded in full.',
       chipCheaper: '💰 Cheapest',
       chipOpen: '🟢 Usable now',
@@ -775,18 +795,6 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           <label for="cgGuests">{t.guestsLabel}</label>
           <select id="cgGuests"></select>
         </div>
-        <div class="field">
-          <label for="cgName">{t.nameLabel}</label>
-          <input id="cgName" type="text" autocomplete="name" />
-        </div>
-        <div class="field">
-          <label for="cgEmail">{t.emailLabel}</label>
-          <input id="cgEmail" type="email" autocomplete="email" inputmode="email" />
-        </div>
-        <div class="field">
-          <label for="cgPhone">{t.phoneLabel}</label>
-          <input id="cgPhone" type="tel" autocomplete="tel" inputmode="tel" />
-        </div>
         <div id="cgHint" style="color:var(--warn);font-size:13px;min-height:17px;margin-bottom:8px;"></div>
         <button class="test-pay-btn" id="cgSubmit">{t.cgSubmit}</button>
       </div>
@@ -810,6 +818,30 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         <p>{t.doneNote}</p>
         <div class="sum-box done-box" id="doneBox"></div>
         <button class="done-close" id="doneClose">{t.close}</button>
+      </div>
+    </div>
+
+    <!-- Contact capture right before accepting a quote -->
+    <div class="panel" id="acceptPanel" style="z-index:55">
+      <div class="panel-body" style="padding-top: calc(14px + env(safe-area-inset-top));">
+        <button class="panel-close" id="acceptClose" style="position:static;margin-bottom:12px;">←</button>
+        <h2>{t.acceptTitle}</h2>
+        <div class="panel-meta" id="acceptHotelLine"></div>
+        <div class="cg-note">{t.acceptNote}</div>
+        <div class="field">
+          <label for="acName">{t.nameLabel}</label>
+          <input id="acName" type="text" autocomplete="name" />
+        </div>
+        <div class="field">
+          <label for="acEmail">{t.emailLabel}</label>
+          <input id="acEmail" type="email" autocomplete="email" inputmode="email" />
+        </div>
+        <div class="field">
+          <label for="acPhone">{t.phoneLabel}</label>
+          <input id="acPhone" type="tel" autocomplete="tel" inputmode="tel" />
+        </div>
+        <div id="acHint" style="color:var(--warn);font-size:13px;min-height:17px;margin-bottom:8px;"></div>
+        <button class="test-pay-btn" id="acGo">{t.acceptGo}</button>
       </div>
     </div>
 
@@ -1357,19 +1389,13 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         $('cgFrom').innerHTML = hourOpts(6, 22, '10:00');
         $('cgTo').innerHTML = hourOpts(7, 23, '18:00');
         $('cgGuests').innerHTML = Array.from({ length: 4 }, (_, i) => `<option value="${i + 1}">${i + 1}${t.ppl}</option>`).join('');
-        const g = getGuest();
-        if (g.name && !$('cgName').value) $('cgName').value = g.name;
-        if (g.email && !$('cgEmail').value) $('cgEmail').value = g.email;
-        if (g.phone && !$('cgPhone').value) $('cgPhone').value = g.phone;
         $('cgHint').textContent = '';
         openPanel('callPanel');
         track('app_cg_form_open', { hotel: h.name });
       }
       $('callClose').addEventListener('click', () => closePanel('callPanel'));
       $('cgSubmit').addEventListener('click', async () => {
-        const name = $('cgName').value.trim();
-        const email = $('cgEmail').value.trim();
-        if (!name || !/.+@.+\..+/.test(email) || !$('cgDate').value || !cgTarget) {
+        if (!$('cgDate').value || !cgTarget) {
           $('cgHint').textContent = t.fillAll;
           return;
         }
@@ -1377,11 +1403,12 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           $('cgHint').textContent = `${t.cgTimeFrom} < ${t.cgTimeTo}`;
           return;
         }
-        saveGuest({ name, email, phone: $('cgPhone').value.trim() });
         $('cgSubmit').disabled = true;
         $('cgHint').textContent = t.searching;
         try {
           const guests = Number($('cgGuests').value || 1);
+          // Contact-free inquiry: the free call needs no guest details; they
+          // are collected only at the accept/payment step.
           const r = await fetch('/api/concierge/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1390,11 +1417,10 @@ const areas: Array<{ label: string; q: string; img: string }> = [
               message: '__create_call_group_direct',
               locale: isJa ? 'ja' : 'en',
               guests,
-              guest_phone: $('cgPhone').value.trim(),
               _call_group: {
-                guest_name: name,
-                guest_email: email,
-                guest_phone: $('cgPhone').value.trim(),
+                guest_name: '',
+                guest_email: '',
+                guest_phone: '',
                 guests,
                 adults: guests,
                 children: 0,
@@ -1412,8 +1438,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           });
           const d = await r.json();
           if (d.error) throw new Error(d.error);
+          if (d.group_id) {
+            saveInquiry({ g: d.group_id, s: cgSessionId, hotel: cgTarget.name, date: $('cgDate').value, ts: Date.now() });
+          }
           closePanel('callPanel');
-          aiSay(d.response || t.cgNote, {});
+          aiSay(t.cgDone, {});
           track('app_cg_call_requested', { hotel: cgTarget.name });
         } catch (e) {
           $('cgHint').textContent = '⚠️ ' + t.cgFail;
