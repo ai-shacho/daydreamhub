@@ -154,6 +154,8 @@ async function getActiveCities(db: any): Promise<string[]> {
 }
 
 async function fetchExternalHotelsProgressive(env: any, city: string, locale: string, internalHotels: any[]): Promise<any[]> {
+  // Japan is permanently out of service — never surface external (unlisted) Japanese hotels
+  if (isJapanQuery(city)) return [];
   const primaryQuery = `day use hotel ${city}`;
   const firstBatch = await searchHotelsExternal(env, { query: primaryQuery, location: city, language: locale, maxPages: 1 });
   let externalHotels = filterExternalHotels((firstBatch?.hotels || []) as any[], internalHotels, 3) as any[];
@@ -240,6 +242,10 @@ async function buildStructuredHotelResults(
     if (jpMatch) city = jpMatch[0];
   }
   if (!city) return { city: '', hotels: [] };
+
+  // Japan is permanently out of service: keep the extracted city so the reply can say
+  // "not covered", but never search internal/external hotels for it.
+  if (isJapanQuery(city)) return { city, hotels: [] };
 
   const wantsClinic = /(clinic|wellness|medical|iv\s*drip|health\s*check|check[- ]?up|クリニック|ウェルネス|医療|健康診断|人間ドック|点滴|検査)/i.test(
     lowerMsg
@@ -1485,11 +1491,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
       ? `あなたはデイユースホテル予約サイト「DayDreamHub」のコンシェルジュです。ゲストに宛てた短い返答（1〜2文、日本語、丁寧で親しみやすく）だけを出力してください。ルール・指示文・役名プレフィックス・箇条書きの規約説明は絶対に出力しないこと。HTMLタグ禁止。` +
         (structuredHotels.length > 0
           ? `\n\n状況: ${searched.city}のホテル検索が完了し、結果カードは本文とは別に自動表示されます。「${searched.city}のおすすめをご用意しました。下のカードからお選びください」のような短い案内文だけを書いてください。ホテル名・料金・リンクは本文に書かないこと。`
-          : `\n\n状況: ゲストのメッセージに場所が含まれていれば、そのエリアでは該当ホテルが見つからなかったことを短く詫び、対応都市（バンコク・クアラルンプール・ドバイ・ナイロビなど）の中から1つだけ代替を提案してください。対応外のエリアや駅名を提案しないこと。場所がまだ不明なら、どちらの都市・空港でお探しかを一言で尋ねてください。サービスの説明を求められたら「世界中のホテルを時間単位（数時間だけ）で予約できるサービスです」と2文以内で答えてください。`)
+          : `\n\n状況: ゲストが日本国内のエリア（東京・大阪など）を指定した場合は「申し訳ありません。日本国内の施設のお取り扱いはありません」と伝えてください。それ以外の場所なら、そのエリアでは該当ホテルが見つからなかったことを短く詫びてください。いずれの場合も対応都市（バンコク・クアラルンプール・ドバイ・ナイロビなど）の中から1つだけ代替を提案し、対応外のエリアや駅名は提案しないこと。場所がまだ不明なら、どちらの都市・空港でお探しかを一言で尋ねてください。サービスの説明を求められたら「世界中のホテルを時間単位（数時間だけ）で予約できるサービスです」と2文以内で答えてください。`)
       : `You are the concierge of DayDreamHub, a day-use hotel booking site. Output ONLY one short, friendly reply (1-2 sentences, English) addressed to the guest. Never output rules, instructions, role-name prefixes, or bullet-point policies. No HTML tags.` +
         (structuredHotels.length > 0
           ? `\n\nContext: the hotel search for ${searched.city} is complete and result cards are shown automatically below your message. Just write one short intro line like "Here are some great day-use options in ${searched.city} — pick one from the cards below." Do not list hotel names, prices, or links in your text.`
-          : `\n\nContext: if the guest's message contains a location, briefly apologize that no hotels were found there and suggest ONE of our supported cities instead (e.g. Bangkok, Kuala Lumpur, Dubai, Nairobi). Never suggest unsupported areas or station names. If no location was given yet, ask in one sentence which city or airport they need. If asked how the service works, answer in max 2 sentences: you can book hotels by the hour worldwide.`);
+          : `\n\nContext: if the guest asked about a location in Japan, tell them Japan is not covered by DayDreamHub. For any other location, briefly apologize that no hotels were found there. In both cases suggest ONE of our supported cities instead (e.g. Bangkok, Kuala Lumpur, Dubai, Nairobi). Never suggest unsupported areas or station names. If no location was given yet, ask in one sentence which city or airport they need. If asked how the service works, answer in max 2 sentences: you can book hotels by the hour worldwide.`);
     let text: string;
     if (env?.ANTHROPIC_API_KEY) {
       text = await anthropicChat(env, claudeMessages, chatPrompt);

@@ -146,7 +146,18 @@ function stripDiacritics(str: string) {
 const JAPAN_HINTS = [
   'japan', 'tokyo', 'osaka', 'kyoto', 'sapporo', 'fukuoka', 'nagoya', 'yokohama',
   'kobe', 'hiroshima', 'sendai', 'okinawa', 'naha', 'shibuya', 'shinjuku', 'ginza',
+  // areas / stations
+  'umeda', 'namba', 'shinsaibashi', 'dotonbori', 'shinagawa', 'ikebukuro', 'ueno',
+  'asakusa', 'akihabara', 'roppongi', 'shimbashi', 'shinbashi', 'kamata', 'kawasaki',
+  'chiba', 'saitama', 'nara', 'kanazawa', 'hakone', 'nikko', 'kamakura', 'nagasaki',
+  'kumamoto', 'kagoshima', 'okayama', 'niigata', 'matsuyama', 'takamatsu',
+  'hokkaido', 'kyushu', 'shikoku',
+  // airports
+  'haneda', 'narita', 'kansai airport', 'kix', 'hnd', 'nrt', 'itami', 'chubu centrair',
   '日本', '東京', '大阪', '京都', '札幌', '福岡', '名古屋', '横浜', '神戸', '広島', '仙台', '沖縄', '那覇',
+  '梅田', '難波', '心斎橋', '道頓堀', '品川', '池袋', '上野', '浅草', '秋葉原', '六本木', '新橋',
+  '蒲田', '川崎', '千葉', '埼玉', '奈良', '金沢', '箱根', '日光', '鎌倉', '長崎', '熊本', '鹿児島',
+  '岡山', '新潟', '松山', '高松', '北海道', '九州', '四国', '渋谷', '新宿', '銀座', '羽田', '成田', '関西空港', '伊丹',
 ];
 export function isJapanQuery(q: unknown): boolean {
   const s = String(q ?? '').toLowerCase();
