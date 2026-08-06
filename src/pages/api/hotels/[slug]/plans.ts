@@ -12,13 +12,24 @@ export const GET: APIRoute = async ({ params, locals }) => {
 
     if (!hotel) return new Response(JSON.stringify({ error: 'Hotel not found' }), { status: 404 });
 
-    // images is stored as a JSON string — hand clients a real array.
+    // Photos live in two places: the hotel_images table (admin-managed, most
+    // hotels) and the hotels.images JSON column (owner uploads). Merge both.
+    let photos: string[] = [];
+    try {
+      const imgRows = await db.prepare(
+        'SELECT image_url FROM hotel_images WHERE hotel_id = ? ORDER BY sort_order ASC LIMIT 12'
+      ).bind(hotel.id).all();
+      photos = (imgRows.results || []).map((r: any) => r.image_url).filter(Boolean);
+    } catch {
+      // table may not exist in stripped-down environments
+    }
     try {
       const arr = JSON.parse(hotel.images || '[]');
-      hotel.images = Array.isArray(arr) ? arr.filter((u: any) => typeof u === 'string' && u).slice(0, 12) : [];
-    } catch {
-      hotel.images = [];
-    }
+      if (Array.isArray(arr)) {
+        for (const u of arr) if (typeof u === 'string' && u && !photos.includes(u)) photos.push(u);
+      }
+    } catch {}
+    hotel.images = photos.slice(0, 12);
 
     const plans = await db.prepare(
       'SELECT id, name, name_ja, price_usd, check_in_time, check_out_time, plan_type, max_guests, duration_hours FROM plans WHERE hotel_id = ? AND is_active = 1 ORDER BY price_usd ASC'
