@@ -463,6 +463,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         font-size: 13px; font-weight: 700; cursor: pointer;
       }
       .cg-note { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 10px 0 14px; }
+      .cg-inline {
+        width: 100%; padding: 13px; margin-top: 2px; cursor: pointer;
+        background: var(--surface); border: 1.5px dashed var(--teal); border-radius: 14px;
+        color: var(--teal-dark); font-size: 14px; font-weight: 700;
+      }
       .time-row { display: flex; gap: 8px; }
       .time-row .field { flex: 1; }
 
@@ -1024,13 +1029,24 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           : t.noResults;
         $('queryPill').querySelector('.q').textContent = label || ($('q').value || '');
 
-        list.innerHTML = hotels.map(cardHtml).join('');
+        // Concierge entry also lives at the end of the map-results list, so
+        // geolocation searches (which bypass the chat) can reach it too.
+        list.innerHTML = hotels.map(cardHtml).join('') +
+          `<button class="cg-inline">${t.chipConcierge}</button>`;
         updateMap(hotels);
       }
 
       // Cards open the in-app detail/booking flow; the href stays for
       // open-in-new-tab semantics only.
       list.addEventListener('click', (e) => {
+        const cg = e.target.closest && e.target.closest('button.cg-inline');
+        if (cg) {
+          // Chat overlays the results screen; closing it drops back here.
+          openChat();
+          conciergeSearch();
+          track('app_cg_from_results');
+          return;
+        }
         const a = e.target.closest && e.target.closest('a.card');
         if (!a) return;
         e.preventDefault();
@@ -1062,6 +1078,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           track('app_search', { mode: data.mode, q: params.q || '' });
           $('homeStatus').textContent = '';
           applyIntent(data.intent);
+          // Give the concierge a place name even when the search was by
+          // coordinates: fall back to the nearest result's city.
+          lastPlaceLabel = (data.center && data.center.label) || (data.hotels[0] && data.hotels[0].city) || '';
           await enterResults();
           setSheet(1);
           render(data);
