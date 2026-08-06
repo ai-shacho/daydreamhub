@@ -81,7 +81,16 @@ const t = isJa
       doneNote: '確認メールをお送りしました。ホテルの確認がとれ次第、確定のご連絡をします。',
       bookingNo: '予約番号',
       close: '閉じる',
-      webDetail: 'Web版で写真や詳細を見る →',
+      webDetail: 'Web版でレビューを見る →',
+      aboutHotel: '施設について',
+      more: '…もっと見る',
+      myBookings: '📋 予約の確認',
+      bookingsTitle: 'あなたの予約',
+      stPending: 'ホテル確認待ち',
+      stConfirmed: '確定',
+      stCancelled: 'キャンセル',
+      stChecking: '確認中…',
+      noBookings: 'まだ予約はありません',
       testPayBtn: 'テスト決済を実行（PayPalなし）',
       noPlans: '現在予約できるプランがありません',
     }
@@ -149,7 +158,16 @@ const t = isJa
       doneNote: 'A confirmation email is on its way. We will notify you once the hotel confirms.',
       bookingNo: 'Booking #',
       close: 'Close',
-      webDetail: 'See photos & details on the web →',
+      webDetail: 'See reviews on the web →',
+      aboutHotel: 'About this place',
+      more: '…show more',
+      myBookings: '📋 My bookings',
+      bookingsTitle: 'Your bookings',
+      stPending: 'Awaiting hotel confirmation',
+      stConfirmed: 'Confirmed',
+      stCancelled: 'Cancelled',
+      stChecking: 'Checking…',
+      noBookings: 'No bookings yet',
       testPayBtn: 'Run test payment (no PayPal)',
       noPlans: 'No bookable plans right now',
     };
@@ -410,8 +428,38 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       .panel.open { transform: translateY(0); }
       #bookPanel { z-index: 40; }
       #donePanel { z-index: 50; }
-      .panel-hero { position: relative; height: 210px; background: var(--line); }
-      .panel-hero img { width: 100%; height: 100%; object-fit: cover; }
+      .panel-hero { position: relative; height: 230px; background: var(--line); }
+      .hero-scroll {
+        display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+      }
+      .hero-scroll img {
+        flex: none; width: 100%; height: 100%; object-fit: cover; scroll-snap-align: start;
+      }
+      .hero-count {
+        position: absolute; right: 10px; bottom: 10px; background: rgba(15,23,42,.7);
+        color: #fff; font-size: 11px; padding: 3px 9px; border-radius: 999px;
+      }
+      .desc { color: #334155; font-size: 13px; line-height: 1.75; margin-bottom: 6px; }
+      .desc.clamp { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+      .desc-more { color: var(--teal-dark); font-size: 13px; font-weight: 600; background: none; border: 0; cursor: pointer; padding: 0; margin-bottom: 8px; }
+      .mybk-btn {
+        display: none; width: 100%; padding: 13px; margin: 12px 0 0; cursor: pointer;
+        background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
+        color: var(--text); font-size: 14px; font-weight: 700; text-align: center;
+      }
+      .mybk-btn.show { display: block; }
+      .bk-item {
+        background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
+        padding: 13px 14px; margin-bottom: 10px; font-size: 14px;
+      }
+      .bk-item .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+      .bk-item .hname { font-weight: 700; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .bk-item .meta2 { color: var(--muted); font-size: 12px; margin-top: 5px; }
+      .st { flex: none; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+      .st.pending { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+      .st.confirmed { background: var(--teal-soft); color: var(--teal-dark); border: 1px solid var(--teal); }
+      .st.cancelled { background: #f1f5f9; color: var(--muted); border: 1px solid var(--line); }
       .panel-close {
         position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 10px;
         width: 40px; height: 40px; border-radius: 12px; border: 0; cursor: pointer;
@@ -508,6 +556,8 @@ const areas: Array<{ label: string; q: string; img: string }> = [
 
         <div id="homeStatus"></div>
 
+        <button class="mybk-btn" id="myBookingsBtn">{t.myBookings}</button>
+
         <div class="popular-title">{t.popular}</div>
         <div class="areas" id="areas">
           {areas.map((a) => (
@@ -571,11 +621,17 @@ const areas: Array<{ label: string; q: string; img: string }> = [
     <div class="panel" id="detailPanel">
       <div class="panel-hero">
         <button class="panel-close" id="detailClose">←</button>
-        <img id="detailImg" src="" alt="" />
+        <div class="hero-scroll" id="heroScroll"><img id="detailImg" src="" alt="" /></div>
+        <div class="hero-count" id="heroCount" style="display:none"></div>
       </div>
       <div class="panel-body">
         <h2 id="detailName"></h2>
         <div class="panel-meta" id="detailMeta"></div>
+        <div id="descWrap" style="display:none">
+          <div class="sec-title">{t.aboutHotel}</div>
+          <div class="desc clamp" id="detailDesc"></div>
+          <button class="desc-more" id="descMore">{t.more}</button>
+        </div>
         <div class="sec-title">{t.selectPlan}</div>
         <div id="planList"></div>
         <a class="web-link" id="detailWebLink" href="#">{t.webDetail}</a>
@@ -613,6 +669,16 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           <div id="payHint"></div>
           <div id="paypalBox" class="locked"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- My bookings -->
+    <div class="panel" id="bkListPanel">
+      <div class="panel-body" style="padding-top: calc(14px + env(safe-area-inset-top));">
+        <button class="panel-close" id="bkListClose" style="position:static;margin-bottom:12px;">←</button>
+        <h2>{t.bookingsTitle}</h2>
+        <div style="height:12px"></div>
+        <div id="bkList"></div>
       </div>
     </div>
 
@@ -1172,7 +1238,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       async function openDetail(slug) {
         track('app_card_tap', { slug });
         const cur = currentView.find((h) => h.slug === slug) || {};
-        $('detailImg').src = cur.thumbnail || '';
+        $('heroScroll').innerHTML = `<img src="${esc(cur.thumbnail || '')}" alt="" />`;
+        $('heroCount').style.display = 'none';
+        $('descWrap').style.display = 'none';
         $('detailName').textContent = (isJa && cur.nameJa) || cur.name || '';
         const km = cur.km != null ? (cur.km < 1 ? Math.round(cur.km * 1000) + 'm' : cur.km + 'km') : '';
         const state = cur.openNow === true ? t.openShort : cur.openNow === false ? t.closed : '';
@@ -1185,6 +1253,28 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           const d = await r.json();
           if (d.error) throw new Error(d.error);
           selHotel = d.hotel;
+          if (isJa && d.hotel.name_ja) $('detailName').textContent = d.hotel.name_ja;
+          // photo gallery (swipe) + hotel description
+          const imgs = (d.hotel.images && d.hotel.images.length ? d.hotel.images : [cur.thumbnail]).filter(Boolean);
+          if (imgs.length) {
+            $('heroScroll').innerHTML = imgs.map((u) => `<img src="${esc(u)}" alt="" loading="lazy" />`).join('');
+            $('heroScroll').scrollLeft = 0;
+            if (imgs.length > 1) {
+              $('heroCount').textContent = `1/${imgs.length}`;
+              $('heroCount').style.display = 'block';
+              $('heroScroll').onscroll = () => {
+                const i = Math.round($('heroScroll').scrollLeft / $('heroScroll').clientWidth) + 1;
+                $('heroCount').textContent = `${Math.min(i, imgs.length)}/${imgs.length}`;
+              };
+            }
+          }
+          const desc = ((isJa && d.hotel.description_ja) || d.hotel.description || '').trim();
+          if (desc) {
+            $('detailDesc').textContent = desc;
+            $('detailDesc').classList.add('clamp');
+            $('descMore').style.display = '';
+            $('descWrap').style.display = 'block';
+          }
           const plans = d.plans || [];
           if (!plans.length) {
             $('planList').innerHTML = `<div class="panel-meta">${t.noPlans}</div>`;
@@ -1268,10 +1358,70 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           `<div class="row"><span class="k">${t.dateLabel}</span><span>${esc($('bkDate').value)}</span></div>` +
           `<div class="row total"><span>${t.total}</span><span class="v">$${selPlan.price_usd}</span></div>`;
         openPanel('donePanel');
+        saveBooking({
+          id: bookingId,
+          hotel: selHotel ? selHotel.name : '',
+          plan: pname,
+          date: $('bkDate').value,
+          price: selPlan.price_usd,
+        });
         track('app_booking_done', { booking: bookingId });
       }
       $('doneClose').addEventListener('click', () => {
         ['donePanel', 'bookPanel', 'detailPanel'].forEach(closePanel);
+      });
+
+      // ---------- my bookings (guest, device-local) ----------
+      const BK_KEY = 'ddhBookings';
+      const getBookings = () => {
+        try { return JSON.parse(localStorage.getItem(BK_KEY) || '[]'); } catch (e) { return []; }
+      };
+      function saveBooking(b) {
+        const bks = getBookings().filter((x) => x.id !== b.id);
+        bks.unshift(b);
+        try { localStorage.setItem(BK_KEY, JSON.stringify(bks.slice(0, 10))); } catch (e) {}
+        refreshBkBtn();
+      }
+      function refreshBkBtn() {
+        $('myBookingsBtn').classList.toggle('show', getBookings().length > 0);
+      }
+      refreshBkBtn();
+      $('bkListClose').addEventListener('click', () => closePanel('bkListPanel'));
+      $('myBookingsBtn').addEventListener('click', () => {
+        const bks = getBookings();
+        openPanel('bkListPanel');
+        track('app_bookings_open', { n: bks.length });
+        if (!bks.length) {
+          $('bkList').innerHTML = `<div class="panel-meta">${t.noBookings}</div>`;
+          return;
+        }
+        $('bkList').innerHTML = bks
+          .map((b) => `<div class="bk-item">
+            <div class="top"><div class="hname">${esc(b.hotel || '')}</div><span class="st pending" id="st-${esc(String(b.id))}">${t.stChecking}</span></div>
+            <div class="meta2">${esc(b.plan || '')}</div>
+            <div class="meta2">${esc(b.date || '')} ・ ${t.bookingNo}${esc(String(b.id))}${b.price != null ? ' ・ $' + esc(String(b.price)) : ''}</div>
+          </div>`)
+          .join('');
+        bks.forEach(async (b) => {
+          const el = document.getElementById('st-' + b.id);
+          if (!el) return;
+          try {
+            const r = await fetch('/api/booking-status?order=' + encodeURIComponent(b.id));
+            const d = await r.json();
+            const s = String(d.status || '').toLowerCase();
+            const key = s === 'confirmed' || s === 'completed' ? 'confirmed'
+                      : s === 'cancelled' || s === 'rejected' ? 'cancelled' : 'pending';
+            el.textContent = key === 'confirmed' ? t.stConfirmed : key === 'cancelled' ? t.stCancelled : t.stPending;
+            el.className = 'st ' + key;
+          } catch (e) {
+            el.textContent = t.stPending;
+          }
+        });
+      });
+
+      $('descMore').addEventListener('click', () => {
+        $('detailDesc').classList.remove('clamp');
+        $('descMore').style.display = 'none';
       });
 
       function loadPayPalSdk() {
