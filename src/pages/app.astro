@@ -63,6 +63,9 @@ const t = isJa
       cgNone: '追加の候補は見つかりませんでした。エリア名を変えて試してみてください。',
       cgBadge: '未掲載',
       ofcBadge: '公式',
+      withinKm: '{r}km圏内',
+      allRange: '全範囲',
+      expandBtn: '🔍 もっと広い範囲で探す',
       cgShort: '☎ AIが電話確認',
       cgCallBtn: '📞 AIに電話で確認してもらう',
       cgTitle: 'AI電話確認のリクエスト',
@@ -156,6 +159,9 @@ const t = isJa
       cgNone: 'No extra candidates found. Try a different area name.',
       cgBadge: 'Unlisted',
       ofcBadge: 'Official',
+      withinKm: 'Within {r}km',
+      allRange: 'All distances',
+      expandBtn: '🔍 Search a wider area',
       cgShort: '☎ AI will call',
       cgCallBtn: '📞 Have AI call to confirm',
       cgTitle: 'AI phone confirmation',
@@ -477,6 +483,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         font-size: 13px; font-weight: 700; cursor: pointer;
       }
       .cg-note { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 10px 0 14px; }
+      .expand-btn {
+        width: 100%; padding: 13px; margin-top: 2px; cursor: pointer;
+        background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
+        color: var(--teal-dark); font-size: 14px; font-weight: 700;
+      }
       .cg-inline {
         width: 100%; padding: 13px; margin-top: 2px; cursor: pointer;
         background: var(--surface); border: 1.5px dashed var(--teal); border-radius: 14px;
@@ -824,6 +835,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       let currentView = [];
       let sortBy = 'km';
       let openOnly = false;
+      const RADII = [20, 100, null]; // start with the neighbourhood, widen on demand
+      let radiusIdx = 0;
+      let currentExtView = [];
       let budget = '';
       let rateJPY = null;
       let map = null;
@@ -968,7 +982,8 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           m.on('click', () => selectHotel(h.slug));
           markersBySlug[h.slug] = m;
         });
-        extHotels.forEach((h, i) => {
+        currentExtView.forEach((h) => {
+          const i = extHotels.indexOf(h);
           if (h.lat == null || h.lng == null) return;
           const pin = L.divIcon({
             className: '',
@@ -1048,6 +1063,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
 
       function render(data) {
         lastData = data;
+        radiusIdx = 0;
         renderView();
       }
 
@@ -1062,33 +1078,49 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         hotels.sort((a, b) => sortBy === 'price'
           ? nullLast(a.minPrice) - nullLast(b.minPrice)
           : nullLast(a.km) - nullLast(b.km));
+
+        // Neighbourhood-first: clip to the current radius, auto-widening past
+        // empty tiers so the user always sees something.
+        const withinR = (arr, r) => (r == null ? arr : arr.filter((x) => x.km == null || x.km <= r));
+        while (
+          radiusIdx < RADII.length - 1 &&
+          withinR(hotels, RADII[radiusIdx]).length + withinR(extHotels, RADII[radiusIdx]).length === 0
+        ) radiusIdx++;
+        hotels = withinR(hotels, RADII[radiusIdx]);
+        currentExtView = withinR(extHotels, RADII[radiusIdx]);
         currentView = hotels;
 
         const label = data && data.center && data.center.label ? `${data.center.label}${t.nearLabel}` : '';
         const far = all.length && all[0].km != null && all[0].km > 150;
         $('farToast').classList.toggle('show', !!far);
-        $('sheetStatus').textContent = hotels.length
-          ? `${label ? label + ' ・ ' : ''}${hotels.length}${t.results}`
+        const radiusLabel = RADII[radiusIdx] == null ? t.allRange : fmt(t.withinKm, { r: RADII[radiusIdx] });
+        const totalShown = hotels.length + currentExtView.length;
+        $('sheetStatus').textContent = totalShown
+          ? `${label ? label + ' ・ ' : ''}${radiusLabel} ・ ${totalShown}${t.results}`
           : t.noResults;
         $('queryPill').querySelector('.q').textContent = label || ($('q').value || '');
 
-        // Concierge entry also lives at the end of the map-results list, so
-        // geolocation searches (which bypass the chat) can reach it too.
-        list.innerHTML = hotels.map(cardHtml).join('') +
-          extHotels.map(extCardHtml).join('') +
-          `<button class="cg-inline">${t.chipConcierge}</button>`;
+        // Official and unlisted interleave by distance — the user wants the
+        // nearest place to rest; the badges carry the recommendation. On price
+        // sort, unlisted (no price data) go last.
+        const merged = [
+          ...hotels.map((h) => ({ ext: false, h })),
+          ...currentExtView.map((h) => ({ ext: true, h, i: extHotels.indexOf(h) })),
+        ];
+        if (sortBy === 'km') merged.sort((a, b) => nullLast(a.h.km) - nullLast(b.h.km));
+        list.innerHTML = merged.map((m) => (m.ext ? extCardHtml(m.h, m.i) : cardHtml(m.h))).join('') +
+          (RADII[radiusIdx] != null ? `<button class="expand-btn">${t.expandBtn}</button>` : '');
         updateMap(hotels);
       }
 
       // Cards open the in-app detail/booking flow; the href stays for
       // open-in-new-tab semantics only.
       list.addEventListener('click', (e) => {
-        const cg = e.target.closest && e.target.closest('button.cg-inline');
-        if (cg) {
-          // Chat overlays the results screen; closing it drops back here.
-          openChat();
-          conciergeSearch();
-          track('app_cg_from_results');
+        const ex = e.target.closest && e.target.closest('button.expand-btn');
+        if (ex) {
+          radiusIdx = Math.min(RADII.length - 1, radiusIdx + 1);
+          renderView();
+          track('app_radius_expand', { r: RADII[radiusIdx] || 'all' });
           return;
         }
         const a = e.target.closest && e.target.closest('a.card');
@@ -1232,7 +1264,6 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           chips.push(`<button class="primary" data-act="map">${t.chatShowMap}</button>`);
           if (sortBy !== 'price') chips.push(`<button data-act="cheaper">${t.chipCheaper}</button>`);
           if (!openOnly) chips.push(`<button data-act="open">${t.chipOpen}</button>`);
-          chips.push(`<button data-act="concierge">${t.chipConcierge}</button>`);
         }
         if (o.cgChip) chips.push(`<button class="primary" data-act="concierge">${t.chipConcierge}</button>`);
         if (chips.length) inner += `<div class="chat-chips">${chips.join('')}</div>`;
