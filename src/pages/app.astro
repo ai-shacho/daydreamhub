@@ -1817,7 +1817,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         $('myBookingsBtn').classList.toggle('show', getBookings().length + getInquiries().length > 0);
       }
       refreshBkBtn();
-      $('bkListClose').addEventListener('click', () => closePanel('bkListPanel'));
+      $('bkListClose').addEventListener('click', () => { stopBkPolling(); closePanel('bkListPanel'); });
       $('myBookingsBtn').addEventListener('click', () => {
         const bks = getBookings();
         const inqs = getInquiries();
@@ -1836,7 +1836,6 @@ const areas: Array<{ label: string; q: string; img: string }> = [
               <div id="inq-act-${esc(String(q.g))}"></div>
             </div>`)
             .join('') + (bks.length ? `<div class="sec-title">${t.bookingsTitle}</div>` : '');
-          setTimeout(pollInquiries, 50);
         }
         $('bkList').innerHTML = inqHtml + (bks.length ? '' : '');
         $('bkList').innerHTML += bks
@@ -1846,7 +1845,45 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             <div class="meta2">${esc(b.date || '')} ・ ${t.bookingNo}${esc(String(b.id))}${b.price != null ? ' ・ $' + esc(String(b.price)) : ''}</div>
           </div>`)
           .join('');
-        bks.forEach(async (b) => {
+        startBkPolling();
+      });
+
+      // ── Live status polling while My Bookings is open ──────────────────────
+      // Both /api/booking-status and /api/app/call-status read live D1 state
+      // (booking.status, concierge_calls.status/price_quoted/accepted), so the
+      // panel refreshes itself while the AI is on the phone — no reopen needed.
+      let bkPollTimer = null;
+      let bkToastEl = null;
+      const bkPrev = {};
+      function bkToast(msg) {
+        if (!bkToastEl) {
+          bkToastEl = document.createElement('div');
+          bkToastEl.style.cssText = 'position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#111;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;z-index:200;box-shadow:0 6px 24px rgba(0,0,0,.3);opacity:0;transition:opacity .25s;pointer-events:none;max-width:88vw;text-align:center;';
+          document.body.appendChild(bkToastEl);
+        }
+        bkToastEl.textContent = msg;
+        bkToastEl.style.opacity = '1';
+        clearTimeout(bkToastEl._t);
+        bkToastEl._t = setTimeout(() => { bkToastEl.style.opacity = '0'; }, 4000);
+      }
+      function startBkPolling() {
+        stopBkPolling();
+        tickBkPolling();
+        bkPollTimer = setInterval(tickBkPolling, 8000);
+      }
+      function stopBkPolling() {
+        if (bkPollTimer) { clearInterval(bkPollTimer); bkPollTimer = null; }
+      }
+      async function tickBkPolling() {
+        let pending = false;
+        try { if (await refreshBookingStatuses()) pending = true; } catch (e) {}
+        try { if (await pollInquiries()) pending = true; } catch (e) {}
+        if (!pending) stopBkPolling();
+      }
+      async function refreshBookingStatuses() {
+        const bks = getBookings();
+        let pending = false;
+        await Promise.all(bks.map(async (b) => {
           const el = document.getElementById('st-' + b.id);
           if (!el) return;
           try {
@@ -1857,15 +1894,23 @@ const areas: Array<{ label: string; q: string; img: string }> = [
                       : s === 'cancelled' || s === 'rejected' ? 'cancelled' : 'pending';
             el.textContent = key === 'confirmed' ? t.stConfirmed : key === 'cancelled' ? t.stCancelled : t.stPending;
             el.className = 'st ' + key;
+            if (key === 'pending') pending = true;
+            const pk = 'bk-' + b.id;
+            if (bkPrev[pk] && bkPrev[pk] !== key && key === 'confirmed') bkToast('✓ ' + (b.hotel || '') + ' — ' + t.stConfirmed);
+            if (bkPrev[pk] && bkPrev[pk] !== key && key === 'cancelled') bkToast((b.hotel || '') + ' — ' + t.stCancelled);
+            bkPrev[pk] = key;
           } catch (e) {
             el.textContent = t.stPending;
+            pending = true;
           }
-        });
-      });
+        }));
+        return pending;
+      }
 
       // Poll inquiry-call results and surface the quote with a book CTA.
       let acceptTarget = null;
       async function pollInquiries() {
+        let pending = false;
         for (const q of getInquiries()) {
           const st = document.getElementById('inq-st-' + q.g);
           const act = document.getElementById('inq-act-' + q.g);
@@ -1878,26 +1923,40 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             const quoted = calls.find((c) => c.price != null && c.accept_token);
             const accepted = calls.find((c) => c.accepted);
             const allDead = calls.length && calls.every((c) => ['unavailable', 'no_answer', 'over_budget', 'voicemail'].includes(c.outcome || ''));
+            let key;
             if (accepted) {
+              key = 'accepted';
               st.textContent = t.inqAccepted;
               st.className = 'st confirmed';
               if (act) act.innerHTML = '';
             } else if (quoted) {
+              key = 'quoted';
               st.textContent = t.inqQuoted;
               st.className = 'st confirmed';
               if (act) act.innerHTML = `<button class="call-cta" data-token="${esc(quoted.accept_token)}" data-hotel="${esc(quoted.hotel)}" style="margin-top:8px">${t.inqBook} — ${esc(quoted.currency || '')} ${esc(String(quoted.price))}</button>`;
             } else if (allDead) {
+              key = 'na';
               st.textContent = t.inqNA;
               st.className = 'st cancelled';
               if (act) act.innerHTML = '';
             } else {
+              key = 'calling';
               st.textContent = t.inqCalling;
               st.className = 'st pending';
+              pending = true;
             }
+            const pk = 'inq-' + q.g;
+            if (bkPrev[pk] && bkPrev[pk] !== key) {
+              if (key === 'quoted') bkToast('☎ ' + (q.hotel || '') + ' — ' + t.inqQuoted);
+              else if (key === 'accepted') bkToast('✓ ' + (q.hotel || '') + ' — ' + t.inqAccepted);
+            }
+            bkPrev[pk] = key;
           } catch (e) {
             st.textContent = t.inqCalling;
+            pending = true;
           }
         }
+        return pending;
       }
       $('bkList').addEventListener('click', (e) => {
         const btn = e.target.closest && e.target.closest('button.call-cta');
