@@ -317,9 +317,9 @@ export async function searchHotelsExternal(env: any, params: any) {
 
   const lang = params.language || "en";
   const enrichedQuery = enrichQuery(params.query, lang);
-  // Only bias by region for non-English locales; for English leave unset so international results aren't biased toward US
-  const regionMap: Record<string, string> = { ja: "JP", th: "TH", ko: "KR" };
-  const regionCode = regionMap[lang] || undefined;
+  // No regionCode bias: it was previously derived from the USER's language (ja→JP etc.),
+  // which skewed results toward the user's home region when searching foreign cities.
+  // The destination city is already explicit in the text query, so no bias is needed.
   const maxPages = Math.max(1, Math.min(Number(params.maxPages || 1), 3));
 
   const baseBody: any = {
@@ -327,7 +327,6 @@ export async function searchHotelsExternal(env: any, params: any) {
     languageCode: lang,
     maxResultCount: 20
   };
-  if (regionCode) baseBody.regionCode = regionCode;
 
   const headers = {
     "Content-Type": "application/json",
