@@ -1,0 +1,161 @@
+---
+import { COUNTRIES } from '../lib/data/countries';
+
+// Country and city as linked dropdowns: picking a country loads that country's
+// cities from /geo/cities/<CC>.json. Free text was producing the same place
+// under several spellings ("Thailand" / "thailand", "USA" / "United States"),
+// which breaks grouping, filtering and city pages.
+//
+// A dropdown can never cover every location a day-use hotel sits in — islands
+// and districts (Bali, Sukhumvit, Shibuya-ku) are not cities — so "Other" stays
+// available and simply reveals a text field. The value submitted is still the
+// plain place name, so the `country` / `city` columns are unchanged.
+interface Props {
+  country?: string;
+  city?: string;
+  required?: boolean;
+  labelClass?: string;
+  inputClass?: string;
+  wrapperClass?: string;
+}
+const {
+  country = '',
+  city = '',
+  required = false,
+  labelClass = 'block text-sm font-medium text-gray-700 mb-1',
+  inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500',
+  wrapperClass = '',
+} = Astro.props;
+---
+
+<div class={wrapperClass} data-country-city>
+  <div>
+    <label class={labelClass}>Country {required && <span class="text-red-500">*</span>}</label>
+    <select name="country" class={`${inputClass} bg-white`} data-cc-country required={required}>
+      <option value="">— Select a country —</option>
+      {COUNTRIES.map(([code, name]) => (
+        <option value={name} data-code={code}>{name}</option>
+      ))}
+    </select>
+    <p class="hidden mt-1 text-xs text-amber-700" data-cc-country-warn></p>
+  </div>
+
+  <div class="mt-4">
+    <label class={labelClass}>City {required && <span class="text-red-500">*</span>}</label>
+    <select name="city" class={`${inputClass} bg-white`} data-cc-city required={required}>
+      <option value="">— Select a country first —</option>
+    </select>
+    <input
+      type="text"
+      class={`${inputClass} mt-2 hidden`}
+      placeholder="Type the city, district or area name"
+      data-cc-city-other
+    />
+    <p class="mt-1 text-xs text-slate-400" data-cc-city-hint></p>
+  </div>
+
+  <script is:inline define:vars={{ initialCountry: country, initialCity: city }}>
+    (function () {
+      var root = document.currentScript.closest('[data-country-city]');
+      if (!root) return;
+      var countrySel = root.querySelector('[data-cc-country]');
+      var citySel = root.querySelector('[data-cc-city]');
+      var otherInput = root.querySelector('[data-cc-city-other]');
+      var hint = root.querySelector('[data-cc-city-hint]');
+      var warn = root.querySelector('[data-cc-country-warn]');
+      var OTHER = '__other__';
+
+      function norm(s) { return String(s || '').trim().toLowerCase(); }
+
+      // Existing records hold names that don't match the canonical list exactly.
+      var ALIAS = {
+        usa: 'United States', us: 'United States', 'u.s.a.': 'United States',
+        uk: 'United Kingdom', 'u.k.': 'United Kingdom', england: 'United Kingdom',
+        uae: 'United Arab Emirates',
+        'kingdom of bahrain': 'Bahrain',
+        'magyarország': 'Hungary', nederland: 'Netherlands', deutschland: 'Germany',
+        'türkiye': 'Turkey', 'south korea': 'South Korea', 'czech republic': 'Czechia',
+        russia: 'Russia', vietnam: 'Vietnam', laos: 'Laos',
+      };
+
+      function findCountryOption(value) {
+        var v = norm(value);
+        if (!v) return null;
+        var opts = Array.prototype.slice.call(countrySel.options);
+        var hit = opts.find(function (o) { return norm(o.value) === v; });
+        if (hit) return hit;
+        var aliased = ALIAS[v];
+        if (aliased) {
+          hit = opts.find(function (o) { return norm(o.value) === norm(aliased); });
+          if (hit) return hit;
+        }
+        return null;
+      }
+
+      function setCityOptions(names, selected) {
+        citySel.innerHTML = '';
+        var blank = new Option('— Select a city —', '');
+        citySel.appendChild(blank);
+        names.forEach(function (n) { citySel.appendChild(new Option(n, n)); });
+        // Keep a value that isn't in the list (island, district, small resort area)
+        // rather than silently dropping it.
+        if (selected && names.indexOf(selected) === -1) {
+          var keep = new Option(selected + ' (current)', selected);
+          citySel.insertBefore(keep, citySel.options[1] || null);
+        }
+        citySel.appendChild(new Option('Other — not listed…', OTHER));
+        citySel.value = selected || '';
+        syncOther();
+      }
+
+      function syncOther() {
+        var isOther = citySel.value === OTHER;
+        otherInput.classList.toggle('hidden', !isOther);
+        // Only one of the two carries the submitted value.
+        otherInput.name = isOther ? 'city' : '';
+        citySel.name = isOther ? '' : 'city';
+        if (isOther) otherInput.focus();
+      }
+
+      async function loadCities(code, selected) {
+        if (!code) {
+          citySel.innerHTML = '<option value="">— Select a country first —</option>';
+          hint.textContent = '';
+          return;
+        }
+        hint.textContent = 'Loading cities…';
+        try {
+          var res = await fetch('/geo/cities/' + code + '.json');
+          var names = res.ok ? await res.json() : [];
+          setCityOptions(names, selected || '');
+          hint.textContent = names.length
+            ? names.length + ' cities. Not listed? Choose “Other”.'
+            : 'No city list for this country — choose “Other” and type the name.';
+        } catch (e) {
+          setCityOptions([], selected || '');
+          hint.textContent = 'Could not load the city list — choose “Other” and type the name.';
+        }
+      }
+
+      countrySel.addEventListener('change', function () {
+        var opt = countrySel.options[countrySel.selectedIndex];
+        warn.classList.add('hidden');
+        loadCities(opt ? opt.dataset.code : '', '');
+      });
+      citySel.addEventListener('change', syncOther);
+
+      // Restore the saved values.
+      var match = findCountryOption(initialCountry);
+      if (match) {
+        countrySel.value = match.value;
+        loadCities(match.dataset.code, initialCity || '');
+      } else if (initialCountry) {
+        // e.g. a full address pasted into the country field — make it visible
+        // instead of quietly resetting it.
+        warn.textContent = 'Saved value “' + initialCountry + '” is not a recognised country. Please select the correct one.';
+        warn.classList.remove('hidden');
+        if (initialCity) setCityOptions([], initialCity);
+      }
+    })();
+  </script>
+</div>
