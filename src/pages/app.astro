@@ -1167,6 +1167,28 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         </a>`;
       }
 
+      // Remote photos (Places media, hotel CDNs) can 404 — swap a failed image
+      // for the placeholder instead of showing a broken-image glyph. Error
+      // events don't bubble, hence the capture phase.
+      document.addEventListener('error', (e) => {
+        const img = e.target;
+        if (!img || img.tagName !== 'IMG') return;
+        const isExt = !!(img.closest('a[data-ext]') || img.closest('.map-pop[data-ext]'));
+        if (img.classList.contains('thumb') || img.classList.contains('mp-thumb')) {
+          const d = document.createElement('div');
+          d.className = img.className + (isExt ? ' tel' : '');
+          if (isExt) d.textContent = '📞';
+          img.replaceWith(d);
+        } else if (img.closest('#heroScroll')) {
+          const wrap = img.closest('#heroScroll');
+          img.remove();
+          const left = wrap.querySelectorAll('img').length;
+          if (!left) wrap.innerHTML = `<div class="mp-thumb tel" style="width:100%;height:100%;border-radius:0;font-size:44px">📞</div>`;
+          $('heroCount').style.display = left > 1 ? 'block' : 'none';
+          if (left > 1) $('heroCount').textContent = `1/${left}`;
+        }
+      }, true);
+
       // Unlisted (external) hotels merge into the same results — the user just
       // wants somewhere nearby; the badge and CTA make the difference clear.
       function extCardHtml(h, i) {
