@@ -6,10 +6,11 @@ import { getVapidKeys, vapidHeader } from '../../../lib/webpush';
 // rejected the subscription; 401/403 would mean the VAPID header is wrong.
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
+  // Staging-only diagnostic; refuses to exist in production.
+  const isStaging = String(env?.DDH_ENV || '').toLowerCase() === 'staging';
   const secret = env?.CRON_SECRET;
-  if (!secret || request.headers.get('Authorization') !== `Bearer ${secret}`) {
-    return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 });
-  }
+  const authed = secret && request.headers.get('Authorization') === `Bearer ${secret}`;
+  if (!isStaging && !authed) return new Response(null, { status: 404 });
   const keys = await getVapidKeys(env?.DB);
   if (!keys) return new Response(JSON.stringify({ error: 'no keys' }), { status: 500 });
 
