@@ -1,7 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { formatDisplayDate } from '../lib/dateFormat';
-const lastUpdated = formatDisplayDate('2026-04-17');
+const lastUpdated = formatDisplayDate('2026-08-08');
 ---
 
 <Layout title="Owner Terms of Service | DayDreamHub" description="Terms of Service for facility owners and managers listing on DayDreamHub.">
@@ -41,11 +41,23 @@ const lastUpdated = formatDisplayDate('2026-04-17');
         <ol class="list-decimal pl-5 space-y-2 mt-2">
           <li><strong>Reservation Management:</strong> Review, approve, or decline reservation requests. Guests will be notified by email upon approval or rejection.</li>
           <li><strong>Calendar &amp; Availability Management:</strong> Manage blocked dates on a daily basis (double-click to block or unblock). Availability can be synchronized with external systems via iCal calendar integration. (※ iCal calendar integration is currently available as a beta feature.)</li>
-          <li><strong>Pricing:</strong> Set a base rate for each plan.</li>
+          <li><strong>Pricing:</strong> Set a base rate for each plan, and paid options attached to a plan, in the property's Pricing Currency.</li>
           <li><strong>Plan Management:</strong> Temporarily deactivate or reactivate plans without deleting them (Activate/Deactivate).</li>
           <li><strong>Sales Reports:</strong> View monthly sales reports and export data in CSV format.</li>
           <li><strong>Guest Reviews:</strong> View reviews submitted by guests after their visit.</li>
           <li><strong>Messaging:</strong> Communicate with guests regarding reservations and facility use through the Owner Panel's messaging feature.</li>
+        </ol>
+      </div>
+
+      <div>
+        <h2 class="text-xl font-bold text-slate-900 mb-3">Article 4-2 — Paid Options (Add-ons)</h2>
+        <ol class="list-decimal pl-5 space-y-2">
+          <li>Owners may attach paid options to a plan — such as breakfast, airport transfer, a day pass, or an optional tour. Each option is charged per booking, per guest, or at separate adult and child rates, and is priced in the property's Pricing Currency.</li>
+          <li>The Owner warrants that it holds every permit, licence and registration required to provide each paid option it lists, including any passenger-transport, travel-agency or food-hygiene authorisation, and that each option complies with applicable law.</li>
+          <li>A paid option purchased by a guest forms part of the confirmed reservation. By approving the reservation the Owner undertakes to provide the purchased options on the reserved date at no further charge to the guest.</li>
+          <li>If the Owner cannot provide a purchased option, the Owner must notify DayDreamHub without delay. DayDreamHub will refund the guest the amount of that option, and the Owner shall bear that amount.</li>
+          <li>Hiding or deleting an option takes effect for future reservations only. Options already purchased remain payable and deliverable at the price recorded at the time of booking.</li>
+          <li>A guest may ask the Owner to add an option, or to make another arrangement, directly at the facility on arrival. The Owner is under <strong>no obligation to accept</strong> such a request and may decline it. Where the Owner accepts, the Owner may charge the guest directly at the facility for that on-site addition. Such an on-site addition <strong>does not constitute</strong> conduct prohibited under Article 11, Section 4, provided the original reservation was made through the Platform, and no commission is payable to DayDreamHub on the on-site amount.</li>
         </ol>
       </div>
 
@@ -76,19 +88,21 @@ const lastUpdated = formatDisplayDate('2026-04-17');
         <h2 class="text-xl font-bold text-slate-900 mb-3">Article 7 — Cancellation Policy</h2>
         <ol class="list-decimal pl-5 space-y-2">
           <li>Owners may set a cancellation policy for each plan.</li>
-          <li>If no cancellation policy is set, DayDreamHub's default cancellation policy will apply automatically, under which a 100% cancellation fee will be charged for cancellations made within 24 hours of the time of booking. The applicable cancellation policy will be clearly displayed to guests.</li>
+          <li>If no cancellation policy is set, DayDreamHub's default cancellation policy will apply automatically, under which a 100% cancellation fee will be charged for cancellations made within 24 hours before the scheduled check-in time. The applicable cancellation policy will be clearly displayed to guests.</li>
           <li>If a confirmed reservation is cancelled at the Owner's discretion, DayDreamHub will issue a full refund to the guest. Depending on the timing of payment from DayDreamHub to the Owner, DayDreamHub may request the Owner to return the equivalent amount of the refund.</li>
           <li>If Owner-initiated cancellations occur repeatedly, DayDreamHub may separately invoice the Owner for the commission associated with the relevant reservation. The Owner's listing may also be subject to suspension or termination of the agreement.</li>
           <li>If a guest submits a cancellation request through their account page, the reservation will automatically transition to a cancelled status. Refunds will be processed by DayDreamHub in accordance with the cancellation policy set by the Owner.</li>
+          <li>Unless the Owner has set a separate policy for a paid option, the cancellation policy applying to the plan applies equally to the amount of any paid options purchased with that reservation. Paid options cannot be cancelled, added or amended individually once a reservation is confirmed; a guest wishing to change them must cancel and rebook, subject to the applicable cancellation policy. Where DayDreamHub seeks the return of a refunded amount under Section 3, that request extends to the paid option amounts already remitted to the Owner for the same reservation.</li>
         </ol>
       </div>
 
       <div>
         <h2 class="text-xl font-bold text-slate-900 mb-3">Article 8 — Fees and Payment</h2>
         <ol class="list-decimal pl-5 space-y-2">
-          <li>DayDreamHub charges a commission of 10% of the plan price for each confirmed reservation. Payment to the Owner will be made after deducting the applicable commission from the plan price.</li>
-          <li>Owners are advised to take DayDreamHub's 10% commission into account when setting plan prices.</li>
-          <li>Plan prices must include all applicable taxes, service charges, and any other fees.</li>
+          <li>DayDreamHub charges a commission of 10% of the <strong>Booking Value</strong> for each confirmed reservation. "Booking Value" means the plan price plus the price of any paid options (add-ons) selected by the guest, in each case as set by the Owner, and excludes the processing and service fees DayDreamHub charges to the guest. Payment to the Owner will be made after deducting the applicable commission from the Booking Value.</li>
+          <li>Owners are advised to take DayDreamHub's 10% commission into account when setting both plan prices and paid option prices.</li>
+          <li>Plan prices and paid option prices must include all applicable taxes, service charges, and any other fees.</li>
+          <li>Paid option amounts are collected from the guest by DayDreamHub together with the plan price and are remitted to the Owner together with the plan price, on the schedule set out below. The Owner shall not charge the guest again at the facility for an option already paid for through the Platform.</li>
           <li>If any charges, such as a city tax or resort fee, are required to be collected directly from the guest at the time of check-in, they must be clearly stated in the plan's Description field.</li>
           <li>Listing on the Platform is free of charge. Commission fees are only incurred upon confirmed bookings.</li>
           <li>DayDreamHub reserves the right to revise the commission rate upon prior notice to the Owner.</li>
@@ -124,7 +138,8 @@ const lastUpdated = formatDisplayDate('2026-04-17');
         <h2 class="text-xl font-bold text-slate-900 mb-3">Article 10 — Messaging</h2>
         <ol class="list-decimal pl-5 space-y-2">
           <li>Owners may receive and respond to messages from guests regarding reservations and facility use through the Owner Panel's messaging feature.</li>
-          <li>The messaging feature must be used solely for communication purposes related to reservations and facility use. Solicitation, marketing, and any attempt to redirect guests to complete bookings outside of the Platform are strictly prohibited.</li>
+          <li>The messaging feature must be used solely for communication purposes related to reservations and facility use. Solicitation, marketing, and any attempt to redirect guests to complete bookings outside of the Platform are strictly prohibited. Enquiries about paid options or other extras to be arranged with, and paid to, the facility on arrival are not covered by this prohibition.</li>
+          <li>Owners shall respond to guest messages relating to a confirmed reservation within a reasonable time, and in any event before the check-in date.</li>
           <li>In the event of a violation of the above prohibitions, DayDreamHub will issue a warning to the Owner. If the violation continues after the warning, the Owner's listing may be suspended or the agreement may be terminated.</li>
           <li>DayDreamHub reserves the right to review messages to verify compliance with these Terms of Service. The handling of messages shall be governed by Article 11 of the Privacy Policy.</li>
         </ol>
@@ -137,7 +152,7 @@ const lastUpdated = formatDisplayDate('2026-04-17');
           <li>Providing false or misleading information in any listing.</li>
           <li>Continuing to list a facility that is not actually available for use.</li>
           <li>Submitting a false reason for a cancellation.</li>
-          <li>Directing guests to complete bookings outside of the Platform for the purpose of circumventing commission fees.</li>
+          <li>Directing guests to complete <strong>the reservation itself</strong> outside of the Platform for the purpose of circumventing commission fees. On-site additions made in accordance with Article 4-2, Section 6 are excepted.</li>
           <li>Discriminating against guests on the basis of nationality, race, gender, religion, disability, or any other ground.</li>
           <li>Using guest personal information for any purpose other than the provision of services, or handling guest information in violation of applicable data protection laws.</li>
           <li>Engaging in any form of pressure or retaliatory conduct toward guests in connection with their reviews.</li>

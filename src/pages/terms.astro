@@ -1,7 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import { formatDisplayDate } from '../lib/dateFormat';
-const lastUpdated = formatDisplayDate('2026-04-17');
+const lastUpdated = formatDisplayDate('2026-08-08');
 ---
 
 <Layout title="Terms of Service | DayDreamHub" description="Terms of Service for DayDreamHub - day-use and short-stay booking platform.">
@@ -33,12 +33,14 @@ const lastUpdated = formatDisplayDate('2026-04-17');
           <li><strong>"Offer"</strong> means a Service made available by a Facility along with its applicable terms of use, including the content of the Service, available time slots, pricing, and accessible amenities.</li>
           <li><strong>"Reservation"</strong> means an Offer booked by a Guest through the Platform.</li>
           <li><strong>"Facility Charge"</strong> means the fee set by the Facility for the use of its rooms, spaces, or other services.</li>
-          <li><strong>"Service Fee"</strong> means the fee charged by DayDreamHub to the Guest for reservation intermediation, system use, customer support, and other ancillary services, including payment processing fees.</li>
-          <li><strong>"Total Amount"</strong> means the sum of the Facility Charge, Service Fee, and payment processing fees, representing the final amount payable by the Guest through the Platform.</li>
+          <li><strong>"Service Fee"</strong> means the fee charged by DayDreamHub to the Guest for reservation intermediation, system use, customer support, and other ancillary services.</li>
+          <li><strong>"Add-on"</strong> means an optional paid service offered by a Facility alongside an Offer — such as breakfast, airport transfer, a day pass, or an optional tour — which the Guest may select when making a Reservation. Add-ons are charged per booking, per guest, or at separate adult and child rates, as stated on the Offer.</li>
+            <li><strong>"Processing Fee"</strong> means the fee charged by DayDreamHub to the Guest to cover payment processing and fraud prevention, equal to 6% of the Facility Charge and Add-on prices combined.</li>
+            <li><strong>"Total Amount"</strong> means the sum of the Facility Charge, the price of any Add-ons selected, the Processing Fee, and the Service Fee, representing the final amount payable by the Guest through the Platform.</li>
           <li><strong>"Local Taxes and Surcharges"</strong> means taxes such as accommodation taxes or other charges not included in the price displayed on the Platform and which may be payable directly to the Facility at check-in.</li>
           <li><strong>"Privacy Policy"</strong> means DayDreamHub's policy on the handling of personal data, available on the DayDreamHub website.</li>
-          <li><strong>"AI Phone Booking Service"</strong> means a service whereby DayDreamHub's AI contacts facilities not listed on the Platform on behalf of a Guest to inquire about day-use availability and make a reservation. Each request includes calls to up to three (3) facilities.</li>
-          <li><strong>"AI Phone Booking Fee"</strong> means the fee payable by the Guest for use of the AI Phone Booking Service, set at USD $7 per request (covering calls to three facilities). In the event that all call attempts are unsuccessful — meaning the facility did not answer or was fully booked — the AI Phone Booking Fee shall be refunded in full.</li>
+          <li><strong>"AI Phone Booking Service"</strong> means a service whereby DayDreamHub's AI contacts a facility on behalf of a Guest to inquire about day-use availability and price, and — where the Guest accepts the resulting quote — to confirm a reservation.</li>
+          <li><strong>"AI Phone Booking Fee"</strong> means the fee payable by the Guest for use of the AI Phone Booking Service, set at USD $7 per quote accepted by the Guest. Where the Facility does not confirm the reservation for any reason attributable to the Facility, the AI Phone Booking Fee shall be refunded in full.</li>
         </ul>
       </div>
 
@@ -98,7 +100,7 @@ const lastUpdated = formatDisplayDate('2026-04-17');
         <p>Upon confirmation of a reservation, a confirmation email will be sent to the Guest's registered email address. If no confirmation email is received, Guests are advised to check their spam or junk folder. Guests should retain their reservation details for presentation at the Facility. Please note that a reservation request is not confirmed until the Guest receives a confirmation email; Guests should refrain from visiting the Facility prior to receiving such confirmation.</p>
 
         <h3 class="font-semibold text-slate-800 mt-4 mb-2">6.5 Modifications</h3>
-        <p>Reservation details — including dates and plan selection — cannot be modified. Guests wishing to make changes must cancel their existing reservation and submit a new one. The applicable cancellation policy of the Facility will apply to any cancelled confirmed reservation.</p>
+        <p>Reservation details — including dates, plan selection, the number of guests, and any Add-ons selected — cannot be modified once a Reservation has been submitted. Guests wishing to make changes must cancel their existing reservation and submit a new one. DayDreamHub does not issue partial refunds against an existing Reservation: removing an Add-on or reducing the number of guests does not reduce the amount already paid. The applicable cancellation policy of the Facility will apply to any cancelled confirmed reservation, so where that policy permits a free cancellation the Guest may cancel and rebook at no cost. Add-ons may alternatively be requested from the Facility directly on arrival and paid to the Facility; whether the Facility can accommodate such a request is at its sole discretion. Nothing in this Article limits the Guest's rights under Article 9.5.</p>
 
         <h3 class="font-semibold text-slate-800 mt-4 mb-2">6.6 Refund Upon Rejection</h3>
         <p>In the event that a Facility Owner rejects a reservation request, DayDreamHub will refund the full amount paid within no more than five (5) to seven (7) business days.</p>
@@ -111,10 +113,10 @@ const lastUpdated = formatDisplayDate('2026-04-17');
         <p>The AI Phone Booking Service enables DayDreamHub's AI to contact facilities not listed on the Platform on a Guest's behalf to check day-use availability and make a reservation. The service is available for any facility listed on Google Maps, worldwide.</p>
 
         <h3 class="font-semibold text-slate-800 mt-4 mb-2">6-2.2 How It Works</h3>
-        <p>Guests initiate the service by specifying the desired facility name, date, time, and plan details. Upon successful payment of the AI Phone Booking Fee, DayDreamHub's AI will begin placing calls to the specified facilities in sequence. Each request covers calls to three (3) facilities. If a reservation is successfully confirmed, DayDreamHub will notify the Guest by email at their registered email address.</p>
+        <p>Guests initiate the service by specifying the desired facility name, date, time, and plan details. The service then operates in two stages. Stage one is free of charge: DayDreamHub's AI calls the specified facility to ask about availability and price, and DayDreamHub emails the resulting quote to the Guest's registered email address. No payment is taken at this stage and the Guest is under no obligation to proceed. Stage two begins only if the Guest accepts the quote: on acceptance the AI Phone Booking Fee becomes payable, and once it is paid DayDreamHub's AI places a second call to the facility to confirm the reservation. DayDreamHub will notify the Guest by email of the outcome.</p>
 
         <h3 class="font-semibold text-slate-800 mt-4 mb-2">6-2.3 Fees and Payment</h3>
-        <p>The AI Phone Booking Fee is USD $7 per request (covering three facility calls) and is charged at the time the request is submitted. If all three call attempts are unsuccessful — meaning the facility did not answer or was fully booked — the fee will be refunded in full within no more than five (5) to seven (7) business days.</p>
+        <p>The AI Phone Booking Fee is USD $7 per quote accepted by the Guest, and is charged at the moment the Guest accepts. If the facility does not confirm the reservation for any reason attributable to the facility — including no answer, no availability, or the facility declining or being unable to honour the quoted terms — the fee is refunded in full within no more than five (5) to seven (7) business days. The fee is not refunded once the facility has confirmed the reservation, including where the Guest subsequently cancels or does not arrive.</p>
         <p>Facility pricing, available time slots, and other conditions vary by facility and are not guaranteed by DayDreamHub. Payment of facility charges is to be made directly to the facility at check-in.</p>
 
         <h3 class="font-semibold text-slate-800 mt-4 mb-2">6-2.4 Disclaimer</h3>
@@ -124,18 +126,19 @@ const lastUpdated = formatDisplayDate('2026-04-17');
       <div>
         <h2 class="text-xl font-bold text-slate-900 mb-3">Article 7 — Pricing</h2>
         <p><strong>7.1</strong> Prices displayed for each Offer represent the cost of the Service and include VAT and service charges where applicable. Local Taxes and Surcharges are not included and may be payable directly to the Facility at check-in.</p>
-        <p><strong>7.2</strong> Prices displayed on the Platform comprise the Facility Charge and the Service Fee. The breakdown of each component and the Total Amount will be clearly indicated at the time of reservation confirmation.</p>
+        <p><strong>7.2</strong> The Total Amount payable comprises: (a) the Facility Charge; (b) the price of any Add-ons selected; (c) the Processing Fee, being 6% of (a) plus (b); and (d) the Service Fee. The Service Fee is calculated as follows: where 10% of (a) plus (b) is USD $10 or more, no Service Fee is charged; where it is less than USD $10, the Service Fee is the difference between USD $10 and that 10% figure. Each component and the Total Amount are itemised on the booking page before payment and in the confirmation email.</p>
+        <p><strong>7.7</strong> Add-ons are supplied by the Facility, not by DayDreamHub. DayDreamHub collects the price of Add-ons on the Facility's behalf as part of the Total Amount; the agreement to supply the Add-on is entered into between the Guest and the Facility, and Articles 12.1 to 12.3 apply to Add-ons as they apply to any other Service. Add-on prices are set by the Facility in its local currency and converted in accordance with Article 7.5. Where the Facility is unable to provide an Add-on that has been paid for, DayDreamHub will refund the price of that Add-on.</p>
         <p><strong>7.3</strong> Certain Offers may be subject to additional Local Taxes and Surcharges. Where applicable, an estimated amount will be indicated in the Offer summary; however, such amounts are provided for reference only and are not binding on DayDreamHub. These figures are provided by Facility Owners, and DayDreamHub accepts no liability for any inaccuracy in the amounts stated.</p>
         <p><strong>7.4</strong> Guests may be required to provide a security deposit upon arrival at the Facility in accordance with the Facility's policies. Whether a deposit is required, and the applicable amount and refund conditions, shall be determined at the Facility's discretion.</p>
-        <p><strong>7.5</strong> All prices on the Platform are displayed in USD. Prices shown in other currencies are for reference purposes only and may differ from the actual amount charged due to exchange rate fluctuations. DayDreamHub accepts no liability for any difference arising from currency conversion.</p>
-        <p><strong>7.6</strong> The AI Phone Booking Fee of USD $7 per request is charged separately from any facility usage fees. Facility charges vary by property and are payable directly to the facility at check-in.</p>
+        <p><strong>7.5</strong> Facilities set their prices in their own local currency. Prices on the Platform are therefore shown in the Facility's local currency together with an approximate United States dollar equivalent (for example, "¥10,000 (≈ $61.04 USD)"). All payments to DayDreamHub are taken in United States dollars. The USD amount is calculated from the Facility's local price using an exchange rate that DayDreamHub updates daily; the rate applied to a Reservation is the rate in effect at the moment payment is captured, and that USD amount is recorded on the booking and is the amount actually charged. Local-currency figures shown alongside the total are approximate conversions for information only. Because rates move daily, the USD price of the same Offer may differ from one day to the next. A Guest's card issuer or PayPal may apply its own conversion and charges where the funding source is not held in USD. DayDreamHub accepts no liability for any difference arising from currency conversion by the Guest's payment provider.</p>
+        <p><strong>7.6</strong> The AI Phone Booking Fee of USD $7 per accepted quote is charged separately from any facility usage fees. Any price quoted following a call is the price stated by the facility to DayDreamHub's AI at the time of the call; it is an indication only, is not guaranteed by DayDreamHub, and the facility may charge a different amount on arrival. Facility charges vary by property and are payable directly to the facility at check-in.</p>
       </div>
 
       <div>
         <h2 class="text-xl font-bold text-slate-900 mb-3">Article 8 — Payment</h2>
         <p><strong>8.1</strong> All payments are processed securely through DayDreamHub's designated payment methods (including PayPal). Guests shall pay the Total Amount displayed on the Platform to DayDreamHub in USD. Currency conversion rates applied by the Guest's PayPal account or payment service may apply.</p>
         <p><strong>8.2</strong> Upon successful payment, a payment confirmation email will be sent to the Guest. The reservation request will then be forwarded to the Facility. If the Facility Owner rejects the request and the reservation is not confirmed, the full amount paid will be refunded within no more than five (5) to seven (7) business days.</p>
-        <p><strong>8.3</strong> The AI Phone Booking Fee (USD $7) is charged at the time the request is submitted, after which DayDreamHub's AI will begin placing calls. If all call attempts are unsuccessful — meaning the facility did not answer or was fully booked — the fee will be refunded in full within no more than five (5) to seven (7) business days.</p>
+        <p><strong>8.3</strong> The AI Phone Booking Fee (USD $7) is charged at the moment the Guest accepts a quote, after which DayDreamHub's AI places a confirmation call to the facility. If the facility does not confirm the reservation for any reason attributable to the facility, the fee is refunded in full within no more than five (5) to seven (7) business days. The fee is not refunded once the facility has confirmed the reservation.</p>
         <p><strong>8.4</strong> Payment methods for charges payable directly to the Facility — including Local Taxes and Surcharges, security deposits, and facility usage fees for AI Phone Booking Service reservations — vary by facility.</p>
         <p><strong>8.5</strong> If a payment transaction fails, the reservation request will not be submitted. Guests should verify their payment details and resubmit.</p>
         <p><strong>8.6</strong> The payment confirmation email sent upon successful payment serves as a receipt. Please note that DayDreamHub does not issue separate invoices.</p>
@@ -159,6 +162,9 @@ const lastUpdated = formatDisplayDate('2026-04-17');
         <h3 class="font-semibold text-slate-800 mt-4 mb-2">9.5 Exceptional Circumstances</h3>
         <p>In the event of the exceptional circumstances listed below, Guests may request a free cancellation or modification of their reservation. Such requests do not guarantee that a cancellation or modification will be granted. Requests must be submitted to Customer Service within seven (7) days of the date the circumstances arise or the scheduled check-in date, whichever is earlier. DayDreamHub may require supporting documentation. Any documentation submitted will be shared with the Facility Owner, and the decision on whether to approve the cancellation or modification will be made following consultation between DayDreamHub and the Facility Owner.</p>
         <p>Qualifying exceptional circumstances include: the death of the Guest or an immediate family member; hospitalization of the Guest or an immediate family member; and compelling professional, legal, or judicial obligations beyond the Guest's control.</p>
+
+        <h3 class="font-semibold text-slate-800 mt-4 mb-2">9.7 Scope of Cancellation Fees and Refunds</h3>
+        <p>Unless the applicable cancellation policy states otherwise, any cancellation fee or refund percentage is applied to the Total Amount, including Add-ons, the Processing Fee and the Service Fee. Where DayDreamHub cancels a Reservation, or a Facility rejects or cancels it, the full Total Amount including Add-ons and all fees is refunded.</p>
 
         <h3 class="font-semibold text-slate-800 mt-4 mb-2">9.6 Cancellations via AI Phone Booking Service</h3>
         <p>Reservations made through the AI Phone Booking Service must be cancelled directly with the facility in accordance with that facility's cancellation policy. As such reservations constitute a direct agreement between the Guest and a non-partner facility, DayDreamHub bears no responsibility for handling cancellations or any related matters.</p>
@@ -236,7 +242,7 @@ const lastUpdated = formatDisplayDate('2026-04-17');
           <li>Content unrelated to a reservation;</li>
           <li>Harassment, threats, or offensive messages directed at Facility staff;</li>
           <li>Content related to unlawful activities; or</li>
-          <li>Attempts to solicit off-platform transactions or payments.</li>
+          <li>Attempts to solicit off-platform transactions or payments (this does not apply to enquiries about Add-ons or other extras to be arranged with, and paid to, the Facility on arrival).</li>
         </ul>
       </div>
 
