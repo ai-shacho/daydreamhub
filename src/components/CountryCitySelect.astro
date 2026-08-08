@@ -1,0 +1,176 @@
+---
+import { COUNTRIES } from '../lib/data/countries';
+
+// Country and city as linked dropdowns: picking a country loads that country's
+// cities from /geo/cities/<CC>.json. Free text was producing the same place
+// under several spellings ("Thailand" / "thailand", "USA" / "United States"),
+// which breaks grouping, filtering and city pages.
+//
+// The submitted values live in hidden inputs that start out holding whatever is
+// already saved. The selects only ever write into them, so a record can never
+// be blanked by saving before the city list loads, by a country the list does
+// not recognise, or with JavaScript unavailable.
+//
+// A dropdown also can't cover every location a day-use hotel sits in — islands
+// and districts (Bali, Sukhumvit, Shibuya-ku) are not cities — so "Other" stays
+// available and reveals a text field.
+interface Props {
+  country?: string;
+  city?: string;
+  required?: boolean;
+  labelClass?: string;
+  inputClass?: string;
+  wrapperClass?: string;
+}
+const {
+  country = '',
+  city = '',
+  required = false,
+  labelClass = 'block text-sm font-medium text-gray-700 mb-1',
+  inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500',
+  wrapperClass = '',
+} = Astro.props;
+
+// Match the saved country against the canonical list here, on the server, so the
+// right option is already selected in the delivered HTML.
+const ALIASES: Record<string, string> = {
+  usa: 'United States', us: 'United States', 'u.s.a.': 'United States',
+  uk: 'United Kingdom', 'u.k.': 'United Kingdom', england: 'United Kingdom',
+  uae: 'United Arab Emirates', 'kingdom of bahrain': 'Bahrain',
+  'magyarország': 'Hungary', deutschland: 'Germany',
+  'türkiye': 'Turkey', 'czech republic': 'Czechia',
+  // The canonical list spells these differently from everyday usage.
+  netherlands: 'The Netherlands', nederland: 'The Netherlands',
+  holland: 'The Netherlands',
+};
+// Accents differ between what was typed and the canonical spelling
+// ("São Tomé and Príncipe" vs "Sao Tome and Principe"), so compare without them.
+const norm = (s: string) =>
+  String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const savedCountry = String(country || '').trim();
+const target = ALIASES[norm(savedCountry)] ?? savedCountry;
+const matched = COUNTRIES.find(([, name]) => norm(name) === norm(target)) || null;
+// A saved value we can't match — a mis-entered country, or a whole address
+// pasted into the field. Keep it visible and keep it saved.
+const unmatchedCountry = savedCountry && !matched ? savedCountry : '';
+const savedCity = String(city || '').trim();
+---
+
+<div class={wrapperClass} data-country-city data-required={required ? "1" : ""}>
+  <!-- What actually gets submitted. Pre-filled with the stored values. -->
+  <input type="hidden" name="country" value={matched ? matched[1] : savedCountry} data-cc-country-value />
+  <input type="hidden" name="city" value={savedCity} data-cc-city-value />
+
+  <div>
+    <label class={labelClass}>Country {required && <span class="text-red-500">*</span>}</label>
+    <select class={`${inputClass} bg-white`} data-cc-country required={required} data-code={matched ? matched[0] : ''}>
+      <option value="">— Select a country —</option>
+      {unmatchedCountry && (
+        <option value={unmatchedCountry} selected data-code="">{unmatchedCountry} (current — not recognised)</option>
+      )}
+      {COUNTRIES.map(([code, name]) => (
+        <option value={name} data-code={code} selected={matched ? matched[1] === name : false}>{name}</option>
+      ))}
+    </select>
+    {unmatchedCountry && (
+      <p class="mt-1 text-xs text-amber-700">
+        “{unmatchedCountry}” isn’t a recognised country. It stays saved until you pick the correct one.
+      </p>
+    )}
+  </div>
+
+  <div class="mt-4">
+    <label class={labelClass}>City {required && <span class="text-red-500">*</span>}</label>
+    <select class={`${inputClass} bg-white`} data-cc-city required={required}>
+      {savedCity
+        ? <option value={savedCity} selected>{savedCity}</option>
+        : <option value="">— Select a country first —</option>}
+    </select>
+    <input
+      type="text"
+      class={`${inputClass} mt-2 hidden`}
+      placeholder="Type the city, district or area name"
+      data-cc-city-other
+    />
+    <p class="mt-1 text-xs text-slate-400" data-cc-city-hint></p>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var root = document.currentScript.closest('[data-country-city]');
+      if (!root) return;
+      var countrySel = root.querySelector('[data-cc-country]');
+      var citySel = root.querySelector('[data-cc-city]');
+      var otherInput = root.querySelector('[data-cc-city-other]');
+      var hint = root.querySelector('[data-cc-city-hint]');
+      var countryValue = root.querySelector('[data-cc-country-value]');
+      var cityValue = root.querySelector('[data-cc-city-value]');
+      var OTHER = '__other__';
+      var isRequired = root.dataset.required === '1';
+      var savedCity = cityValue.value;
+
+      function setCityOptions(names, selected) {
+        citySel.innerHTML = '';
+        citySel.appendChild(new Option('— Select a city —', ''));
+        // A stored value that isn't in the list (island, district, small resort
+        // area) stays selectable rather than being dropped.
+        if (selected && names.indexOf(selected) === -1) {
+          citySel.appendChild(new Option(selected + ' (current)', selected));
+        }
+        names.forEach(function (n) { citySel.appendChild(new Option(n, n)); });
+        citySel.appendChild(new Option('Other — not listed…', OTHER));
+        citySel.value = selected || '';
+      }
+
+      function commitCity() {
+        if (citySel.value === OTHER) {
+          otherInput.classList.remove('hidden');
+          otherInput.required = isRequired;
+          // Don't blank the record while the box is still empty.
+          cityValue.value = otherInput.value.trim() || savedCity;
+        } else {
+          otherInput.classList.add('hidden');
+          otherInput.required = false;
+          cityValue.value = citySel.value || savedCity;
+        }
+      }
+
+      async function loadCities(code, selected) {
+        if (!code) { hint.textContent = ''; return; }
+        hint.textContent = 'Loading cities…';
+        try {
+          var res = await fetch('/geo/cities/' + code + '.json');
+          var names = res.ok ? await res.json() : [];
+          setCityOptions(names, selected || '');
+          hint.textContent = names.length
+            ? names.length + ' cities. Not listed? Choose “Other”.'
+            : 'No city list for this country — choose “Other” and type the name.';
+        } catch (e) {
+          setCityOptions([], selected || '');
+          hint.textContent = 'Could not load the city list — choose “Other” and type the name.';
+        }
+        commitCity();
+      }
+
+      countrySel.addEventListener('change', function () {
+        var opt = countrySel.options[countrySel.selectedIndex];
+        var code = opt ? opt.dataset.code : '';
+        // Only overwrite the stored country once a real choice is made.
+        if (countrySel.value) countryValue.value = countrySel.value;
+        savedCity = '';           // a different country invalidates the old city
+        cityValue.value = '';
+        loadCities(code, '');
+      });
+
+      citySel.addEventListener('change', function () {
+        if (citySel.value === OTHER) otherInput.focus();
+        commitCity();
+      });
+      otherInput.addEventListener('input', commitCity);
+
+      // Populate the list for the country already selected, keeping its city.
+      var initialCode = countrySel.dataset.code;
+      if (initialCode) loadCities(initialCode, savedCity);
+    })();
+  </script>
+</div>
