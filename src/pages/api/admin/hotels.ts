@@ -3,6 +3,7 @@ import { sendListingApprovedEmail } from '../../../lib/email';
 import { requireAdmin } from '../../../lib/apiAuth';
 import { isValidPropertyType, normalizePropertyType } from '../../../lib/propertyTypes';
 import { isValidCurrencyCode, repriceHotelPlansForCurrency } from '../../../lib/currency';
+import { ensureHotelCoords } from '../../../lib/geocode';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
@@ -172,6 +173,9 @@ export const PUT: APIRoute = async ({ request, locals }) => {
       }
     }
 
+    // Backfill coordinates for hotels saved without them (never overwrites).
+    await ensureHotelCoords(env, db, id);
+
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -236,7 +240,8 @@ export const DELETE: APIRoute = async ({ request, locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const db = (locals as any).runtime?.env?.DB;
+  const env = (locals as any).runtime?.env;
+  const db = env?.DB;
   if (!db) {
     return new Response(JSON.stringify({ error: 'Database not available' }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
@@ -260,9 +265,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const isActive = status === 'active' ? 1 : 0;
     const rawPt = data.property_type || 'hotel';
     const propertyType = isValidPropertyType(rawPt) ? normalizePropertyType(rawPt) : 'hotel';
+    const lat = Number(data.latitude);
+    const lng = Number(data.longitude);
     const result = await db.prepare(
-      `INSERT INTO hotels (name, name_ja, slug, description, description_ja, city, country, address, thumbnail_url, property_type, email, phone, amenities, is_active, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, datetime('now'))`
+      `INSERT INTO hotels (name, name_ja, slug, description, description_ja, city, country, address, thumbnail_url, property_type, email, phone, latitude, longitude, amenities, is_active, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, datetime('now'))`
     ).bind(
       name, data.name_ja || null, slug,
       data.description || null, data.description_ja || null,
@@ -270,9 +277,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
       data.address || null, data.thumbnail_url || null,
       propertyType,
       data.email || null, data.phone || null,
+      Number.isFinite(lat) ? lat : null, Number.isFinite(lng) ? lng : null,
       isActive, status
     ).run();
-    return new Response(JSON.stringify({ success: true, id: (result as any).meta?.last_row_id }), {
+    // Position the hotel automatically when no coordinates were supplied, so the
+    // nearest-airport distance shows up without a manual geocode step.
+    const newId = (result as any).meta?.last_row_id;
+    const coords = await ensureHotelCoords(env, db, newId);
+    return new Response(JSON.stringify({ success: true, id: newId, geocoded: coords || undefined }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {

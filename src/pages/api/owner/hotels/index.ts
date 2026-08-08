@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireOwner } from '../../../../lib/apiAuth';
 import { isValidPropertyType, normalizePropertyType } from '../../../../lib/propertyTypes';
+import { ensureHotelCoords } from '../../../../lib/geocode';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const json = { 'Content-Type': 'application/json' };
@@ -58,6 +59,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
     const newId = result.meta?.last_row_id;
     const newHotel = await db.prepare('SELECT id FROM hotels WHERE slug = ? LIMIT 1').bind(slug).first();
+    // Position the hotel automatically when the owner didn't use the geocode
+    // button, so the nearest-airport distance shows on the listing.
+    await ensureHotelCoords(env, db, newHotel?.id || newId);
 
     return new Response(JSON.stringify({
       success: true,
