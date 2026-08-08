@@ -84,6 +84,35 @@ const paymentStatus = Astro.url.searchParams.get('payment_status') || '';
           </div>
         </dl>
       </div>
+
+      <!-- Changing a booking: what the guest has to do -->
+      <div class="mt-4 bg-amber-50 border border-amber-200 rounded-2xl p-5 text-left max-w-md mx-auto text-sm text-amber-900">
+        <p class="font-semibold mb-2">
+          {locale === 'ja' ? '予約内容の変更について' : 'Need to change your booking?'}
+        </p>
+        <ul class="space-y-1.5 list-disc pl-4">
+          <li>
+            {locale === 'ja'
+              ? 'オプションを外す、人数を減らすといった変更はできません。キャンセルして予約し直してください（差額の返金はできません）。'
+              : 'Removing an add-on or reducing the number of guests isn’t possible — please cancel and book again. We can’t refund the difference on an existing booking.'}
+          </li>
+          <li>
+            {locale === 'ja'
+              ? 'オプションを追加したい場合は、キャンセルして予約し直すか、現地でホテルに直接依頼して追加料金をお支払いください。'
+              : 'To add an add-on, either cancel and book again, or ask the hotel directly on arrival and pay them for it there.'}
+          </li>
+          <li>
+            {locale === 'ja'
+              ? '現地で追加・変更できるかはホテル次第です。まずはメッセージ（受信箱）からホテルにご確認ください。'
+              : 'Whether it can be arranged on arrival is up to the hotel — check with them first via Messages (your inbox).'}
+          </li>
+          <li>
+            {locale === 'ja'
+              ? 'キャンセル時の返金は、プランのキャンセルポリシーに従います。'
+              : 'Any refund when you cancel follows the plan’s cancellation policy.'}
+          </li>
+        </ul>
+      </div>
     </div>
 
     <!-- State: Alt Choice -->

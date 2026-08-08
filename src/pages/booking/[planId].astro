@@ -455,9 +455,47 @@ try {
                       );
                     })}
                   </div>
+
                 </div>
               </>
             )}
+
+            <div class="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+              <p class="font-semibold mb-1.5">
+                {planOptions.length > 0
+                  ? (locale === 'ja' ? '⚠️ オプション・人数は予約後に変更できません' : '⚠️ Add-ons and guest numbers cannot be changed after booking')
+                  : (locale === 'ja' ? '⚠️ 人数は予約後に変更できません' : '⚠️ Guest numbers cannot be changed after booking')}
+              </p>
+              <ul class="space-y-1 list-disc pl-4">
+                <li>
+                  {planOptions.length > 0
+                    ? (locale === 'ja'
+                        ? 'オプションを外す・人数を減らす場合は、いったんキャンセルして予約し直してください（差額の返金はできません）。'
+                        : 'To remove an add-on or reduce the number of guests, please cancel and book again — we cannot refund the difference on an existing booking.')
+                    : (locale === 'ja'
+                        ? '人数を減らす場合は、いったんキャンセルして予約し直してください（差額の返金はできません）。'
+                        : 'To reduce the number of guests, please cancel and book again — we cannot refund the difference on an existing booking.')}
+                </li>
+                {planOptions.length > 0 && (
+                  <li>
+                    {locale === 'ja'
+                      ? 'オプションを追加する場合も、キャンセルして予約し直すか、現地でホテルに直接依頼して追加料金をお支払いください。'
+                      : 'To add an add-on, either cancel and book again, or ask the hotel directly on arrival and pay them for it there.'}
+                  </li>
+                )}
+                <li>
+                  {locale === 'ja'
+                    ? '現地での追加・変更が可能かどうかはホテル次第です。予約後のメッセージ（受信箱）からホテルにご確認ください。'
+                    : 'Whether anything can still be arranged on arrival is up to the hotel — please check with them via Messages (your inbox) after booking.'}
+                </li>
+                <li>
+                  {locale === 'ja'
+                    ? 'キャンセル時の返金は、プランのキャンセルポリシーに従います。'
+                    : 'Any refund when you cancel follows the plan’s cancellation policy.'}
+                </li>
+              </ul>
+            </div>
+
             <div class="border-t border-gray-200 my-4"></div>
             {(() => {
               const hotelCurrency = String((plan as any).hotel_currency || 'USD').toUpperCase();

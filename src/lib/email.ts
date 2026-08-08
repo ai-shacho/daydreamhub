@@ -588,6 +588,16 @@ export async function sendGuestBookingConfirmation(
       ⏳ <strong>Awaiting hotel confirmation.</strong> You'll receive a confirmation email once the hotel accepts your booking. This usually takes less than 24 hours.
     </div>
 
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#7c2d12">
+      <strong>Need to change your booking?</strong>
+      <ul style="margin:8px 0 0;padding-left:18px">
+        <li style="margin-bottom:4px">Removing an add-on or reducing the number of guests isn't possible &mdash; please cancel and book again. We can't refund the difference on an existing booking.</li>
+        <li style="margin-bottom:4px">To add an add-on, either cancel and book again, or ask the hotel directly on arrival and pay them for it there.</li>
+        <li style="margin-bottom:4px">Whether it can be arranged on arrival is up to the hotel &mdash; check with them first via Messages in your DayDreamHub inbox.</li>
+        <li>Any refund when you cancel follows the cancellation policy above.</li>
+      </ul>
+    </div>
+
     <div style="text-align:center;margin:24px 0">
       <a href="${SITE_URL}/mypage" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Check Booking Status</a>
     </div>
