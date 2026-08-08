@@ -23,6 +23,7 @@ const USER_CSV_COLUMNS: { header: string; key: string }[] = [
   { header: 'name', key: 'name' },
   { header: 'email', key: 'email' },
   { header: 'role', key: 'role' },
+  { header: 'hotels', key: 'hotel_names' },
   { header: 'created_at', key: 'created_at' },
 ];
 
@@ -44,7 +45,13 @@ export const GET: APIRoute = async ({ request, locals }) => {
   let users: any[] = [];
 
   try {
-    let query = `SELECT id, name, email, role, created_at FROM users WHERE 1=1`;
+    // Mirrors /admin/users: include the hotels an owner is matched to, and let
+    // the same search term hit a hotel name, so the CSV matches the screen.
+    let query = `SELECT id, name, email, role, created_at,
+      (SELECT GROUP_CONCAT(h.name, ', ') FROM hotels h
+        WHERE LOWER(TRIM(h.email)) = LOWER(TRIM(users.email)) AND h.email IS NOT NULL AND h.email != ''
+      ) AS hotel_names
+      FROM users WHERE 1=1`;
     const binds: any[] = [];
 
     if (roleFilter) {
@@ -52,8 +59,11 @@ export const GET: APIRoute = async ({ request, locals }) => {
       binds.push(roleFilter);
     }
     if (search) {
-      query += ' AND (name LIKE ? OR email LIKE ?)';
-      binds.push(`%${search}%`, `%${search}%`);
+      query += ` AND (name LIKE ? OR email LIKE ? OR EXISTS (
+        SELECT 1 FROM hotels h2
+         WHERE LOWER(TRIM(h2.email)) = LOWER(TRIM(users.email)) AND h2.email IS NOT NULL AND h2.email != ''
+           AND h2.name LIKE ?))`;
+      binds.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     query += ' ORDER BY created_at DESC LIMIT 200';
