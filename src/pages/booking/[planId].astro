@@ -56,6 +56,7 @@ let currentUser: { name?: string; email?: string; phone?: string } = {};
 let plan: any = null;
 let dbAvailable = false;
 let paypalClientId = '';
+let planOptions: any[] = [];
 
 try {
   const runtime = (Astro.locals as any).runtime;
@@ -66,6 +67,13 @@ try {
     plan = await db.prepare(
       "SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country, h.cancellation_policy as hotel_cancellation_policy, h.currency as hotel_currency FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?"
     ).bind(planIdNum).first();
+    // Paid add-ons the hotel offers with this plan.
+    try {
+      const optRes = await db.prepare(
+        'SELECT * FROM plan_options WHERE plan_id = ? AND is_active = 1 ORDER BY sort_order ASC, id ASC'
+      ).bind(planIdNum).all();
+      planOptions = (optRes?.results || []) as any[];
+    } catch { planOptions = []; }
   }
 } catch (e) {
   dbAvailable = false;
@@ -402,6 +410,54 @@ try {
                 }
               })()}
             </div>
+            {planOptions.length > 0 && (
+              <>
+                <div class="border-t border-gray-200 my-4"></div>
+                <div class="mb-3">
+                  <p class="text-sm font-semibold text-gray-800 mb-2">
+                    {locale === 'ja' ? 'オプション（任意）' : 'Add-ons (optional)'}
+                  </p>
+                  <div class="space-y-2">
+                    {planOptions.map((o: any) => {
+                      const cur = String((plan as any).hotel_currency || 'USD').toUpperCase();
+                      const unitLocal = Number(o.price_local ?? o.price_usd);
+                      const childLocal = o.child_price_local == null ? null : Number(o.child_price_local);
+                      const per = o.pricing_type === 'per_person'
+                        ? (locale === 'ja' ? '／人' : ' per guest')
+                        : o.pricing_type === 'per_adult_child'
+                          ? (locale === 'ja' ? '／大人' : ' per adult')
+                          : (locale === 'ja' ? '／1予約' : ' per booking');
+                      return (
+                        <label class="flex items-start gap-2.5 border border-gray-200 rounded-lg px-3 py-2.5 cursor-pointer hover:border-[#45A2C1] transition-colors">
+                          <input
+                            type="checkbox"
+                            class="booking-option mt-0.5 w-4 h-4 accent-[#45A2C1]"
+                            value={o.id}
+                            data-price-usd={Number(o.price_usd || 0)}
+                            data-child-price-usd={o.child_price_usd == null ? '' : Number(o.child_price_usd)}
+                            data-pricing-type={o.pricing_type}
+                          />
+                          <span class="flex-1 min-w-0">
+                            <span class="flex items-center justify-between gap-2 flex-wrap">
+                              <span class="text-sm text-gray-800">{locale === 'ja' && o.name_ja ? o.name_ja : o.name}</span>
+                              <span class="text-sm text-gray-600 whitespace-nowrap">
+                                {formatLocalWithUsd(unitLocal, cur, Number(o.price_usd || 0))}{per}
+                              </span>
+                            </span>
+                            {childLocal != null && (
+                              <span class="block text-xs text-gray-500 mt-0.5">
+                                {locale === 'ja' ? '子供' : 'Child'}: {formatLocalWithUsd(childLocal, cur, Number(o.child_price_usd || 0))}
+                              </span>
+                            )}
+                            {o.description && <span class="block text-xs text-gray-400 mt-0.5">{o.description}</span>}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
             <div class="border-t border-gray-200 my-4"></div>
             {(() => {
               const hotelCurrency = String((plan as any).hotel_currency || 'USD').toUpperCase();
@@ -421,18 +477,20 @@ try {
                       {locale === 'ja' ? '決済手数料' : 'Processing fee'}
                       <span class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-300 text-[10px] text-gray-500 cursor-help" title={locale === 'ja' ? 'カード決済・不正防止などのシステム処理に必要な費用です。' : 'This covers payment processing and fraud protection costs.'}>i</span>
                     </span>
-                    <span>${processingFee.toFixed(2)}</span>
+                    <span id="sum-processing">${processingFee.toFixed(2)}</span>
                   </div>
-                  {serviceFee > 0 && (
-                    <div class="flex justify-between text-gray-600">
-                      <span>{locale === 'ja' ? 'サービス料' : 'Service Fee'}</span>
-                      <span>${serviceFee.toFixed(2)}</span>
-                    </div>
-                  )}
+                  <div id="sum-options-row" class="hidden flex justify-between text-gray-600">
+                    <span>{locale === 'ja' ? 'オプション' : 'Add-ons'}</span>
+                    <span id="sum-options">$0.00</span>
+                  </div>
+                  <div id="sum-service-row" class:list={['flex justify-between text-gray-600', serviceFee > 0 ? '' : 'hidden']}>
+                    <span>{locale === 'ja' ? 'サービス料' : 'Service Fee'}</span>
+                    <span id="sum-service">${serviceFee.toFixed(2)}</span>
+                  </div>
                   <div class="flex items-center justify-between pt-2 border-t border-gray-100">
                     <p class="text-base font-semibold text-gray-800">{t('booking.total', locale)}</p>
                     <p class="text-2xl font-bold text-[#45A2C1]">
-                      ${total.toFixed(2)} <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
+                      <span id="sum-total" data-base-usd={effectivePriceUsd}>${total.toFixed(2)}</span> <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
                     </p>
                   </div>
                   {!isUsdHotel && (
@@ -703,5 +761,57 @@ try {
         if (this.value) clearFieldError('check_in_date');
       });
     }
+  })();
+
+  // ── Add-ons: keep the displayed total in step with what the server will
+  // charge. The server re-prices everything on create/capture; this is display
+  // only, using the same formula.
+  (function () {
+    var boxes = document.querySelectorAll('.booking-option');
+    if (!boxes.length) return;
+    var basePriceUsd = Number(document.getElementById('sum-total')?.dataset.baseUsd || 0);
+
+    function num(id) { return parseInt(document.getElementById(id)?.value || '0') || 0; }
+
+    function recalc() {
+      var adults = Math.max(1, num('adults'));
+      var children = num('children');
+      var optionsUsd = 0;
+      Array.prototype.forEach.call(boxes, function (b) {
+        if (!b.checked) return;
+        var unit = Number(b.dataset.priceUsd || 0);
+        var child = b.dataset.childPriceUsd === '' ? 0 : Number(b.dataset.childPriceUsd || 0);
+        var type = b.dataset.pricingType;
+        if (type === 'per_person') optionsUsd += unit * (adults + children);
+        else if (type === 'per_adult_child') optionsUsd += unit * adults + child * children;
+        else optionsUsd += unit;
+      });
+      optionsUsd = Math.round(optionsUsd * 100) / 100;
+
+      var chargeable = Math.round((basePriceUsd + optionsUsd) * 100) / 100;
+      var processing = Math.round(chargeable * 0.06 * 100) / 100;
+      var serviceBase = Math.round(chargeable * 0.10 * 100) / 100;
+      var service = serviceBase < 10 ? Math.round((10 - serviceBase) * 100) / 100 : 0;
+      var total = Math.round((chargeable + processing + service) * 100) / 100;
+
+      var optRow = document.getElementById('sum-options-row');
+      if (optRow) optRow.classList.toggle('hidden', optionsUsd <= 0);
+      var optEl = document.getElementById('sum-options');
+      if (optEl) optEl.textContent = '$' + optionsUsd.toFixed(2);
+      var procEl = document.getElementById('sum-processing');
+      if (procEl) procEl.textContent = '$' + processing.toFixed(2);
+      var svcRow = document.getElementById('sum-service-row');
+      if (svcRow) svcRow.classList.toggle('hidden', service <= 0);
+      var svcEl = document.getElementById('sum-service');
+      if (svcEl) svcEl.textContent = '$' + service.toFixed(2);
+      var totEl = document.getElementById('sum-total');
+      if (totEl) totEl.textContent = '$' + total.toFixed(2);
+    }
+
+    Array.prototype.forEach.call(boxes, function (b) { b.addEventListener('change', recalc); });
+    ['adults', 'children'].forEach(function (id) {
+      document.getElementById(id)?.addEventListener('change', recalc);
+    });
+    recalc();
   })();
 </script>

@@ -468,6 +468,64 @@ const chapters = [
             </table>
           </div>
 
+          <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Paid Options (New)</h3>
+          <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-slate-700 mb-5 space-y-2">
+            <p>💰 <strong>Sell extras alongside each plan — and raise your average booking value.</strong> Breakfast, airport transfer, a day pass, an optional tour: guests tick what they want while booking, and the amount is added to the same payment. You receive it together with the room revenue, without any extra invoicing or cash handling at the front desk.</p>
+            <ul class="list-disc pl-5 space-y-1">
+              <li>Add <strong>as many options as you like</strong> to any plan.</li>
+              <li>Prices are entered in <strong>your own currency</strong>, just like plan prices — the USD amount guests pay is converted automatically at the daily rate.</li>
+              <li>Options are <strong>optional for the guest</strong>: your plan price stays as advertised, so it never hurts your search ranking or conversion.</li>
+            </ul>
+          </div>
+
+          <p class="text-sm text-slate-600 mb-3">Choose how each option is charged, so the amount matches how you actually price it:</p>
+          <div class="overflow-hidden rounded-xl border border-slate-200 mb-5">
+            <table class="w-full text-sm">
+              <thead><tr class="bg-indigo-600 text-white text-left"><th class="px-4 py-3 font-semibold">Charge type</th><th class="px-4 py-3 font-semibold">How it adds up</th><th class="px-4 py-3 font-semibold">Good for</th></tr></thead>
+              <tbody>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Per booking</td><td class="px-4 py-3 text-slate-600">One flat charge, however many guests</td><td class="px-4 py-3 text-slate-600">Airport transfer, late check-out, parking</td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Per guest</td><td class="px-4 py-3 text-slate-600">Price × everyone in the party</td><td class="px-4 py-3 text-slate-600">Optional tours, day pass, spa entry</td></tr>
+                <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Per adult / child</td><td class="px-4 py-3 text-slate-600">Adults and children priced separately</td><td class="px-4 py-3 text-slate-600">Breakfast and other meals</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4 class="text-sm font-semibold text-slate-800 mb-3">Adding an option</h4>
+          <ol class="space-y-3 mb-5">
+            {['Open your property and scroll to the Plans section.','Click ＋Options on the plan you want to sell extras with.','Enter the option name (e.g. Breakfast), choose how it is charged, and set the price in your currency.','For Per adult / child, also set the child price.','Click Add option — it appears on the booking page straight away.'].map((step, i) => (
+              <li class="flex items-start gap-3 text-sm text-slate-700">
+                <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
+                <span class="mt-1">{step}</span>
+              </li>
+            ))}
+          </ol>
+
+          <p class="text-sm font-semibold text-slate-800 mb-3">📸 What the guest sees</p>
+          <div class="rounded-xl border border-slate-200 shadow-sm overflow-hidden max-w-md mb-4">
+            <div class="bg-slate-100 border-b border-slate-200 px-3 py-1.5 text-[11px] text-slate-500 font-medium">Guest booking screen</div>
+            <div class="p-4 bg-white space-y-2">
+              <p class="text-xs font-semibold text-slate-700">Add-ons (optional)</p>
+              <div class="border border-slate-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                <div class="w-4 h-4 rounded border-2 border-teal-500 bg-teal-500 flex items-center justify-center text-white text-[10px] flex-shrink-0 mt-0.5">✓</div>
+                <div class="flex-1 flex items-center justify-between gap-2"><span class="text-xs text-slate-700">Breakfast</span><span class="text-xs text-slate-500">¥2,000 (≈ $12.21) per adult</span></div>
+              </div>
+              <div class="border border-slate-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                <div class="w-4 h-4 rounded border-2 border-slate-300 flex-shrink-0 mt-0.5"></div>
+                <div class="flex-1 flex items-center justify-between gap-2"><span class="text-xs text-slate-700">Airport transfer</span><span class="text-xs text-slate-500">¥5,000 (≈ $30.52) per booking</span></div>
+              </div>
+              <div class="pt-2 mt-1 border-t border-slate-100 space-y-1">
+                <div class="flex justify-between text-xs text-slate-500"><span>Plan Price</span><span>¥10,000</span></div>
+                <div class="flex justify-between text-xs text-emerald-700 font-medium"><span>Add-ons</span><span>+ $24.42</span></div>
+                <div class="flex justify-between text-sm font-bold text-slate-900 pt-1"><span>Total</span><span>$97.90 USD</span></div>
+              </div>
+            </div>
+            <div class="bg-slate-50 border-t border-slate-200 px-4 py-2 text-[11px] text-slate-400 text-center">Illustration — add-ons are paid together with the room</div>
+          </div>
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3 mb-6 text-sm">
+            <span class="text-xl">💡</span>
+            <div>Hiding an option (or deleting it) only affects <strong>future</strong> bookings. Guests who already booked keep the price they were charged.</div>
+          </div>
+
           <h3 class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">Pausing a Plan</h3>
           <p class="text-sm text-slate-600 mb-3">Temporarily stop accepting bookings for a plan without deleting it.</p>
           <ol class="space-y-3 mb-4">

@@ -24,6 +24,7 @@ if (!ownerHotelIds.includes(hotelId)) return Astro.redirect("/owner/hotels");
 let hotel: any = null;
 let plans: any[] = [];
 let editRequests: any[] = [];
+const planOptions: Record<number, any[]> = {};
 
 if (db) {
   hotel = await db.prepare("SELECT * FROM hotels WHERE id = ?").bind(hotelId).first();
@@ -31,6 +32,16 @@ if (db) {
 
   const planRes = await db.prepare("SELECT * FROM plans WHERE hotel_id = ? ORDER BY sort_order ASC, id ASC").bind(hotelId).all();
   plans = planRes?.results || [];
+
+  // Paid add-ons attached to each plan, so the list can show how many are set up.
+  try {
+    const optRes = await db.prepare(
+      "SELECT * FROM plan_options WHERE hotel_id = ? ORDER BY sort_order ASC, id ASC"
+    ).bind(hotelId).all();
+    for (const o of (optRes?.results || []) as any[]) {
+      (planOptions[o.plan_id] ||= []).push(o);
+    }
+  } catch { /* table added in migration 048 */ }
 
   try {
     const erRes = await db.prepare(
@@ -503,6 +514,14 @@ for (let h = 0; h < 24; h++) {
                     >{plan.is_active ? '⏸' : '▶'}</button>
                     <button
                       type="button"
+                      class="btn-plan-options text-xs font-medium transition-colors"
+                      class:list={[(planOptions[plan.id]?.length ? 'text-teal-700 hover:text-teal-900' : 'text-slate-500 hover:text-teal-700')]}
+                      data-plan-id={plan.id}
+                      data-plan-name={plan.name}
+                      title="Paid add-ons for this plan (breakfast, airport transfer…)"
+                    >＋Options{planOptions[plan.id]?.length ? ` (${planOptions[plan.id].length})` : ''}</button>
+                    <button
+                      type="button"
                       class="btn-edit-plan text-xs text-indigo-600 hover:text-indigo-800 font-medium"
                       data-plan={JSON.stringify(plan)}
                     >Edit</button>
@@ -675,6 +694,82 @@ for (let h = 0; h < 24; h++) {
           <button type="submit" id="submit-plan-btn" class="flex-1 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700">Save Plan</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Paid add-ons for a plan -->
+  <div id="options-modal" class="fixed inset-0 z-50 hidden">
+    <div id="options-modal-backdrop" class="absolute inset-0 bg-black/50"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
+          <div>
+            <h3 class="font-semibold text-slate-900">Paid options</h3>
+            <p id="options-plan-name" class="text-xs text-slate-500 mt-0.5"></p>
+          </div>
+          <button id="close-options-modal" type="button" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+        </div>
+
+        <div class="p-6 space-y-5">
+          <div class="bg-teal-50 border border-teal-200 rounded-lg p-3 text-xs text-slate-700">
+            💡 Add extras guests can buy with this plan — breakfast, airport transfer, a day pass, an optional tour.
+            Prices are in <strong id="options-currency">USD</strong>; guests pay the USD equivalent and the amount is
+            added to the same PayPal payment.
+          </div>
+
+          <div id="options-list" class="space-y-2"></div>
+
+          <form id="option-form" class="border border-slate-200 rounded-lg p-4 space-y-3">
+            <input type="hidden" id="option-id" value="" />
+            <input type="hidden" id="option-plan-id" value="" />
+            <p id="option-form-title" class="text-sm font-semibold text-slate-800">Add an option</p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Option name <span class="text-red-500">*</span></label>
+                <input id="option-name" type="text" placeholder="Breakfast" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">Japanese name</label>
+                <input id="option-name-ja" type="text" placeholder="朝食" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">How is it charged? <span class="text-red-500">*</span></label>
+              <select id="option-pricing-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                <option value="per_room">Per booking — one flat charge (airport transfer, late check-out)</option>
+                <option value="per_person">Per guest — × everyone in the party (optional tour, day pass)</option>
+                <option value="per_adult_child">Per adult / child — priced separately (meals)</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-medium text-slate-700 mb-1">
+                  <span id="option-price-label">Price</span> (<span class="option-currency-label">USD</span>) <span class="text-red-500">*</span>
+                </label>
+                <input id="option-price" type="number" min="0" step={priceStep} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+              </div>
+              <div id="option-child-price-wrap" class="hidden">
+                <label class="block text-xs font-medium text-slate-700 mb-1">Child price (<span class="option-currency-label">USD</span>)</label>
+                <input id="option-child-price" type="number" min="0" step={priceStep} class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Description</label>
+              <input id="option-description" type="text" placeholder="Served 7:00–10:00 at the hotel restaurant" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" />
+            </div>
+
+            <div id="option-form-error" class="hidden p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700"></div>
+            <div class="flex gap-2">
+              <button type="button" id="option-cancel-edit" class="hidden flex-1 px-4 py-2 border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50">Cancel</button>
+              <button type="submit" id="option-submit" class="flex-1 px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">Add option</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1264,6 +1359,167 @@ for (let h = 0; h < 24; h++) {
         btn.textContent = '❌ Error — please try again';
       } finally {
         setTimeout(function() { btn.textContent = '📍 Auto-fill coordinates from address'; btn.disabled = false; }, 3000);
+      }
+    });
+
+    // ---- Paid options per plan ----------------------------------------
+    var optCurrency = originalCurrency || 'USD';
+    Array.prototype.forEach.call(document.querySelectorAll('.option-currency-label'), function (el) { el.textContent = optCurrency; });
+    var optCurEl = document.getElementById('options-currency');
+    if (optCurEl) optCurEl.textContent = optCurrency;
+
+    function optMoney(v) {
+      var n = Number(v || 0);
+      return optCurrency + ' ' + (Math.round(n * 100) / 100).toLocaleString();
+    }
+    function optTypeLabel(t) {
+      if (t === 'per_person') return 'per guest';
+      if (t === 'per_adult_child') return 'per adult / child';
+      return 'per booking';
+    }
+    function optResetForm() {
+      document.getElementById('option-id').value = '';
+      document.getElementById('option-name').value = '';
+      document.getElementById('option-name-ja').value = '';
+      document.getElementById('option-description').value = '';
+      document.getElementById('option-price').value = '';
+      document.getElementById('option-child-price').value = '';
+      document.getElementById('option-pricing-type').value = 'per_room';
+      document.getElementById('option-form-title').textContent = 'Add an option';
+      document.getElementById('option-submit').textContent = 'Add option';
+      document.getElementById('option-cancel-edit').classList.add('hidden');
+      document.getElementById('option-form-error').classList.add('hidden');
+      optSyncPricingType();
+    }
+    function optSyncPricingType() {
+      var t = document.getElementById('option-pricing-type').value;
+      document.getElementById('option-child-price-wrap').classList.toggle('hidden', t !== 'per_adult_child');
+      document.getElementById('option-price-label').textContent = t === 'per_adult_child' ? 'Adult price' : 'Price';
+    }
+    document.getElementById('option-pricing-type')?.addEventListener('change', optSyncPricingType);
+
+    async function optLoadList(planId) {
+      var list = document.getElementById('options-list');
+      list.innerHTML = '<p class="text-xs text-slate-400">Loading…</p>';
+      try {
+        var res = await fetch('/api/owner/plan-options?plan_id=' + encodeURIComponent(planId));
+        var data = await res.json();
+        var rows = (data && data.options) || [];
+        if (!rows.length) {
+          list.innerHTML = '<p class="text-xs text-slate-400">No options yet. Add one below — guests will see it as an extra when booking.</p>';
+          return;
+        }
+        list.innerHTML = rows.map(function (o) {
+          var price = optMoney(o.price_local != null ? o.price_local : o.price_usd);
+          if (o.pricing_type === 'per_adult_child' && o.child_price_local != null) {
+            price += ' / child ' + optMoney(o.child_price_local);
+          }
+          return '<div class="flex items-center gap-3 border border-slate-200 rounded-lg px-3 py-2">' +
+            '<div class="flex-1 min-w-0">' +
+              '<div class="flex items-center gap-2 flex-wrap">' +
+                '<span class="text-sm font-medium text-slate-800">' + (o.name || '') + '</span>' +
+                '<span class="text-xs text-slate-500">' + price + '</span>' +
+                '<span class="text-[11px] bg-slate-100 text-slate-600 rounded-full px-2 py-0.5">' + optTypeLabel(o.pricing_type) + '</span>' +
+                (o.is_active ? '' : '<span class="text-[11px] bg-red-50 text-red-600 rounded-full px-2 py-0.5">Hidden</span>') +
+              '</div>' +
+              (o.description ? '<p class="text-xs text-slate-400 mt-0.5">' + o.description + '</p>' : '') +
+            '</div>' +
+            '<button type="button" class="opt-edit text-xs text-indigo-600 hover:text-indigo-800 font-medium" data-opt=\'' + JSON.stringify(o).replace(/'/g, '&#39;') + '\'>Edit</button>' +
+            '<button type="button" class="opt-toggle text-xs font-medium ' + (o.is_active ? 'text-amber-600' : 'text-green-600') + '" data-id="' + o.id + '" data-active="' + (o.is_active ? 1 : 0) + '">' + (o.is_active ? 'Hide' : 'Show') + '</button>' +
+            '<button type="button" class="opt-delete text-xs text-red-500 hover:text-red-700 font-medium" data-id="' + o.id + '">Delete</button>' +
+          '</div>';
+        }).join('');
+      } catch (e) {
+        list.innerHTML = '<p class="text-xs text-red-600">Could not load options.</p>';
+      }
+    }
+
+    document.addEventListener('click', function (e) {
+      var openBtn = e.target.closest('.btn-plan-options');
+      if (openBtn) {
+        document.getElementById('option-plan-id').value = openBtn.dataset.planId;
+        document.getElementById('options-plan-name').textContent = openBtn.dataset.planName || '';
+        optResetForm();
+        optLoadList(openBtn.dataset.planId);
+        document.getElementById('options-modal').classList.remove('hidden');
+        return;
+      }
+      var editBtn = e.target.closest('.opt-edit');
+      if (editBtn) {
+        var o = JSON.parse(editBtn.dataset.opt);
+        document.getElementById('option-id').value = o.id;
+        document.getElementById('option-name').value = o.name || '';
+        document.getElementById('option-name-ja').value = o.name_ja || '';
+        document.getElementById('option-description').value = o.description || '';
+        document.getElementById('option-pricing-type').value = o.pricing_type || 'per_room';
+        document.getElementById('option-price').value = (o.price_local != null ? o.price_local : o.price_usd) || '';
+        document.getElementById('option-child-price').value = o.child_price_local != null ? o.child_price_local : '';
+        document.getElementById('option-form-title').textContent = 'Edit option';
+        document.getElementById('option-submit').textContent = 'Save changes';
+        document.getElementById('option-cancel-edit').classList.remove('hidden');
+        optSyncPricingType();
+        return;
+      }
+      var togBtn = e.target.closest('.opt-toggle');
+      if (togBtn) {
+        fetch('/api/owner/plan-options', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: Number(togBtn.dataset.id), is_active: togBtn.dataset.active === '1' ? 0 : 1 })
+        }).then(function () { optLoadList(document.getElementById('option-plan-id').value); });
+        return;
+      }
+      var delBtn = e.target.closest('.opt-delete');
+      if (delBtn) {
+        if (!confirm('Delete this option? Existing bookings keep what they were charged.')) return;
+        fetch('/api/owner/plan-options?id=' + delBtn.dataset.id, { method: 'DELETE' })
+          .then(function () { optLoadList(document.getElementById('option-plan-id').value); });
+      }
+    });
+
+    document.getElementById('close-options-modal')?.addEventListener('click', function () {
+      document.getElementById('options-modal').classList.add('hidden');
+      location.reload(); // refresh the per-plan option counts
+    });
+    document.getElementById('options-modal-backdrop')?.addEventListener('click', function () {
+      document.getElementById('options-modal').classList.add('hidden');
+      location.reload();
+    });
+    document.getElementById('option-cancel-edit')?.addEventListener('click', optResetForm);
+
+    document.getElementById('option-form')?.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var errEl = document.getElementById('option-form-error');
+      errEl.classList.add('hidden');
+      var id = document.getElementById('option-id').value;
+      var payload = {
+        plan_id: Number(document.getElementById('option-plan-id').value),
+        name: document.getElementById('option-name').value.trim(),
+        name_ja: document.getElementById('option-name-ja').value.trim(),
+        description: document.getElementById('option-description').value.trim(),
+        pricing_type: document.getElementById('option-pricing-type').value,
+        price: Number(document.getElementById('option-price').value),
+        child_price: Number(document.getElementById('option-child-price').value || 0)
+      };
+      if (!payload.name) { errEl.textContent = 'Please enter an option name.'; errEl.classList.remove('hidden'); return; }
+      if (!Number.isFinite(payload.price) || payload.price <= 0) { errEl.textContent = 'Please enter a price greater than 0.'; errEl.classList.remove('hidden'); return; }
+      if (id) payload.id = Number(id);
+      var btn = document.getElementById('option-submit');
+      btn.disabled = true;
+      try {
+        var res = await fetch('/api/owner/plan-options', {
+          method: id ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save');
+        optResetForm();
+        optLoadList(payload.plan_id);
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
       }
     });
 

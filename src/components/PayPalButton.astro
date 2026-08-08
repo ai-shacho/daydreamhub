@@ -113,6 +113,12 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 </div>
 
 <script define:vars={{ isDev, isTestHotel, testMode, usePayPal, clientId, planId, hotelName, hotelCity }}>
+  // Selected paid add-ons — ids only; the server re-prices them.
+  function _selectedOptions() {
+    return Array.prototype.slice.call(document.querySelectorAll('.booking-option:checked'))
+      .map(function (b) { return { id: Number(b.value) }; });
+  }
+
   function _ga4Send(eventName, params) {
     if (typeof gtag === 'function') gtag('event', eventName, params);
   }
@@ -305,6 +311,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
             adults: parseInt(fd.get('adults') || '1'),
             children: parseInt(fd.get('children') || '0'),
             infants: parseInt(fd.get('infants') || '0'),
+            options: _selectedOptions(),
             notes: fd.get('notes') || '',
           }),
         });
@@ -457,12 +464,20 @@ const isTestHotel = hotelSlug.includes('test-hotel');
             adults: parseInt(fd.get('adults') || '1'),
             children: parseInt(fd.get('children') || '0'),
             infants: parseInt(fd.get('infants') || '0'),
+            options: _selectedOptions(),
             notes: fd.get('notes') || '',
           };
           const res = await fetch('/api/payments/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ plan_id: planId }),
+            // Add-ons and party size must go with the order, or the amount
+            // PayPal authorises won't match what capture charges.
+            body: JSON.stringify({
+              plan_id: planId,
+              options: _pendingBookingData.options,
+              adults: _pendingBookingData.adults,
+              children: _pendingBookingData.children,
+            }),
           });
           if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'Failed to create order');
           return (await res.json()).order_id;
