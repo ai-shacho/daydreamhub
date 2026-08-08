@@ -63,8 +63,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const orderId = await createOrder(accessToken, totalAmount, PAYPAL_MODE, planName, idempotencyKey);
 
     // NOTE: No DB write here. Booking is created only after PayPal capture succeeds.
+    // The amounts are echoed back so the caller can show/verify exactly what the
+    // order was created for, add-ons included.
     return new Response(
-      JSON.stringify({ order_id: orderId }),
+      JSON.stringify({
+        order_id: orderId,
+        amount: totalAmount,
+        base_usd: charge.baseUsd,
+        options_total_usd: charge.optionsUsd,
+        currency: 'USD',
+      }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
