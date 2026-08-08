@@ -55,7 +55,16 @@ export const GET: APIRoute = async ({ request, locals }) => {
       });
       hotels = ((res?.hotels || []) as any[])
         .filter((h) => h.name && h.phone)
-        .slice(0, 5);
+        .slice(0, 5)
+        .map((h) => ({
+          ...h,
+          // Hand clients ready-to-use proxy URLs; the API key stays server-side.
+          photoUrls: (h.photos || [])
+            .filter((ph: any) => ph?.name)
+            .map((ph: any) => `/api/app/place-photo?name=${encodeURIComponent(ph.name)}&w=600`),
+          photoAttribution: (h.photos || [])[0]?.attribution || '',
+          photos: undefined,
+        }));
       cache.set(key, { at: now, hotels });
     } catch {
       hotels = [];

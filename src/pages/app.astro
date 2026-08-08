@@ -68,6 +68,11 @@ const t = isJa
       expandBtn: '🔍 もっと広い範囲で探す',
       cgShort: '☎ AIが電話確認',
       cgCallBtn: '📞 AIに電話で確認してもらう',
+      extAbout: 'この施設について',
+      extIntro: 'DDH未掲載の施設です。デイユースの可否・空き・料金をAIが電話で確認します（確認は無料）。',
+      extWeb: '公式サイトを見る →',
+      photoBy: '写真提供',
+      newResult: '新着',
       cgTitle: 'AI電話確認のリクエスト',
       cgHotel: '対象ホテル',
       cgTimeFrom: '利用開始',
@@ -174,6 +179,11 @@ const t = isJa
       expandBtn: '🔍 Search a wider area',
       cgShort: '☎ AI will call',
       cgCallBtn: '📞 Have AI call to confirm',
+      extAbout: 'About this place',
+      extIntro: 'Not listed on DDH. Our AI will phone them to check day-use, availability and price (the inquiry is free).',
+      extWeb: 'Visit the website →',
+      photoBy: 'Photo',
+      newResult: 'New',
       cgTitle: 'AI phone confirmation',
       cgHotel: 'Hotel',
       cgTimeFrom: 'From',
@@ -560,6 +570,18 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         color: var(--text); font-size: 14px; font-weight: 700; text-align: center;
       }
       .mybk-btn.show { display: block; }
+      .bk-badge {
+        display: none; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+        background: #dc2626; color: #fff; font-size: 11px; font-weight: 700;
+      }
+      .bk-badge.show { display: inline-block; }
+      .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+        background: rgba(13,148,136,.28) !important;
+      }
+      .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
+        background: var(--teal-dark) !important; color: #fff !important;
+        font-weight: 700; font-family: inherit;
+      }
       .bk-item {
         background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
         padding: 13px 14px; margin-bottom: 10px; font-size: 14px;
@@ -667,7 +689,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
 
         <div id="homeStatus"></div>
 
-        <button class="mybk-btn" id="myBookingsBtn">{t.myBookings}</button>
+        <button class="mybk-btn" id="myBookingsBtn">{t.myBookings}<span class="bk-badge" id="bkBadge"></span></button>
 
         <div class="popular-title">{t.popular}</div>
         <div class="areas" id="areas">
@@ -743,8 +765,12 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           <div class="desc clamp" id="detailDesc"></div>
           <button class="desc-more" id="descMore">{t.more}</button>
         </div>
-        <div class="sec-title">{t.selectPlan}</div>
+        <div class="sec-title" id="planTitle">{t.selectPlan}</div>
         <div id="planList"></div>
+        <div id="extCta" style="display:none">
+          <div class="cg-note" id="extNote"></div>
+          <button class="test-pay-btn" id="extCallBtn">{t.cgCallBtn}</button>
+        </div>
         <a class="web-link" id="detailWebLink" href="#">{t.webDetail}</a>
       </div>
     </div>
@@ -903,6 +929,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       let rateJPY = null;
       let map = null;
       let markerLayer = null;
+      let centerDot = null;
       let markersBySlug = {};
       let leafletPromise = null;
 
@@ -994,7 +1021,21 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           document.head.appendChild(css);
           const s = document.createElement('script');
           s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-          s.onload = resolve;
+          s.onload = () => {
+            // Clustering keeps dense city centres readable; failure to load it
+            // is non-fatal (we fall back to plain markers).
+            ['MarkerCluster.css', 'MarkerCluster.Default.css'].forEach((f) => {
+              const c = document.createElement('link');
+              c.rel = 'stylesheet';
+              c.href = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/' + f;
+              document.head.appendChild(c);
+            });
+            const mc = document.createElement('script');
+            mc.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+            mc.onload = resolve;
+            mc.onerror = () => resolve();
+            document.head.appendChild(mc);
+          };
           s.onerror = () => { leafletPromise = null; reject(new Error('leaflet')); };
           document.head.appendChild(s);
         });
@@ -1008,14 +1049,16 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             attribution: '&copy; OpenStreetMap &copy; CARTO',
             maxZoom: 19,
           }).addTo(map);
-          markerLayer = L.layerGroup().addTo(map);
+          markerLayer = (L.markerClusterGroup
+            ? L.markerClusterGroup({ maxClusterRadius: 45, showCoverageOnHover: false, spiderfyDistanceMultiplier: 1.4 })
+            : L.layerGroup()).addTo(map);
           $('map').addEventListener('click', (e) => {
             const el = e.target.closest && e.target.closest('.map-pop');
             if (!el) return;
             if (el.dataset.slug) { map.closePopup(); openDetail(el.dataset.slug); }
             else if (el.dataset.ext != null) {
               const h = extHotels[Number(el.dataset.ext)];
-              if (h) { map.closePopup(); openCallPanel(h); }
+              if (h) { map.closePopup(); openExtDetail(h); }
             }
           });
         }
@@ -1034,7 +1077,10 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       }
       function extPopupHtml(h, i) {
         const bits = [t.cgBadge, h.rating ? '⭐' + h.rating : '', h.km != null ? h.km + 'km' : ''].filter(Boolean).join(' ・ ');
-        return `<div class="map-pop" data-ext="${i}"><div class="mp-thumb tel">📞</div>
+        const th = h.photoUrls && h.photoUrls.length
+          ? `<img class="mp-thumb" src="${esc(h.photoUrls[0])}" alt="" />`
+          : `<div class="mp-thumb tel">📞</div>`;
+        return `<div class="map-pop" data-ext="${i}">${th}
           <div class="mp-body"><div class="mp-name">${esc(h.name)}</div><div class="mp-meta">${bits}</div></div>
           <div class="mp-go">›</div></div>`;
       }
@@ -1071,8 +1117,10 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         });
         const c = lastData && lastData.center;
         if (c) {
-          L.circleMarker([c.lat, c.lng], { radius: 7, color: '#0d9488', fillColor: '#0d9488', fillOpacity: 0.9 })
-            .addTo(markerLayer);
+          if (centerDot) map.removeLayer(centerDot);
+          centerDot = L.circleMarker([c.lat, c.lng], {
+            radius: 7, color: '#0d9488', fillColor: '#0d9488', fillOpacity: 0.9,
+          }).addTo(map);
           pts.push([c.lat, c.lng]);
         }
         if (pts.length) {
@@ -1126,8 +1174,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         if (h.rating) bits.push('⭐' + h.rating);
         if (h.km != null) bits.push(h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km');
         if (h.address) bits.push(esc(String(h.address).split(',')[0]));
+        const thumb = h.photoUrls && h.photoUrls.length
+          ? `<img class="thumb" src="${esc(h.photoUrls[0])}" alt="" loading="lazy" />`
+          : `<div class="thumb tel">📞</div>`;
         return `<a class="card" href="#" data-ext="${i}" data-slug="ext-${i}">
-          <div class="thumb tel">📞</div>
+          ${thumb}
           <div class="info">
             <div class="name">${esc(h.name)}</div>
             <div class="meta"><span class="ext-badge">${t.cgBadge}</span>${bits.join('<span style="opacity:.5"> ・ </span>')}</div>
@@ -1203,7 +1254,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         e.preventDefault();
         if (a.dataset.ext != null) {
           const h = extHotels[Number(a.dataset.ext)];
-          if (h) openCallPanel(h);
+          if (h) openExtDetail(h);
           return;
         }
         openDetail(a.dataset.slug);
@@ -1667,6 +1718,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         const state = cur.openNow === true ? t.openShort : cur.openNow === false ? t.closed : '';
         $('detailMeta').textContent = [cityJa(cur.city), km, state].filter(Boolean).join(' ・ ');
         $('detailWebLink').href = (isJa ? '/ja/hotel/' : '/hotel/') + encodeURIComponent(slug);
+        $('detailWebLink').textContent = t.webDetail;
+        $('detailWebLink').target = '';
+        $('detailWebLink').style.display = '';
+        $('planTitle').style.display = '';
+        $('extCta').style.display = 'none';
         $('planList').innerHTML = `<div class="panel-meta">${t.searching}</div>`;
         openPanel('detailPanel');
         try {
@@ -1726,6 +1782,49 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         }
       }
       $('detailClose').addEventListener('click', () => closePanel('detailPanel'));
+
+      // Unlisted hotels get the same detail treatment (photos, rating, address)
+      // before the AI-call ask — enough to decide whether it is worth calling.
+      let extDetailTarget = null;
+      function openExtDetail(h) {
+        extDetailTarget = h;
+        track('app_ext_detail', { hotel: h.name });
+        const photos = h.photoUrls || [];
+        $('heroScroll').innerHTML = photos.length
+          ? photos.map((u) => `<img src="${esc(u)}" alt="" loading="lazy" />`).join('')
+          : `<div class="mp-thumb tel" style="width:100%;height:100%;border-radius:0;font-size:44px">📞</div>`;
+        $('heroScroll').scrollLeft = 0;
+        if (photos.length > 1) {
+          $('heroCount').textContent = `1/${photos.length}`;
+          $('heroCount').style.display = 'block';
+          $('heroScroll').onscroll = () => {
+            const i = Math.round($('heroScroll').scrollLeft / $('heroScroll').clientWidth) + 1;
+            $('heroCount').textContent = `${Math.min(i, photos.length)}/${photos.length}`;
+          };
+        } else {
+          $('heroCount').style.display = 'none';
+        }
+        $('detailName').textContent = h.name || '';
+        const km = h.km != null ? (h.km < 1 ? Math.round(h.km * 1000) + 'm' : h.km + 'km') : '';
+        $('detailMeta').textContent = [t.cgBadge, h.rating ? '⭐' + h.rating : '', km, h.address || ''].filter(Boolean).join(' ・ ');
+        $('descWrap').style.display = 'none';
+        $('planTitle').style.display = 'none';
+        $('planList').innerHTML = '';
+        $('extNote').textContent = t.extIntro + (h.photoAttribution ? `　（${t.photoBy}: ${h.photoAttribution}）` : '');
+        $('extCta').style.display = 'block';
+        if (h.website) {
+          $('detailWebLink').href = h.website;
+          $('detailWebLink').textContent = t.extWeb;
+          $('detailWebLink').target = '_blank';
+          $('detailWebLink').style.display = '';
+        } else {
+          $('detailWebLink').style.display = 'none';
+        }
+        openPanel('detailPanel');
+      }
+      $('extCallBtn').addEventListener('click', () => {
+        if (extDetailTarget) openCallPanel(extDetailTarget);
+      });
 
       function openBook(plan) {
         selPlan = plan;
@@ -1846,12 +1945,58 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           </div>`)
           .join('');
         startBkPolling();
+        markInquiriesSeen();
       });
 
       // ── Live status polling while My Bookings is open ──────────────────────
       // Both /api/booking-status and /api/app/call-status read live D1 state
       // (booking.status, concierge_calls.status/price_quoted/accepted), so the
       // panel refreshes itself while the AI is on the phone — no reopen needed.
+      // Complements the in-panel toast polling: checks quietly on load and on
+      // app resume so a result that lands while the panel is closed still gets
+      // surfaced, as a badge on the entry button.
+      const SEEN_KEY = 'ddhInqSeen';
+      const getSeen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch (e) { return {}; } };
+      const setSeen = (o) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify(o)); } catch (e) {} };
+
+      async function inquiryState(q) {
+        const r = await fetch('/api/app/call-status?' + new URLSearchParams({ group: String(q.g), session: q.s }));
+        const d = await r.json();
+        if (d.error) throw new Error(d.error);
+        const calls = d.calls || [];
+        if (calls.find((c) => c.accepted)) return 'accepted';
+        if (calls.find((c) => c.price != null && c.accept_token)) return 'quoted';
+        if (calls.length && calls.every((c) => ['unavailable', 'no_answer', 'over_budget', 'voicemail'].includes(c.outcome || ''))) return 'na';
+        return 'calling';
+      }
+
+      async function checkInquiriesQuietly() {
+        const inqs = getInquiries();
+        if (!inqs.length || $('bkListPanel').classList.contains('open')) return;
+        const seen = getSeen();
+        let unseen = 0;
+        for (const q of inqs) {
+          try {
+            const state = await inquiryState(q);
+            if ((state === 'quoted' || state === 'na') && seen[q.g] !== state) unseen++;
+          } catch (e) {}
+        }
+        const badge = $('bkBadge');
+        badge.textContent = unseen ? `${t.newResult} ${unseen}` : '';
+        badge.classList.toggle('show', unseen > 0);
+      }
+      function markInquiriesSeen() {
+        const seen = getSeen();
+        Promise.all(getInquiries().map(async (q) => {
+          try { seen[q.g] = await inquiryState(q); } catch (e) {}
+        })).then(() => setSeen(seen));
+        $('bkBadge').classList.remove('show');
+      }
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkInquiriesQuietly();
+      });
+      setTimeout(checkInquiriesQuietly, 1500);
+
       let bkPollTimer = null;
       let bkToastEl = null;
       const bkPrev = {};

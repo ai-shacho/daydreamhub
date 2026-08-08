@@ -310,7 +310,7 @@ export async function searchHotelsExternal(env: any, params: any) {
   const fieldMask = [
     "places.displayName", "places.formattedAddress", "places.nationalPhoneNumber",
     "places.internationalPhoneNumber", "places.rating", "places.userRatingCount",
-    "places.websiteUri", "places.types", "places.location", "nextPageToken"
+    "places.websiteUri", "places.types", "places.location", "places.photos", "nextPageToken"
   ].join(",");
 
   const lang = params.language || "en";
@@ -405,6 +405,12 @@ function processPlacesResults(data: any) {
       website: p.websiteUri || null,
       lat: p.location?.latitude ?? null,
       lng: p.location?.longitude ?? null,
+      // Photo resource names only — fetching the media itself is billed, so
+      // clients pull them through /api/app/place-photo on demand.
+      photos: (p.photos || []).slice(0, 5).map((ph: any) => ({
+        name: ph.name,
+        attribution: ph.authorAttributions?.[0]?.displayName || "",
+      })),
       source: "external"
     }));
   return { count: hotels.length, source: "external", hotels };
