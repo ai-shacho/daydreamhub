@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
-import { sendConciergeResultEmail, type ConciergeResultEmailType } from '../../../lib/email';
+import { sendConciergeResultEmail, sendConciergeQuoteEmail, type ConciergeResultEmailType } from '../../../lib/email';
+import { getAccessToken, refundCapture, resolvePayPalConfig } from '../../../lib/paypal';
 import { currencyForPhone, spokenNameForCurrency } from '../../../lib/phoneCurrency';
 import { initiateNextGroupCall, processGroupRefund } from '../../../lib/tools';
 
@@ -24,7 +25,12 @@ type Step =
   | 'outreach_phase_callback_name'
   | 'outreach_phase_callback_email'
   | 'ask_dayuse'
+  | 'ask_availability'
+  | 'confirm2_person'
+  | 'confirm2'
   | 'ask_price'
+  | 'confirm_prices'
+  | 'ask_more'
   | 'confirm_booking'
   | 'confirm_booking_details';
 
@@ -48,11 +54,18 @@ function sayText(text: string, opts?: { slow?: boolean }): string {
 
 function gatherTwiml(action: string, prompt: string, opts?: { timeout?: number; finishOnKey?: string; preface?: string; slow?: boolean; speechTimeout?: string }): Response {
   const timeout = opts?.timeout ?? 8;
-  const finishOnKey = opts?.finishOnKey ? ` finishOnKey="${esc(opts.finishOnKey)}"` : '';
+  // DTMF handling:
+  //  - finishOnKey given (incl. '' = none): multi-digit entry, submits on the
+  //    inter-digit timeout — no # required.  (used for price entry)
+  //  - finishOnKey omitted: numDigits="1" so a single keypress (1/2/3) confirms
+  //    INSTANTLY without needing to press #.  (used for yes/no/repeat)
+  const dtmfAttr = (opts?.finishOnKey !== undefined)
+    ? ` finishOnKey="${esc(opts.finishOnKey)}"`
+    : ' numDigits="1"';
   const speechTimeout = opts?.speechTimeout || 'auto';
   const preface = opts?.preface ? sayText(opts.preface, { slow: opts?.slow }) : '';
   return twiml(
-    `${preface}<Gather input="speech dtmf" timeout="${timeout}" speechTimeout="${esc(speechTimeout)}" actionOnEmptyResult="true" language="en-US" action="${esc(action)}" method="POST"${finishOnKey}>` +
+    `${preface}<Gather input="speech dtmf" timeout="${timeout}" speechTimeout="${esc(speechTimeout)}" actionOnEmptyResult="true" language="en-US" action="${esc(action)}" method="POST"${dtmfAttr}>` +
     `${sayText(prompt, { slow: opts?.slow })}` +
     `</Gather>`
   );
@@ -92,6 +105,14 @@ function toAmPm(timeRaw: unknown): string {
   return `${h}:${min} ${suffix}`;
 }
 
+function readPricesFromNote(note: unknown): number[] {
+  const n = String(note ?? '');
+  const matches = [...n.matchAll(/twilio_prices:([0-9.\/]+)/g)];
+  if (!matches.length) return [];
+  const last = matches[matches.length - 1]?.[1] || '';
+  return last.split('/').map((x) => Number(x)).filter((v) => Number.isFinite(v) && v > 0).slice(0, 3);
+}
+
 function readQuotedAmountFromNote(note: unknown): number | null {
   const n = String(note ?? '');
   const matches = [...n.matchAll(/twilio_price(?:_corrected)?:([0-9]+(?:\.[0-9]+)?)/g)];
@@ -102,7 +123,7 @@ function readQuotedAmountFromNote(note: unknown): number | null {
   return Math.round(v * 100) / 100;
 }
 
-function readBookingTestMetaFromNote(note: unknown): { guest_name?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null {
+function readBookingTestMetaFromNote(note: unknown): { guest_name?: string; guest_email?: string; guest_count?: number; check_in_date?: string; check_in_time?: string; check_out_time?: string } | null {
   const text = String(note ?? '');
   const m = text.match(/\[booking-test:(\{.*\})\]/);
   if (!m?.[1]) return null;
@@ -110,6 +131,7 @@ function readBookingTestMetaFromNote(note: unknown): { guest_name?: string; gues
     const parsed = JSON.parse(m[1]);
     return {
       guest_name: String(parsed?.guest_name || '').trim() || undefined,
+      guest_email: String(parsed?.guest_email || '').trim() || undefined,
       guest_count: Number(parsed?.guest_count || parsed?.guests || 0) || undefined,
       check_in_date: String(parsed?.check_in_date || '').trim() || undefined,
       check_in_time: String(parsed?.check_in_time || '').trim() || undefined,
@@ -140,7 +162,12 @@ function normalizeStep(raw: string | null): Step {
   if (s === 'outreach_phase_callback_name') return 'outreach_phase_callback_name';
   if (s === 'outreach_phase_callback_email') return 'outreach_phase_callback_email';
   if (s === 'ask_dayuse') return 'ask_dayuse';
+  if (s === 'ask_availability') return 'ask_availability';
+  if (s === 'confirm2_person') return 'confirm2_person';
+  if (s === 'confirm2') return 'confirm2';
   if (s === 'ask_price') return 'ask_price';
+  if (s === 'confirm_prices') return 'confirm_prices';
+  if (s === 'ask_more') return 'ask_more';
   if (s === 'confirm_booking') return 'confirm_booking';
   if (s === 'confirm_booking_details') return 'confirm_booking_details';
   return 'intro';
@@ -163,6 +190,13 @@ function makeWebhookUrl(request: Request, logId: string | null, step: Step, phas
   u.searchParams.set('turn', String(turn));
   u.searchParams.set('phase', phase);
   if (event) u.searchParams.set('event', event);
+  return u.toString();
+}
+
+// Append extra query params (plan count / index / pending price) to a webhook URL.
+function withParams(base: string, extra: Record<string, string | number>): string {
+  const u = new URL(base);
+  for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, String(v));
   return u.toString();
 }
 
@@ -495,6 +529,25 @@ function parsePrices(text: string, digits: string): number[] {
   return out;
 }
 
+// Parse how many day-use plans the hotel has (1-3). Accepts keypad digits or
+// spoken numbers ("two", "just one"). Returns null if nothing usable was heard.
+function parseCount(text: string, digits: string): number | null {
+  const d = clamp(digits, 8).replace(/[^0-9]/g, '');
+  if (d) {
+    const n = parseInt(d[0], 10);
+    if (n >= 1) return Math.min(n, 3);
+  }
+  const t = clamp(text, 120).toLowerCase();
+  const dm = t.match(/\b([1-9])\b/);
+  if (dm) return Math.min(parseInt(dm[1], 10), 3);
+  const words: [RegExp, number][] = [
+    [/\b(three|third)\b/, 3], [/\b(two|second|couple|both)\b/, 2],
+    [/\b(one|single|just one|only one|a single)\b/, 1],
+  ];
+  for (const [re, n] of words) if (re.test(t)) return n;
+  return null;
+}
+
 function formatPhoneForSpeech(raw: unknown): string {
   const s = String(raw ?? '').trim();
   if (!s) return 'not provided';
@@ -595,6 +648,69 @@ async function updateConciergeCallStatus(db: DbLike | null, conciergeCallId: str
   await db.prepare(`UPDATE concierge_calls SET ${fields}, updated_at = datetime('now') WHERE id = ?`).bind(...values).run().catch((e) => {
     console.error('[twilio-voice] concierge update failed', e);
   });
+}
+
+// App inquiries are contact-free (no email), so the outcome is delivered by
+// Web Push instead. Idempotent via app_push_sent; never throws.
+async function pushOutcomeToApp(env: any, db: DbLike | null, conciergeCallId: string | null) {
+  if (!db || !conciergeCallId) return;
+  try {
+    const row: any = await db.prepare(
+      `SELECT c.app_push_sent, g.session_id
+         FROM concierge_calls c
+         LEFT JOIN concierge_call_groups g ON g.id = c.call_group_id
+        WHERE c.id = ?`
+    ).bind(conciergeCallId).first().catch(() => null);
+    if (!row?.session_id || Number(row.app_push_sent || 0) === 1) return;
+    const claim: any = await db.prepare(
+      `UPDATE concierge_calls SET app_push_sent = 1, updated_at = datetime('now') WHERE id = ? AND app_push_sent = 0`
+    ).bind(conciergeCallId).run().catch(() => null);
+    if (Number(claim?.meta?.changes || 0) === 0) return;
+    const { pushToSession } = await import('../../../lib/webpush');
+    await pushToSession(env, String(row.session_id));
+  } catch (e) {
+    console.error('[twilio-voice] pushOutcomeToApp failed', e);
+  }
+}
+
+// Two-call model: after call 1 quotes a price, email the guest a "Book at this
+// price" link. Idempotent via quote_email_sent. Generates the accept token.
+async function sendQuoteEmailOnce(env: any, db: DbLike | null, conciergeCallId: string | null) {
+  if (!db || !conciergeCallId || !env?.RESEND_API_KEY) return;
+  const call: any = await db.prepare(
+    `SELECT id, guest_name, guest_email, hotel_name, hotel_phone, request_details, price_quoted, accept_token
+       FROM concierge_calls WHERE id = ?`
+  ).bind(conciergeCallId).first().catch(() => null);
+  if (!call?.guest_email || call.price_quoted == null || String(call.price_quoted) === '') return;
+
+  const claim: any = await db.prepare(
+    `UPDATE concierge_calls SET quote_email_sent = 1, updated_at = datetime('now') WHERE id = ? AND quote_email_sent = 0`
+  ).bind(conciergeCallId).run().catch(() => null);
+  if (Number(claim?.meta?.changes || 0) === 0) return;
+
+  let token = String(call.accept_token || '');
+  if (!token) {
+    token = (crypto as any).randomUUID().replace(/-/g, '');
+    await db.prepare(`UPDATE concierge_calls SET accept_token = ? WHERE id = ?`).bind(token, conciergeCallId).run().catch(() => {});
+  }
+
+  const details: any = normalizeConciergeDetails(parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(quote_email)'));
+  const currency = currencyForPhone(call.hotel_phone).currency || 'USD';
+  const base = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || (String(env?.DDH_ENV || '').toLowerCase() === 'staging' ? 'https://staging.daydreamhub-1sv.pages.dev' : 'https://daydreamhub.com')).replace(/\/$/, '');
+  const acceptUrl = `${base}/concierge/accept?token=${token}`;
+
+  await sendConciergeQuoteEmail(env.RESEND_API_KEY, {
+    guestName: call.guest_name || 'Guest',
+    guestEmail: call.guest_email,
+    hotelName: call.hotel_name || 'the hotel',
+    date: details.check_in_date || details.date || '',
+    checkIn: details.check_in_time || details.check_in || '',
+    checkOut: details.check_out_time || details.check_out || '',
+    guests: details.guests || 1,
+    price: call.price_quoted,
+    priceCurrency: currency,
+    acceptUrl,
+  }).catch((e: any) => console.error('[twilio-voice] quote email failed', e));
 }
 
 async function sendResultEmailOnce(env: any, db: DbLike | null, conciergeCallId: string | null, resultType: ConciergeResultEmailType) {
@@ -709,26 +825,23 @@ async function sendAdminConciergeBookedEmail(env: any, db: DbLike | null, concie
   }).catch((e: any) => console.error('[twilio-voice] admin concierge email failed', e));
 }
 
-// App inquiries are contact-free (no email on file), so outcomes are delivered
-// by Web Push instead. Idempotent via app_push_sent; never throws.
-async function pushOutcomeToApp(env: any, db: DbLike | null, conciergeCallId: string | null) {
-  if (!db || !conciergeCallId) return;
+// Two-call model: if the confirmation call fails (hotel declines / no answer),
+// refund the $7 DDH fee the guest paid at the accept step (as promised). The fee
+// capture is stored on the accept-step call in the same group.
+async function refundAcceptFeeIfPaid(env: any, db: DbLike | null, groupId: number | null) {
+  if (!db || !groupId || !env) return;
   try {
-    const row: any = await db.prepare(
-      `SELECT c.app_push_sent, g.session_id
-         FROM concierge_calls c
-         LEFT JOIN concierge_call_groups g ON g.id = c.call_group_id
-        WHERE c.id = ?`
-    ).bind(conciergeCallId).first().catch(() => null);
-    if (!row?.session_id || Number(row.app_push_sent || 0) === 1) return;
-    const claim: any = await db.prepare(
-      `UPDATE concierge_calls SET app_push_sent = 1, updated_at = datetime('now') WHERE id = ? AND app_push_sent = 0`
-    ).bind(conciergeCallId).run().catch(() => null);
-    if (Number(claim?.meta?.changes || 0) === 0) return;
-    const { pushToSession } = await import('../../../lib/webpush');
-    await pushToSession(env, String(row.session_id));
+    const paid: any = await db.prepare(
+      `SELECT id, paypal_capture_id FROM concierge_calls WHERE call_group_id = ? AND fee_payment_status = 'paid' AND paypal_capture_id IS NOT NULL ORDER BY id ASC LIMIT 1`
+    ).bind(groupId).first().catch(() => null);
+    if (!paid?.paypal_capture_id) return;
+    const pp = resolvePayPalConfig(env);
+    if (!pp.clientId || !pp.secret) return;
+    const at = await getAccessToken(pp.clientId, pp.secret, pp.mode);
+    await refundCapture(at, String(paid.paypal_capture_id), pp.mode, 7);
+    await db.prepare(`UPDATE concierge_calls SET fee_payment_status = 'refunded', updated_at = datetime('now') WHERE id = ?`).bind(paid.id).run().catch(() => {});
   } catch (e) {
-    console.error('[twilio-voice] pushOutcomeToApp failed', e);
+    console.error('[twilio-voice] refundAcceptFeeIfPaid failed', { groupId, message: (e as any)?.message || String(e) });
   }
 }
 
@@ -736,7 +849,7 @@ async function finalizeConciergeOutcome(
   env: any,
   db: DbLike | null,
   conciergeCallId: string | null,
-  outcome: 'booked' | 'available' | 'unavailable' | 'no_answer' | 'over_budget',
+  outcome: 'booked' | 'available' | 'unavailable' | 'no_answer' | 'over_budget' | 'quoted',
   aiSummary: string,
   opts: { priceQuoted?: number | null; sendAdminBooked?: boolean } = {}
 ): Promise<boolean> {
@@ -749,7 +862,7 @@ async function finalizeConciergeOutcome(
            price_quoted = COALESCE(?, price_quoted),
            updated_at = datetime('now')
      WHERE id = ?
-       AND COALESCE(outcome, '') NOT IN ('booked','available','unavailable','no_answer','over_budget')`
+       AND COALESCE(outcome, '') NOT IN ('booked','available','unavailable','no_answer','over_budget','quoted')`
   ).bind(outcome, clamp(aiSummary, 500), opts.priceQuoted ?? null, conciergeCallId).run().catch((e: any) => {
     console.error('[twilio-voice] finalizeConciergeOutcome UPDATE concierge_calls failed', { conciergeCallId, outcome, message: e?.message || String(e) });
     return null;
@@ -766,6 +879,8 @@ async function finalizeConciergeOutcome(
     await sendResultEmailOnce(env, db, conciergeCallId, 'no_answer');
   } else if (outcome === 'over_budget') {
     await sendResultEmailOnce(env, db, conciergeCallId, 'over_budget');
+  } else if (outcome === 'quoted') {
+    await sendQuoteEmailOnce(env, db, conciergeCallId);
   }
   // Independent of email (app inquiries have no address on file).
   await pushOutcomeToApp(env, db, conciergeCallId);
@@ -777,9 +892,19 @@ async function finalizeConciergeOutcome(
   const groupId = Number(call?.call_group_id || 0) || null;
   if (!groupId) return true;
 
-  if (outcome === 'booked' || outcome === 'available') {
-    await db.prepare("UPDATE concierge_call_groups SET status = 'success', updated_at = datetime('now') WHERE id = ? AND status != 'success'")
-      .bind(groupId).run().catch(() => {});
+  if (outcome === 'booked' || outcome === 'available' || outcome === 'quoted') {
+    // Terminal for this group: 'quoted' waits for the guest to accept by email
+    // (which triggers call 2); 'booked'/'available' are already done. Either way
+    // we do NOT roll over to the next hotel in the group.
+    if (outcome === 'quoted') {
+      // Mark quoted unless the group is already finalized.
+      await db.prepare("UPDATE concierge_call_groups SET status = 'quoted', updated_at = datetime('now') WHERE id = ? AND status NOT IN ('success')")
+        .bind(groupId).run().catch(() => {});
+    } else {
+      // Booking succeeded — promote to success even from 'quoted'/'confirming'.
+      await db.prepare("UPDATE concierge_call_groups SET status = 'success', updated_at = datetime('now') WHERE id = ? AND status != 'success'")
+        .bind(groupId).run().catch(() => {});
+    }
     return true;
   }
 
@@ -807,6 +932,17 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     const step = normalizeStep(url.searchParams.get('step'));
     const turn = parseTurn(url.searchParams.get('turn'));
     const event = clamp(url.searchParams.get('event') || '', 40).toLowerCase();
+    // Per-plan price loop state (passed via the webhook action URL):
+    //   pc = total plan count (1-3), pi = current plan index (1-based),
+    //   pp = the pending (unconfirmed) price just heard for plan pi.
+    const planCount = Math.min(Math.max(parseInt(url.searchParams.get('pc') || '1', 10) || 1, 1), 3);
+    const planIdx = Math.min(Math.max(parseInt(url.searchParams.get('pi') || '1', 10) || 1, 1), 3);
+    const pendingPriceRaw = Number(url.searchParams.get('pp'));
+    const pendingPrice = Number.isFinite(pendingPriceRaw) && pendingPriceRaw > 0 ? Math.round(pendingPriceRaw * 100) / 100 : null;
+    // Confirmed prices collected so far, carried in the URL (not the note) so the
+    // accumulation is self-contained per call and immune to stale log history.
+    const accPrices = (url.searchParams.get('acc') || '')
+      .split('/').map((x) => Number(x)).filter((v) => Number.isFinite(v) && v > 0).slice(0, 3);
 
     const form = await readTwilioParams(request);
     const callSid = clamp(form.get('CallSid') || '', 120);
@@ -1028,7 +1164,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       : (booking?.guest_name || bookingTestMeta?.guest_name || 'the guest');
     const bookingGuestEmail = phase === 'concierge'
       ? (conciergeCall?.guest_email || conciergeDetails.guest_email || '')
-      : (booking?.guest_email || '');
+      : (booking?.guest_email || bookingTestMeta?.guest_email || '');
     const bookingGuestPhone = phase === 'concierge'
       ? (conciergeCall?.guest_phone || conciergeDetails.guest_phone || '')
       : (booking?.guest_phone || '');
@@ -1059,11 +1195,89 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         return gatherTwiml(action, 'Hello. We are DayDreamHub, a platform that matches guests with hotel day-use rooms. We are calling today to invite your property to be listed on our site. Is the manager or person in charge available? Press 1 if available now, or press 2 if not available. You can also answer by voice.');
       }
 
+      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+      // Two-call model: call 2 confirms an already-quoted, guest-accepted booking.
+      if (phase === 'concierge' && String(conciergeDetails?.call_mode || '') === 'confirm') {
+        await updateCallLog(db, logId, 'awaiting_response', 'twilio_confirm2_intro', callSid ? `twilio:${callSid}` : undefined);
+        // The person answering call 2 may differ from call 1 — check first.
+        const action = makeWebhookUrl(request, logId, 'confirm2_person', inferredPhase, 0);
+        return gatherTwiml(action, `Hello, this is DayDreamHub, calling back about the day-use inquiry we discussed with your property earlier for ${bookingCheckInDate}${timeInfo}. Are you the same person we spoke with on that call? Press 1 or say yes. Press 2 or say no.`);
+      }
+
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
       const action = makeWebhookUrl(request, logId, 'ask_dayuse', inferredPhase, 0);
-      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
-      const prompt = `Hello, this is DayDreamHub, an online platform specializing in day-use hotel bookings. We have a guest looking to book a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
+      const prompt = `Hello, this is DayDreamHub, an online platform specializing in day-use hotel bookings. Do you offer day-use plans for guests? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
       return gatherTwiml(action, prompt);
+    }
+
+    if (step === 'confirm2_person') {
+      const cprice = conciergeDetails?.confirmed_price;
+      const ccur = spokenNameForCurrency(String(conciergeDetails?.price_currency || budgetCurrency || 'USD'));
+      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+      if (isRepeat(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm2_person', inferredPhase, turn + 1);
+        return gatherTwiml(action, `Are you the same person we spoke with earlier about the day-use inquiry? Press 1 or say yes. Press 2 or say no.`);
+      }
+      // Same person → go straight to confirmation.
+      if (isYes(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, 0);
+        return gatherTwiml(action, `Thank you. Our guest has accepted your price of ${cprice} ${ccur} for the day-use on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Can we go ahead and confirm this booking? Press 1 or say yes to confirm. Press 2 or say no.`);
+      }
+      // Different person → ask to hand the phone to the right person, then confirm.
+      if (isNo(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, 0);
+        return gatherTwiml(action, `No problem. Could you please pass the phone to the person who handled our earlier call, or to anyone who can confirm this booking? When they are ready: our guest has accepted the price of ${cprice} ${ccur} for the day-use on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. To confirm the booking, press 1 or say yes. To decline, press 2 or say no.`, { timeout: 15 });
+      }
+      if (turn >= MAX_RETRY) {
+        // Could not tell — proceed to confirmation anyway (details are re-stated).
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, 0);
+        return gatherTwiml(action, `Our guest has accepted your price of ${cprice} ${ccur} for the day-use on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Can we go ahead and confirm this booking? Press 1 or say yes. Press 2 or say no.`);
+      }
+      const action = makeWebhookUrl(request, logId, 'confirm2_person', inferredPhase, turn + 1);
+      return gatherTwiml(action, `Sorry, I didn't catch that. Are you the same person we spoke with earlier about the day-use inquiry? Press 1 or say yes. Press 2 or say no.`);
+    }
+
+    if (step === 'confirm2') {
+      const cprice = conciergeDetails?.confirmed_price;
+      const ccur = spokenNameForCurrency(String(conciergeDetails?.price_currency || budgetCurrency || 'USD'));
+      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+      if (isRepeat(speech, digits)) {
+        const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, turn + 1);
+        return gatherTwiml(action, `Our guest has accepted your price of ${cprice} ${ccur} for a day-use on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Can we confirm this booking? Press 1 or say yes. Press 2 or say no.`);
+      }
+      if (isYes(speech, digits)) {
+        const guestName = bookingGuestName;
+        const guestPhoneSpeech = formatPhoneForSpeech(bookingGuestPhone);
+        const guestEmailSpeech = formatEmailForSpeech(bookingGuestEmail);
+        await updateCallLog(db, logId, 'confirmed', 'twilio_confirm2_booked', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
+        await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'booked', `confirm2_booked;price=${cprice}`, { priceQuoted: cprice, sendAdminBooked: true });
+        return twiml(`<Say voice="${VOICE}">Thank you, the booking is confirmed at ${cprice} ${ccur}, to be paid on-site at check-in. For your records, the guest is ${guestName}. Contact phone, ${guestPhoneSpeech}. Email, ${guestEmailSpeech}. We will email the guest their confirmation now. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Goodbye.</Say><Hangup/>`);
+      }
+      if (isNo(speech, digits)) {
+        await updateCallLog(db, logId, 'declined', 'twilio_confirm2_declined', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
+        // Terminal — the guest accepted THIS hotel; do not roll over to others.
+        if (phase === 'concierge') {
+          await db.prepare(`UPDATE concierge_calls SET status='completed', outcome='unavailable', ai_summary=?, updated_at=datetime('now') WHERE id=? AND COALESCE(outcome,'') NOT IN ('booked','available','unavailable','no_answer','over_budget','quoted')`).bind('confirm_declined_by_hotel', resolvedConciergeCallId || logId).run().catch(() => {});
+          const grp: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id=?`).bind(resolvedConciergeCallId || logId).first().catch(() => null);
+          if (grp?.call_group_id) await db.prepare("UPDATE concierge_call_groups SET status='confirm_failed', updated_at=datetime('now') WHERE id=? AND status NOT IN ('success')").bind(grp.call_group_id).run().catch(() => {});
+          // Booking not approved → refund the $7 fee in full (as promised).
+          await refundAcceptFeeIfPaid(env, db, grp?.call_group_id || null);
+          await sendResultEmailOnce(env, db, resolvedConciergeCallId || logId, 'declined');
+        }
+        return twiml(`<Say voice="${VOICE}">Understood, thank you for letting us know. We will inform our guest. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_confirm2_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          const grp: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id=?`).bind(resolvedConciergeCallId || logId).first().catch(() => null);
+          // Booking not confirmed → refund the $7 fee in full (as promised).
+          await refundAcceptFeeIfPaid(env, db, grp?.call_group_id || null);
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_confirm2_answer');
+        }
+        return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'confirm2', inferredPhase, turn + 1);
+      return gatherTwiml(action, `Sorry, I didn't catch that. Can we confirm the booking at ${cprice} ${ccur}? Press 1 or say yes. Press 2 or say no.`);
     }
 
     if (step === 'outreach_phase_0') {
@@ -1273,24 +1487,29 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     if (step === 'ask_dayuse') {
       if (isRepeat(speech, digits)) {
         const action = makeWebhookUrl(request, logId, 'ask_dayuse', inferredPhase, turn + 1);
-        const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
-        return gatherTwiml(action, `We have a guest looking to book a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. Do you offer day-use plans? Press 1 or say yes. Press 2 or say no.`);
+        return gatherTwiml(action, `Do you offer day-use plans for guests? Press 1 or say yes. Press 2 or say no.`);
       }
       if (isYes(speech, digits)) {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_dayuse_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
-        const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0);
-        return gatherTwiml(action, `What is the total price for the guest in ${spokenCurrency}, including all service fees and taxes? If you have several plans, please tell me each price. You can also enter the amount on your phone keypad and press the pound key if you prefer. The guest will pay the hotel directly on-site.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3', preface: 'Thank you.' });
+        if (phase === 'concierge') {
+          // Two-call model: check availability first, then get a quote (no on-call booking).
+          const action = makeWebhookUrl(request, logId, 'ask_availability', inferredPhase, 0);
+          const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
+          return gatherTwiml(action, `Do you have availability for a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}? Press 1 or say yes. Press 2 or say no.`, { timeout: 8, speechTimeout: '3', preface: 'Thank you.' });
+        }
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pi: 1, acc: '' });
+        return gatherTwiml(action, `What is the total price for your day-use plan in ${spokenCurrency}, including all service fees and taxes? You can say it, or enter it on your keypad. The guest pays the hotel directly on-site.`, { timeout: 4, finishOnKey: '#', speechTimeout: '3', preface: 'Thank you.' });
       }
       if (isNo(speech, digits)) {
         await updateCallLog(db, logId, 'declined', 'twilio_dayuse_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
         if (phase === 'concierge') {
           await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'unavailable', 'hotel_declined_dayuse');
-          return twiml(`<Say voice="${VOICE}">Understood. We currently have guests seeking day-use stays in your area. We may follow up to discuss whether a day-use plan could work for your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
+          return twiml(`<Say voice="${VOICE}">One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
         }
         if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="${VOICE}">Understood. We currently have guests seeking day-use stays in your area. We may follow up to discuss whether a day-use plan could work for your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye!</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_dayuse_no_answer', callSid ? `twilio:${callSid}` : undefined);
@@ -1303,27 +1522,77 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes if you offer day-use. Press 2 or say no if you do not.');
     }
 
-    if (step === 'ask_price') {
+    if (step === 'ask_availability') {
+      const timeInfo = bookingCheckInTime && bookingCheckOutTime ? ` from ${bookingCheckInTime} to ${bookingCheckOutTime}` : '';
       if (isRepeat(speech, digits)) {
-        const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
-        return gatherTwiml(action, `What is the total price for the guest in ${spokenCurrency}, including all service fees and taxes? If you have several plans, please tell me each price. You can also enter the amount on your phone keypad and press the pound key if you prefer. The guest will pay the hotel directly on-site.`, { timeout: 10, finishOnKey: '#', speechTimeout: '3' });
+        const action = makeWebhookUrl(request, logId, 'ask_availability', inferredPhase, turn + 1);
+        return gatherTwiml(action, `Do you have availability for a day-use stay on ${bookingCheckInDate}${timeInfo}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}? Press 1 or say yes. Press 2 or say no.`, { timeout: 8, speechTimeout: '3' });
       }
-      const amounts = parsePrices(speech, digits);
-      if (amounts.length > 0) {
-        const withinBudget = maxBudgetUsd != null ? amounts.filter((a) => a <= maxBudgetUsd) : amounts;
-        if (withinBudget.length === 0) {
-          // Every offered plan exceeds the guest's budget — do not book.
-          const lowest = Math.min(...amounts);
-          await updateCallLog(db, logId, 'declined', `twilio_prices:${amounts.join('/')}_over_budget`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: all offered plans exceed guest budget ${maxBudgetUsd} ${budgetCurrency}`);
-          if (phase === 'concierge') {
-            await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `all_plans_over_budget;prices=${amounts.join(',')};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: lowest });
-          }
-          return twiml(`<Say voice="${VOICE}">Thank you for the information. Unfortunately, the offered ${amounts.length === 1 ? 'plan is' : 'plans are'} above our guest's budget, so we cannot proceed with the booking this time. We appreciate your time. Goodbye.</Say><Hangup/>`);
+      if (isYes(speech, digits)) {
+        await updateCallLog(db, logId, 'awaiting_response', 'twilio_availability_yes', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pi: 1, acc: '' });
+        return gatherTwiml(action, `Great. What is the total price for your day-use plan in ${spokenCurrency}, including all service fees and taxes? You can say it, or enter it on your keypad. The guest pays the hotel directly on-site.`, { timeout: 4, finishOnKey: '#', speechTimeout: '3', preface: 'Thank you.' });
+      }
+      if (isNo(speech, digits)) {
+        await updateCallLog(db, logId, 'declined', 'twilio_availability_no', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 2'}`);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'unavailable', 'hotel_no_availability');
         }
-        const amount = Math.min(...withinBudget);
-        await updateCallLog(db, logId, 'awaiting_response', `twilio_prices:${amounts.join('/')};twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || `DTMF:${digits}`}\n[Agent]: Confirming price ${amount} (offered: ${amounts.join(', ')})`);
-        const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, 0);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please tell me the correct amount, or enter it on your keypad and press the pound key.`, { preface: 'Thank you.' });
+        return twiml(`<Say voice="${VOICE}">Understood, thank you for checking. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_availability_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_availability_answer');
+        }
+        return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'ask_availability', inferredPhase, turn + 1);
+      return gatherTwiml(action, `Sorry, I didn't catch that. Do you have availability for that day-use request? Press 1 or say yes. Press 2 or say no.`, { timeout: 8, speechTimeout: '3' });
+    }
+
+    // Shared: for the booking (admin) phase, apply budget and go to on-call
+    // confirmation. For the concierge phase, DO NOT book on the call — record the
+    // cheapest quote and end; the guest confirms by email, which triggers call 2.
+    const finalizePrices = async (confirmedPrices: number[]): Promise<Response> => {
+      if (phase === 'concierge') {
+        const cheapest = Math.min(...confirmedPrices);
+        await updateCallLog(db, logId, 'awaiting_response', `twilio_quoted:${cheapest}`, callSid ? `twilio:${callSid}` : undefined, `[Agent]: quoted cheapest ${cheapest} (offered: ${confirmedPrices.join(', ')}); relaying to guest`);
+        await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'quoted', `quoted;prices=${confirmedPrices.join(',')};cheapest=${cheapest}`, { priceQuoted: cheapest });
+        return twiml(`<Say voice="${VOICE}">Thank you. We will share this price with our guest and follow up shortly to confirm the booking. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye.</Say><Hangup/>`);
+      }
+      return await finalizeBookingPhase(confirmedPrices);
+    };
+    const finalizeBookingPhase = async (confirmedPrices: number[]): Promise<Response> => {
+      const withinBudget = maxBudgetUsd != null ? confirmedPrices.filter((a) => a <= maxBudgetUsd) : confirmedPrices;
+      if (withinBudget.length === 0) {
+        const lowest = Math.min(...confirmedPrices);
+        await updateCallLog(db, logId, 'declined', `twilio_prices:${confirmedPrices.join('/')}_over_budget`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: confirmed ${confirmedPrices.join(', ')}\n[Agent]: all plans exceed guest budget ${maxBudgetUsd} ${budgetCurrency}`);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `all_plans_over_budget;prices=${confirmedPrices.join(',')};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: lowest });
+        }
+        return twiml(`<Say voice="${VOICE}">Thank you for confirming. Unfortunately, the offered ${confirmedPrices.length === 1 ? 'plan is' : 'plans are'} above our guest's budget, so we cannot proceed with the booking this time. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. We appreciate your time. Goodbye.</Say><Hangup/>`);
+      }
+      // Cheapest plan within budget wins → confirm the booking with the hotel.
+      const amount = Math.min(...withinBudget);
+      const chosenNote = confirmedPrices.length > 1 ? ` We will proceed with the lowest plan within the guest's budget, ${amount} ${spokenCurrency}.` : '';
+      await updateCallLog(db, logId, 'awaiting_response', `twilio_price:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Agent]: chosen ${amount} (offered: ${confirmedPrices.join(', ')})`);
+      const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, 0);
+      return gatherTwiml(action, `${chosenNote} To confirm the reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree and confirm the booking, press 1 or say yes. To decline, press 2 or say no.`, { preface: 'Thank you.' });
+    };
+
+    if (step === 'ask_price') {
+      const planPhrase = planIdx <= 1 ? 'your day-use plan' : `plan ${planIdx}`;
+      if (isRepeat(speech, digits)) {
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1), { pi: planIdx, acc: accPrices.join('/') });
+        return gatherTwiml(action, `What is the total price for ${planPhrase} in ${spokenCurrency}, including all service fees and taxes? You can say it, or enter it on your keypad.`, { timeout: 4, finishOnKey: '#', speechTimeout: '3' });
+      }
+      const amount = parsePrice(speech, digits);
+      if (amount != null) {
+        // Read THIS single plan's price back for confirmation before moving on.
+        const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, 0), { pi: planIdx, pp: amount, acc: accPrices.join('/') });
+        const label = planIdx <= 1 ? 'The price' : `Plan ${planIdx}`;
+        return gatherTwiml(action, `${label} is ${amount} ${spokenCurrency}. Is that correct? Press 1 or say yes. To change it, press 2 or say the correct price.`, { timeout: 10, speechTimeout: '3', preface: 'Thank you.' });
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_price_no_answer', callSid ? `twilio:${callSid}` : undefined);
@@ -1332,12 +1601,81 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         return twiml(`<Say voice="${VOICE}">We could not capture the amount after multiple attempts. Goodbye.</Say><Hangup/>`);
       }
-      const action = makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1);
-      return gatherTwiml(action, `Sorry, I didn't catch that. Please tell me the total price. If you have several plans, tell me each price. You can also enter the amount on your keypad and press pound.`);
+      const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, turn + 1), { pi: planIdx, acc: accPrices.join('/') });
+      return gatherTwiml(action, `Sorry, I didn't catch that. Please tell me the total price for ${planPhrase} in ${spokenCurrency}. You can also enter it on your keypad.`, { timeout: 4, finishOnKey: '#', speechTimeout: '3' });
+    }
+
+    if (step === 'confirm_prices') {
+      const planPhrase = planIdx <= 1 ? 'The price' : `Plan ${planIdx}`;
+      const forPlan = planIdx <= 1 ? 'your day-use plan' : `plan ${planIdx}`;
+      // Correction by VOICE only. Keypad at this yes/no step is a single key
+      // (1/2/3), so DTMF must NOT be read as a price — to change the price the
+      // hotel presses 2 and re-enters it in the ask_price step.
+      const corrected = parsePrice(speech, '');
+      if (corrected != null && !isYes(speech, digits) && !isNo(speech, digits)) {
+        const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, 0), { pi: planIdx, pp: corrected, acc: accPrices.join('/') });
+        return gatherTwiml(action, `Thank you. ${planPhrase} is ${corrected} ${spokenCurrency}. Is that correct? Press 1 or say yes. To change it, press 2 or say the correct price.`, { timeout: 10, speechTimeout: '3' });
+      }
+      if (isNo(speech, digits)) {
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pi: planIdx, acc: accPrices.join('/') });
+        return gatherTwiml(action, `No problem. Please tell me the correct total ${spokenCurrency} price for ${forPlan}. You can also enter it on your keypad.`, { timeout: 4, finishOnKey: '#', speechTimeout: '3' });
+      }
+      if (isYes(speech, digits)) {
+        if (pendingPrice == null) {
+          const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pi: planIdx, acc: accPrices.join('/') });
+          return gatherTwiml(action, `Sorry, could you tell me the ${spokenCurrency} price for ${forPlan} again?`, { timeout: 4, finishOnKey: '#', speechTimeout: '3' });
+        }
+        // Accumulate this confirmed plan price (carried via the URL, logged for audit).
+        const acc = [...accPrices, pendingPrice].slice(0, 3);
+        await updateCallLog(db, logId, 'awaiting_response', `twilio_prices:${acc.join('/')}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: confirmed ${planPhrase.toLowerCase()} = ${pendingPrice}`);
+        // Cap at three plans; otherwise ask whether there is another one.
+        if (acc.length >= 3) return await finalizePrices(acc);
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_more', inferredPhase, 0), { pi: planIdx, acc: acc.join('/') });
+        return gatherTwiml(action, `Got it. Do you have another day-use plan at a different price? Press 1 or say yes. Press 2 or say no.`, { timeout: 8, speechTimeout: '3', preface: 'Thank you.' });
+      }
+      if (turn >= MAX_RETRY) {
+        await updateCallLog(db, logId, 'no_answer', 'twilio_confirm_prices_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_price_confirmation');
+        }
+        return twiml(`<Say voice="${VOICE}">We could not confirm the price after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const action = withParams(makeWebhookUrl(request, logId, 'confirm_prices', inferredPhase, turn + 1), { pi: planIdx, pp: pendingPrice ?? '', acc: accPrices.join('/') });
+      const spoken = pendingPrice != null ? `${pendingPrice} ${spokenCurrency}` : 'the price you mentioned';
+      return gatherTwiml(action, `Sorry, I didn't catch that. ${planPhrase} is ${spoken}. Is that correct? Press 1 or say yes. To change it, press 2 or say the correct price.`, { timeout: 10, speechTimeout: '3' });
+    }
+
+    if (step === 'ask_more') {
+      // Never exceed three plans.
+      if (accPrices.length >= 3) return await finalizePrices(accPrices);
+      if (isYes(speech, digits)) {
+        const nextIdx = Math.min(planIdx + 1, 3);
+        const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pi: nextIdx, acc: accPrices.join('/') });
+        return gatherTwiml(action, `What is the total price for plan ${nextIdx} in ${spokenCurrency}, including all service fees and taxes? You can say it, or enter it on your keypad.`, { timeout: 4, finishOnKey: '#', speechTimeout: '3', preface: 'Thank you.' });
+      }
+      if (isNo(speech, digits)) {
+        if (!accPrices.length) {
+          const action = withParams(makeWebhookUrl(request, logId, 'ask_price', inferredPhase, 0), { pi: 1, acc: '' });
+          return gatherTwiml(action, `Let me get the price first. What is the total price for your day-use plan in ${spokenCurrency}? You can say it, or enter it on your keypad.`, { timeout: 4, finishOnKey: '#', speechTimeout: '3' });
+        }
+        return await finalizePrices(accPrices);
+      }
+      if (turn >= MAX_RETRY) {
+        // No clear yes/no — proceed with what we already have.
+        if (accPrices.length) return await finalizePrices(accPrices);
+        await updateCallLog(db, logId, 'no_answer', 'twilio_ask_more_no_answer', callSid ? `twilio:${callSid}` : undefined);
+        if (phase === 'concierge') {
+          await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'no_answer', 'no_more_plans_answer');
+        }
+        return twiml(`<Say voice="${VOICE}">We could not confirm your response after multiple attempts. Goodbye.</Say><Hangup/>`);
+      }
+      const action = withParams(makeWebhookUrl(request, logId, 'ask_more', inferredPhase, turn + 1), { pi: planIdx, acc: accPrices.join('/') });
+      return gatherTwiml(action, `Sorry, I didn't catch that. Do you have another day-use plan at a different price? Press 1 or say yes. Press 2 or say no.`, { timeout: 8, speechTimeout: '3' });
     }
 
     if (step === 'confirm_booking') {
-      const amount = parsePrice(speech, digits);
+      // Corrected amount by VOICE only — keypad here is a single yes/no key.
+      const amount = parsePrice(speech, '');
       if (amount != null && !isYes(speech, digits) && !isNo(speech, digits)) {
         if (maxBudgetUsd != null && amount > maxBudgetUsd) {
           // Corrected quote pushed the price over budget — do not book.
@@ -1345,11 +1683,11 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           if (phase === 'concierge') {
             await finalizeConciergeOutcome(env, db, resolvedConciergeCallId || logId, 'over_budget', `corrected_price_over_budget;price=${amount};budget=${maxBudgetUsd} ${budgetCurrency}`, { priceQuoted: amount });
           }
-          return twiml(`<Say voice="${VOICE}">Thank you. Unfortunately that amount is above our guest's budget, so we cannot proceed with the booking this time. We appreciate your time. Goodbye.</Say><Hangup/>`);
+          return twiml(`<Say voice="${VOICE}">Thank you. Unfortunately that amount is above our guest's budget, so we cannot proceed with the booking this time. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. We appreciate your time. Goodbye.</Say><Hangup/>`);
         }
         await updateCallLog(db, logId, 'awaiting_response', `twilio_price_corrected:${amount}`, callSid ? `twilio:${callSid}` : undefined, `[Hotel]: corrected price ${amount}`);
         const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
-        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please tell me the correct amount, or enter it on your keypad and press the pound key.`);
+        return gatherTwiml(action, `To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${amount} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please tell me the correct amount.`);
       }
       if (isYes(speech, digits)) {
         const finalAmount = quotedAmountFromNote;
@@ -1371,7 +1709,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         }
         const detailAction = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, 0);
         return twiml(
-          `${sayText(`Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${finalAmount != null ? `${finalAmount} ${spokenCurrency}` : 'the agreed amount'}, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details.`)}` +
+          `${sayText(`Thank you. All consent checks are complete. The reservation is confirmed at a final total of ${finalAmount != null ? `${finalAmount} ${spokenCurrency}` : 'the agreed amount'}, including service fees and taxes. Payment will be made directly at the hotel by the guest. We will send a follow-up confirmation email shortly with all the details. `)}` +
           `<Pause length="1"/>` +
           `${sayText(`For your immediate records, I will share the guest details slowly.`)}` +
           `<Pause length="1"/>` +
@@ -1393,7 +1731,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         } else if (db && booking?.id) {
           await db.prepare(`UPDATE bookings SET status='declined_by_hotel', updated_at=datetime('now') WHERE id=?`).bind(booking.id).run().catch(() => {});
         }
-        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your answer. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. We recognized your answer. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
         await updateCallLog(db, logId, 'no_answer', 'twilio_confirm_no_answer', callSid ? `twilio:${callSid}` : undefined);
@@ -1404,7 +1742,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       }
       const action = makeWebhookUrl(request, logId, 'confirm_booking', inferredPhase, turn + 1);
       if (quotedAmountFromNote != null) {
-        return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please tell me the correct amount, or enter it on your keypad and press the pound key.`);
+        return gatherTwiml(action, `Sorry, I could not hear your response clearly. To confirm your reservation: The date is ${bookingCheckInDate}, time is ${bookingCheckInTime} to ${bookingCheckOutTime}, for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. The final total amount including taxes and fees is ${quotedAmountFromNote} ${spokenCurrency}, to be paid on-site at check-in. If you agree to all these details and confirm the booking, press 1 or say yes. To decline, press 2 or say no. If the amount is different, please tell me the correct amount.`);
       }
       return gatherTwiml(action, 'Sorry, I could not hear your response clearly. Please say it again. Press 1 or say yes to confirm. Press 2 or say no to decline. You can also provide a corrected amount.');
     }
@@ -1422,10 +1760,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         );
       }
       if (isYes(speech, digits)) {
-        return twiml(`<Say voice="${VOICE}">Thank you. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">Thank you. One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Goodbye.</Say><Hangup/>`);
       }
       if (turn >= MAX_RETRY) {
-        return twiml(`<Say voice="${VOICE}">Thank you for your time. Goodbye.</Say><Hangup/>`);
+        return twiml(`<Say voice="${VOICE}">One more thing. We regularly have guests looking for day-use stays in your area, so we would love to feature your day-use plans on DayDreamHub. Our team will contact you soon about listing your property. Thank you for your time. Goodbye.</Say><Hangup/>`);
       }
       const action = makeWebhookUrl(request, logId, 'confirm_booking_details', inferredPhase, turn + 1);
       return gatherTwiml(action, 'If you want the guest details repeated slowly, press 3 or say repeat. Otherwise, press 1 or say yes to finish this call.', { slow: true });

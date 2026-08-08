@@ -588,6 +588,16 @@ export async function sendGuestBookingConfirmation(
       ⏳ <strong>Awaiting hotel confirmation.</strong> You'll receive a confirmation email once the hotel accepts your booking. This usually takes less than 24 hours.
     </div>
 
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#7c2d12">
+      <strong>Need to change your booking?</strong>
+      <ul style="margin:8px 0 0;padding-left:18px">
+        <li style="margin-bottom:4px">Removing an add-on or reducing the number of guests isn't possible &mdash; please cancel and book again. We can't refund the difference on an existing booking.</li>
+        <li style="margin-bottom:4px">To add an add-on, either cancel and book again, or ask the hotel directly on arrival and pay them for it there.</li>
+        <li style="margin-bottom:4px">Whether it can be arranged on arrival is up to the hotel &mdash; check with them first via Messages in your DayDreamHub inbox.</li>
+        <li>Any refund when you cancel follows the cancellation policy above.</li>
+      </ul>
+    </div>
+
     <div style="text-align:center;margin:24px 0">
       <a href="${SITE_URL}/mypage" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Check Booking Status</a>
     </div>
@@ -835,6 +845,53 @@ export async function sendReviewRequestNotification(
   });
 }
 
+// Sent to owner when admin reviews the listing and asks for changes before
+// publishing. Clears the "under review" state so the owner can revise and
+// re-submit. Includes the reviewer's feedback.
+export async function sendListingChangesRequestedEmail(
+  apiKey: string,
+  data: { ownerName: string; ownerEmail: string; hotelName: string; hotelId: number; feedback: string }
+): Promise<{ success: boolean; error?: string }> {
+  const subject = `Changes requested for your listing – ${data.hotelName}`;
+  const feedbackHtml = escapeHtml(data.feedback || '').replace(/\n/g, '<br>');
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#b45309;color:white;padding:24px;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:20px">Changes requested</h1>
+    <p style="margin:8px 0 0;opacity:0.9">${escapeHtml(data.hotelName)}</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+    <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.ownerName)}</strong> 👋</p>
+    <p style="color:#374151;line-height:1.6">
+      Thank you for submitting your listing for review. Before we can publish it, our team would like you to update a few things:
+    </p>
+    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:16px;margin:16px 0;color:#92400e;line-height:1.6">
+      ${feedbackHtml || 'Please review your listing details and resubmit.'}
+    </div>
+    <p style="color:#374151;line-height:1.6">
+      Please open your listing, make the updates, and click <strong>Request review</strong> again. We'll take another look right away.
+    </p>
+    <div style="text-align:center;margin:24px 0">
+      <a href="${SITE_URL}/owner/hotels/${data.hotelId}"
+         style="display:inline-block;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:bold">
+        Edit my listing →
+      </a>
+    </div>
+    <p style="color:#6b7280;font-size:14px;line-height:1.6">
+      Questions? Reply to this email or contact us at <a href="mailto:contact@daydreamhub.com" style="color:#4f46e5">contact@daydreamhub.com</a>.
+    </p>
+    ${emailFooter()}
+  </div>
+</div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.ownerEmail,
+    subject,
+    html,
+  });
+}
+
 // Sent to owner when admin sets is_active = 1 (listing approved)
 export async function sendListingApprovedEmail(
   apiKey: string,
@@ -880,6 +937,60 @@ export async function sendListingApprovedEmail(
 }
 
 export type ConciergeResultEmailType = 'success' | 'no_answer' | 'declined' | 'all_failed' | 'over_budget';
+
+// Two-call model: after call 1, the guest receives the hotel's quoted price and
+// a button to accept it. Clicking the button (which then collects the $7 DDH fee)
+// triggers call 2 to confirm the booking. The room price is paid on-site.
+export async function sendConciergeQuoteEmail(
+  apiKey: string,
+  data: {
+    guestName: string; guestEmail: string; hotelName: string;
+    date: string; checkIn: string; checkOut: string; guests: number;
+    price: string | number; priceCurrency: string; acceptUrl: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const fmtQuoteDate = (iso: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+    if (!m) return String(iso || '');
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${months[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}`;
+  };
+  const when = [fmtQuoteDate(data.date), [data.checkIn, data.checkOut].filter(Boolean).join(' – ')].filter(Boolean).join('  ·  ');
+  const priceStr = `${data.price} ${escapeHtml(data.priceCurrency || '')}`.trim();
+  const subject = `Your day-use quote for ${data.hotelName} — ${priceStr}`;
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:#46a3c2;color:white;padding:24px;border-radius:8px 8px 0 0">
+    <h1 style="margin:0;font-size:20px">We found a price for you</h1>
+    <p style="margin:8px 0 0;opacity:0.9">${escapeHtml(data.hotelName)}</p>
+  </div>
+  <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
+    <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.guestName || 'there')}</strong>,</p>
+    <p style="color:#374151;line-height:1.6">We called <strong>${escapeHtml(data.hotelName)}</strong> and they can offer your day-use stay at the price below.</p>
+    <table style="border-collapse:collapse;width:100%;margin:16px 0">
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Hotel</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(data.hotelName)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">When</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(when)}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Guests</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(String(data.guests))}</td></tr>
+      <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;white-space:nowrap">Quoted price</td><td style="padding:8px 12px;border:1px solid #ddd;font-size:18px;font-weight:700;color:#37879f">${priceStr}</td></tr>
+    </table>
+    <p style="color:#374151;line-height:1.6">If this works for you, tap below to book. A <strong>$7 DayDreamHub booking fee</strong> applies; the room price above is paid directly to the hotel on-site. <strong>If the hotel cannot confirm your booking, this $7 fee is refunded in full.</strong></p>
+    <div style="text-align:center;margin:24px 0">
+      <a href="${data.acceptUrl}" style="display:inline-block;padding:14px 32px;background:#46a3c2;color:white;text-decoration:none;border-radius:8px;font-weight:bold;font-size:16px">
+        Book at this price →
+      </a>
+    </div>
+    <p style="color:#6b7280;font-size:13px;line-height:1.6">After you confirm, we call the hotel again to finalize your booking and email you the confirmation. If you have any questions, reply to this email or contact us at <a href="mailto:contact@daydreamhub.com" style="color:#46a3c2">contact@daydreamhub.com</a>.</p>
+    ${emailFooter()}
+  </div>
+</div>`;
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.guestEmail,
+    subject,
+    html,
+  });
+}
 
 export async function sendConciergeResultEmail(
   apiKey: string,
