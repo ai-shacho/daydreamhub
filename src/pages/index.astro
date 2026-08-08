@@ -754,7 +754,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
             <input
               type="text"
               id="hero-chat-input"
-              placeholder={isJa ? '例: 東京、ドバイ、バンコク、パリ' : 'e.g. Tokyo, Dubai, Bangkok, Paris, New York'}
+              placeholder={isJa ? '例: バンコク、ドバイ、クアラルンプール' : 'e.g. Bangkok, Dubai, Kuala Lumpur, Nairobi'}
               class="flex-1 bg-transparent text-gray-800 placeholder-gray-400 text-sm md:text-base focus:outline-none font-medium"
               maxlength="300"
             />
@@ -2237,8 +2237,8 @@ function escHtml(s) {
     var isJaGreet = (document.documentElement.lang || 'en').indexOf('ja') === 0;
     addMsg(
       isJaGreet
-        ? '👋 こんにちは！AIコンシェルジュです。\nどちらの**都市・空港**でホテルをお探しですか？（例: 東京、ドバイ、バンコク）'
-        : "👋 Hi! I'm your AI concierge.\nWhich **city or airport** are you visiting? (e.g. Tokyo, Dubai, Bangkok)",
+        ? '👋 こんにちは！AIコンシェルジュです。\nどちらの**都市・空港**でホテルをお探しですか？（例: バンコク、ドバイ、クアラルンプール）'
+        : "👋 Hi! I'm your AI concierge.\nWhich **city or airport** are you visiting? (e.g. Bangkok, Dubai, Kuala Lumpur)",
       'assistant'
     );
     showMessages();
@@ -2280,9 +2280,6 @@ function escHtml(s) {
     {city:"Moscow",country:"Russia"},{city:"St. Petersburg",country:"Russia"},{city:"Kiev",country:"Ukraine"},
     {city:"Bucharest",country:"Romania"},{city:"Sofia",country:"Bulgaria"},{city:"Zagreb",country:"Croatia"},
     // Asia
-    {city:"Tokyo",country:"Japan"},{city:"Osaka",country:"Japan"},{city:"Kyoto",country:"Japan"},
-    {city:"Yokohama",country:"Japan"},{city:"Nagoya",country:"Japan"},{city:"Sapporo",country:"Japan"},
-    {city:"Fukuoka",country:"Japan"},{city:"Kobe",country:"Japan"},{city:"Hiroshima",country:"Japan"},
     {city:"Beijing",country:"China"},{city:"Shanghai",country:"China"},{city:"Shenzhen",country:"China"},
     {city:"Guangzhou",country:"China"},{city:"Chengdu",country:"China"},{city:"Xi'an",country:"China"},
     {city:"Hangzhou",country:"China"},{city:"Wuhan",country:"China"},{city:"Chongqing",country:"China"},

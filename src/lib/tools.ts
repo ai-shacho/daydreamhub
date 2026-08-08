@@ -283,6 +283,8 @@ const EXCLUDED_LUXURY_CHAIN_KEYWORDS = [
 ];
 const MIN_USER_RATING_COUNT = 50;
 const MAX_USER_RATING_COUNT = 5000;
+// Relaxed floor used by the second filter pass when the strict band yields too few hotels
+const RELAXED_MIN_RATING_COUNT = 15;
 
 export async function searchHotelsExternal(env: any, params: any) {
   const cityEnglish = geoNameEn(params.city || params.query || "");
@@ -352,15 +354,26 @@ export async function searchHotelsExternal(env: any, params: any) {
   }
 
   let data: any = await response.json();
-  let aggregated = processPlacesResults(data).hotels || [];
+  const allPlaces: any[] = [...(data.places || [])];
   let nextPageToken = data?.nextPageToken;
 
   for (let page = 2; page <= maxPages && nextPageToken; page++) {
     const nextRes = await searchOnce({ ...baseBody, pageToken: nextPageToken }, false);
     if (!nextRes.ok) break;
     data = await nextRes.json();
-    aggregated.push(...(processPlacesResults(data).hotels || []));
+    allPlaces.push(...(data.places || []));
     nextPageToken = data?.nextPageToken;
+  }
+
+  // Two-pass rating filter: prefer mid-size hotels (50–4999 reviews) that are likely to
+  // accept phone bookings; when a city yields too few (big-brand cities where every hotel
+  // has 5000+ reviews, or small cities below 50), relax to ≥15 reviews with no upper cap.
+  let aggregated = processPlacesResults({ places: allPlaces }).hotels || [];
+  if (aggregated.length < 3) {
+    const seen = new Set(aggregated.map((h: any) => (String(h.name) + '|' + String(h.phone)).toLowerCase()));
+    const relaxed = (processPlacesResults({ places: allPlaces }, RELAXED_MIN_RATING_COUNT, Infinity).hotels || [])
+      .filter((h: any) => !seen.has((String(h.name) + '|' + String(h.phone)).toLowerCase()));
+    aggregated = [...aggregated, ...relaxed];
   }
 
   const deduped = aggregated.filter((hotel: any, index: number, arr: any[]) => {
@@ -372,14 +385,14 @@ export async function searchHotelsExternal(env: any, params: any) {
   return { count: deduped.length, source: "external", hotels: deduped };
 }
 
-function processPlacesResults(data: any) {
+function processPlacesResults(data: any, minRatings = MIN_USER_RATING_COUNT, maxRatings = MAX_USER_RATING_COUNT) {
   const places = data.places || [];
   const hotels = places
     .filter((p: any) => {
       if (!p.internationalPhoneNumber && !p.nationalPhoneNumber) return false;
 
       const userRatingCount = p.userRatingCount || 0;
-      if (userRatingCount < MIN_USER_RATING_COUNT || userRatingCount >= MAX_USER_RATING_COUNT) return false;
+      if (userRatingCount < minRatings || userRatingCount >= maxRatings) return false;
 
       const types = p.types || [];
       const isLodging = types.some((t: string) => HOTEL_TYPES.includes(t));
