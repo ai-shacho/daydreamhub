@@ -73,6 +73,8 @@ const t = isJa
       extWeb: '公式サイトを見る →',
       photoBy: '写真提供',
       newResult: '新着',
+      pushOn: '結果が届いたらプッシュ通知でお知らせします。',
+      pushIos: '通知を受け取るには、共有ボタン（□↑）→「ホーム画面に追加」でアプリとして開いてください。',
       cgTitle: 'AI電話確認のリクエスト',
       cgHotel: '対象ホテル',
       cgTimeFrom: '利用開始',
@@ -184,6 +186,8 @@ const t = isJa
       extWeb: 'Visit the website →',
       photoBy: 'Photo',
       newResult: 'New',
+      pushOn: "We'll send a push notification when the result arrives.",
+      pushIos: 'To get notifications, add this to your Home Screen (Share → Add to Home Screen) and open it from there.',
       cgTitle: 'AI phone confirmation',
       cgHotel: 'Hotel',
       cgTimeFrom: 'From',
@@ -1420,7 +1424,16 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       }
 
       // ---------- concierge: unlisted hotels + AI phone confirmation ----------
-      const cgSessionId = (crypto.randomUUID && crypto.randomUUID()) || 'app-' + Date.now() + '-' + String(Math.random()).slice(2, 8);
+      // Stable per device: push subscriptions and inquiry lookups both key off it.
+      const cgSessionId = (() => {
+        let v = null;
+        try { v = localStorage.getItem('ddhSession'); } catch (e) {}
+        if (!v) {
+          v = (crypto.randomUUID && crypto.randomUUID()) || 'app-' + Date.now() + '-' + String(Math.random()).slice(2, 8);
+          try { localStorage.setItem('ddhSession', v); } catch (e) {}
+        }
+        return v;
+      })();
       let lastPlaceLabel = '';
       let extHotels = [];
       let extSeq = 0;
@@ -1562,6 +1575,12 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           // Land the user where the result will appear.
           $('myBookingsBtn').click();
           track('app_cg_call_requested', { hotel: cgTarget.name });
+          // Now is when notifications are obviously worth it.
+          const standaloneNow = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+          const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+          ensurePush(true).then((ok) => {
+            bkToast(ok ? t.pushOn : (ios && !standaloneNow ? t.pushIos : t.cgDone));
+          });
         } catch (e) {
           $('cgHint').textContent = '⚠️ ' + t.cgFail;
         } finally {
@@ -2259,6 +2278,54 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/app-sw.js', { scope: '/app' }).catch(() => {});
       }
+
+      // ---- push notifications ----
+      // iOS only allows push for a home-screen install; elsewhere the browser
+      // handles it. Permission is requested at the moment it earns its keep —
+      // right after asking the AI to call — never on page load.
+      const pushSupported = () =>
+        'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+      function b64ToBytes(b64) {
+        const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+        const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+        const arr = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+        return arr;
+      }
+      async function ensurePush(ask) {
+        if (!pushSupported()) return false;
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          let sub = await reg.pushManager.getSubscription();
+          if (!sub) {
+            if (Notification.permission === 'denied') return false;
+            if (Notification.permission !== 'granted') {
+              if (!ask) return false;
+              if ((await Notification.requestPermission()) !== 'granted') {
+                track('app_push_denied');
+                return false;
+              }
+            }
+            const cfg = await (await fetch('/api/app/push-config')).json();
+            if (!cfg.publicKey) return false;
+            sub = await reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: b64ToBytes(cfg.publicKey),
+            });
+            track('app_push_subscribed');
+          }
+          await fetch('/api/app/push-subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: sub.endpoint, session: cgSessionId, lang: isJa ? 'ja' : 'en' }),
+          });
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+      // Keep an existing subscription fresh (endpoints rotate) without prompting.
+      setTimeout(() => { if (pushSupported() && Notification.permission === 'granted') ensurePush(false); }, 2500);
 
       // Install promotion. Android/Chrome fires beforeinstallprompt; iOS never
       // does, so show a one-time "Add to Home Screen" walkthrough instead.
