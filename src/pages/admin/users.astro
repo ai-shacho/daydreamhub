@@ -18,7 +18,14 @@ let error = "";
 
 if (db) {
   try {
-    let query = `SELECT id, name, email, role, created_at FROM users WHERE 1=1`;
+    // Owners are identified by email on the hotels table, so pull the hotels
+    // they own alongside the account — a bare person's name doesn't say which
+    // property they belong to.
+    let query = `SELECT id, name, email, role, created_at,
+      (SELECT GROUP_CONCAT(h.name, ' ||| ') FROM hotels h
+        WHERE LOWER(TRIM(h.email)) = LOWER(TRIM(users.email)) AND h.email IS NOT NULL AND h.email != ''
+      ) AS hotel_names
+      FROM users WHERE 1=1`;
     const binds: any[] = [];
 
     if (roleFilter) {
@@ -26,8 +33,13 @@ if (db) {
       binds.push(roleFilter);
     }
     if (search) {
-      query += " AND (name LIKE ? OR email LIKE ?)";
-      binds.push(`%${search}%`, `%${search}%`);
+      // Also match the hotel an owner belongs to, so you can look someone up
+      // by property name.
+      query += ` AND (name LIKE ? OR email LIKE ? OR EXISTS (
+        SELECT 1 FROM hotels h2
+         WHERE LOWER(TRIM(h2.email)) = LOWER(TRIM(users.email)) AND h2.email IS NOT NULL AND h2.email != ''
+           AND h2.name LIKE ?))`;
+      binds.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
     query += " ORDER BY created_at DESC LIMIT 200";
@@ -116,10 +128,23 @@ const roleColors: Record<string, string> = {
             <tr>
               <td colspan="5" class="px-4 py-12 text-center text-slate-400">No users found</td>
             </tr>
-          ) : users.map((u: any) => (
+          ) : users.map((u: any) => {
+            // An owner can hold several properties — show the first couple and
+            // fold the rest into a "+N", with the full list on hover.
+            const ownedHotels: string[] = String(u.hotel_names || '')
+              .split(' ||| ').map((s: string) => s.trim()).filter(Boolean);
+            const hotelLabel = ownedHotels.length > 2
+              ? `${ownedHotels.slice(0, 2).join(', ')} +${ownedHotels.length - 2}`
+              : ownedHotels.join(', ');
+            return (
             <tr class="hover:bg-slate-50 transition-colors">
               <td class="px-4 py-3 font-mono text-slate-500">#{u.id}</td>
-              <td class="px-4 py-3 font-medium text-slate-900">{u.name || "-"}</td>
+              <td class="px-4 py-3 font-medium text-slate-900">
+                {u.name || "-"}
+                {hotelLabel && (
+                  <span class="text-slate-400 font-normal" title={ownedHotels.join(', ')}> / {hotelLabel}</span>
+                )}
+              </td>
               <td class="px-4 py-3 text-slate-600">{u.email || "-"}</td>
               <td class="px-4 py-3 text-center">
                 <select
@@ -158,7 +183,8 @@ const roleColors: Record<string, string> = {
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
