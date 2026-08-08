@@ -650,6 +650,29 @@ async function updateConciergeCallStatus(db: DbLike | null, conciergeCallId: str
   });
 }
 
+// App inquiries are contact-free (no email), so the outcome is delivered by
+// Web Push instead. Idempotent via app_push_sent; never throws.
+async function pushOutcomeToApp(env: any, db: DbLike | null, conciergeCallId: string | null) {
+  if (!db || !conciergeCallId) return;
+  try {
+    const row: any = await db.prepare(
+      `SELECT c.app_push_sent, g.session_id
+         FROM concierge_calls c
+         LEFT JOIN concierge_call_groups g ON g.id = c.call_group_id
+        WHERE c.id = ?`
+    ).bind(conciergeCallId).first().catch(() => null);
+    if (!row?.session_id || Number(row.app_push_sent || 0) === 1) return;
+    const claim: any = await db.prepare(
+      `UPDATE concierge_calls SET app_push_sent = 1, updated_at = datetime('now') WHERE id = ? AND app_push_sent = 0`
+    ).bind(conciergeCallId).run().catch(() => null);
+    if (Number(claim?.meta?.changes || 0) === 0) return;
+    const { pushToSession } = await import('../../../lib/webpush');
+    await pushToSession(env, String(row.session_id));
+  } catch (e) {
+    console.error('[twilio-voice] pushOutcomeToApp failed', e);
+  }
+}
+
 // Two-call model: after call 1 quotes a price, email the guest a "Book at this
 // price" link. Idempotent via quote_email_sent. Generates the accept token.
 async function sendQuoteEmailOnce(env: any, db: DbLike | null, conciergeCallId: string | null) {
@@ -859,6 +882,8 @@ async function finalizeConciergeOutcome(
   } else if (outcome === 'quoted') {
     await sendQuoteEmailOnce(env, db, conciergeCallId);
   }
+  // Independent of email (app inquiries have no address on file).
+  await pushOutcomeToApp(env, db, conciergeCallId);
 
   const call: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id = ?`).bind(conciergeCallId).first().catch((e: any) => {
     console.error('[twilio-voice] finalizeConciergeOutcome SELECT call_group_id failed', { conciergeCallId, message: e?.message || String(e) });
