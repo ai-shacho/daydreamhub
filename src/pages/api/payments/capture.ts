@@ -79,8 +79,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  // Server-side charge resolution — same resolver as create.ts.
-  const charge = await resolveBookingCharge(db, plan_id);
+  // Server-side charge resolution — same resolver as create.ts, so the add-ons
+  // are re-priced here too rather than trusted from the client.
+  const charge = await resolveBookingCharge(db, plan_id, {
+    options: Array.isArray(body.options) ? body.options : [],
+    adults: Number(adults) || 1,
+    children: Number(children) || 0,
+  });
 
   if (!charge) {
     return new Response(JSON.stringify({ error: 'Plan not found' }), {
@@ -172,6 +177,26 @@ export const POST: APIRoute = async ({ request, locals }) => {
           .run();
         const row: any = await db.prepare('SELECT last_insert_rowid() as id').first();
         bookingId = row?.id;
+
+        // Record the add-ons at the prices charged, so later edits to an option
+        // never rewrite what this guest actually paid.
+        if (bookingId && charge.options.length) {
+          for (const o of charge.options) {
+            await db.prepare(
+              `INSERT INTO booking_options (
+                 booking_id, option_id, name, pricing_type, currency,
+                 unit_price_local, unit_price_usd, child_unit_price_local, child_unit_price_usd,
+                 quantity, child_quantity, amount_local, amount_usd
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).bind(
+              bookingId, o.option_id, o.name, o.pricing_type, charge.currency,
+              o.unit_price_local, o.unit_price_usd, o.child_unit_price_local, o.child_unit_price_usd,
+              o.quantity, o.child_quantity, o.amount_local, o.amount_usd
+            ).run().catch((e: any) => console.error('[capture] booking_option insert failed', e));
+          }
+          await db.prepare('UPDATE bookings SET options_total_usd = ? WHERE id = ?')
+            .bind(charge.optionsUsd, bookingId).run().catch(() => {});
+        }
       } catch (dbError) {
         // Payment succeeded at PayPal but DB write failed — log for manual recovery
         console.error(

@@ -41,7 +41,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   // Server-side charge resolution (local price × payment-time rate → USD).
   // Shared with capture.ts via resolveBookingCharge so amounts always match.
-  const charge = await resolveBookingCharge(db, plan_id);
+  const charge = await resolveBookingCharge(db, plan_id, {
+    options: Array.isArray(body.options) ? body.options : [],
+    adults: Number(body.adults) || 1,
+    children: Number(body.children) || 0,
+  });
 
   if (!charge) {
     return new Response(JSON.stringify({ error: 'Plan not found' }), {
