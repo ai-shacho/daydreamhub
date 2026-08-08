@@ -57,7 +57,7 @@ export async function getVapidKeys(db: any): Promise<VapidKeys | null> {
   }
 }
 
-async function vapidHeader(keys: VapidKeys, audience: string): Promise<string> {
+export async function vapidHeader(keys: VapidKeys, audience: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'jwk',
     keys.privateJwk,
