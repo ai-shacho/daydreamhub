@@ -2,6 +2,7 @@ import { APIRoute } from 'astro';
 import { requireOwner } from '../../../../lib/apiAuth';
 import { isValidPropertyType, normalizePropertyType } from '../../../../lib/propertyTypes';
 import { isValidCurrencyCode, repriceHotelPlansForCurrency } from '../../../../lib/currency';
+import { ensureHotelCoords } from '../../../../lib/geocode';
 
 export const GET: APIRoute = async ({ params, request, locals }) => {
   const hotelId = params.id;
@@ -132,6 +133,10 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
         });
       }
     }
+
+    // Backfill coordinates when the owner saved without geocoding, so the
+    // nearest-airport distance appears on the listing (never overwrites).
+    await ensureHotelCoords(runtime?.env, db, hotelId);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
