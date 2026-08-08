@@ -45,7 +45,10 @@ if (db && id) {
       // owner in /admin/users makes them appear here on the next load (SSR
       // queries the DB every request, so it's always in sync).
       const ownersResult = await db.prepare(
-        `SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.email
+        `SELECT u.id, COALESCE(NULLIF(u.name, ''), u.email) AS name, u.email,
+           (SELECT GROUP_CONCAT(h2.name, ' ||| ') FROM hotels h2
+             WHERE LOWER(TRIM(h2.email)) = LOWER(TRIM(u.email)) AND h2.email IS NOT NULL AND h2.email != ''
+           ) AS hotel_names
          FROM users u
          WHERE u.role = 'owner'
          ORDER BY name COLLATE NOCASE ASC`
@@ -169,11 +172,20 @@ if (!hotel) {
                   class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
                 >
                   <option value="">-- オーナーを選択 --</option>
-                  {owners.map((o: any) => (
-                    <option value={o.email} selected={hotel.email === o.email}>
-                      {o.name} ({o.email})
-                    </option>
-                  ))}
+                  {owners.map((o: any) => {
+                    // Show which property each owner belongs to — a person's
+                    // name alone doesn't identify them.
+                    const owned: string[] = String(o.hotel_names || '')
+                      .split(' ||| ').map((s: string) => s.trim()).filter(Boolean);
+                    const label = owned.length > 2
+                      ? `${owned.slice(0, 2).join(', ')} +${owned.length - 2}`
+                      : owned.join(', ');
+                    return (
+                      <option value={o.email} selected={hotel.email === o.email}>
+                        {o.name}{label ? ` / ${label}` : ''} ({o.email})
+                      </option>
+                    );
+                  })}
                 </select>
                 <button
                   id="assign-owner-btn"
