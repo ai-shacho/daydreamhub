@@ -355,7 +355,10 @@ try {
                             value={o.id}
                             data-price-usd={Number(o.price_usd || 0)}
                             data-child-price-usd={o.child_price_usd == null ? '' : Number(o.child_price_usd)}
+                            data-price-local={unitLocal}
+                            data-child-price-local={childLocal == null ? '' : childLocal}
                             data-pricing-type={o.pricing_type}
+                            data-label={locale === 'ja' && o.name_ja ? o.name_ja : o.name}
                           />
                           <span class="flex-1 min-w-0">
                             <span class="flex items-center justify-between gap-2 flex-wrap">
@@ -510,17 +513,25 @@ try {
                     <span>{locale === 'ja' ? 'プラン料金' : 'Plan Price'}</span>
                     <span>{formatLocalWithUsd(Number(plan.price_local ?? plan.price_usd), hotelCurrency, effectivePriceUsd)}</span>
                   </div>
+                  <div id="sum-options-row" class="hidden">
+                    <div class="flex justify-between text-gray-600">
+                      <span>{locale === 'ja' ? 'オプション' : 'Add-ons'}</span>
+                      <span id="sum-options">$0.00</span>
+                    </div>
+                    <div id="sum-options-lines" class="pl-3 mt-0.5 space-y-0.5 text-xs text-gray-400"></div>
+                  </div>
                   <div class="flex justify-between text-gray-600">
                     <span class="inline-flex items-center gap-1">
                       {locale === 'ja' ? '決済手数料' : 'Processing fee'}
-                      <span class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-300 text-[10px] text-gray-500 cursor-help" title={locale === 'ja' ? 'カード決済・不正防止などのシステム処理に必要な費用です。' : 'This covers payment processing and fraud protection costs.'}>i</span>
+                      <button type="button" id="fee-info-btn" aria-expanded="false"
+                        class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-300 text-[10px] text-gray-500 hover:bg-gray-100"
+                        title={locale === 'ja' ? 'カード決済・不正防止などのシステム処理に必要な費用です。' : 'This covers payment processing and fraud protection costs.'}>i</button>
                     </span>
                     <span id="sum-processing">${processingFee.toFixed(2)}</span>
                   </div>
-                  <div id="sum-options-row" class="hidden flex justify-between text-gray-600">
-                    <span>{locale === 'ja' ? 'オプション' : 'Add-ons'}</span>
-                    <span id="sum-options">$0.00</span>
-                  </div>
+                  <p id="fee-info-text" class="hidden text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    {locale === 'ja' ? 'カード決済・不正防止などのシステム処理に必要な費用です。' : 'This covers payment processing and fraud protection costs.'}
+                  </p>
                   <div id="sum-service-row" class:list={['flex justify-between text-gray-600', serviceFee > 0 ? '' : 'hidden']}>
                     <span>{locale === 'ja' ? 'サービス料' : 'Service Fee'}</span>
                     <span id="sum-service">${serviceFee.toFixed(2)}</span>
@@ -528,7 +539,7 @@ try {
                   <div class="flex items-center justify-between pt-2 border-t border-gray-100">
                     <p class="text-base font-semibold text-gray-800">{t('booking.total', locale)}</p>
                     <p class="text-2xl font-bold text-[#45A2C1]">
-                      <span id="sum-total" data-base-usd={effectivePriceUsd}>${total.toFixed(2)}</span> <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
+                      <span id="sum-total" data-base-usd={effectivePriceUsd} data-currency={hotelCurrency}>${total.toFixed(2)}</span> <span class="text-sm font-normal text-gray-500">{t('hotel.usd', locale)}</span>
                     </p>
                   </div>
                   {!isUsdHotel && (
@@ -805,26 +816,67 @@ try {
   // charge. The server re-prices everything on create/capture; this is display
   // only, using the same formula.
   (function () {
+    // The fee note is a button, not a hover title, so it also works on touch.
+    var feeBtn = document.getElementById('fee-info-btn');
+    var feeText = document.getElementById('fee-info-text');
+    feeBtn?.addEventListener('click', function () {
+      var open = feeText.classList.toggle('hidden') === false;
+      feeBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
     var boxes = document.querySelectorAll('.booking-option');
     if (!boxes.length) return;
     var basePriceUsd = Number(document.getElementById('sum-total')?.dataset.baseUsd || 0);
+    var currency = document.getElementById('sum-total')?.dataset.currency || 'USD';
+    var zeroDecimal = ['JPY','HUF','TWD','KRW','VND','CLP','ISK'].indexOf(currency) !== -1;
+
+    function money(v) {
+      var digits = zeroDecimal ? 0 : 2;
+      try {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency, minimumFractionDigits: 0, maximumFractionDigits: digits }).format(v);
+      } catch (e) {
+        return currency + ' ' + v.toFixed(digits);
+      }
+    }
+    // Same shape as the plan price: local amount with the USD equivalent.
+    function dual(local, usd) {
+      var u = '$' + usd.toFixed(2);
+      return currency === 'USD' ? u : money(local) + ' (≈ ' + u + ' USD)';
+    }
 
     function num(id) { return parseInt(document.getElementById(id)?.value || '0') || 0; }
 
     function recalc() {
       var adults = Math.max(1, num('adults'));
       var children = num('children');
-      var optionsUsd = 0;
+      var optionsUsd = 0, optionsLocal = 0;
+      var lines = [];
       Array.prototype.forEach.call(boxes, function (b) {
         if (!b.checked) return;
         var unit = Number(b.dataset.priceUsd || 0);
         var child = b.dataset.childPriceUsd === '' ? 0 : Number(b.dataset.childPriceUsd || 0);
+        var unitL = Number(b.dataset.priceLocal || unit);
+        var childL = b.dataset.childPriceLocal === '' ? 0 : Number(b.dataset.childPriceLocal || 0);
         var type = b.dataset.pricingType;
-        if (type === 'per_person') optionsUsd += unit * (adults + children);
-        else if (type === 'per_adult_child') optionsUsd += unit * adults + child * children;
-        else optionsUsd += unit;
+        var usd, loc, qty;
+        if (type === 'per_person') {
+          qty = adults + children;
+          usd = unit * qty; loc = unitL * qty;
+          qty = '× ' + qty;
+        } else if (type === 'per_adult_child') {
+          usd = unit * adults + child * children;
+          loc = unitL * adults + childL * children;
+          qty = '× ' + adults + (children ? ' + ' + children : '');
+        } else {
+          usd = unit; loc = unitL; qty = '';
+        }
+        optionsUsd += usd; optionsLocal += loc;
+        lines.push('<div class="flex justify-between gap-2"><span>' + (b.dataset.label || '') +
+          (qty ? ' <span class="text-gray-300">' + qty + '</span>' : '') +
+          '</span><span class="whitespace-nowrap">' + dual(loc, Math.round(usd * 100) / 100) + '</span></div>');
       });
       optionsUsd = Math.round(optionsUsd * 100) / 100;
+      optionsLocal = zeroDecimal ? Math.round(optionsLocal) : Math.round(optionsLocal * 100) / 100;
 
       var chargeable = Math.round((basePriceUsd + optionsUsd) * 100) / 100;
       var processing = Math.round(chargeable * 0.06 * 100) / 100;
@@ -835,7 +887,9 @@ try {
       var optRow = document.getElementById('sum-options-row');
       if (optRow) optRow.classList.toggle('hidden', optionsUsd <= 0);
       var optEl = document.getElementById('sum-options');
-      if (optEl) optEl.textContent = '$' + optionsUsd.toFixed(2);
+      if (optEl) optEl.textContent = dual(optionsLocal, optionsUsd);
+      var linesEl = document.getElementById('sum-options-lines');
+      if (linesEl) linesEl.innerHTML = lines.join('');
       var procEl = document.getElementById('sum-processing');
       if (procEl) procEl.textContent = '$' + processing.toFixed(2);
       var svcRow = document.getElementById('sum-service-row');
