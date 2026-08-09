@@ -328,6 +328,11 @@ try {
                   {t('booking.special_requests', locale)}
                 </label>
                 <textarea id="notes" name="notes" rows="3" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#45A2C1] focus:border-[#45A2C1] outline-none transition-colors resize-vertical" placeholder={t('booking.special_requests_placeholder', locale)}></textarea>
+                <p class="mt-1.5 text-xs text-gray-500">
+                  {locale === 'ja'
+                    ? 'ご要望はホテルにお伝えしますが、お応えできるかはホテルの判断によります。確約されるものではなく、内容によっては別途料金がかかる場合があります。'
+                    : 'We pass your request to the hotel, but whether it can be met is the hotel’s decision. It is not guaranteed, and some requests may carry an extra charge payable to the hotel.'}
+                </p>
               </div>
               <div class="pt-2 border-t border-gray-200">
             {planOptions.length > 0 && (
@@ -361,11 +366,9 @@ try {
                             data-label={locale === 'ja' && o.name_ja ? o.name_ja : o.name}
                           />
                           <span class="flex-1 min-w-0">
-                            <span class="flex items-center justify-between gap-2 flex-wrap">
-                              <span class="text-sm text-gray-800">{locale === 'ja' && o.name_ja ? o.name_ja : o.name}</span>
-                              <span class="text-sm text-gray-600 whitespace-nowrap">
-                                {formatLocalWithUsd(unitLocal, cur, Number(o.price_usd || 0))}{per}
-                              </span>
+                            <span class="block text-sm font-medium text-gray-800">{locale === 'ja' && o.name_ja ? o.name_ja : o.name}</span>
+                            <span class="block text-sm text-gray-600 mt-0.5">
+                              {formatLocalWithUsd(unitLocal, cur, Number(o.price_usd || 0))}{per}
                             </span>
                             {childLocal != null && (
                               <span class="block text-xs text-gray-500 mt-0.5">
@@ -472,6 +475,18 @@ try {
                 <p class="font-medium text-gray-900">{plan.max_guests} {t('hotel.guests_unit', locale)}</p>
               </div>
             )}
+            <div class="mb-4 pt-4 border-t border-gray-100">
+              <p class="text-sm text-gray-500">{locale === 'ja' ? 'ご利用日' : 'Check-in date'}</p>
+              <p id="sum-date" class="font-medium text-gray-900">—</p>
+            </div>
+            <div class="mb-4">
+              <p class="text-sm text-gray-500">{locale === 'ja' ? '人数' : 'Guests'}</p>
+              <p id="sum-guests" class="font-medium text-gray-900">—</p>
+            </div>
+            <div id="sum-notes-wrap" class="mb-4 hidden">
+              <p class="text-sm text-gray-500">{t('booking.special_requests', locale)}</p>
+              <p id="sum-notes" class="text-sm text-gray-700 whitespace-pre-line break-words"></p>
+            </div>
             <div class="mb-4">
               <p class="text-sm text-gray-500 mb-2">{locale === 'ja' ? 'キャンセルについて' : 'Cancellation policy'}</p>
               {(() => {
@@ -810,6 +825,63 @@ try {
         if (this.value) clearFieldError('check_in_date');
       });
     }
+  })();
+
+  // ── Keep the summary showing what is actually being booked, not just the
+  // plan: date, party size and any request the guest typed.
+  (function () {
+    var dateEl = document.getElementById('check_in_date');
+    var notesEl = document.getElementById('notes');
+    var outDate = document.getElementById('sum-date');
+    var outGuests = document.getElementById('sum-guests');
+    var outNotes = document.getElementById('sum-notes');
+    var notesWrap = document.getElementById('sum-notes-wrap');
+    if (!outDate && !outGuests) return;
+    var isJa = document.documentElement.lang === 'ja';
+
+    function n(id) { return parseInt(document.getElementById(id)?.value || '0') || 0; }
+
+    function fmtDate(v) {
+      if (!v) return '—';
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+      if (!m) return v;
+      var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      if (isNaN(d.getTime())) return v;
+      try {
+        return d.toLocaleDateString(isJa ? 'ja-JP' : 'en-US',
+          { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' });
+      } catch (e) { return v; }
+    }
+
+    function sync() {
+      if (outDate) outDate.textContent = fmtDate(dateEl?.value);
+      if (outGuests) {
+        var a = n('adults'), c = n('children'), i = n('infants');
+        var parts = [];
+        if (isJa) {
+          parts.push('大人 ' + a);
+          if (c) parts.push('子供 ' + c);
+          if (i) parts.push('幼児 ' + i);
+        } else {
+          parts.push(a + (a === 1 ? ' adult' : ' adults'));
+          if (c) parts.push(c + (c === 1 ? ' child' : ' children'));
+          if (i) parts.push(i + (i === 1 ? ' infant' : ' infants'));
+        }
+        outGuests.textContent = parts.join(' · ');
+      }
+      if (outNotes && notesWrap) {
+        var v = (notesEl?.value || '').trim();
+        outNotes.textContent = v;
+        notesWrap.classList.toggle('hidden', !v);
+      }
+    }
+
+    ['check_in_date', 'adults', 'children', 'infants', 'notes'].forEach(function (id) {
+      var el = document.getElementById(id);
+      el?.addEventListener('change', sync);
+      el?.addEventListener('input', sync);
+    });
+    sync();
   })();
 
   // ── Add-ons: keep the displayed total in step with what the server will
