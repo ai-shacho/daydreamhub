@@ -45,6 +45,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     options: Array.isArray(body.options) ? body.options : [],
     adults: Number(body.adults) || 1,
     children: Number(body.children) || 0,
+    infants: Number(body.infants) || 0,
   });
 
   if (!charge) {

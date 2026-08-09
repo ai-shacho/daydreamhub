@@ -118,22 +118,27 @@ export type PricedOption = {
   unit_price_usd: number;
   child_unit_price_local: number | null;
   child_unit_price_usd: number | null;
+  infant_unit_price_local: number | null;
+  infant_unit_price_usd: number | null;
   quantity: number;
   child_quantity: number;
+  infant_quantity: number;
   amount_local: number;
   amount_usd: number;
 };
 
 // Price the add-ons a guest picked. Quantities are derived from the party size
 // rather than trusted from the client: per_room is a flat charge, per_person
-// multiplies by every guest, and per_adult_child charges adults and children at
-// their own rates.
+// multiplies by adults and children (infants are not charged), and
+// per_adult_child charges each age band — adult, child, infant — at its own
+// rate, so an infant can be free by leaving that rate at zero.
 async function priceSelectedOptions(
   db: any,
   planId: number | string,
   selection: OptionSelection[],
   adults: number,
   children: number,
+  infants: number,
   currency: string,
   fxRate: number,
 ): Promise<{ options: PricedOption[]; optionsUsd: number; optionsLocal: number }> {
@@ -158,6 +163,7 @@ async function priceSelectedOptions(
 
   const partyAdults = Math.max(0, Math.floor(Number(adults) || 0));
   const partyChildren = Math.max(0, Math.floor(Number(children) || 0));
+  const partyInfants = Math.max(0, Math.floor(Number(infants) || 0));
   const options: PricedOption[] = [];
   let optionsUsd = 0;
   let optionsLocal = 0;
@@ -167,21 +173,27 @@ async function priceSelectedOptions(
     const unitLocal = Number(row.price_local ?? unitUsd);
     const childUsd = row.child_price_usd == null ? null : Number(row.child_price_usd);
     const childLocal = row.child_price_local == null ? null : Number(row.child_price_local);
+    const infantUsd = row.infant_price_usd == null ? null : Number(row.infant_price_usd);
+    const infantLocal = row.infant_price_local == null ? null : Number(row.infant_price_local);
     const type = String(row.pricing_type || 'per_room');
 
     let qty = 1;
     let childQty = 0;
+    let infantQty = 0;
     if (type === 'per_person') {
       qty = Math.max(1, partyAdults + partyChildren);
     } else if (type === 'per_adult_child') {
       qty = partyAdults;
       childQty = partyChildren;
+      infantQty = partyInfants;
     } else {
       qty = wanted.get(Number(row.id)) || 1; // per_room — a flat charge, optionally repeated
     }
 
-    const amountUsd = roundForCurrency(unitUsd * qty + (childUsd ?? 0) * childQty, 'USD');
-    const amountLocal = roundForCurrency(unitLocal * qty + (childLocal ?? 0) * childQty, currency);
+    const amountUsd = roundForCurrency(
+      unitUsd * qty + (childUsd ?? 0) * childQty + (infantUsd ?? 0) * infantQty, 'USD');
+    const amountLocal = roundForCurrency(
+      unitLocal * qty + (childLocal ?? 0) * childQty + (infantLocal ?? 0) * infantQty, currency);
     if (amountUsd <= 0) continue;
 
     options.push({
@@ -192,8 +204,11 @@ async function priceSelectedOptions(
       unit_price_usd: unitUsd,
       child_unit_price_local: childLocal,
       child_unit_price_usd: childUsd,
+      infant_unit_price_local: infantLocal,
+      infant_unit_price_usd: infantUsd,
       quantity: qty,
       child_quantity: childQty,
+      infant_quantity: infantQty,
       amount_local: amountLocal,
       amount_usd: amountUsd,
     });
@@ -211,7 +226,7 @@ async function priceSelectedOptions(
 export async function resolveBookingCharge(
   db: any,
   planId: number | string,
-  extras?: { options?: OptionSelection[]; adults?: number; children?: number },
+  extras?: { options?: OptionSelection[]; adults?: number; children?: number; infants?: number },
 ): Promise<null | {
   plan: any;
   currency: string;
@@ -251,6 +266,7 @@ export async function resolveBookingCharge(
     extras?.options || [],
     extras?.adults ?? 1,
     extras?.children ?? 0,
+    extras?.infants ?? 0,
     currency,
     fxRate,
   );

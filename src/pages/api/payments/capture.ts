@@ -85,6 +85,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     options: Array.isArray(body.options) ? body.options : [],
     adults: Number(adults) || 1,
     children: Number(children) || 0,
+    infants: Number(infants) || 0,
   });
 
   if (!charge) {
@@ -186,12 +187,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
               `INSERT INTO booking_options (
                  booking_id, option_id, name, pricing_type, currency,
                  unit_price_local, unit_price_usd, child_unit_price_local, child_unit_price_usd,
-                 quantity, child_quantity, amount_local, amount_usd
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                 infant_unit_price_local, infant_unit_price_usd,
+                 quantity, child_quantity, infant_quantity, amount_local, amount_usd
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
             ).bind(
               bookingId, o.option_id, o.name, o.pricing_type, charge.currency,
               o.unit_price_local, o.unit_price_usd, o.child_unit_price_local, o.child_unit_price_usd,
-              o.quantity, o.child_quantity, o.amount_local, o.amount_usd
+              o.infant_unit_price_local, o.infant_unit_price_usd,
+              o.quantity, o.child_quantity, o.infant_quantity, o.amount_local, o.amount_usd
             ).run().catch((e: any) => console.error('[capture] booking_option insert failed', e));
           }
           await db.prepare('UPDATE bookings SET options_total_usd = ? WHERE id = ?')

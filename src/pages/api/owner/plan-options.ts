@@ -72,16 +72,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const child = pricingType === 'per_adult_child'
       ? await resolvePlanPriceFields(db, plan.hotel_id, body.child_price ?? 0)
       : null;
+    const infant = pricingType === 'per_adult_child'
+      ? await resolvePlanPriceFields(db, plan.hotel_id, body.infant_price ?? 0)
+      : null;
 
     const res: any = await db.prepare(
       `INSERT INTO plan_options (plan_id, hotel_id, name, name_ja, description, pricing_type,
-         price_local, price_usd, child_price_local, child_price_usd, is_active, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
+         price_local, price_usd, child_price_local, child_price_usd,
+         infant_price_local, infant_price_usd, is_active, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
          COALESCE((SELECT MAX(sort_order) + 1 FROM plan_options WHERE plan_id = ?), 0))`
     ).bind(
       planId, plan.hotel_id, name, String(body.name_ja || ''), String(body.description || ''), pricingType,
       price.price_local, price.price_usd,
       child ? child.price_local : null, child ? child.price_usd : null,
+      infant ? infant.price_local : null, infant ? infant.price_usd : null,
       planId,
     ).run();
 
@@ -137,10 +142,17 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         push('child_price_local = ?', child.price_local);
         push('child_price_usd = ?', child.price_usd);
       }
+      if ('infant_price' in body) {
+        const infant = await resolvePlanPriceFields(db, existing.hotel_id, body.infant_price ?? 0);
+        push('infant_price_local = ?', infant.price_local);
+        push('infant_price_usd = ?', infant.price_usd);
+      }
     } else if ('pricing_type' in body) {
-      // Switching away from adult/child pricing clears the child rate.
+      // Switching away from age-band pricing clears the child and infant rates.
       push('child_price_local = ?', null);
       push('child_price_usd = ?', null);
+      push('infant_price_local = ?', null);
+      push('infant_price_usd = ?', null);
     }
 
     if (!sets.length) return bad('No fields to update');

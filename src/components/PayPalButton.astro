@@ -477,6 +477,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
               options: _pendingBookingData.options,
               adults: _pendingBookingData.adults,
               children: _pendingBookingData.children,
+              infants: _pendingBookingData.infants,
             }),
           });
           if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'Failed to create order');

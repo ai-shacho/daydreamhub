@@ -65,7 +65,7 @@ try {
   if (db) {
     dbAvailable = true;
     plan = await db.prepare(
-      "SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country, h.cancellation_policy as hotel_cancellation_policy, h.currency as hotel_currency FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?"
+      "SELECT p.*, p.cancellation_hours, h.name as hotel_name, h.name_ja as hotel_name_ja, h.slug as hotel_slug, h.city, h.country, h.cancellation_policy as hotel_cancellation_policy, h.currency as hotel_currency, h.infant_max_age, h.child_max_age FROM plans p JOIN hotels h ON h.id = p.hotel_id WHERE p.id = ?"
     ).bind(planIdNum).first();
     // Paid add-ons the hotel offers with this plan.
     try {
@@ -323,6 +323,20 @@ try {
                 <span>This plan allows a maximum of <strong>{maxGuests}</strong> guests in total (adults + children + infants).</span>
               </div>
               <p id="err-adults" class="hidden mt-1.5 text-xs text-red-600 flex items-center gap-1"><span>⚠</span><span></span></p>
+              <p class="text-xs text-gray-500">
+                {(plan.infant_max_age != null || plan.child_max_age != null) && (
+                  <span class="block">
+                    {locale === 'ja'
+                      ? `このホテルでは${plan.infant_max_age != null ? `幼児は${plan.infant_max_age}歳以下` : ''}${plan.infant_max_age != null && plan.child_max_age != null ? '、' : ''}${plan.child_max_age != null ? `子供は${plan.child_max_age}歳以下` : ''}として扱われます。それ以上は大人料金です。`
+                      : `This hotel counts ${plan.infant_max_age != null ? `infants as ${plan.infant_max_age} years old and under` : ''}${plan.infant_max_age != null && plan.child_max_age != null ? ', and ' : ''}${plan.child_max_age != null ? `children as ${plan.child_max_age} and under` : ''}. Anyone older is charged as an adult.`}
+                  </span>
+                )}
+                <span class="block">
+                  {locale === 'ja'
+                    ? 'チェックイン時に年齢の確認をさせていただく場合があります。実際の年齢が異なる場合、現地で追加料金が発生することがあります。'
+                    : 'The hotel may ask to verify ages at check-in. If ages differ from what was booked, an extra charge may apply on arrival.'}
+                </span>
+              </p>
               <div>
                 <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">
                   {t('booking.special_requests', locale)}
@@ -347,6 +361,7 @@ try {
                       const cur = String((plan as any).hotel_currency || 'USD').toUpperCase();
                       const unitLocal = Number(o.price_local ?? o.price_usd);
                       const childLocal = o.child_price_local == null ? null : Number(o.child_price_local);
+                      const infantLocal = o.infant_price_local == null ? null : Number(o.infant_price_local);
                       const per = o.pricing_type === 'per_person'
                         ? (locale === 'ja' ? '／人' : ' per guest')
                         : o.pricing_type === 'per_adult_child'
@@ -362,6 +377,8 @@ try {
                             data-child-price-usd={o.child_price_usd == null ? '' : Number(o.child_price_usd)}
                             data-price-local={unitLocal}
                             data-child-price-local={childLocal == null ? '' : childLocal}
+                            data-infant-price-usd={o.infant_price_usd == null ? '' : Number(o.infant_price_usd)}
+                            data-infant-price-local={infantLocal == null ? '' : infantLocal}
                             data-pricing-type={o.pricing_type}
                             data-label={locale === 'ja' && o.name_ja ? o.name_ja : o.name}
                           />
@@ -373,6 +390,13 @@ try {
                             {childLocal != null && (
                               <span class="block text-xs text-gray-500 mt-0.5">
                                 {locale === 'ja' ? '子供' : 'Child'}: {formatLocalWithUsd(childLocal, cur, Number(o.child_price_usd || 0))}
+                              </span>
+                            )}
+                            {infantLocal != null && (
+                              <span class="block text-xs text-gray-500 mt-0.5">
+                                {locale === 'ja' ? '幼児' : 'Infant'}: {Number(o.infant_price_usd || 0) === 0
+                                  ? (locale === 'ja' ? '無料' : 'Free')
+                                  : formatLocalWithUsd(infantLocal, cur, Number(o.infant_price_usd || 0))}
                               </span>
                             )}
                             {o.description && <span class="block text-xs text-gray-400 mt-0.5">{o.description}</span>}
@@ -921,6 +945,7 @@ try {
     function recalc() {
       var adults = Math.max(1, num('adults'));
       var children = num('children');
+      var infants = num('infants');
       var optionsUsd = 0, optionsLocal = 0;
       var lines = [];
       Array.prototype.forEach.call(boxes, function (b) {
@@ -929,6 +954,8 @@ try {
         var child = b.dataset.childPriceUsd === '' ? 0 : Number(b.dataset.childPriceUsd || 0);
         var unitL = Number(b.dataset.priceLocal || unit);
         var childL = b.dataset.childPriceLocal === '' ? 0 : Number(b.dataset.childPriceLocal || 0);
+        var infantU = b.dataset.infantPriceUsd === '' ? 0 : Number(b.dataset.infantPriceUsd || 0);
+        var infantL = b.dataset.infantPriceLocal === '' ? 0 : Number(b.dataset.infantPriceLocal || 0);
         var type = b.dataset.pricingType;
         var usd, loc, qty;
         if (type === 'per_person') {
@@ -936,9 +963,9 @@ try {
           usd = unit * qty; loc = unitL * qty;
           qty = '× ' + qty;
         } else if (type === 'per_adult_child') {
-          usd = unit * adults + child * children;
-          loc = unitL * adults + childL * children;
-          qty = '× ' + adults + (children ? ' + ' + children : '');
+          usd = unit * adults + child * children + infantU * infants;
+          loc = unitL * adults + childL * children + infantL * infants;
+          qty = '× ' + adults + (children ? ' + ' + children : '') + (infants && infantU ? ' + ' + infants : '');
         } else {
           usd = unit; loc = unitL; qty = '';
         }
@@ -973,7 +1000,7 @@ try {
     }
 
     Array.prototype.forEach.call(boxes, function (b) { b.addEventListener('change', recalc); });
-    ['adults', 'children'].forEach(function (id) {
+    ['adults', 'children', 'infants'].forEach(function (id) {
       document.getElementById(id)?.addEventListener('change', recalc);
     });
     recalc();
