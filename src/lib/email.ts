@@ -271,6 +271,7 @@ export async function sendBookingNotificationToHotel(
     guestName: string;
     guestEmail: string;
     guestPhone?: string;
+    guestNationality?: string | null;
     checkInDate: string;
     planName: string;
     adults: number;
@@ -292,6 +293,7 @@ export async function sendBookingNotificationToHotel(
     ['Guest Name', data.guestName],
     ['Guest Email', data.guestEmail],
     ['Guest Phone', data.guestPhone || '-'],
+    ['Nationality', data.guestNationality || '-'],
     ['Check-in Date', data.checkInDate],
     ['Plan', data.planName],
     ['Adults', String(data.adults)],

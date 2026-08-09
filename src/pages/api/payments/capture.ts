@@ -70,7 +70,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  const { order_id, plan_id, guest_name, guest_email, guest_phone, check_in_date, adults, children, infants, notes } = body;
+  const { order_id, plan_id, guest_name, guest_email, guest_phone, guest_nationality, check_in_date, adults, children, infants, notes } = body;
 
   if (!order_id || !plan_id || !guest_name || !guest_email || !check_in_date) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -152,10 +152,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           .prepare(
             `INSERT INTO bookings (
               plan_id, hotel_id, guest_name, guest_email, guest_phone,
-              check_in_date, adults, children, infants, total_price_usd,
+              guest_nationality, check_in_date, adults, children, infants, total_price_usd,
               local_currency, local_amount, fx_rate,
               status, paypal_order_id, paypal_capture_id, notes, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?, ?, datetime('now'), datetime('now'))`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?, ?, datetime('now'), datetime('now'))`
           )
           .bind(
             plan_id,
@@ -163,6 +163,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             guest_name,
             guest_email,
             guest_phone || '',
+            guest_nationality || null,
             check_in_date,
             adults || 1,
             children || 0,
@@ -266,6 +267,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 guestName: guest_name,
                 guestEmail: guest_email,
                 guestPhone: guest_phone || '',
+                guestNationality: guest_nationality || '',
                 checkInDate: check_in_date,
                 planName: (planFull as any).name,
                 adults: adults || 1,
@@ -317,7 +319,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
               from: 'DaydreamHub <noreply@daydreamhub.com>',
               to: adminTo,
               subject: adminSubject,
-              html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${bookingId}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${guest_name} (${guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(planFull as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${totalAmount}</td></tr></table></div>`,
+              html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${bookingId}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${guest_name} (${guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Nationality:</td><td>${guest_nationality || '-'}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(planFull as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${totalAmount}</td></tr></table></div>`,
             }),
           });
           const adminBody: any = await adminRes.json().catch(() => ({}));

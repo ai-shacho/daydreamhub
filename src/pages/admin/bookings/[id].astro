@@ -83,6 +83,7 @@ const statusColor: Record<string,string> = {
             <p class="font-semibold text-slate-900">{booking.guest_name || '—'}</p>
             <p class="text-sm text-slate-500">{booking.guest_email}</p>
             {booking.guest_phone && <p class="text-sm text-slate-500">{booking.guest_phone}</p>}
+            {booking.guest_nationality && <p class="text-sm text-slate-500">🌐 {booking.guest_nationality}</p>}
           </div>
           <div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Check-in</p>
