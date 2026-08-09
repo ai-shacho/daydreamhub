@@ -76,6 +76,9 @@ if (isJa) {
 let heroHotels: any[] = [];
 let categoryHotels: Record<string, any[]> = {};
 let allCities: any[] = [];
+// Hotel names for the location suggestions — the field accepts a property name,
+// so it should suggest one.
+let hotelNames: any[] = [];
 let totalHotels = 0;
 let totalPlans = 0;
 let recentBlogs: any[] = [];
@@ -122,13 +125,17 @@ try {
       ).bind(cat.planType).all().catch(() => ({ results: [] }))
     );
 
-    const [heroResult, cityResult, statsH, statsP, blogResult, mapResult, ...categoryResults] =
+    const [heroResult, cityResult, hotelNameResult, statsH, statsP, blogResult, mapResult, ...categoryResults] =
       await Promise.all([
         heroQuery,
         DB.prepare(
           `SELECT TRIM(city) as city, TRIM(country) as country, COUNT(*) as hotel_count
            FROM hotels WHERE city != '' AND status = 'active'
            GROUP BY TRIM(LOWER(city)), TRIM(LOWER(country)) ORDER BY hotel_count DESC LIMIT 60`
+        ).all().catch(() => ({ results: [] })),
+        DB.prepare(
+          `SELECT name, name_ja, city, country FROM hotels
+           WHERE status = 'active' AND name != '' ORDER BY name`
         ).all().catch(() => ({ results: [] })),
         DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE status = 'active'").first().catch(() => ({ c: 0 })),
         DB.prepare("SELECT COUNT(*) as c FROM plans WHERE status = 'active'").first().catch(() => ({ c: 0 })),
@@ -148,6 +155,7 @@ try {
 
     heroHotels = heroResult?.results ?? [];
     allCities = cityResult?.results ?? [];
+    hotelNames = hotelNameResult?.results ?? [];
     totalHotels = statsH?.c || 0;
     totalPlans = statsP?.c || 0;
     recentBlogs = blogResult?.results ?? [];
@@ -647,7 +655,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
           <!-- Location -->
           <div class="relative flex-1 min-w-0 px-4 py-1.5 md:border-r md:border-gray-200" id="location-wrapper">
             <label class="block text-[11px] text-gray-500 font-semibold">{isJa ? '場所' : 'Where'}</label>
-            <input type="text" name="location" id="location-input" placeholder={isJa ? '都市名または空港名' : 'City or airport'} autocomplete="off"
+            <input type="text" name="location" id="location-input" placeholder={isJa ? '都市名・国名・ホテル名' : 'City, country, or hotel name'} autocomplete="off"
               class="w-full bg-transparent text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none" />
             <ul id="location-suggestions"
               class="hidden absolute left-0 right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm">
@@ -1997,7 +2005,7 @@ function escHtml(s) {
 <!-- Flatpickr: English date picker for Check-in -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" media="print" onload="this.media='all'" /><noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" /></noscript>
 
-<script is:inline define:vars={{ allCities }}>
+<script is:inline define:vars={{ allCities, hotelNames }}>
 (function() {
   // 世界のメジャー都市（DB未登録でも検索可能にする）
   var WORLD_CITIES = [
@@ -2096,6 +2104,13 @@ function escHtml(s) {
 
   var cities = dbCities.concat(worldExtras);
 
+  // Properties the guest can search by name. Shape matches the city entries so
+  // the same renderer handles both; `isHotel` only changes the badge.
+  var hotelEntries = (hotelNames || []).map(function (h) {
+    var where = [ (h.city || '').trim(), (h.country || '').trim() ].filter(Boolean).join(', ');
+    return { city: (h.name || '').trim(), nameJa: (h.name_ja || '').trim(), country: where, inDB: true, isHotel: true };
+  }).filter(function (h) { return h.city; });
+
   var input = document.getElementById('location-input');
   var list  = document.getElementById('location-suggestions');
   if (!input || !list) return;
@@ -2121,9 +2136,11 @@ function escHtml(s) {
       return;
     }
     list.innerHTML = items.map(function(c, i) {
-      var badge = c.inDB
-        ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">DDH</span>'
-        : '';
+      var badge = c.isHotel
+        ? '<span class="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">Hotel</span>'
+        : (c.inDB
+            ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">DDH</span>'
+            : '');
       return '<li class="px-4 py-2.5 cursor-pointer hover:bg-teal-50 text-gray-800 flex justify-between items-center suggestion-item" data-city="' + escHtml(c.city) + '" data-idx="' + i + '">' +
              '<span class="font-medium flex items-center">' + highlight(c.city, q) + badge + '</span>' +
              '<span class="text-gray-400 text-xs ml-2 flex-shrink-0">' + escHtml(c.country) + '</span>' +
@@ -2177,7 +2194,14 @@ function escHtml(s) {
       }
     });
     // DB優先: prefix(DB) → prefix(world) → contains(DB) → contains(world)
-    return prefixDB.concat(prefixWorld).concat(containsDB).concat(containsWorld).slice(0, 10);
+    // A typed property name should surface the property itself first.
+    var hotelHits = [];
+    for (var hi = 0; hi < hotelEntries.length && hotelHits.length < 5; hi++) {
+      var he = hotelEntries[hi];
+      var hn = normalize(he.city), hj = normalize(he.nameJa);
+      if (hn.startsWith(nq) || hn.includes(nq) || (hj && hj.includes(nq))) hotelHits.push(he);
+    }
+    return hotelHits.concat(prefixDB, prefixWorld, containsDB, containsWorld).slice(0, 10);
   }
 
   input.addEventListener('input', function() {
