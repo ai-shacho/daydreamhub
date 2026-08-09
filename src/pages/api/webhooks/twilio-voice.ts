@@ -885,6 +885,27 @@ async function finalizeConciergeOutcome(
   // Independent of email (app inquiries have no address on file).
   await pushOutcomeToApp(env, db, conciergeCallId);
 
+  // Remember what this call taught us about the hotel, so the next guest is
+  // not charged another call for the same question.
+  try {
+    const c: any = await db.prepare(
+      `SELECT hotel_name, hotel_phone, hotel_source, price_quoted FROM concierge_calls WHERE id = ?`
+    ).bind(conciergeCallId).first().catch(() => null);
+    if (c?.hotel_phone && String(c.hotel_source || '') !== 'internal') {
+      const { recordDayUseFact } = await import('../../../lib/dayUseFacts');
+      await recordDayUseFact(db, {
+        phone: String(c.hotel_phone),
+        hotelName: c.hotel_name || null,
+        outcome,
+        reason: aiSummary,
+        price: opts.priceQuoted ?? (c.price_quoted != null ? Number(c.price_quoted) : null),
+        currency: currencyForPhone(String(c.hotel_phone)).currency || null,
+      });
+    }
+  } catch (e) {
+    console.error('[twilio-voice] recordDayUseFact failed', e);
+  }
+
   const call: any = await db.prepare(`SELECT call_group_id FROM concierge_calls WHERE id = ?`).bind(conciergeCallId).first().catch((e: any) => {
     console.error('[twilio-voice] finalizeConciergeOutcome SELECT call_group_id failed', { conciergeCallId, message: e?.message || String(e) });
     return null;
