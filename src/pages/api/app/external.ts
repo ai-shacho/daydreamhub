@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { searchHotelsExternal } from '../../../lib/tools';
 import { haversineKm } from '../../../lib/airports';
+import { getDayUseFacts, phoneKey } from '../../../lib/dayUseFacts';
 
 // Unlisted (non-DDH) hotels near a place, for the app's merged results.
 // Straight Google Places text search — no LLM in the loop — with a short
@@ -71,7 +72,23 @@ export const GET: APIRoute = async ({ request, locals }) => {
     }
   }
 
-  const withKm = hotels.map((h) => ({
+  // What past AI calls taught us: drop hotels that told us they do not do
+  // day-use at all (showing them is noise, and we already know the answer),
+  // and surface the price we were quoted for the ones that do.
+  const facts = await getDayUseFacts(env?.DB, hotels.map((h: any) => h.phone));
+  const usable = hotels
+    .filter((h: any) => facts[phoneKey(h.phone)]?.day_use !== 'no')
+    .map((h: any) => {
+      const f = facts[phoneKey(h.phone)];
+      return {
+        ...h,
+        dayUseKnown: f?.day_use === 'yes' || undefined,
+        knownPrice: f?.last_price ?? undefined,
+        knownCurrency: f?.last_currency ?? undefined,
+      };
+    });
+
+  const withKm = usable.map((h) => ({
     ...h,
     km:
       Number.isFinite(lat) && Number.isFinite(lng) && h.lat != null && h.lng != null

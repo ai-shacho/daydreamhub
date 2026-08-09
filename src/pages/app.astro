@@ -62,6 +62,8 @@ const t = isJa
       cgIntro: '掲載外でデイユースに使えそうなホテルが見つかりました。AIが電話で「デイユース可否・空き・料金」を確認します。確認は何件でも無料、予約が成立したときだけ手数料$7です。',
       cgNone: '追加の候補は見つかりませんでした。エリア名を変えて試してみてください。',
       cgBadge: '未掲載',
+      verifiedBadge: 'デイユース確認済',
+      approxPrice: '目安',
       ofcBadge: '公式',
       withinKm: '{r}km圏内',
       allRange: '全範囲',
@@ -175,6 +177,8 @@ const t = isJa
       cgIntro: 'Found unlisted hotels that may offer day-use. Our AI phones them to confirm day-use, availability and price — inquiries are free; a $7 fee applies only when a booking is made.',
       cgNone: 'No extra candidates found. Try a different area name.',
       cgBadge: 'Unlisted',
+      verifiedBadge: 'Day-use confirmed',
+      approxPrice: 'approx.',
       ofcBadge: 'Official',
       withinKm: 'Within {r}km',
       allRange: 'All distances',
@@ -460,6 +464,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         border: 1px solid var(--teal); margin-right: 4px; vertical-align: 1px;
       }
       .meta .ext-badge { margin-right: 4px; vertical-align: 1px; }
+      .vf-badge {
+        display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px;
+        border-radius: 999px; background: #ecfdf5; color: #047857; border: 1px solid #6ee7b7;
+        margin-right: 4px; vertical-align: 1px;
+      }
       .thumb.tel { display: flex; align-items: center; justify-content: center; font-size: 24px; }
 
       /* ---------- Conversational (chat) screen ---------- */
@@ -1203,13 +1212,19 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         const thumb = h.photoUrls && h.photoUrls.length
           ? `<img class="thumb" src="${esc(h.photoUrls[0])}" alt="" loading="lazy" />`
           : `<div class="thumb tel">📞</div>`;
+        // A past call already told us this place does day-use — say so, and
+        // show the price we were quoted.
+        const vf = h.dayUseKnown ? `<span class="vf-badge">${t.verifiedBadge}</span>` : '';
+        const price = h.knownPrice != null
+          ? `<div class="pcol"><div class="usd">${esc(String(h.knownPrice))}${h.knownCurrency ? ' ' + esc(h.knownCurrency) : ''}</div><div class="yen">${t.approxPrice}</div></div>`
+          : `<div class="pcol"><div class="yen">${t.cgShort}</div></div>`;
         return `<a class="card" href="#" data-ext="${i}" data-slug="ext-${i}">
           ${thumb}
           <div class="info">
             <div class="name">${esc(h.name)}</div>
-            <div class="meta"><span class="ext-badge">${t.cgBadge}</span>${bits.join('<span style="opacity:.5"> ・ </span>')}</div>
+            <div class="meta">${vf}<span class="ext-badge">${t.cgBadge}</span>${bits.join('<span style="opacity:.5"> ・ </span>')}</div>
           </div>
-          <div class="pcol"><div class="yen">${t.cgShort}</div></div>
+          ${price}
         </a>`;
       }
 
