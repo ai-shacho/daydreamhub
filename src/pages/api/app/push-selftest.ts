@@ -16,6 +16,17 @@ export const GET: APIRoute = async ({ request, locals, url }) => {
   const { checkInquiryLimits } = await import('../../../lib/inquiryLimits');
   const limits = await checkInquiryLimits(env, env?.DB, url.searchParams.get('session') || 'ops-probe');
 
+  // Fact lookups swallow errors by design, so probe the table explicitly.
+  let facts: any;
+  try {
+    const r: any = await env?.DB.prepare(
+      "SELECT COUNT(*) AS n, SUM(day_use = 'no') AS no_count, SUM(day_use = 'yes') AS yes_count FROM hotel_day_use_facts"
+    ).first();
+    facts = { ok: true, total: Number(r?.n || 0), yes: Number(r?.yes_count || 0), no: Number(r?.no_count || 0) };
+  } catch (e: any) {
+    facts = { ok: false, error: e?.message || String(e) };
+  }
+
   const keys = await getVapidKeys(env?.DB);
   if (!keys) return new Response(JSON.stringify({ error: 'no keys' }), { status: 500 });
 
@@ -37,6 +48,7 @@ export const GET: APIRoute = async ({ request, locals, url }) => {
         detail: text.slice(0, 200),
         publicKeyLength: keys.publicKey.length,
         inquiryLimits: limits,
+        dayUseFacts: facts,
       }),
       { headers: { 'Content-Type': 'application/json' } }
     );
