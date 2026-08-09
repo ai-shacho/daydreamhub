@@ -937,36 +937,22 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
       // Inquiry calls are free to the guest but cost us telephony, so cap them:
       // per device (session) and globally, the latter as a circuit breaker.
-      const PER_SESSION_DAILY = Number(env?.CONCIERGE_DAILY_PER_SESSION || 3);
-      const GLOBAL_DAILY = Number(env?.CONCIERGE_DAILY_GLOBAL || 150);
-      try {
-        const mine: any = await db.prepare(
-          `SELECT COUNT(*) AS n FROM concierge_call_groups
-            WHERE session_id = ? AND created_at > datetime('now', '-1 day')`
-        ).bind(session_id).first();
-        if (Number(mine?.n || 0) >= PER_SESSION_DAILY) {
-          return new Response(JSON.stringify({
-            error: locale === 'ja'
-              ? `無料の電話確認は1日${PER_SESSION_DAILY}件までです。時間をおいてお試しください。`
-              : `Free inquiry calls are limited to ${PER_SESSION_DAILY} per day. Please try again later.`,
-            rate_limited: true,
-          }), { status: 429, headers: { 'Content-Type': 'application/json' } });
-        }
-        const all: any = await db.prepare(
-          `SELECT COUNT(*) AS n FROM concierge_call_groups WHERE created_at > datetime('now', '-1 day')`
-        ).first();
-        if (Number(all?.n || 0) >= GLOBAL_DAILY) {
-          console.error('[chat] global daily inquiry cap reached', all?.n);
-          return new Response(JSON.stringify({
-            error: locale === 'ja'
+      const { checkInquiryLimits } = await import('../../../lib/inquiryLimits');
+      const limits = await checkInquiryLimits(env, db, session_id);
+      if (!limits.allowed) {
+        const msg = limits.reason === 'session'
+          ? (locale === 'ja'
+              ? `無料の電話確認は1日${limits.perSession}件までです。時間をおいてお試しください。`
+              : `Free inquiry calls are limited to ${limits.perSession} per day. Please try again later.`)
+          : (locale === 'ja'
               ? '現在アクセスが集中しています。しばらくしてからお試しください。'
-              : 'We are handling a high volume of requests right now. Please try again later.',
-            rate_limited: true,
-          }), { status: 429, headers: { 'Content-Type': 'application/json' } });
-        }
-      } catch (e) {
-        console.error('[chat] rate limit check failed', e);
+              : 'We are handling a high volume of requests right now. Please try again later.');
+        if (limits.reason === 'global') console.error('[chat] global daily inquiry cap reached', limits.all);
+        return new Response(JSON.stringify({ error: msg, rate_limited: true }), {
+          status: 429, headers: { 'Content-Type': 'application/json' },
+        });
       }
+      if (limits.reason === 'error') console.error('[chat] inquiry limit check failed', limits.error);
       // Two-call model: no guest budget. The inquiry call (call 1) is free; the
       // $7 fee is collected later when the guest accepts the quote by email.
       const directBudgetCurrency = currencyForPhone(callGroupData.hotels?.[0]?.hotel_phone).currency;
