@@ -129,9 +129,10 @@ export type PricedOption = {
 
 // Price the add-ons a guest picked. Quantities are derived from the party size
 // rather than trusted from the client: per_room is a flat charge, per_person
-// multiplies by adults and children (infants are not charged), and
-// per_adult_child charges each age band — adult, child, infant — at its own
-// rate, so an infant can be free by leaving that rate at zero.
+// multiplies by the age bands the hotel says the option counts (a day pass may
+// count infants, a wine tasting may count adults only), and per_adult_child
+// charges each band at its own rate, so an infant can be free by leaving that
+// rate at zero.
 async function priceSelectedOptions(
   db: any,
   planId: number | string,
@@ -181,7 +182,12 @@ async function priceSelectedOptions(
     let childQty = 0;
     let infantQty = 0;
     if (type === 'per_person') {
-      qty = Math.max(1, partyAdults + partyChildren);
+      // Legacy rows predate the flags; treat a missing value as the old default.
+      const cA = row.counts_adults == null ? 1 : Number(row.counts_adults);
+      const cC = row.counts_children == null ? 1 : Number(row.counts_children);
+      const cI = row.counts_infants == null ? 0 : Number(row.counts_infants);
+      qty = (cA ? partyAdults : 0) + (cC ? partyChildren : 0) + (cI ? partyInfants : 0);
+      if (qty <= 0) continue;   // nobody in the party is counted — no charge
     } else if (type === 'per_adult_child') {
       qty = partyAdults;
       childQty = partyChildren;

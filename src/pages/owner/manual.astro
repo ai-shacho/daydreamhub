@@ -484,7 +484,7 @@ const chapters = [
               <thead><tr class="bg-indigo-600 text-white text-left"><th class="px-4 py-3 font-semibold">Charge type</th><th class="px-4 py-3 font-semibold">How it adds up</th><th class="px-4 py-3 font-semibold">Good for</th></tr></thead>
               <tbody>
                 <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Per booking</td><td class="px-4 py-3 text-slate-600">One flat charge, however many guests</td><td class="px-4 py-3 text-slate-600">Airport transfer, late check-out, parking</td></tr>
-                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Per guest</td><td class="px-4 py-3 text-slate-600">Price × everyone in the party</td><td class="px-4 py-3 text-slate-600">Optional tours, day pass, spa entry</td></tr>
+                <tr class="border-t border-slate-100 bg-slate-50"><td class="px-4 py-3 font-medium text-slate-800">Per guest</td><td class="px-4 py-3 text-slate-600">Price × the age bands you tick (adults / children / infants)</td><td class="px-4 py-3 text-slate-600">Optional tours, day pass, spa entry</td></tr>
                 <tr class="border-t border-slate-100"><td class="px-4 py-3 font-medium text-slate-800">Per adult / child</td><td class="px-4 py-3 text-slate-600">Adults and children priced separately</td><td class="px-4 py-3 text-slate-600">Breakfast and other meals</td></tr>
               </tbody>
             </table>
@@ -492,7 +492,7 @@ const chapters = [
 
           <h4 class="text-sm font-semibold text-slate-800 mb-3">Adding an option</h4>
           <ol class="space-y-3 mb-5">
-            {['Open your property and scroll to the Plans section.','Click ＋Options on the plan you want to sell extras with.','Enter the option name (e.g. Breakfast), choose how it is charged, and set the price in your currency.','For Per adult / child, also set the child price.','Click Add option — it appears on the booking page straight away.'].map((step, i) => (
+            {['Open your property and scroll to the Plans section.','Click ＋Options on the plan you want to sell extras with.','Enter the option name (e.g. Breakfast), choose how it is charged, and set the price in your currency.','For Per guest, tick who it counts — a day pass that admits everyone counts infants too, a wine tasting counts adults only.','For Per adult / child, also set the child price.','Click Add option — it appears on the booking page straight away.'].map((step, i) => (
               <li class="flex items-start gap-3 text-sm text-slate-700">
                 <span class="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i+1}</span>
                 <span class="mt-1">{step}</span>

@@ -400,6 +400,9 @@ try {
                             data-infant-price-usd={o.infant_price_usd == null ? '' : Number(o.infant_price_usd)}
                             data-infant-price-local={infantLocal == null ? '' : infantLocal}
                             data-pricing-type={o.pricing_type}
+                            data-counts-adults={(o.counts_adults == null || o.counts_adults) ? '1' : '0'}
+                            data-counts-children={(o.counts_children == null || o.counts_children) ? '1' : '0'}
+                            data-counts-infants={o.counts_infants ? '1' : '0'}
                             data-label={locale === 'ja' && o.name_ja ? o.name_ja : o.name}
                           />
                           <span class="flex-1 min-w-0">
@@ -1010,7 +1013,10 @@ try {
         var type = b.dataset.pricingType;
         var usd, loc, qty;
         if (type === 'per_person') {
-          var people = adults + children;
+          // The hotel decides which bands this option counts.
+          var people = (b.dataset.countsAdults === '1' ? adults : 0)
+            + (b.dataset.countsChildren === '1' ? children : 0)
+            + (b.dataset.countsInfants === '1' ? infants : 0);
           usd = unit * people; loc = unitL * people;
           qty = guestsLabel(people);
         } else if (type === 'per_adult_child') {

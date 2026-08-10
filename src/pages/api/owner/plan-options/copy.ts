@@ -102,11 +102,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
           await db.prepare(
             `UPDATE plan_options SET name_ja = ?, description = ?, pricing_type = ?,
                price_local = ?, price_usd = ?, child_price_local = ?, child_price_usd = ?,
-               infant_price_local = ?, infant_price_usd = ?, updated_at = datetime('now')
+               infant_price_local = ?, infant_price_usd = ?,
+               counts_adults = ?, counts_children = ?, counts_infants = ?, updated_at = datetime('now')
              WHERE id = ?`
           ).bind(
             s.name_ja || '', s.description || '', s.pricing_type,
             price_local, price_usd, child_local, child_usd, infant_local, infant_usd,
+            s.counts_adults == null ? 1 : s.counts_adults,
+            s.counts_children == null ? 1 : s.counts_children,
+            s.counts_infants ? 1 : 0,
             existing.id,
           ).run();
           updated++;
@@ -114,12 +118,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
           await db.prepare(
             `INSERT INTO plan_options (plan_id, hotel_id, name, name_ja, description, pricing_type,
                price_local, price_usd, child_price_local, child_price_usd,
-               infant_price_local, infant_price_usd, is_active, sort_order)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+               infant_price_local, infant_price_usd,
+               counts_adults, counts_children, counts_infants, is_active, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                COALESCE((SELECT MAX(sort_order) + 1 FROM plan_options WHERE plan_id = ?), 0))`
           ).bind(
             t.plan_id, t.hotel_id, s.name, s.name_ja || '', s.description || '', s.pricing_type,
             price_local, price_usd, child_local, child_usd, infant_local, infant_usd,
+            s.counts_adults == null ? 1 : s.counts_adults,
+            s.counts_children == null ? 1 : s.counts_children,
+            s.counts_infants ? 1 : 0,
             s.is_active ? 1 : 0, t.plan_id,
           ).run();
           copied++;

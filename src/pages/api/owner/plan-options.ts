@@ -79,14 +79,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const res: any = await db.prepare(
       `INSERT INTO plan_options (plan_id, hotel_id, name, name_ja, description, pricing_type,
          price_local, price_usd, child_price_local, child_price_usd,
-         infant_price_local, infant_price_usd, is_active, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
+         infant_price_local, infant_price_usd,
+         counts_adults, counts_children, counts_infants, is_active, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1,
          COALESCE((SELECT MAX(sort_order) + 1 FROM plan_options WHERE plan_id = ?), 0))`
     ).bind(
       planId, plan.hotel_id, name, String(body.name_ja || ''), String(body.description || ''), pricingType,
       price.price_local, price.price_usd,
       child ? child.price_local : null, child ? child.price_usd : null,
       infant ? infant.price_local : null, infant ? infant.price_usd : null,
+      body.counts_adults === false ? 0 : 1,
+      body.counts_children === false ? 0 : 1,
+      body.counts_infants === true ? 1 : 0,
       planId,
     ).run();
 
@@ -123,6 +127,10 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   if ('name_ja' in body) push('name_ja = ?', String(body.name_ja || ''));
   if ('description' in body) push('description = ?', String(body.description || ''));
   if ('is_active' in body) push('is_active = ?', body.is_active ? 1 : 0);
+  // Which age bands a per-guest option counts.
+  if ('counts_adults' in body) push('counts_adults = ?', body.counts_adults ? 1 : 0);
+  if ('counts_children' in body) push('counts_children = ?', body.counts_children ? 1 : 0);
+  if ('counts_infants' in body) push('counts_infants = ?', body.counts_infants ? 1 : 0);
 
   const pricingType = 'pricing_type' in body ? String(body.pricing_type) : String(existing.pricing_type);
   if ('pricing_type' in body) {
