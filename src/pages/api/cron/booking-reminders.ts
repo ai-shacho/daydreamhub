@@ -43,7 +43,14 @@ async function logMessage(params: {
   }
 }
 
-export const POST: APIRoute = async ({ request, locals }) => {
+export const POST: APIRoute = async ({ request, url, locals }) => {
+  // ?dry_run=1 reports exactly who would be emailed and writes nothing, so the
+  // first run on a new environment can be checked before anything is sent.
+  const dryRun = url.searchParams.get('dry_run') === '1';
+  // A ceiling on one run. Normal volume is a handful; anything near this means
+  // something is wrong, and stopping is better than mailing every owner.
+  const MAX_PER_RUN = 50;
+
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const CRON_SECRET = runtime?.env?.CRON_SECRET;
@@ -58,19 +65,19 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const sent: any[] = [];
   const failed: any[] = [];
+  const wouldSend: any[] = [];
 
   for (const stage of STAGES) {
     // Awaiting the owner, old enough for this stage, check-in still ahead, and
     // this stage not yet sent. Bookings whose date has already passed are left
     // alone — chasing a hotel over a stay that cannot happen is just noise.
     //
-    // The 7-day floor is a blast guard. The whole escalation finishes inside 24
-    // hours, so nothing legitimate is older than that; without the floor, the
-    // first run after this ships would fire a "Final Notice" at every request
-    // that has been sitting unanswered since before the feature existed.
+    // Bookings that predate this feature are excluded by migration 054, which
+    // pre-recorded all three stages for them. Deleting a hotel's rows from
+    // booking_owner_reminders is what opts its existing bookings back in.
     const due: any[] = ((await db.prepare(
       `SELECT b.id, b.hotel_id, b.guest_name, b.guest_email, b.guest_phone, b.guest_nationality,
-              b.check_in_date, b.adults, b.children, b.infants,
+              b.created_at, b.check_in_date, b.adults, b.children, b.infants,
               b.total_price_usd, b.local_currency, b.local_amount, b.fx_rate, b.notes,
               h.name AS hotel_name, h.email AS hotel_email, h.contact_email,
               p.name AS plan_name
@@ -80,7 +87,6 @@ export const POST: APIRoute = async ({ request, locals }) => {
         WHERE b.status IN ('pending_confirmation', 'pending')
           AND b.check_in_date >= date('now')
           AND b.created_at <= datetime('now', ?)
-          AND b.created_at >= datetime('now', '-7 days')
           AND NOT EXISTS (
             SELECT 1 FROM booking_owner_reminders r
              WHERE r.booking_id = b.id AND r.stage = ?
@@ -93,12 +99,21 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }))?.results) || [];
 
     for (const b of due) {
+      if (sent.length + failed.length >= MAX_PER_RUN) {
+        console.warn(`[booking-reminders] hit the ${MAX_PER_RUN} cap; remaining bookings wait for the next run`);
+        break;
+      }
       const recipients = [...new Set([b.hotel_email, b.contact_email].filter(Boolean))];
       if (!recipients.length) {
         // Nowhere to send it. Record the stage anyway so the query does not
         // return this booking on every single run for the rest of its life.
         await markSent(db, b.id, stage);
         failed.push({ booking_id: b.id, stage, error: 'no hotel email on file' });
+        continue;
+      }
+
+      if (dryRun) {
+        wouldSend.push({ booking_id: b.id, stage, to: recipients, created_at: b.created_at, check_in_date: b.check_in_date });
         continue;
       }
 
@@ -143,6 +158,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
       (result.success ? sent : failed).push({ booking_id: b.id, stage, to: recipients, error: (result as any).error });
     }
+  }
+
+  if (dryRun) {
+    return new Response(JSON.stringify({
+      success: true, dry_run: true, would_send: wouldSend.length, details: wouldSend,
+    }), { headers: json });
   }
 
   return new Response(JSON.stringify({

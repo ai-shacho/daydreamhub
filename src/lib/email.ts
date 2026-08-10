@@ -397,6 +397,7 @@ function ownerEmailShell(opts: {
   return `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:${opts.headerBg};color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
+    <p style="margin:0 0 12px;font-size:13px;letter-spacing:1px;text-transform:uppercase;opacity:0.85">DayDreamHub</p>
     <div style="font-size:36px;margin-bottom:8px">${opts.emoji}</div>
     <h1 style="margin:0;font-size:22px;font-weight:700">${opts.title}</h1>
     <p style="margin:6px 0 0;opacity:0.9;font-size:14px">${opts.subtitle}</p>
@@ -417,9 +418,8 @@ function ownerEmailShell(opts: {
     ${ownerActionButtons()}
 
     <p style="color:#6b7280;font-size:12px;line-height:1.7">
-      Your listing agreement asks for a decision within 24 hours, and no later than 48 hours.
-      A booking left unanswered holds the guest's money without giving them a room, so if you
-      cannot honour it, declining is better than silence.
+      Guests are told to expect an answer within 24 hours, so the sooner you respond the better —
+      and if the room is not available, declining helps them more than waiting does.
       Replying to this email reaches the guest directly.
     </p>
 
@@ -432,13 +432,13 @@ export async function sendBookingNotificationToHotel(
   apiKey: string,
   data: OwnerBookingData
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = `[Action Required] New Booking #${data.bookingId} — ${data.guestName}, ${data.checkInDate}`;
+  const subject = `[Action Required] DayDreamHub booking #${data.bookingId} — new request from ${data.guestName} · ${data.checkInDate}`;
   const html = ownerEmailShell({
     headerBg: '#b45309',
     emoji: '🔔',
     title: 'Action Required: New Booking',
     subtitle: 'A guest has paid and is waiting for your decision.',
-    intro: `A new booking request has come in for <strong>${escapeHtml(data.hotelName)}</strong>.`,
+    intro: `A new booking request has come in through DayDreamHub for <strong>${escapeHtml(data.hotelName)}</strong>.`,
     urgencyBox: `
     <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#78350f">
       ⏳ <strong>Please confirm or decline within 24 hours.</strong> The guest has already been charged and
@@ -461,6 +461,7 @@ export type ReminderStage = 6 | 12 | 24;
 
 const REMINDER_COPY: Record<ReminderStage, {
   subjectTag: string;
+  subjectPhrase: string;
   headerBg: string;
   emoji: string;
   title: string;
@@ -468,43 +469,45 @@ const REMINDER_COPY: Record<ReminderStage, {
   box: string;
 }> = {
   6: {
-    subjectTag: '[Action Required]',
+    subjectTag: '[Reminder]',
+    subjectPhrase: 'your guest is waiting for confirmation',
     headerBg: '#b45309',
     emoji: '⏳',
-    title: '6 Hours Without a Response',
-    subtitle: 'This booking is still waiting for you.',
+    title: 'Your Guest Is Waiting',
+    subtitle: 'This booking has been open for 6 hours.',
     box: `
     <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#78350f">
-      ⏳ <strong>6 hours have passed since this request arrived.</strong> You have until the 24-hour mark to
-      confirm or decline it. If the room is not available, declining now lets the guest book elsewhere
-      while they still have time.
+      ⏳ <strong>A guest paid 6 hours ago and is still waiting to hear from you.</strong> Guests are told to
+      expect an answer within 24 hours, so a reply now leaves them plenty of time to plan. If the room is not
+      available, declining lets them book somewhere else while they still can.
     </div>`,
   },
   12: {
-    subjectTag: '[Urgent]',
+    subjectTag: '[Please Respond]',
+    subjectPhrase: 'your guest has been waiting half a day',
     headerBg: '#c2410c',
-    emoji: '⚠️',
-    title: '12 Hours Without a Response',
-    subtitle: 'Half of your response window has gone.',
+    emoji: '📩',
+    title: 'Still Waiting After 12 Hours',
+    subtitle: 'Half a day has passed since this guest booked.',
     box: `
     <div style="background:#ffedd5;border:1px solid #fb923c;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#7c2d12">
-      ⚠️ <strong>12 hours have passed and this booking is still unanswered.</strong> Your listing agreement
-      asks for a decision within 24 hours. The guest has paid and has been told to expect an answer —
-      every hour of silence is an hour they cannot plan around.
+      📩 <strong>Your guest has been waiting half a day for an answer.</strong> They have already paid and
+      cannot make any other arrangements until they hear from you. Please open the Owner Portal and confirm
+      or decline — either answer helps them; silence does not.
     </div>`,
   },
   24: {
-    subjectTag: '[Final Notice]',
+    subjectTag: '[Urgent]',
+    subjectPhrase: 'your guest has been waiting a full day',
     headerBg: '#b91c1c',
     emoji: '🚨',
-    title: '24 Hours Without a Response',
-    subtitle: 'You are now past the response time you agreed to.',
+    title: 'Waiting a Full Day',
+    subtitle: 'Please respond to this guest today.',
     box: `
     <div style="background:#fee2e2;border:1px solid #f87171;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#7f1d1d">
-      🚨 <strong>This booking has been unanswered for 24 hours — past the deadline in your listing agreement,
-      which allows no more than 48 hours.</strong> If we do not hear from you, DayDreamHub may cancel the
-      booking on the guest's behalf and refund them in full. Repeated non-response can lead to your listing
-      being suspended. If you can still take this booking, confirm it now.
+      🚨 <strong>A full day has gone by and this guest still has no answer.</strong> They were told to expect
+      one within 24 hours, and their trip is on hold until you reply. Please confirm the booking now if you
+      can take it, or decline it so we can refund them and they can find another room.
     </div>`,
   },
 };
@@ -517,13 +520,13 @@ export async function sendOwnerBookingReminder(
   data: OwnerBookingData
 ): Promise<{ success: boolean; error?: string }> {
   const copy = REMINDER_COPY[stage];
-  const subject = `${copy.subjectTag} Booking #${data.bookingId} unanswered for ${stage}h — ${data.guestName}, ${data.checkInDate}`;
+  const subject = `${copy.subjectTag} DayDreamHub booking #${data.bookingId} — ${copy.subjectPhrase} · ${data.checkInDate}`;
   const html = ownerEmailShell({
     headerBg: copy.headerBg,
     emoji: copy.emoji,
     title: copy.title,
     subtitle: copy.subtitle,
-    intro: `Booking <strong>#${data.bookingId}</strong> at <strong>${escapeHtml(data.hotelName)}</strong> is still awaiting your confirmation.`,
+    intro: `DayDreamHub booking <strong>#${data.bookingId}</strong> at <strong>${escapeHtml(data.hotelName)}</strong> is still awaiting your confirmation.`,
     urgencyBox: copy.box,
     data,
   });
