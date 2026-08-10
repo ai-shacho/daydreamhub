@@ -1,0 +1,53 @@
+# Scheduled jobs for DayDreamHub.
+#
+# Cloudflare Pages has no cron triggers, so the /api/cron/* endpoints only run
+# when something calls them. Nothing currently does: production has 19 bookings
+# still sitting in pending_confirmation with a check-in date in the past, and no
+# booking has ever reached completed or no_show — proof that
+# /api/cron/update-booking-status has never been invoked.
+#
+# This workflow is the scheduler. It cannot be pushed with the current PAT
+# (repo scope only, no workflow scope), so add it through the GitHub web UI:
+#   Actions → new workflow → paste this file as .github/workflows/cron.yml
+#
+# Required repository secret:
+#   CRON_SECRET — must equal the CRON_SECRET already set on the Pages project.
+#
+# The reminder job is safe to run hourly: each (booking, stage) is recorded in
+# booking_owner_reminders before the next run, so a repeated or overlapping run
+# sends nothing extra.
+
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: '17 * * * *'      # hourly, off the hour to dodge the platform-wide rush
+  workflow_dispatch:
+
+jobs:
+  owner-booking-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chase owners who have not answered a booking (6h / 12h / 24h)
+        run: |
+          curl -sS -X POST 'https://daydreamhub.com/api/cron/booking-reminders' \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w '\nHTTP %{http_code}\n' \
+            --fail-with-body
+
+  booking-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Roll past bookings to completed / no_show
+        # Date-based, so once a day is enough.
+        if: github.event_name == 'workflow_dispatch' || fromJSON(format('{0}', github.run_number)) > 0
+        run: |
+          hour=$(date -u +%H)
+          if [ "$hour" != "01" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "Not the 01:00 UTC run — skipping."
+            exit 0
+          fi
+          curl -sS -X POST 'https://daydreamhub.com/api/cron/update-booking-status' \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -w '\nHTTP %{http_code}\n' \
+            --fail-with-body
