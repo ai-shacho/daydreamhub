@@ -72,10 +72,35 @@ try {
         unreadMap[r.booking_id] = r.unread_count;
       }
       bookings = bookings.map((b: any) => ({ ...b, unread_messages: unreadMap[b.id] || 0 }));
+      // Add-ons the guest paid for, fetched for the whole list in one query and
+      // attached to each booking so the card can explain its own total.
+      const optResult = await DB.prepare(
+        `SELECT * FROM booking_options WHERE booking_id IN (${ph}) ORDER BY id`
+      ).bind(...bookingIds).all().catch(() => null);
+      const optMap: Record<number, any[]> = {};
+      for (const o of (optResult?.results || []) as any[]) {
+        (optMap[o.booking_id] ||= []).push(o);
+      }
+      bookings = bookings.map((b: any) => ({ ...b, add_ons: optMap[b.id] || [] }));
     }
   }
 } catch (e: any) {
   error = '予約情報の読み込みに失敗しました。';
+}
+
+
+// オプションが誰の分として課金されたか。カードの金額の内訳を追えるようにするため。
+function optionCoverage(o: any): string {
+  const n = (v: any) => Number(v) || 0;
+  if (o.pricing_type === 'per_adult_child') {
+    const parts: string[] = [];
+    if (n(o.quantity) > 0) parts.push(`大人${n(o.quantity)}名`);
+    if (n(o.child_quantity) > 0) parts.push(`子供${n(o.child_quantity)}名`);
+    if (n(o.infant_quantity) > 0) parts.push(`幼児${n(o.infant_quantity)}名`);
+    return parts.join('＋');
+  }
+  if (o.pricing_type === 'per_person') return `${n(o.quantity)}名`;
+  return '1予約';
 }
 
 const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
@@ -177,6 +202,24 @@ const statusConfig: Record<string, { label: string; color: string; icon: string 
                       <div class="font-medium text-gray-700 text-xs">{guestCount}名</div>
                     </div>
                   </div>
+
+                  {(b.add_ons || []).length > 0 && (
+                    <div class="mt-3 pt-3 border-t border-gray-100">
+                      <div class="text-xs text-gray-400 mb-1">オプション</div>
+                      <ul class="space-y-1">
+                        {(b.add_ons || []).map((o: any) => (
+                          <li class="flex justify-between gap-3 text-xs text-gray-700">
+                            <span>{o.name} <span class="text-gray-400">({optionCoverage(o)})</span></span>
+                            <span class="whitespace-nowrap">
+                              {o.currency && o.currency !== 'USD' && o.amount_local != null
+                                ? `${o.currency} ${o.amount_local} (≈ $${Number(o.amount_usd || 0).toFixed(2)})`
+                                : `$${Number(o.amount_usd || 0).toFixed(2)}`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {b.status === 'pending_confirmation' && (
                     <div class="mt-3 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-xs text-blue-700">
