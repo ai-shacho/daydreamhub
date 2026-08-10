@@ -579,6 +579,7 @@ for (const img of images) {
             );
           }
         })()}
+        <p class="mt-2 text-xs text-gray-500">🕘 {t('hotel.cancel_policy_local_time', locale)}</p>
       </section>
 
       <!-- Available Plans Section -->
@@ -664,7 +665,10 @@ for (const img of images) {
                               {hours === 0 ? (
                                 <p class="text-red-600 font-medium">❌ {t('hotel.cancel_policy_none', locale)}</p>
                               ) : hours !== null ? (
-                                <p>✅ {t('hotel.cancel_policy_free', locale).replace('{hours}', String(hours))}</p>
+                                <>
+                                  <p>✅ {t('hotel.cancel_policy_free', locale).replace('{hours}', String(hours))}</p>
+                                  <p class="text-gray-500 mt-0.5">{t('hotel.cancel_policy_local_time', locale)}</p>
+                                </>
                               ) : (
                                 <p>{t('hotel.cancel_policy_contact', locale)}</p>
                               )}

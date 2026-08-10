@@ -508,6 +508,7 @@ try {
                   return (
                     <div class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-xs text-gray-700 leading-relaxed whitespace-pre-line">
                       {fullPolicy}
+                      <p class="text-gray-500 mt-1.5">{t('hotel.cancel_policy_local_time', locale)}</p>
                     </div>
                   );
                 } else if (plan.cancellation_hours === 0) {
@@ -520,8 +521,9 @@ try {
                   return (
                     <div class="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-xs text-green-700">
                       {locale === 'ja'
-                        ? `✅ チェックイン${plan.cancellation_hours ?? 24}時間前まで無料でキャンセルできます。キャンセル時に二重請求は発生しません。`
-                        : `✅ Free cancellation up to ${plan.cancellation_hours ?? 24}h before check-in. No double charge will occur if you cancel.`}
+                        ? `✅ チェックイン${plan.cancellation_hours ?? 24}時間前（ホテル現地時間）まで無料でキャンセルできます。キャンセル時に二重請求は発生しません。`
+                        : `✅ Free cancellation up to ${plan.cancellation_hours ?? 24}h before check-in, hotel local time. No double charge will occur if you cancel.`}
+                      <p class="text-green-800/70 mt-1.5">{t('hotel.cancel_policy_local_time', locale)}</p>
                     </div>
                   );
                 }
