@@ -407,7 +407,9 @@ try {
                           />
                           <span class="flex-1 min-w-0">
                             <span class="block text-sm font-medium text-gray-800">{locale === 'ja' && o.name_ja ? o.name_ja : o.name}</span>
-                            <span class="block text-sm text-gray-600 mt-0.5">
+                            <span class={isAgeBand
+                              ? 'block text-xs text-gray-500 mt-0.5'
+                              : 'block text-sm text-gray-600 mt-0.5'}>
                               {isAgeBand && <>{adultLabel}: </>}{formatLocalWithUsd(unitLocal, cur, Number(o.price_usd || 0))}{per}
                             </span>
                             {childLocal != null && (
