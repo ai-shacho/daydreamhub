@@ -745,6 +745,41 @@ for (let h = 0; h < 24; h++) {
           </div>
 
           <div id="options-list" class="space-y-2"></div>
+          <button type="button" id="copy-open" class="hidden text-xs font-medium text-teal-700 hover:text-teal-900">
+            ⧉ Copy these options to other plans…
+          </button>
+
+          <!-- Apply the same options to other plans -->
+          <div id="copy-panel" class="hidden border border-teal-200 bg-teal-50/40 rounded-lg p-4 space-y-3">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-sm font-semibold text-slate-800">Copy these options to other plans</p>
+              <button type="button" id="copy-cancel" class="text-xs text-slate-500 hover:text-slate-700">Close</button>
+            </div>
+
+            <div>
+              <p class="text-xs font-medium text-slate-600 mb-1.5">1. Which options?</p>
+              <div id="copy-options" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div>
+              <p class="text-xs font-medium text-slate-600 mb-1.5">2. Which plans?</p>
+              <div id="copy-targets" class="max-h-56 overflow-y-auto border border-slate-200 rounded-lg bg-white p-2 space-y-2 text-sm">
+                <p class="text-xs text-slate-400">Loading your plans…</p>
+              </div>
+            </div>
+
+            <label class="flex items-start gap-2 text-xs text-slate-600">
+              <input type="checkbox" id="copy-overwrite" class="mt-0.5" />
+              <span>Overwrite an option of the same name if the plan already has one. Leave unticked to keep prices you've already adjusted.</span>
+            </label>
+
+            <div id="copy-result" class="hidden text-xs rounded-lg px-3 py-2"></div>
+            <button type="button" id="copy-apply" class="w-full px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg hover:bg-teal-700">Copy to selected plans</button>
+            <p class="text-[11px] text-slate-400">
+              Each copy is independent — you can change the price on one plan afterwards without affecting the others.
+              Copying into a property that prices in another currency converts the amount automatically.
+            </p>
+          </div>
 
           <form id="option-form" class="border border-slate-200 rounded-lg p-4 space-y-3">
             <input type="hidden" id="option-id" value="" />
@@ -1408,6 +1443,8 @@ for (let h = 0; h < 24; h++) {
 
     // ---- Paid options per plan ----------------------------------------
     var optCurrency = originalCurrency || 'USD';
+    var optCurrentRows = [];      // options shown for the plan currently open
+    var optPlansTree = null;      // owner's hotels/plans, fetched once
     Array.prototype.forEach.call(document.querySelectorAll('.option-currency-label'), function (el) { el.textContent = optCurrency; });
     var optCurEl = document.getElementById('options-currency');
     if (optCurEl) optCurEl.textContent = optCurrency;
@@ -1455,6 +1492,8 @@ for (let h = 0; h < 24; h++) {
           list.innerHTML = '<p class="text-xs text-slate-400">No options yet. Add one below — guests will see it as an extra when booking.</p>';
           return;
         }
+        optCurrentRows = rows;
+        document.getElementById('copy-open')?.classList.toggle('hidden', rows.length === 0);
         list.innerHTML = rows.map(function (o) {
           var price = optMoney(o.price_local != null ? o.price_local : o.price_usd);
           if (o.pricing_type === 'per_adult_child') {
@@ -1487,6 +1526,8 @@ for (let h = 0; h < 24; h++) {
         document.getElementById('option-plan-id').value = openBtn.dataset.planId;
         document.getElementById('options-plan-name').textContent = openBtn.dataset.planName || '';
         optResetForm();
+        document.getElementById('copy-panel').classList.add('hidden');
+        document.getElementById('copy-result').classList.add('hidden');
         optLoadList(openBtn.dataset.planId);
         document.getElementById('options-modal').classList.remove('hidden');
         return;
@@ -1521,6 +1562,118 @@ for (let h = 0; h < 24; h++) {
         if (!confirm('Delete this option? Existing bookings keep what they were charged.')) return;
         fetch('/api/owner/plan-options?id=' + delBtn.dataset.id, { method: 'DELETE' })
           .then(function () { optLoadList(document.getElementById('option-plan-id').value); });
+      }
+    });
+
+    function copyRenderOptions() {
+      var box = document.getElementById('copy-options');
+      box.innerHTML = optCurrentRows.map(function (o) {
+        return '<label class="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-full px-2.5 py-1">' +
+          '<input type="checkbox" class="copy-opt" value="' + o.id + '" checked />' +
+          '<span class="text-xs text-slate-700">' + (o.name || '') + '</span></label>';
+      }).join('') || '<p class="text-xs text-slate-400">No options to copy.</p>';
+    }
+
+    function copyRenderTargets() {
+      var box = document.getElementById('copy-targets');
+      var currentPlanId = String(document.getElementById('option-plan-id').value);
+      if (!optPlansTree || !optPlansTree.length) {
+        box.innerHTML = '<p class="text-xs text-slate-400">No other plans found.</p>';
+        return;
+      }
+      box.innerHTML = optPlansTree.map(function (h) {
+        // Group by room type so a property with many plans stays readable.
+        var groups = {};
+        h.plans.forEach(function (p) { (groups[p.room_type || ''] = groups[p.room_type || ''] || []).push(p); });
+        var inner = Object.keys(groups).map(function (rt) {
+          var plans = groups[rt].filter(function (p) { return String(p.id) !== currentPlanId; });
+          if (!plans.length) return '';
+          return (rt ? '<p class="text-[11px] text-slate-400 mt-1.5 ml-5">' + rt + '</p>' : '') +
+            plans.map(function (p) {
+              return '<label class="flex items-center gap-2 ml-5 py-0.5">' +
+                '<input type="checkbox" class="copy-target" value="' + p.id + '" />' +
+                '<span class="text-xs text-slate-700">' + p.name + '</span>' +
+                (p.option_count ? '<span class="text-[10px] text-slate-400">(' + p.option_count + ')</span>' : '') +
+                '</label>';
+            }).join('');
+        }).join('');
+        if (!inner) return '';
+        return '<div>' +
+          '<label class="flex items-center gap-2 font-medium text-slate-800">' +
+            '<input type="checkbox" class="copy-hotel" data-hotel="' + h.id + '" />' +
+            '<span class="text-xs">' + h.name + '</span>' +
+            '<span class="text-[10px] text-slate-400">' + h.currency + '</span>' +
+          '</label>' + inner + '</div>';
+      }).join('') || '<p class="text-xs text-slate-400">No other plans found.</p>';
+    }
+
+    document.getElementById('copy-open')?.addEventListener('click', async function () {
+      document.getElementById('copy-panel').classList.remove('hidden');
+      copyRenderOptions();
+      if (!optPlansTree) {
+        try {
+          var res = await fetch('/api/owner/plans-tree');
+          var data = await res.json();
+          optPlansTree = data.hotels || [];
+        } catch (e) { optPlansTree = []; }
+      }
+      copyRenderTargets();
+    });
+
+    document.getElementById('copy-cancel')?.addEventListener('click', function () {
+      document.getElementById('copy-panel').classList.add('hidden');
+    });
+
+    // Ticking a property selects every plan under it.
+    document.getElementById('copy-targets')?.addEventListener('change', function (e) {
+      if (!e.target.classList.contains('copy-hotel')) return;
+      var group = e.target.closest('div');
+      group.querySelectorAll('.copy-target').forEach(function (cb) { cb.checked = e.target.checked; });
+    });
+
+    document.getElementById('copy-apply')?.addEventListener('click', async function () {
+      var btn = this;
+      var resultEl = document.getElementById('copy-result');
+      var optionIds = Array.prototype.slice.call(document.querySelectorAll('.copy-opt:checked')).map(function (c) { return Number(c.value); });
+      var targetIds = Array.prototype.slice.call(document.querySelectorAll('.copy-target:checked')).map(function (c) { return Number(c.value); });
+      function warn(msg) {
+        resultEl.textContent = msg;
+        resultEl.className = 'text-xs rounded-lg px-3 py-2 bg-amber-50 border border-amber-200 text-amber-700';
+        resultEl.classList.remove('hidden');
+      }
+      resultEl.classList.add('hidden');
+      if (!optionIds.length) return warn('Select at least one option.');
+      if (!targetIds.length) return warn('Select at least one plan to copy to.');
+
+      btn.disabled = true;
+      var original = btn.textContent;
+      btn.textContent = 'Copying...';
+      try {
+        var res = await fetch('/api/owner/plan-options/copy', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            option_ids: optionIds,
+            target_plan_ids: targetIds,
+            overwrite: document.getElementById('copy-overwrite').checked,
+          }),
+        });
+        var data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Copy failed');
+        var parts = [];
+        if (data.copied) parts.push(data.copied + ' added');
+        if (data.updated) parts.push(data.updated + ' updated');
+        if (data.skipped) parts.push(data.skipped + ' skipped (already had one)');
+        resultEl.textContent = '\u2705 ' + (parts.join(' \u00b7 ') || 'Nothing to do');
+        resultEl.className = 'text-xs rounded-lg px-3 py-2 bg-green-50 border border-green-200 text-green-700';
+        resultEl.classList.remove('hidden');
+        optPlansTree = null;   // counts changed - refetch next time
+      } catch (err) {
+        resultEl.textContent = '\u274c ' + err.message;
+        resultEl.className = 'text-xs rounded-lg px-3 py-2 bg-red-50 border border-red-200 text-red-700';
+        resultEl.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
       }
     });
 
