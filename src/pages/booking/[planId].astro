@@ -380,11 +380,13 @@ try {
                       const unitLocal = Number(o.price_local ?? o.price_usd);
                       const childLocal = o.child_price_local == null ? null : Number(o.child_price_local);
                       const infantLocal = o.infant_price_local == null ? null : Number(o.infant_price_local);
+                      const isAgeBand = o.pricing_type === 'per_adult_child';
                       const per = o.pricing_type === 'per_person'
                         ? (locale === 'ja' ? '／人' : ' per guest')
-                        : o.pricing_type === 'per_adult_child'
-                          ? (locale === 'ja' ? '／大人' : ' per adult')
+                        : isAgeBand
+                          ? ''
                           : (locale === 'ja' ? '／1予約' : ' per booking');
+                      const adultLabel = locale === 'ja' ? '大人' : 'Adult';
                       return (
                         <label class="flex items-start gap-2.5 border border-gray-200 rounded-lg px-3 py-2.5 cursor-pointer hover:border-[#45A2C1] transition-colors">
                           <input
@@ -403,7 +405,7 @@ try {
                           <span class="flex-1 min-w-0">
                             <span class="block text-sm font-medium text-gray-800">{locale === 'ja' && o.name_ja ? o.name_ja : o.name}</span>
                             <span class="block text-sm text-gray-600 mt-0.5">
-                              {formatLocalWithUsd(unitLocal, cur, Number(o.price_usd || 0))}{per}
+                              {isAgeBand && <>{adultLabel}: </>}{formatLocalWithUsd(unitLocal, cur, Number(o.price_usd || 0))}{per}
                             </span>
                             {childLocal != null && (
                               <span class="block text-xs text-gray-500 mt-0.5">
