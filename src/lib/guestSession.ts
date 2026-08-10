@@ -55,3 +55,17 @@ export async function planExists(db: any, planId: string | number): Promise<bool
     return true;          // a query failure is not a missing plan; let the page render its own error
   }
 }
+
+// Whether a hotel should be reachable by URL at all. Demo listings stay
+// visible on purpose; inactive ones must 404. Decided by the route because a
+// status set from inside a component lands after the response is settled.
+export async function hotelIsVisible(db: any, slug: string): Promise<boolean> {
+  if (!db) return true;   // no DB binding (local dev) — the page falls back to sample hotels
+  try {
+    const row: any = await db.prepare('SELECT status, is_active FROM hotels WHERE slug = ?').bind(slug).first();
+    if (!row) return false;
+    return !(row.status === 'inactive' || (!row.status && !row.is_active));
+  } catch {
+    return true;
+  }
+}
