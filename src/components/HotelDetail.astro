@@ -225,6 +225,50 @@ const categoryLabelKeys: Record<string, string> = {
   early_checkin: 'search.early_checkin',
 };
 
+// Amenities arrive either as a slug ("air_conditioning") or as the full English
+// phrase the owner typed ("Air Conditioning"), so the Japanese lookup covers
+// both — otherwise a Japanese visitor gets an English amenity list.
+const AMENITY_JA: Record<string, string> = {
+  'wifi': 'Wi-Fi', 'pool': 'プール', 'spa': 'スパ', 'gym': 'ジム',
+  'restaurant': 'レストラン', 'bar': 'バー', 'parking': '駐車場',
+  'desk': 'デスク', 'coffee': 'コーヒー', 'meeting_room': '会議室',
+  'printer': 'プリンター', 'shower': 'シャワー', 'luggage_storage': '荷物預かり',
+  'garden': '庭園', 'beach': 'ビーチアクセス', 'breakfast': '朝食',
+  'concierge': 'コンシェルジュ', 'air_conditioning': 'エアコン', 'tv': 'テレビ',
+  'refrigerator': '冷蔵庫', 'kitchen': 'キッチン', 'laundry': 'ランドリー',
+  'elevator': 'エレベーター', 'safe': 'セーフティボックス', 'minibar': 'ミニバー',
+  'Wi-Fi': 'Wi-Fi', 'Free Wi-Fi': '無料Wi-Fi', 'Pool': 'プール',
+  'Swimming Pool': 'スイミングプール', 'Spa': 'スパ', 'Gym': 'ジム',
+  'Fitness Center': 'フィットネスセンター', 'Restaurant': 'レストラン', 'Bar': 'バー',
+  'Parking': '駐車場', 'Parking on Premises': '駐車場', 'Free Parking': '無料駐車場',
+  'Desk': 'デスク', 'Desk/Workspace': 'デスク/ワークスペース',
+  'Work Desk': 'ワークデスク', 'Coffee': 'コーヒー', 'Meeting Room': '会議室',
+  'Printer': 'プリンター', 'Shower': 'シャワー', 'Luggage Storage': '荷物預かり',
+  'Garden': '庭園', 'Beach Access': 'ビーチアクセス', 'Breakfast': '朝食',
+  'Concierge': 'コンシェルジュ', 'Air Conditioning': 'エアコン',
+  'Air Conditioner': 'エアコン', 'Air Conditioner (Cooling)': 'エアコン（冷房）',
+  'Air Conditioner (Heating)': 'エアコン（暖房）', 'TV': 'テレビ', 'Television': 'テレビ',
+  'Refrigerator': '冷蔵庫', 'Kitchen': 'キッチン', 'Kitchenette': 'キッチネット',
+  'Laundry': 'ランドリー', 'Laundry Service': 'ランドリーサービス',
+  'Elevator': 'エレベーター', 'Safe': 'セーフティボックス', 'Minibar': 'ミニバー',
+  'Bathtub': 'バスタブ', 'Jacuzzi': 'ジャグジー', 'Sauna': 'サウナ',
+  'Terrace': 'テラス', 'Balcony': 'バルコニー', 'Sea View': 'シービュー',
+  'Mountain View': 'マウンテンビュー', 'City View': 'シティビュー',
+  'Airport Shuttle': 'エアポートシャトル', 'Room Service': 'ルームサービス',
+  'Housekeeping': 'ハウスキーピング', 'Reception 24h': '24時間フロント',
+  '24-hour Front Desk': '24時間フロント', 'Non-smoking': '禁煙',
+  'Hair Dryer': 'ヘアドライヤー', 'Hairdryer': 'ヘアドライヤー',
+  'Iron': 'アイロン', 'Ironing Facilities': 'アイロン設備',
+  'Electric pot': '電気ポット', 'Electric Kettle': '電気ケトル',
+  'Night wear': 'ナイトウェア', 'Slippers': 'スリッパ', 'Bathrobes': 'バスローブ',
+  'Towels': 'タオル', 'Toiletries': 'アメニティ', 'Toothbrush': '歯ブラシ',
+  'Shampoo': 'シャンプー', 'Soap': 'ソープ', 'TEL': '電話', 'Telephone': '電話',
+  'Wheelchair Accessible': '車椅子対応', 'Non Smoking': '禁煙',
+  'Smoking Allowed': '喫煙可', 'Pets Allowed': 'ペット可',
+  'Bicycle Rental': 'レンタサイクル', 'Car Rental': 'レンタカー',
+  'ATM': 'ATM', 'Currency Exchange': '両替', 'Business Center': 'ビジネスセンター',
+};
+
 const amenityLabels: Record<string, Record<string, string>> = {
   wifi: { en: 'Wi-Fi', ja: 'Wi-Fi' },
   pool: { en: 'Pool', ja: 'プール' },
@@ -314,7 +358,9 @@ for (const img of images) {
           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           DEMO PAGE
         </span>
-        <p class="text-sm text-amber-700">This is a preview page for internal use only. It is not listed on the site and will not appear in search engines.</p>
+        <p class="text-sm text-amber-700">{ja
+          ? 'このページは社内確認用のプレビューです。サイトには掲載されず、検索エンジンにも表示されません。'
+          : 'This is a preview page for internal use only. It is not listed on the site and will not appear in search engines.'}</p>
       </div>
     </div>
   )}
@@ -405,7 +451,7 @@ for (const img of images) {
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
                 </svg>
-                <span class="hidden sm:inline">Map</span>
+                <span class="hidden sm:inline">{ja ? '地図' : 'Map'}</span>
               </a>
               <!-- Wishlist button -->
               <button
@@ -417,7 +463,7 @@ for (const img of images) {
                 <svg class="wishlist-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z" />
                 </svg>
-                <span class="wishlist-label">Save</span>
+                <span class="wishlist-label">{ja ? '保存' : 'Save'}</span>
               </button>
             </div>
           </div>
@@ -491,7 +537,9 @@ for (const img of images) {
                   <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
                 </svg>
                 <span class="text-sm text-gray-700">
-                  {amenityLabels[amenity]?.[locale] || amenity}
+                  {ja
+                    ? (AMENITY_JA[amenity] || amenityLabels[amenity]?.ja || amenity)
+                    : (amenityLabels[amenity]?.en || amenity)}
                 </span>
               </div>
             ))}
@@ -501,7 +549,7 @@ for (const img of images) {
 
       <!-- Cancellation Policy -->
       <section class="mb-10">
-        <h2 class="text-xl font-bold text-slate-900 mb-4">Cancellation Policy</h2>
+        <h2 class="text-xl font-bold text-slate-900 mb-4">{t('hotel.cancel_policy', locale)}</h2>
         {(() => {
           const hotelPolicy = hotel.cancellation_policy?.trim();
           const planPolicies = [...new Set(
@@ -526,7 +574,7 @@ for (const img of images) {
           } else {
             return (
               <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed">
-                Please contact the hotel directly for cancellation policy details.
+                {t('hotel.cancel_policy_contact', locale)}
               </div>
             );
           }
@@ -605,6 +653,24 @@ for (const img of images) {
                             </div>
                           )}
                         </div>
+                        {(() => {
+                          // A plan's own rule wins over the hotel-wide blurb: several
+                          // hotels advertise free cancellation while selling
+                          // non-refundable transit rooms.
+                          const hours = plan.cancellation_hours ?? hotel.cancellation_hours ?? null;
+                          return (
+                            <div class="mb-3 text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                              <div class="font-medium text-amber-800 mb-1">{t('hotel.cancel_policy', locale)}</div>
+                              {hours === 0 ? (
+                                <p class="text-red-600 font-medium">❌ {t('hotel.cancel_policy_none', locale)}</p>
+                              ) : hours !== null ? (
+                                <p>✅ {t('hotel.cancel_policy_free', locale).replace('{hours}', String(hours))}</p>
+                              ) : (
+                                <p>{t('hotel.cancel_policy_contact', locale)}</p>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {/* Date picker + Book Now */}
                         <div class="mb-3">
                           <label class="block text-xs text-gray-500 mb-1">
