@@ -58,18 +58,22 @@ export function initConfirmationStatus(): void {
     const list = document.getElementById('detail-addons');
     if (!row || !list) return;
     if (!options.length) { row.classList.add('hidden'); return; }
+    // This runs on both /booking/confirmation and its /ja/ twin, so the wording
+    // follows the path rather than being fixed at build time.
+    const ja = location.pathname.startsWith('/ja/');
     const n = (v: any) => Number(v) || 0;
-    const plural = (v: number, one: string, many: string) => `${v} ${v === 1 ? one : many}`;
+    const count = (v: number, one: string, many: string, jaUnit: string) =>
+      ja ? `${v}${jaUnit}` : `${v} ${v === 1 ? one : many}`;
     const coverage = (o: any) => {
       if (o.pricing_type === 'per_adult_child') {
         const parts: string[] = [];
-        if (n(o.quantity) > 0) parts.push(plural(n(o.quantity), 'adult', 'adults'));
-        if (n(o.child_quantity) > 0) parts.push(plural(n(o.child_quantity), 'child', 'children'));
-        if (n(o.infant_quantity) > 0) parts.push(plural(n(o.infant_quantity), 'infant', 'infants'));
-        return parts.join(' + ');
+        if (n(o.quantity) > 0) parts.push(count(n(o.quantity), 'adult', 'adults', '名（大人）'));
+        if (n(o.child_quantity) > 0) parts.push(count(n(o.child_quantity), 'child', 'children', '名（子供）'));
+        if (n(o.infant_quantity) > 0) parts.push(count(n(o.infant_quantity), 'infant', 'infants', '名（幼児）'));
+        return parts.join(ja ? '＋' : ' + ');
       }
-      if (o.pricing_type === 'per_person') return plural(n(o.quantity), 'guest', 'guests');
-      return plural(n(o.quantity) || 1, 'booking', 'bookings');
+      if (o.pricing_type === 'per_person') return count(n(o.quantity), 'guest', 'guests', '名');
+      return ja ? '1予約' : count(n(o.quantity) || 1, 'booking', 'bookings', '予約');
     };
     list.innerHTML = '';
     for (const o of options) {
