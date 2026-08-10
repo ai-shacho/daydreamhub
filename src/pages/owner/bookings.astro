@@ -38,6 +38,8 @@ let bookings: any[] = [];
 let ownerHotels: any[] = [];
 let error = "";
 
+const bookingOptions: Record<number, any[]> = {};
+
 if (db) {
   try {
     const hotelsRes = await db.prepare(
@@ -83,10 +85,36 @@ if (db) {
       query += ` ORDER BY ${orderCol} ${orderDir}`;
       const result = await db.prepare(query).bind(...binds).all();
       bookings = result?.results || [];
+
+      // Add-ons the guests bought, in one query rather than one per booking.
+      const bookingIds = bookings.map((b: any) => b.id);
+      if (bookingIds.length > 0) {
+        const optRes = await db.prepare(
+          `SELECT * FROM booking_options WHERE booking_id IN (${bookingIds.map(() => "?").join(",")}) ORDER BY id`
+        ).bind(...bookingIds).all().catch(() => null);
+        for (const o of (optRes?.results || []) as any[]) {
+          (bookingOptions[o.booking_id] ||= []).push(o);
+        }
+      }
     }
   } catch (e: any) {
     error = e.message || "Failed to load bookings";
   }
+}
+
+// Who an add-on was charged for, so the hotel knows how many to prepare.
+function optionCoverage(o: any): string {
+  const n = (v: any) => Number(v) || 0;
+  const plural = (v: number, one: string, many: string) => `${v} ${v === 1 ? one : many}`;
+  if (o.pricing_type === "per_adult_child") {
+    const parts: string[] = [];
+    if (n(o.quantity) > 0) parts.push(plural(n(o.quantity), "adult", "adults"));
+    if (n(o.child_quantity) > 0) parts.push(plural(n(o.child_quantity), "child", "children"));
+    if (n(o.infant_quantity) > 0) parts.push(plural(n(o.infant_quantity), "infant", "infants"));
+    return parts.join(" + ");
+  }
+  if (o.pricing_type === "per_person") return plural(n(o.quantity), "guest", "guests");
+  return plural(n(o.quantity) || 1, "booking", "bookings");
 }
 
 function sortLink(col: string) {
@@ -302,6 +330,24 @@ const statusLabels: Record<string, string> = {
                       <span class="text-slate-700 text-xs">{b.created_at?.slice(0, 16)}</span>
                     </div>
                   </div>
+                  {(bookingOptions[b.id] || []).length > 0 && (
+                    <div class="mt-4 pt-3 border-t border-slate-200">
+                      <span class="text-slate-400 text-xs block mb-1.5">Add-ons purchased</span>
+                      <ul class="space-y-1 text-sm">
+                        {(bookingOptions[b.id] || []).map((o: any) => (
+                          <li class="flex flex-wrap items-baseline gap-x-2 text-slate-700">
+                            <span class="font-medium">{o.name}</span>
+                            <span class="text-xs text-slate-500">{optionCoverage(o)}</span>
+                            <span class="text-slate-600">
+                              {o.currency && o.currency !== "USD" && o.amount_local != null
+                                ? `${o.currency} ${o.amount_local} (≈ $${Number(o.amount_usd || 0).toFixed(2)})`
+                                : `$${Number(o.amount_usd || 0).toFixed(2)}`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </td>
               </tr>
             </>

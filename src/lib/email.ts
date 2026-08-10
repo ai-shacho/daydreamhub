@@ -51,6 +51,59 @@ function formatAmountDual(totalUsd: number, localCurrency?: string | null, local
   return `${localCurrency} ${localAmount} (≈ ${usd})`;
 }
 
+// "2 adults, 1 child, 1 infant" — infants are listed because add-ons can now be
+// priced for them, so leaving them out would make an add-on line unexplainable.
+function describeParty(adults: number, children: number, infants?: number): string {
+  const parts = [`${adults} adult${adults === 1 ? '' : 's'}`];
+  if (children > 0) parts.push(`${children} child${children === 1 ? '' : 'ren'}`);
+  if (Number(infants) > 0) parts.push(`${infants} infant${Number(infants) === 1 ? '' : 's'}`);
+  return parts.join(', ');
+}
+
+// An add-on as it was charged, copied from booking_options so the email shows
+// what the guest actually paid rather than today's price for the option.
+export type BookingOptionLine = {
+  name: string;
+  pricing_type?: string | null;
+  quantity?: number | null;
+  child_quantity?: number | null;
+  infant_quantity?: number | null;
+  amount_usd?: number | null;
+  amount_local?: number | null;
+};
+
+// "1 adult + 1 child", "3 guests", "1 booking" — who the charge covered, so the
+// hotel can see at a glance how many breakfasts to lay out.
+function optionCoverage(o: BookingOptionLine): string {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const parts: string[] = [];
+  if (o.pricing_type === 'per_adult_child') {
+    if (Number(o.quantity) > 0) parts.push(plural(Number(o.quantity), 'adult', 'adults'));
+    if (Number(o.child_quantity) > 0) parts.push(plural(Number(o.child_quantity), 'child', 'children'));
+    if (Number(o.infant_quantity) > 0) parts.push(plural(Number(o.infant_quantity), 'infant', 'infants'));
+  } else if (o.pricing_type === 'per_person') {
+    parts.push(plural(Number(o.quantity) || 0, 'guest', 'guests'));
+  } else {
+    parts.push(plural(Number(o.quantity) || 1, 'booking', 'bookings'));
+  }
+  return parts.join(' + ');
+}
+
+// The add-on list as one table cell, so every Booking Details table can drop it
+// in without each template re-deriving the wording.
+function optionsCellHtml(
+  options: BookingOptionLine[] | undefined,
+  localCurrency?: string | null,
+): string {
+  if (!options || !options.length) return '';
+  return options
+    .map((o) => {
+      const amount = formatAmountDual(Number(o.amount_usd || 0), localCurrency, o.amount_local ?? null);
+      return `<div style="margin:0 0 3px">${escapeHtml(o.name)} <span style="color:#6b7280">(${escapeHtml(optionCoverage(o))})</span> — ${escapeHtml(amount)}</div>`;
+    })
+    .join('');
+}
+
 function emailFooter(): string {
   return `
     <div style="margin-top:32px;padding-top:24px;border-top:1px solid #e5e7eb;text-align:center">
@@ -282,6 +335,7 @@ export async function sendBookingNotificationToHotel(
     localAmount?: number | null;
     fxRate?: number | null;
     notes?: string;
+    options?: BookingOptionLine[];
     hotelName: string;
     hotelEmail: string | string[];
   }
@@ -303,10 +357,17 @@ export async function sendBookingNotificationToHotel(
     ...(hasFx ? [['Exchange Rate', `1 USD = ${data.fxRate} ${data.localCurrency} (at payment time; payment was processed in USD)`] as [string, string]] : []),
     ['Notes', data.notes || '-'],
   ];
-  const tableRows = rows
+  // Add-ons sit next to the guest counts: the hotel is the one who has to
+  // deliver them, so they belong in the same table, not a footnote.
+  const addOnsCell = optionsCellHtml(data.options, data.localCurrency);
+  const cells: [string, string][] = rows.map(([label, value]) => [label, escapeHtml(value)]);
+  if (addOnsCell) {
+    cells.splice(cells.findIndex(([l]) => l === 'Total'), 0, ['Add-ons', addOnsCell]);
+  }
+  const tableRows = cells
     .map(
-      ([label, value]) =>
-        `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">${escapeHtml(label)}</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(value)}</td></tr>`
+      ([label, cell]) =>
+        `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">${escapeHtml(label)}</td><td style="padding:8px 12px;border:1px solid #ddd">${cell}</td></tr>`
     )
     .join('');
   const html = `
@@ -456,6 +517,8 @@ export async function sendGuestBookingStatusUpdate(
     status: 'confirmed' | 'cancelled';
     cancelReason?: string;
     hotelSlug?: string;
+    infants?: number;
+    options?: BookingOptionLine[];
   }
 ): Promise<{ success: boolean; error?: string }> {
   const isConfirmed = data.status === 'confirmed';
@@ -470,9 +533,7 @@ export async function sendGuestBookingStatusUpdate(
     ? 'Your day-use hotel booking has been confirmed.'
     : 'Unfortunately, your booking request could not be accommodated.';
 
-  const guestCount = data.children > 0
-    ? `${data.adults} adult${data.adults > 1 ? 's' : ''}, ${data.children} child${data.children > 1 ? 'ren' : ''}`
-    : `${data.adults} adult${data.adults > 1 ? 's' : ''}`;
+  const guestCount = describeParty(data.adults, data.children, data.infants);
 
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
@@ -500,6 +561,9 @@ export async function sendGuestBookingStatusUpdate(
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${formatDate(data.checkInDate)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Time</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.checkInTime)} – ${escapeHtml(data.checkOutTime)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(guestCount)}</td></tr>
+        ${optionsCellHtml(data.options, data.localCurrency)
+          ? `<tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Add-ons</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${optionsCellHtml(data.options, data.localCurrency)}</td></tr>`
+          : ''}
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Amount</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px"><strong>${formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount)}</strong></td></tr>
       </table>
     </div>
@@ -551,13 +615,13 @@ export async function sendGuestBookingConfirmation(
     localCurrency?: string | null;
     localAmount?: number | null;
     notes?: string;
+    infants?: number;
+    options?: BookingOptionLine[];
     cancellationHours?: number | null;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const subject = `Booking Request Received #${data.bookingId} — DaydreamHub`;
-  const guestCount = data.children > 0
-    ? `${data.adults} adult${data.adults > 1 ? 's' : ''}, ${data.children} child${data.children > 1 ? 'ren' : ''}`
-    : `${data.adults} adult${data.adults > 1 ? 's' : ''}`;
+  const guestCount = describeParty(data.adults, data.children, data.infants);
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:#0d9488;color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
@@ -580,6 +644,9 @@ export async function sendGuestBookingConfirmation(
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${formatDate(data.checkInDate)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Time</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(data.checkInTime)} – ${escapeHtml(data.checkOutTime)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(guestCount)}</td></tr>
+        ${optionsCellHtml(data.options, data.localCurrency)
+          ? `<tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Add-ons</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${optionsCellHtml(data.options, data.localCurrency)}</td></tr>`
+          : ''}
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Total Paid</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px"><strong style="color:#0d9488">${formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount)}</strong></td></tr>
         ${data.notes ? `<tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Notes</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(data.notes)}</td></tr>` : ''}
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Cancellation Policy</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${data.cancellationHours === 0 ? '❌ Non-refundable' : `✅ Free cancellation up to ${data.cancellationHours ?? 24}h before check-in`}</td></tr>
