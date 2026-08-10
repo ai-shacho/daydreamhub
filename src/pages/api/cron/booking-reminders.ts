@@ -66,6 +66,11 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   const sent: any[] = [];
   const failed: any[] = [];
   const wouldSend: any[] = [];
+  // One booking gets at most one email per run. markSent already enforces this
+  // by writing the earlier stages, but holding it in memory too means a dry run
+  // reports exactly what a real run would send, and a failed write cannot turn
+  // into three emails.
+  const handled = new Set<number>();
 
   for (const stage of STAGES) {
     // Awaiting the owner, old enough for this stage, check-in still ahead, and
@@ -99,6 +104,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     }))?.results) || [];
 
     for (const b of due) {
+      if (handled.has(b.id)) continue;
       if (sent.length + failed.length >= MAX_PER_RUN) {
         console.warn(`[booking-reminders] hit the ${MAX_PER_RUN} cap; remaining bookings wait for the next run`);
         break;
@@ -107,12 +113,14 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
       if (!recipients.length) {
         // Nowhere to send it. Record the stage anyway so the query does not
         // return this booking on every single run for the rest of its life.
+        handled.add(b.id);
         await markSent(db, b.id, stage);
         failed.push({ booking_id: b.id, stage, error: 'no hotel email on file' });
         continue;
       }
 
       if (dryRun) {
+        handled.add(b.id);
         wouldSend.push({ booking_id: b.id, stage, to: recipients, created_at: b.created_at, check_in_date: b.check_in_date });
         continue;
       }
@@ -145,6 +153,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
 
       // Recorded whether or not Resend accepted it: a send that keeps failing
       // should show up in the message log, not turn into an hourly retry loop.
+      handled.add(b.id);
       await markSent(db, b.id, stage);
 
       await logMessage({
