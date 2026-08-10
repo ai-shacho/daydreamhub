@@ -14,6 +14,10 @@ export function initConfirmationStatus(): void {
   const container = document.querySelector('[data-order-id]') as HTMLElement | null;
   if (!container) return;
 
+  // One script serves /booking/confirmation and its /ja/ twin, so the wording
+  // and the date format follow the path.
+  const ja = location.pathname.startsWith('/ja/');
+
   const orderId = container.getAttribute('data-order-id') || '';
   const paymentStatus = container.getAttribute('data-payment-status') || '';
 
@@ -45,7 +49,7 @@ export function initConfirmationStatus(): void {
     };
     set('detail-hotel', data.hotel_name || '—');
     set('detail-plan', data.plan_name || '—');
-    set('detail-checkin', data.check_in_date ? formatDisplayDate(data.check_in_date) : '—');
+    set('detail-checkin', data.check_in_date ? formatDisplayDate(data.check_in_date, ja ? 'ja' : 'en') : '—');
     set('detail-price', data.total_price_usd != null ? `$${Number(data.total_price_usd).toFixed(2)}` : '—');
     fillAddOns(data.options || []);
     card.classList.remove('hidden');
@@ -58,9 +62,6 @@ export function initConfirmationStatus(): void {
     const list = document.getElementById('detail-addons');
     if (!row || !list) return;
     if (!options.length) { row.classList.add('hidden'); return; }
-    // This runs on both /booking/confirmation and its /ja/ twin, so the wording
-    // follows the path rather than being fixed at build time.
-    const ja = location.pathname.startsWith('/ja/');
     const n = (v: any) => Number(v) || 0;
     const count = (v: number, one: string, many: string, jaUnit: string) =>
       ja ? `${v}${jaUnit}` : `${v} ${v === 1 ? one : many}`;
