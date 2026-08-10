@@ -954,6 +954,25 @@ try {
     if (!boxes.length) return;
     var basePriceUsd = Number(document.getElementById('sum-total')?.dataset.baseUsd || 0);
     var currency = document.getElementById('sum-total')?.dataset.currency || 'USD';
+    var isJaPage = document.documentElement.lang === 'ja';
+
+    // "x 1 + 1" told the guest nothing. Spell out who is being charged.
+    function partyLabel(adults, children, infants) {
+      var parts = [];
+      if (isJaPage) {
+        parts.push('大人' + adults);
+        if (children) parts.push('子供' + children);
+        if (infants) parts.push('幼児' + infants);
+        return parts.join('・');
+      }
+      parts.push(adults + (adults === 1 ? ' adult' : ' adults'));
+      if (children) parts.push(children + (children === 1 ? ' child' : ' children'));
+      if (infants) parts.push(infants + (infants === 1 ? ' infant' : ' infants'));
+      return parts.join(' + ');
+    }
+    function guestsLabel(n) {
+      return isJaPage ? (n + '名') : (n + (n === 1 ? ' guest' : ' guests'));
+    }
     var zeroDecimal = ['JPY','HUF','TWD','KRW','VND','CLP','ISK'].indexOf(currency) !== -1;
 
     function money(v) {
@@ -989,13 +1008,14 @@ try {
         var type = b.dataset.pricingType;
         var usd, loc, qty;
         if (type === 'per_person') {
-          qty = adults + children;
-          usd = unit * qty; loc = unitL * qty;
-          qty = '× ' + qty;
+          var people = adults + children;
+          usd = unit * people; loc = unitL * people;
+          qty = guestsLabel(people);
         } else if (type === 'per_adult_child') {
           usd = unit * adults + child * children + infantU * infants;
           loc = unitL * adults + childL * children + infantL * infants;
-          qty = '× ' + adults + (children ? ' + ' + children : '') + (infants && infantU ? ' + ' + infants : '');
+          // Infants only appear when they actually cost something.
+          qty = partyLabel(adults, children, infantU ? infants : 0);
         } else {
           usd = unit; loc = unitL; qty = '';
         }
