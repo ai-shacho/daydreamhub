@@ -590,7 +590,7 @@ try {
                 </p>
               </div>
             </div>
-            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} testMode={isTestMode} hotelSlug={plan.hotel_slug} locale="en_US" hotelName={plan.hotel_name || ''} hotelCity={plan.city || ''} />
+            <PayPalButton planId={plan.id} priceUsd={plan.price_usd} clientId={paypalClientId} testMode={isTestMode} hotelSlug={plan.hotel_slug} locale={locale === 'ja' ? 'ja_JP' : 'en_US'} hotelName={plan.hotel_name || ''} hotelCity={plan.city || ''} confirmationPath={localePath('/booking/confirmation', locale)} />
           </div>
         </div>
       </div>

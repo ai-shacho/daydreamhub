@@ -1,5 +1,5 @@
 ---
-const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = 'en_US', hotelName = '', hotelCity = '' } = Astro.props || { planId: 0, priceUsd: 0, clientId: '', testMode: false, hotelSlug: '', locale: 'en_US', hotelName: '', hotelCity: '' }
+const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = 'en_US', hotelName = '', hotelCity = '', confirmationPath = '/booking/confirmation' } = Astro.props || { planId: 0, priceUsd: 0, clientId: '', testMode: false, hotelSlug: '', locale: 'en_US', hotelName: '', hotelCity: '' }
 const usePayPal = !testMode && clientId && clientId !== 'sandbox' && clientId.length > 10;
 // Evaluated at build/SSR time — becomes `false` in production bundle
 const isDev = import.meta.env.DEV;
@@ -112,7 +112,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
 </div>
 
-<script define:vars={{ isDev, isTestHotel, testMode, usePayPal, clientId, planId, hotelName, hotelCity }}>
+<script define:vars={{ isDev, isTestHotel, testMode, usePayPal, clientId, planId, hotelName, hotelCity, confirmationPath }}>
   // Selected paid add-ons — ids only; the server re-prices them.
   function _selectedOptions() {
     return Array.prototype.slice.call(document.querySelectorAll('.booking-option:checked'))
@@ -319,7 +319,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
         const data = await res.json();
         if (res.ok && data.order_id) {
-          window.location.href = `/booking/confirmation?order=${data.order_id}`;
+          window.location.href = `${confirmationPath}?order=${data.order_id}`;
         } else {
           if (errorBox && errorMsg) {
             errorMsg.textContent = data.error || 'Booking failed. Please try again.';
@@ -378,7 +378,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
         const data = await res.json();
         if (res.ok && data.booking_id) {
-          window.location.href = `/booking/confirmation?booking_id=${data.booking_id}`;
+          window.location.href = `${confirmationPath}?booking_id=${data.booking_id}`;
         } else {
           if (errorBox && errorMsg) {
             errorMsg.textContent = data.error || 'Booking failed. Please try again.';
@@ -498,9 +498,9 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
             if (res.status === 202 && resData.pending) {
               // PayPal payment is PENDING (under review) — redirect without booking
-              window.location.href = '/booking/confirmation?order=' + data.orderID + '&payment_status=pending';
+              window.location.href = confirmationPath + '?order=' + data.orderID + '&payment_status=pending';
             } else if (res.ok) {
-              window.location.href = '/booking/confirmation?order=' + data.orderID;
+              window.location.href = confirmationPath + '?order=' + data.orderID;
             } else {
               showPopup(classifyError(resData));
             }
