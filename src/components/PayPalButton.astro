@@ -1,6 +1,8 @@
 ---
 const { planId, priceUsd, clientId, testMode = false, hotelSlug = '', locale = 'en_US', hotelName = '', hotelCity = '', confirmationPath = '/booking/confirmation' } = Astro.props || { planId: 0, priceUsd: 0, clientId: '', testMode: false, hotelSlug: '', locale: 'en_US', hotelName: '', hotelCity: '' }
 const usePayPal = !testMode && clientId && clientId !== 'sandbox' && clientId.length > 10;
+// The booking page passes PayPal's own locale code; the surrounding copy follows it.
+const ja = String(locale).startsWith('ja');
 // Evaluated at build/SSR time — becomes `false` in production bundle
 const isDev = import.meta.env.DEV;
 console.log(`PayPal Button Initialized - clientId: ${clientId}`);
@@ -58,7 +60,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
       <svg class="h-5 w-6" viewBox="0 0 24 24" fill="currentColor">
         <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.93 4.778-4.005 7.201-9.138 7.201h-2.19a.563.563 0 0 0-.556.479l-1.187 7.527h-.506l-.24 1.516a.56.56 0 0 0 .554.647h3.882c.46 0 .85-.334.922-.788.06-.26.76-4.852.816-5.09a.932.932 0 0 1 .923-.788h.58c3.76 0 6.705-1.528 7.565-5.946.36-1.847.174-3.388-.777-4.471z"/>
       </svg>
-      <span id="test-btn-text">Pay with PayPal (Test)</span>
+      <span id="test-btn-text">{ja ? 'PayPalで支払う（テスト）' : 'Pay with PayPal (Test)'}</span>
       <span id="test-btn-spinner" class="hidden">
         <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -73,8 +75,8 @@ const isTestHotel = hotelSlug.includes('test-hotel');
       <div class="flex items-start gap-3">
         <span class="text-xl">⚠️</span>
         <div>
-          <p class="font-semibold">Booking Failed</p>
-          <p id="test-error-msg" class="mt-1 text-red-600">Please try again.</p>
+          <p class="font-semibold">{ja ? '予約に失敗しました' : 'Booking Failed'}</p>
+          <p id="test-error-msg" class="mt-1 text-red-600">{ja ? 'もう一度お試しください。' : 'Please try again.'}</p>
         </div>
       </div>
     </div>
@@ -83,11 +85,11 @@ const isTestHotel = hotelSlug.includes('test-hotel');
   <!-- Bypass mode: direct booking without payment -->
   <div>
     <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-sm text-amber-800">
-      💳 <strong>Pay at hotel</strong> — No online payment required. Pay directly at check-in.
+      💳 <strong>{ja ? '現地払い' : 'Pay at hotel'}</strong>{ja ? ' — オンライン決済は不要です。チェックイン時にホテルでお支払いください。' : ' — No online payment required. Pay directly at check-in.'}
     </div>
     <button id="direct-book-btn" type="button"
       class="w-full py-4 px-6 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-lg transition-colors flex items-center justify-center gap-2">
-      <span id="btn-text">✅ Confirm Booking</span>
+      <span id="btn-text">{ja ? '✅ 予約を確定する' : '✅ Confirm Booking'}</span>
       <span id="btn-spinner" class="hidden">
         <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
@@ -95,15 +97,19 @@ const isTestHotel = hotelSlug.includes('test-hotel');
         </svg>
       </span>
     </button>
-    <p class="text-xs text-center text-gray-500 mt-2">Free cancellation · Instant confirmation</p>
+    <p class="text-xs text-center text-gray-500 mt-2">
+      {ja
+        ? 'ご予約リクエストはホテルに送信されます。通常24時間以内に可否をご連絡します。キャンセル条件は上記のプランのポリシーに従います。'
+        : 'Your request goes to the hotel, which usually responds within 24 hours. Cancellation follows the plan’s policy shown above.'}
+    </p>
 
     <!-- Error box for direct booking mode -->
     <div id="direct-error-box" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
       <div class="flex items-start gap-3">
         <span class="text-xl">⚠️</span>
         <div>
-          <p class="font-semibold">Booking Failed</p>
-          <p id="direct-error-msg" class="mt-1 text-red-600">Please try again.</p>
+          <p class="font-semibold">{ja ? '予約に失敗しました' : 'Booking Failed'}</p>
+          <p id="direct-error-msg" class="mt-1 text-red-600">{ja ? 'もう一度お試しください。' : 'Please try again.'}</p>
         </div>
       </div>
     </div>
@@ -112,7 +118,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
 
 </div>
 
-<script define:vars={{ isDev, isTestHotel, testMode, usePayPal, clientId, planId, hotelName, hotelCity, confirmationPath }}>
+<script define:vars={{ isDev, isTestHotel, testMode, usePayPal, clientId, planId, hotelName, hotelCity, confirmationPath, ja }}>
   // Selected paid add-ons — ids only; the server re-prices them.
   function _selectedOptions() {
     return Array.prototype.slice.call(document.querySelectorAll('.booking-option:checked'))
@@ -291,7 +297,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
       const errorMsg = document.getElementById('test-error-msg');
 
       btn.disabled = true;
-      if (btnText) btnText.textContent = 'Processing...';
+      if (btnText) btnText.textContent = ja ? '処理中...' : 'Processing...';
       spinner?.classList.remove('hidden');
       errorBox?.classList.add('hidden');
 
@@ -322,7 +328,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
           window.location.href = `${confirmationPath}?order=${data.order_id}`;
         } else {
           if (errorBox && errorMsg) {
-            errorMsg.textContent = data.error || 'Booking failed. Please try again.';
+            errorMsg.textContent = data.error || (ja ? '予約に失敗しました。もう一度お試しください。' : 'Booking failed. Please try again.');
             errorBox.classList.remove('hidden');
           }
           btn.disabled = false;
@@ -331,7 +337,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
         }
       } catch (e) {
         if (errorBox && errorMsg) {
-          errorMsg.textContent = 'Network error. Please check your connection and try again.';
+          errorMsg.textContent = ja ? '通信エラーが発生しました。接続をご確認のうえ、もう一度お試しください。' : 'Network error. Please check your connection and try again.';
           errorBox.classList.remove('hidden');
         }
         btn.disabled = false;
@@ -352,7 +358,7 @@ const isTestHotel = hotelSlug.includes('test-hotel');
       const errorMsg = document.getElementById('direct-error-msg');
 
       btn.disabled = true;
-      btnText.textContent = 'Processing...';
+      btnText.textContent = ja ? '処理中...' : 'Processing...';
       spinner.classList.remove('hidden');
       if (errorBox) errorBox.classList.add('hidden');
 
@@ -381,20 +387,20 @@ const isTestHotel = hotelSlug.includes('test-hotel');
           window.location.href = `${confirmationPath}?booking_id=${data.booking_id}`;
         } else {
           if (errorBox && errorMsg) {
-            errorMsg.textContent = data.error || 'Booking failed. Please try again.';
+            errorMsg.textContent = data.error || (ja ? '予約に失敗しました。もう一度お試しください。' : 'Booking failed. Please try again.');
             errorBox.classList.remove('hidden');
           }
           btn.disabled = false;
-          btnText.textContent = '✅ Confirm Booking';
+          btnText.textContent = ja ? '✅ 予約を確定する' : '✅ Confirm Booking';
           spinner.classList.add('hidden');
         }
       } catch (e) {
         if (errorBox && errorMsg) {
-          errorMsg.textContent = 'Network error. Please check your connection and try again.';
+          errorMsg.textContent = ja ? '通信エラーが発生しました。接続をご確認のうえ、もう一度お試しください。' : 'Network error. Please check your connection and try again.';
           errorBox.classList.remove('hidden');
         }
         btn.disabled = false;
-        btnText.textContent = '✅ Confirm Booking';
+        btnText.textContent = ja ? '✅ 予約を確定する' : '✅ Confirm Booking';
         spinner.classList.add('hidden');
       }
     });
