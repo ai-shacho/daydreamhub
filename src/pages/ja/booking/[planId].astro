@@ -1,11 +1,12 @@
 ---
 import BookingForm from '../../../components/BookingForm.astro';
-import { getGuestSession } from '../../../lib/guestSession';
+import { getGuestSession, planExists } from '../../../lib/guestSession';
 
 const { planId } = Astro.params;
 const env = (Astro.locals as any).runtime?.env;
 const currentUser = await getGuestSession(Astro.request, env);
 if (!currentUser) return Astro.redirect(`/ja/login?redirect=/ja/booking/${planId}`);
+if (!(await planExists(env?.DB, planId || ''))) Astro.response.status = 404;
 ---
 
 <BookingForm planId={planId || ''} currentUser={currentUser} />

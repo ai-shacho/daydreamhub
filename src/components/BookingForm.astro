@@ -57,10 +57,6 @@ if (!dbAvailable) {
   paypalClientId = 'sandbox';
 }
 
-if (!plan) {
-  Astro.response.status = 404;
-}
-
 const displayPlanName = plan ? (locale === 'ja' && plan.name_ja ? plan.name_ja : plan.name) : '';
 const displayHotelName = plan ? (locale === 'ja' && plan.hotel_name_ja ? plan.hotel_name_ja : plan.hotel_name) : '';
 const timeSlot = plan?.check_in_time && plan?.check_out_time ? `${plan.check_in_time} - ${plan.check_out_time}` : '';

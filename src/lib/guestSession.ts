@@ -42,3 +42,16 @@ export async function getGuestSession(request: Request, env: any): Promise<Guest
   }
   return { name: payload.name || '', email: payload.email || '', phone };
 }
+
+// Whether a plan is bookable at all. The booking routes check this before
+// rendering: a status set from inside a component lands too late to reach the
+// response, so the 404 has to be decided at the page level.
+export async function planExists(db: any, planId: string | number): Promise<boolean> {
+  if (!db) return true;   // no DB binding (local dev) — the page falls back to sample plans
+  try {
+    const row = await db.prepare('SELECT 1 AS ok FROM plans WHERE id = ?').bind(planId).first();
+    return !!row;
+  } catch {
+    return true;          // a query failure is not a missing plan; let the page render its own error
+  }
+}
