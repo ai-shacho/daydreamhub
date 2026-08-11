@@ -773,7 +773,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
               class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white font-bold text-sm md:text-base px-5 py-2.5 rounded-xl transition-colors flex items-center gap-1.5"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
               </svg>
               Send
             </button>
@@ -863,8 +863,8 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         {geoDrillData.map((r, i) => (
           <button type="button" data-region-idx={i}
             class="geo-region-card group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow text-left cursor-pointer">
-            <img src={r.image} alt={r.regionLabel} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+            <img src={r.image} alt={r.regionLabel} class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/5"></div>
             <div class="absolute bottom-0 left-0 right-0 p-3">
               <h3 class="text-white font-semibold text-base">{r.regionLabel}</h3>
               <p class="text-white/70 text-xs">{isJa ? `${r.countryCount}カ国・${r.hotelCount}軒` : `${r.countryCount} ${r.countryCount === 1 ? 'country' : 'countries'} · ${r.hotelCount} hotels`}</p>
@@ -890,21 +890,27 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
   <!-- Browse by Speciality -->
   <section class="py-10 bg-white">
     <div class="max-w-7xl mx-auto px-4">
-      <h2 class="text-2xl font-bold text-gray-800 mb-2">{isJa ? '目的から探す' : 'Browse by Speciality'}</h2>
+      <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-2">{isJa ? '目的から探す' : 'Browse by Speciality'}</h2>
       <p class="text-sm text-gray-500 mb-6">{isJa ? '理想の過ごし方から選べます' : 'Choose your ideal stay experience'}</p>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {specialityCards.map(s => (
           <a href={`/search?speciality=${s.value}`}
             class="group relative rounded-2xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow">
             <img src={s.img} alt={s.label}
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+              class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/5"></div>
             <div class="absolute bottom-0 left-0 right-0 p-4">
               <p class="font-bold text-white text-sm leading-tight">{s.label}</p>
               <p class="text-xs text-white/80 mt-0.5">{s.desc}</p>
             </div>
           </a>
         ))}
+        <a href="/search"
+          class="group relative rounded-2xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow bg-gradient-to-br from-teal-600 to-cyan-700 flex flex-col items-center justify-center text-white">
+          <svg class="w-7 h-7 mb-2 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <p class="font-bold text-sm">{isJa ? 'すべて見る' : 'See all'}</p>
+          <p class="text-xs text-white/80 mt-0.5">{isJa ? '条件を指定して検索' : 'Search with filters'}</p>
+        </a>
       </div>
     </div>
   </section>
@@ -923,8 +929,8 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       }
 
       function cardInner(img, alt, title, sub) {
-        return '<img src="' + esc(img) + '" alt="' + esc(alt) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
-          '<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>' +
+        return '<img src="' + esc(img) + '" alt="' + esc(alt) + '" class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
+          '<div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/5"></div>' +
           '<div class="absolute bottom-0 left-0 right-0 p-3">' +
             '<h3 class="text-white font-semibold text-sm">' + esc(title) + '</h3>' +
             '<p class="text-white/70 text-xs">' + esc(sub) + '</p>' +
@@ -1035,7 +1041,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       <div class="flex flex-wrap justify-center gap-4">
         {roomTypes.map(rt => (
           <a href={`/search?propertyType=${encodeURIComponent(rt.value)}`} class="group relative rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow w-[calc(50%-0.5rem)] sm:w-[calc(33.333%-0.75rem)] lg:w-[calc(20%-0.8rem)]" style="aspect-ratio:1">
-            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80&fm=webp`} alt={rt.label} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80&fm=webp`} alt={rt.label} class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
             <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
             <div class="absolute bottom-0 left-0 right-0 p-3 text-center">
               <h3 class="text-white font-semibold text-sm">{rt.label}</h3>
@@ -1066,7 +1072,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
             <a href={`/blog/${post.slug}`} class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100">
               <div class="aspect-[16/9] overflow-hidden bg-gray-100">
                 {post.thumbnail_url ? (
-                  <img src={post.thumbnail_url} alt={post.title} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                  <img src={post.thumbnail_url} alt={post.title} class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                 ) : (
                   <div class="w-full h-full bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center">
                     <svg class="w-12 h-12 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
@@ -2271,3 +2277,12 @@ function escHtml(s) {
 </script>
 
 </Layout>
+
+<style is:global>
+  /* Stock photography arrives in wildly different grades; a light, uniform
+     correction stops the card rows from looking like a clip-art collage. */
+  .ddh-card-img { filter: saturate(0.92) contrast(1.06) brightness(0.97); }
+  /* Captions sit on photos we do not control — the scrim does most of the
+     work, this covers the brightest edge cases. */
+  .group .absolute h3, .group .absolute p { text-shadow: 0 1px 3px rgba(0,0,0,.45); }
+</style>
