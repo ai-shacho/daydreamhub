@@ -33,6 +33,9 @@ const t = isJa
       nearLabel: 'の近く',
       results: '件',
       popular: '人気エリアから選ぶ',
+      byCountry: '国・都市から選ぶ',
+      hotelsUnit: '軒',
+      loadingAreas: '読み込み中…',
       openShort: '利用時間内',
       closed: '時間外',
       from: '〜',
@@ -148,6 +151,9 @@ const t = isJa
       nearLabel: '',
       results: ' places',
       popular: 'Popular areas',
+      byCountry: 'Browse by country',
+      hotelsUnit: '',
+      loadingAreas: 'Loading…',
       openShort: 'Usable now',
       closed: 'Outside hours',
       from: 'From ',
@@ -360,6 +366,24 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         color: #fff; font-size: 14px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,.6);
       }
       .area:active { transform: scale(.98); }
+      .country-list { border: 1.5px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+      .country-row {
+        width: 100%; display: flex; align-items: center; gap: 10px; padding: 13px 14px;
+        background: none; border: 0; border-top: 1px solid var(--line); cursor: pointer;
+        font-size: 14px; color: var(--text); text-align: left;
+      }
+      .country-row:first-child { border-top: 0; }
+      .country-row .cname { flex: 1; font-weight: 600; }
+      .country-row .ccount { color: var(--muted); font-size: 12px; }
+      .country-row .carrow { color: var(--muted); transition: transform .2s; }
+      .country-row.open .carrow { transform: rotate(90deg); }
+      .city-wrap { display: none; padding: 4px 14px 12px; flex-wrap: wrap; gap: 8px; background: #fbfdfe; border-top: 1px solid var(--line); }
+      .city-wrap.open { display: flex; }
+      .city-chip {
+        padding: 8px 12px; border-radius: 999px; border: 1.5px solid var(--line);
+        background: var(--surface); color: var(--teal-dark); font-size: 13px; font-weight: 600; cursor: pointer;
+      }
+      .city-chip .n { color: var(--muted); font-weight: 400; margin-left: 4px; }
       #home footer { margin-top: 26px; text-align: center; font-size: 12px; color: var(--muted); }
       #home footer a { color: var(--teal-dark); font-weight: 600; }
       .install-hint { margin-top: 10px; font-size: 11px; }
@@ -712,6 +736,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             </button>
           ))}
         </div>
+
+        <div class="popular-title">{t.byCountry}</div>
+        <div class="country-list" id="countryList"><div style="padding:14px;color:var(--muted);font-size:13px">{t.loadingAreas}</div></div>
 
         <footer>
           <a href={isJa ? '/ja' : '/'}>{t.viewSite}</a>
@@ -1229,7 +1256,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
 
       function render(data) {
         lastData = data;
-        radiusIdx = 0;
+        // A deliberately chosen city should show everything in it; the
+        // neighbourhood-first radius only makes sense for "near me" searches.
+        radiusIdx = data && data.mode === 'city' ? RADII.length - 1 : 0;
         renderView();
       }
 
@@ -1713,6 +1742,43 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       document.querySelectorAll('#areas .area').forEach((b) =>
         b.addEventListener('click', () => { $('q').value = b.dataset.q; search({ q: b.dataset.q }); })
       );
+
+      // Browse by country: the eight photo tiles only cover the headline areas,
+      // so the full inventory is reachable as a country → city drill-down.
+      fetch('/api/app/areas')
+        .then((r) => r.json())
+        .then((d) => {
+          const list = $('countryList');
+          const countries = d.countries || [];
+          if (!countries.length) { list.style.display = 'none'; return; }
+          list.innerHTML = countries
+            .map((c, i) => `
+              <button class="country-row" data-c="${i}">
+                <span class="cname">${esc(cityJa(c.country))}</span>
+                <span class="ccount">${c.hotels}${t.hotelsUnit}</span>
+                <span class="carrow">›</span>
+              </button>
+              <div class="city-wrap" data-w="${i}">
+                ${c.cities.map((ct) => `<button class="city-chip" data-city="${esc(ct.city)}">${esc(cityJa(ct.city))}<span class="n">${ct.hotels}</span></button>`).join('')}
+              </div>`)
+            .join('');
+          list.addEventListener('click', (e) => {
+            const chip = e.target.closest && e.target.closest('.city-chip');
+            if (chip) {
+              track('app_city_pick', { city: chip.dataset.city });
+              search({ city: chip.dataset.city });
+              return;
+            }
+            const row = e.target.closest && e.target.closest('.country-row');
+            if (!row) return;
+            const w = list.querySelector(`.city-wrap[data-w="${row.dataset.c}"]`);
+            const opening = !row.classList.contains('open');
+            list.querySelectorAll('.country-row.open').forEach((r) => r.classList.remove('open'));
+            list.querySelectorAll('.city-wrap.open').forEach((x) => x.classList.remove('open'));
+            if (opening) { row.classList.add('open'); w.classList.add('open'); }
+          });
+        })
+        .catch(() => { $('countryList').style.display = 'none'; });
 
       // Voice = conversation. Recognition results go through handleUtterance,
       // and speak() auto-relistens after the reply for a hands-free loop.

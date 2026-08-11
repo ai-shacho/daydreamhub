@@ -208,13 +208,26 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const lat = parseFloat(url.searchParams.get('lat') || '');
   const lng = parseFloat(url.searchParams.get('lng') || '');
   const q = (url.searchParams.get('q') || '').trim().slice(0, 120);
+  // Exact city pick from the browse-by-country list: no geocoding guesswork.
+  const city = (url.searchParams.get('city') || '').trim().slice(0, 80);
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '12'), 30);
 
   let center: { lat: number; lng: number; label: string } | null = null;
-  let mode: 'geo' | 'place' | 'ip' | 'text' = 'text';
+  let mode: 'geo' | 'place' | 'ip' | 'text' | 'city' = 'text';
   let intent: { place: string | null; budgetUsd: number | null; openNow: boolean } | null = null;
 
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+  if (city) {
+    const pts: any = await db
+      .prepare(
+        `SELECT AVG(latitude) AS la, AVG(longitude) AS lo FROM hotels
+          WHERE status = 'active' AND city = ? AND latitude IS NOT NULL`
+      )
+      .bind(city)
+      .first()
+      .catch(() => null);
+    if (pts?.la != null) center = { lat: Number(pts.la), lng: Number(pts.lo), label: city };
+    mode = 'city';
+  } else if (Number.isFinite(lat) && Number.isFinite(lng)) {
     center = { lat, lng, label: '' };
     mode = 'geo';
   } else if (q) {
@@ -273,7 +286,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     }
   }
 
-  if (!center && !q) {
+  if (!center && !q && !city) {
     return new Response(JSON.stringify({ mode: 'text', center: null, hotels: [] }), {
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
@@ -281,7 +294,31 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
   try {
     let rows: any[];
-    if (center) {
+    if (city) {
+      const result = await db
+        .prepare(
+          `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.thumbnail_url,
+                  h.latitude, h.longitude,
+                  MIN(p.price_usd) AS min_price,
+                  MIN(p.check_in_time) AS check_in, MAX(p.check_out_time) AS check_out
+           FROM hotels h
+           LEFT JOIN plans p ON p.hotel_id = h.id AND p.is_active = 1
+           WHERE h.status = 'active' AND h.city = ?
+           GROUP BY h.id`
+        )
+        .bind(city)
+        .all();
+      rows = (result?.results || [])
+        .map((h: any) => ({
+          ...h,
+          km:
+            center && h.latitude != null
+              ? Math.round(haversineKm(center.lat, center.lng, h.latitude, h.longitude) * 10) / 10
+              : null,
+        }))
+        .sort((a: any, b: any) => (a.km ?? 1e9) - (b.km ?? 1e9))
+        .slice(0, limit);
+    } else if (center) {
       const result = await db
         .prepare(
           `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.thumbnail_url,
