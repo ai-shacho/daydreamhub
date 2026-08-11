@@ -56,6 +56,15 @@ const t = isJa
       chatTitle: 'AIコンシェルジュ',
       chatGreeting: 'こんにちは！どこで休憩したいですか？「バンコク」や「チャンギ空港の近くで安いところ」のように話しかけてください。',
       chatPlaceholder: 'メッセージを入力…',
+      convOn: '会話モード',
+      convStart: '会話モードをオンにしますか？',
+      convDesc: 'マイクが続けて聞き取り、返答を音声で読み上げます。ボタンでいつでも停止できます。イヤホンの利用をおすすめします。',
+      convYes: '会話をはじめる',
+      convNo: 'やめておく',
+      convListening: '聞き取り中…',
+      convSpeaking: '応答中…',
+      convEnded: '会話モードを終了しました',
+      convNoMic: 'この端末では音声入力を利用できません',
       chatFound: '{label}の近くで{n}件見つかりました。{cheap}条件があれば「もっと安く」「営業中だけ」などと言ってください。',
       chatCheap: '最安は${p}〜です。',
       chatSorted: '料金の安い順に並べ替えました。',
@@ -177,6 +186,15 @@ const t = isJa
       chatTitle: 'AI Concierge',
       chatGreeting: 'Hi! Where would you like to rest? Try "Bangkok" or "somewhere cheap near Changi Airport".',
       chatPlaceholder: 'Type a message…',
+      convOn: 'Conversation',
+      convStart: 'Turn on conversation mode?',
+      convDesc: 'The mic keeps listening and replies are read aloud. You can stop any time. Headphones recommended.',
+      convYes: 'Start talking',
+      convNo: 'Not now',
+      convListening: 'Listening…',
+      convSpeaking: 'Speaking…',
+      convEnded: 'Conversation mode ended',
+      convNoMic: 'Voice input is not available on this device',
       chatFound: 'Found {n} places near {label}. {cheap}Say "cheaper" or "open now" to refine.',
       chatCheap: 'Cheapest from ${p}. ',
       chatSorted: 'Sorted by price, cheapest first.',
@@ -386,13 +404,21 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       .area-card .ac-name { color: #fff; font-size: 14px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
       .area-card .ac-sub { color: rgba(255,255,255,.85); font-size: 11px; margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
       .area-card:active { transform: scale(.98); }
-      .crumbs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
-      .crumbs button {
-        background: none; border: 0; padding: 0; cursor: pointer;
-        color: var(--teal-dark); font-weight: 600; font-size: 13px;
+      /* A 13px text crumb is not a tap target. This is a full-width row at
+         the platform minimum (44px) with the level name, so going back is
+         the easiest thing on screen. */
+      .area-back {
+        display: none; align-items: center; gap: 10px; width: 100%;
+        min-height: 48px; padding: 10px 14px; margin-bottom: 10px;
+        background: var(--surface); border: 1.5px solid var(--line);
+        border-radius: 14px; cursor: pointer; text-align: left;
       }
-      .crumbs .sep { color: var(--muted); }
-      .crumbs .cur { color: var(--muted); font-weight: 600; }
+      .area-back.show { display: flex; }
+      .area-back .ab-arrow { font-size: 18px; color: var(--teal-dark); flex: none; }
+      .area-back .ab-text { flex: 1; min-width: 0; }
+      .area-back .ab-now { font-size: 15px; font-weight: 700; color: var(--text); }
+      .area-back .ab-up { font-size: 11px; color: var(--muted); margin-top: 1px; }
+      .area-back:active { background: var(--bg); }
       #home footer { margin-top: 26px; text-align: center; font-size: 12px; color: var(--muted); }
       #home footer a { color: var(--teal-dark); font-weight: 600; }
       .install-hint { margin-top: 10px; font-size: 11px; }
@@ -553,6 +579,44 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       }
       .chat-bar button.send { background: linear-gradient(135deg, #0d9488, #0891b2); color: #fff; border: 0; }
       .chat-bar button.listening { background: #dc2626 !important; color: #fff !important; border: 0; animation: pulse 1s infinite; }
+      .chat-head .conv {
+        min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--line);
+        background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 700; cursor: pointer;
+      }
+      .chat-head .conv.on { border-color: var(--teal); background: var(--teal-soft); color: var(--teal-dark); }
+      .conv-state {
+        display: none; align-items: center; justify-content: center; gap: 8px;
+        padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--teal-dark);
+        background: var(--teal-soft); border-top: 1px solid var(--line);
+      }
+      .conv-state.show { display: flex; }
+      .conv-state .wave { display: inline-flex; gap: 3px; align-items: flex-end; height: 14px; }
+      .conv-state .wave i {
+        width: 3px; background: var(--teal); border-radius: 2px; animation: eq .9s ease-in-out infinite;
+      }
+      .conv-state .wave i:nth-child(2) { animation-delay: .15s; }
+      .conv-state .wave i:nth-child(3) { animation-delay: .3s; }
+      .conv-state .wave i:nth-child(4) { animation-delay: .45s; }
+      @keyframes eq { 0%,100% { height: 4px; } 50% { height: 14px; } }
+      .modal-back {
+        position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 60;
+        display: none; align-items: flex-end; justify-content: center;
+      }
+      .modal-back.show { display: flex; }
+      .modal-card {
+        background: var(--surface); width: 100%; max-width: 480px;
+        border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
+      }
+      .modal-card h3 { font-size: 17px; font-weight: 800; margin-bottom: 8px; }
+      .modal-card p { color: var(--muted); font-size: 13px; line-height: 1.7; margin-bottom: 16px; }
+      .modal-card .primary {
+        width: 100%; padding: 15px; border: 0; border-radius: 14px; cursor: pointer;
+        background: linear-gradient(135deg, #0d9488, #0891b2); color: #fff; font-size: 15px; font-weight: 700;
+      }
+      .modal-card .ghost {
+        width: 100%; padding: 13px; margin-top: 8px; border: 0; background: none;
+        color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer;
+      }
       .typing { color: var(--muted); font-size: 13px; }
 
       /* ---------- Concierge (unlisted hotels + AI call) ---------- */
@@ -747,7 +811,10 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         </div>
 
         <div class="popular-title">{t.byCountry}</div>
-        <div class="crumbs" id="areaCrumbs" style="display:none"></div>
+        <button class="area-back" id="areaBack">
+          <span class="ab-arrow">←</span>
+          <span class="ab-text"><span class="ab-now" id="areaNow"></span><span class="ab-up" id="areaUp"></span></span>
+        </button>
         <div class="area-grid" id="areaGrid"></div>
         <div id="areaLoading" style="color:var(--muted);font-size:13px">{t.loadingAreas}</div>
 
@@ -791,6 +858,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       <div class="chat-head">
         <button class="back" id="chatBack">←</button>
         <div class="ttl">💬 {t.chatTitle}</div>
+        <button class="conv" id="convToggle">🎙 {t.convOn}</button>
+      </div>
+      <div class="conv-state" id="convState">
+        <span class="wave"><i></i><i></i><i></i><i></i></span>
+        <span id="convStateText"></span>
       </div>
       <div id="chatLog"></div>
       <div class="chat-bar">
@@ -932,6 +1004,15 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         </div>
         <div id="acHint" style="color:var(--warn);font-size:13px;min-height:17px;margin-bottom:8px;"></div>
         <button class="test-pay-btn" id="acGo">{t.acceptGo}</button>
+      </div>
+    </div>
+
+    <div class="modal-back" id="convModal">
+      <div class="modal-card">
+        <h3>{t.convStart}</h3>
+        <p>{t.convDesc}</p>
+        <button class="primary" id="convAccept">{t.convYes}</button>
+        <button class="ghost" id="convDecline">{t.convNo}</button>
       </div>
     </div>
 
@@ -1342,14 +1423,17 @@ const areas: Array<{ label: string; q: string; img: string }> = [
 
       // ---------- search flow ----------
       async function enterResults() {
-        $('resultsScreen').classList.add('active');
+        if (!$('resultsScreen').classList.contains('active')) {
+          $('resultsScreen').classList.add('active');
+          pushLayer('results', () => {
+            $('resultsScreen').classList.remove('active');
+            document.body.style.overflow = '';
+          });
+        }
         document.body.style.overflow = 'hidden';
         try { await ensureMap(); } catch (e) { $('sheetStatus').textContent = '⚠️ ' + t.mapFail; setSheet(0); }
       }
-      function goHome() {
-        $('resultsScreen').classList.remove('active');
-        document.body.style.overflow = '';
-      }
+      function goHome() { back(); }
       $('backBtn').addEventListener('click', () => {
         goHome();
         if (cameFromChat) { cameFromChat = false; openChat(false); }
@@ -1434,15 +1518,16 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       // method only — unexpected audio in public spaces is hostile UX.
 
       function openChat() {
-        $('chatScreen').classList.add('open');
+        if (!$('chatScreen').classList.contains('open')) {
+          $('chatScreen').classList.add('open');
+          pushLayer('chat', () => $('chatScreen').classList.remove('open'));
+        }
         if (!greeted) {
           greeted = true;
           aiSay(t.chatGreeting, {});
         }
       }
-      function closeChat() {
-        $('chatScreen').classList.remove('open');
-      }
+      function closeChat() { if (convOn) stopConv(true); back(); }
       $('chatBack').addEventListener('click', closeChat);
 
       function scrollChat() { chatLog.scrollTop = chatLog.scrollHeight; }
@@ -1475,6 +1560,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         if (chips.length) inner += `<div class="chat-chips">${chips.join('')}</div>`;
         chatLog.insertAdjacentHTML('beforeend', `<div class="msg ai">${inner}</div>`);
         scrollChat();
+        if (typeof convReplied === 'function') convReplied(text);
       }
 
       // ---------- concierge: unlisted hotels + AI phone confirmation ----------
@@ -1576,7 +1662,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         openPanel('callPanel');
         track('app_cg_form_open', { hotel: h.name });
       }
-      $('callClose').addEventListener('click', () => closePanel('callPanel'));
+      $('callClose').addEventListener('click', back);
       $('cgSubmit').addEventListener('click', async () => {
         if (!$('cgDate').value || !cgTarget) {
           $('cgHint').textContent = t.fillAll;
@@ -1624,7 +1710,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           if (d.group_id) {
             saveInquiry({ g: d.group_id, s: cgSessionId, hotel: cgTarget.name, date: $('cgDate').value, ts: Date.now() });
           }
-          closePanel('callPanel');
+          back();
           if ($('chatScreen').classList.contains('open')) aiSay(t.cgDone, {});
           // Land the user where the result will appear.
           $('myBookingsBtn').click();
@@ -1759,7 +1845,8 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       // to type. Photo cards at every level; breadcrumb to walk back up.
       let areaData = [];
       const areaGrid = $('areaGrid');
-      const crumbs = $('areaCrumbs');
+      const areaBack = $('areaBack');
+      let areaLevel = { level: 0, ri: -1, ci: -1 };
 
       function areaCardHtml(img, name, sub, attr) {
         return `<button class="area-card" ${attr}>
@@ -1770,19 +1857,20 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           </div>
         </button>`;
       }
-      function setCrumbs(parts) {
-        if (!parts.length) { crumbs.style.display = 'none'; crumbs.innerHTML = ''; return; }
-        crumbs.style.display = 'flex';
-        crumbs.innerHTML = parts
-          .map((p, i) =>
-            i === parts.length - 1
-              ? `<span class="cur">${esc(p.label)}</span>`
-              : `<button data-crumb="${esc(p.go)}">${esc(p.label)}</button><span class="sep">›</span>`
-          )
-          .join('');
+      function setBack(nowLabel, upLabel) {
+        if (!nowLabel) { areaBack.classList.remove('show'); return; }
+        $('areaNow').textContent = nowLabel;
+        $('areaUp').textContent = upLabel;
+        areaBack.classList.add('show');
+      }
+      // Keep the newly rendered level in view — after a tap the user should be
+      // looking at the cards, not at wherever the page happened to be scrolled.
+      function revealArea() {
+        areaBack.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }
       function showRegions() {
-        setCrumbs([]);
+        areaLevel = { level: 0, ri: -1, ci: -1 };
+        setBack('', '');
         areaGrid.innerHTML = areaData
           .map((r, i) =>
             areaCardHtml(r.image, r.label, `${r.countryCount}${t.countryUnit} ・ ${r.hotels}${t.hotelsUnit}`, `data-r="${i}"`)
@@ -1792,7 +1880,8 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       function showCountries(ri) {
         const r = areaData[ri];
         if (!r) return;
-        setCrumbs([{ label: t.allRegions, go: 'root' }, { label: r.label }]);
+        areaLevel = { level: 1, ri, ci: -1 };
+        setBack(r.label, t.allRegions);
         areaGrid.innerHTML = r.countries
           .map((c, ci) =>
             areaCardHtml(c.image, c.label, `${c.cities.length}${t.cityUnit} ・ ${c.hotels}${t.hotelsUnit}`, `data-r="${ri}" data-c="${ci}"`)
@@ -1803,7 +1892,8 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         const r = areaData[ri];
         const c = r && r.countries[ci];
         if (!c) return;
-        setCrumbs([{ label: t.allRegions, go: 'root' }, { label: r.label, go: String(ri) }, { label: c.label }]);
+        areaLevel = { level: 2, ri, ci };
+        setBack(c.label, r.label);
         areaGrid.innerHTML = c.cities
           .map((ct) => areaCardHtml(ct.image, ct.label, `${ct.hotels}${t.hotelsUnit}`, `data-city="${esc(ct.city)}"`))
           .join('');
@@ -1815,17 +1905,17 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           track('app_city_pick', { city: card.dataset.city });
           search({ city: card.dataset.city });
         } else if (card.dataset.c != null) {
-          showCities(Number(card.dataset.r), Number(card.dataset.c));
+          const ri = Number(card.dataset.r);
+          pushLayer('area', () => showCountries(ri));
+          showCities(ri, Number(card.dataset.c));
+          revealArea();
         } else {
+          pushLayer('area', showRegions);
           showCountries(Number(card.dataset.r));
+          revealArea();
         }
       });
-      crumbs.addEventListener('click', (e) => {
-        const b = e.target.closest && e.target.closest('button[data-crumb]');
-        if (!b) return;
-        if (b.dataset.crumb === 'root') showRegions();
-        else showCountries(Number(b.dataset.crumb));
-      });
+      areaBack.addEventListener('click', () => { back(); revealArea(); });
       fetch('/api/app/areas' + (isJa ? '?lang=ja' : ''))
         .then((r) => r.json())
         .then((d) => {
@@ -1856,18 +1946,117 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         rec.onerror = () => {};
         rec.start();
       }
+      // ---- conversation mode ----------------------------------------------
+      // Voice as a back-and-forth: while it is on the mic re-opens after every
+      // reply and replies are spoken, so the user never taps between turns.
+      // Speaking out loud is opt-in (a sheet, once) because audio starting by
+      // itself in public is the fastest way to lose someone.
+      let convOn = false;
+      let convRec = null;
+      let convStopping = false;
+      const CONV_KEY = 'ddhConvOk';
+
+      function convStatus(text) {
+        $('convStateText').textContent = text;
+        $('convState').classList.toggle('show', !!text);
+      }
+      function speak(text, onDone) {
+        if (!convOn || !window.speechSynthesis) { onDone && onDone(); return; }
+        try {
+          speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = isJa ? 'ja-JP' : 'en-US';
+          u.rate = 1.05;
+          convStatus(t.convSpeaking);
+          u.onend = () => onDone && onDone();
+          u.onerror = () => onDone && onDone();
+          speechSynthesis.speak(u);
+          // Some browsers never fire onend; do not strand the loop.
+          setTimeout(() => { if (convOn) onDone && onDone(); }, Math.min(12000, 1800 + text.length * 90));
+        } catch (e) {
+          onDone && onDone();
+        }
+      }
+      function convListen() {
+        if (!convOn || !SR || convRec) return;
+        const rec = new SR();
+        convRec = rec;
+        rec.lang = isJa ? 'ja-JP' : 'en-US';
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+        rec.continuous = false;
+        convStatus(t.convListening);
+        $('chatMic').classList.add('listening');
+        rec.onresult = (e) => {
+          const text = e.results[0][0].transcript;
+          track('app_voice_search', { conv: true });
+          handleUtterance(text, true);
+        };
+        rec.onerror = () => {};
+        rec.onend = () => {
+          convRec = null;
+          $('chatMic').classList.remove('listening');
+          // Idle end (user said nothing): keep the conversation alive.
+          if (convOn && !convStopping && !convBusy) setTimeout(convListen, 400);
+        };
+        try { rec.start(); } catch (e) { convRec = null; }
+      }
+      let convBusy = false;
+      function convReplied(text) {
+        if (!convOn) return;
+        convBusy = true;
+        speak(text, () => { convBusy = false; if (convOn) convListen(); });
+      }
+      function startConv() {
+        if (!SR) { bkToast(t.convNoMic); return; }
+        convOn = true;
+        convStopping = false;
+        $('convToggle').classList.add('on');
+        track('app_conv_on');
+        convListen();
+      }
+      function stopConv(quiet) {
+        convOn = false;
+        convStopping = true;
+        $('convToggle').classList.remove('on');
+        try { convRec && convRec.stop(); } catch (e) {}
+        convRec = null;
+        try { window.speechSynthesis && speechSynthesis.cancel(); } catch (e) {}
+        $('chatMic').classList.remove('listening');
+        convStatus('');
+        if (!quiet) bkToast(t.convEnded);
+        track('app_conv_off');
+      }
+      function requestConv() {
+        if (localStorage.getItem(CONV_KEY) === '1') { startConv(); return; }
+        $('convModal').classList.add('show');
+      }
+      $('convAccept').addEventListener('click', () => {
+        try { localStorage.setItem(CONV_KEY, '1'); } catch (e) {}
+        $('convModal').classList.remove('show');
+        startConv();
+      });
+      $('convDecline').addEventListener('click', () => $('convModal').classList.remove('show'));
+      $('convModal').addEventListener('click', (e) => {
+        if (e.target === $('convModal')) $('convModal').classList.remove('show');
+      });
+      $('convToggle').addEventListener('click', () => (convOn ? stopConv() : requestConv()));
+
       if (!SR) {
         $('micBtn').style.display = 'none';
         $('micFab').style.display = 'none';
         $('chatMic').style.display = 'none';
+        $('convToggle').style.display = 'none';
       } else {
-        const voiceToChat = () => {
-          openChat(true);
-          startVoice($('chatMic'), (x) => handleUtterance(x, true));
-        };
+        // Entering by voice from the home screen starts the conversation.
+        const voiceToChat = () => { openChat(); requestConv(); };
         $('micBtn').addEventListener('click', voiceToChat);
         $('micFab').addEventListener('click', voiceToChat);
-        $('chatMic').addEventListener('click', () => startVoice($('chatMic'), (x) => handleUtterance(x, true)));
+        // Inside the chat the mic is a single turn unless conversation is on.
+        $('chatMic').addEventListener('click', () => {
+          if (convOn) { stopConv(); return; }
+          startVoice($('chatMic'), (x) => handleUtterance(x, true));
+        });
       }
 
       // ---------- in-app detail / booking / payment ----------
@@ -1881,7 +2070,41 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         const v = usd * rateJPY;
         return '約¥' + (v >= 1000 ? Math.round(v / 100) * 100 : Math.round(v / 10) * 10).toLocaleString();
       };
-      const openPanel = (id) => $(id).classList.add('open');
+      // Every overlay is a history entry, so the phone's back gesture walks
+      // back through the app instead of leaving it — the single biggest
+      // difference between "a website in a shell" and something that feels
+      // like an app. Close buttons go through history too, so there is one
+      // path in and one path out.
+      const navStack = [];
+      function pushLayer(name, onBack) {
+        navStack.push({ name, onBack });
+        try { history.pushState({ ddh: navStack.length }, ''); } catch (e) {}
+      }
+      function back() {
+        if (navStack.length) history.back();
+      }
+      function backTo(name) {
+        // Unwind to just below the named layer (used when a flow finishes).
+        const idx = navStack.findIndex((l) => l.name === name);
+        const n = idx === -1 ? navStack.length : navStack.length - idx;
+        if (n > 0) history.go(-n);
+      }
+      window.addEventListener('popstate', () => {
+        // One popstate can cover several entries (history.go(-n)).
+        const target = (history.state && history.state.ddh) || 0;
+        while (navStack.length > target) {
+          const layer = navStack.pop();
+          try { layer.onBack(); } catch (e) {}
+        }
+      });
+
+      const openPanel = (id) => {
+        // Moving on to reading or booking ends the hands-free loop — a mic
+        // still listening while someone fills in a form is a trap.
+        if (typeof convOn !== 'undefined' && convOn) stopConv(true);
+        $(id).classList.add('open');
+        pushLayer(id, () => $(id).classList.remove('open'));
+      };
       const closePanel = (id) => $(id).classList.remove('open');
 
       async function openDetail(slug) {
@@ -1958,7 +2181,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           $('planList').innerHTML = `<div class="panel-meta">⚠️ ${esc(e.message)}</div>`;
         }
       }
-      $('detailClose').addEventListener('click', () => closePanel('detailPanel'));
+      $('detailClose').addEventListener('click', back);
 
       // Unlisted hotels get the same detail treatment (photos, rating, address)
       // before the AI-call ask — enough to decide whether it is worth calling.
@@ -2023,7 +2246,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         openPanel('bookPanel');
         setupPay();
       }
-      $('bookClose').addEventListener('click', () => closePanel('bookPanel'));
+      $('bookClose').addEventListener('click', back);
 
       const formValid = () =>
         !!($('bkName').value.trim() && /.+@.+\..+/.test($('bkEmail').value.trim()) && $('bkDate').value);
@@ -2065,7 +2288,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         track('app_booking_done', { booking: bookingId });
       }
       $('doneClose').addEventListener('click', () => {
+        // The booking is finished — unwind the whole flow, not one panel.
         ['donePanel', 'bookPanel', 'detailPanel'].forEach(closePanel);
+        backTo('detailPanel');
       });
 
       // ---------- my bookings (guest, device-local) ----------
@@ -2093,7 +2318,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         $('myBookingsBtn').classList.toggle('show', getBookings().length + getInquiries().length > 0);
       }
       refreshBkBtn();
-      $('bkListClose').addEventListener('click', () => { stopBkPolling(); closePanel('bkListPanel'); });
+      $('bkListClose').addEventListener('click', () => { stopBkPolling(); back(); });
       $('myBookingsBtn').addEventListener('click', () => {
         const bks = getBookings();
         const inqs = getInquiries();
@@ -2293,7 +2518,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         openPanel('acceptPanel');
         track('app_inq_accept_open');
       });
-      $('acceptClose').addEventListener('click', () => closePanel('acceptPanel'));
+      $('acceptClose').addEventListener('click', back);
       $('acGo').addEventListener('click', async () => {
         const name = $('acName').value.trim();
         const email = $('acEmail').value.trim();
@@ -2313,7 +2538,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           const d = await r.json();
           if (!d.ok) throw new Error(d.error || 'failed');
           $('acHint').textContent = '';
-          closePanel('acceptPanel');
+          back();
           window.open('/concierge/accept?token=' + encodeURIComponent(acceptTarget.token), '_blank');
           track('app_inq_accept_go');
         } catch (e) {
