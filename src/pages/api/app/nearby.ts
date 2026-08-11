@@ -368,7 +368,16 @@ export const GET: APIRoute = async ({ request, locals }) => {
         .slice(0, limit);
     } else {
       // No coordinates resolvable — plain text search over names and cities.
-      const like = `%${q}%`;
+      // D1 rejects long or wildcard-laden LIKE patterns ("pattern too
+      // complex"), and this is a last-resort path, so keep the term short and
+      // literal rather than 500-ing on a sentence someone dictated.
+      const term = q.replace(/[%_\\]/g, ' ').trim().slice(0, 30);
+      if (!term) {
+        return new Response(JSON.stringify({ mode, center, intent: null, hotels: [] }), {
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        });
+      }
+      const like = `%${term}%`;
       const result = await db
         .prepare(
           `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.thumbnail_url,
