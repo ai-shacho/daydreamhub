@@ -371,7 +371,12 @@ export const GET: APIRoute = async ({ request, locals }) => {
       // D1 rejects long or wildcard-laden LIKE patterns ("pattern too
       // complex"), and this is a last-resort path, so keep the term short and
       // literal rather than 500-ing on a sentence someone dictated.
-      const term = q.replace(/[%_\\]/g, ' ').trim().slice(0, 30);
+      // D1 caps LIKE patterns at roughly 50 bytes, not characters — Thai and
+      // Japanese spend three bytes a glyph, so a short dictated phrase blows
+      // the limit. Trim by encoded length, on a character boundary.
+      const enc = new TextEncoder();
+      let term = q.replace(/[%_\\]/g, ' ').trim();
+      while (enc.encode(term).length > 44) term = term.slice(0, -1);
       if (!term) {
         return new Response(JSON.stringify({ mode, center, intent: null, hotels: [] }), {
           headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
