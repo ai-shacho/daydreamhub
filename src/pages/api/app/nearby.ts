@@ -150,7 +150,7 @@ async function extractIntent(
     '"budget": number|null (max budget as stated, NO currency conversion), ' +
     '"currency": string|null (ISO code of the stated budget, e.g. "USD", "JPY"), ' +
     '"open_now": boolean (true if they want somewhere usable right now)}';
-  const models = ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1'];
+  const models = ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'];
   for (const model of models) {
     try {
       const r = await env.AI.run(model, {
@@ -271,30 +271,36 @@ export const GET: APIRoute = async ({ request, locals }) => {
           };
         }
       }
-      if (!center && intent?.place) center = resolveQueryToCoords(intent.place);
     }
     if (center) {
       mode = 'place';
     } else {
-      // Unknown place name (any language) — fall back to Google geocoding,
-      // same key the site's /api/geocode uses.
       const apiKey = (locals as any).runtime?.env?.GOOGLE_PLACES_API_KEY;
-      if (apiKey) {
+      const gLang = (url.searchParams.get('lang') || 'en').slice(0, 5);
+      const geocode = async (address: string) => {
+        if (!apiKey || !address) return null;
         try {
-          const gLang = (url.searchParams.get('lang') || 'en').slice(0, 5);
           const res = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(intent?.place || q)}&language=${encodeURIComponent(gLang)}&key=${apiKey}`
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}` +
+              `&language=${encodeURIComponent(gLang)}&key=${apiKey}`
           );
           const data = (await res.json()) as any;
           const loc = data?.results?.[0]?.geometry?.location;
           if (data?.status === 'OK' && loc) {
-            center = { lat: loc.lat, lng: loc.lng, label: data.results[0].formatted_address || q };
-            mode = 'place';
+            return { lat: loc.lat, lng: loc.lng, label: data.results[0].formatted_address || address };
           }
         } catch {
-          // geocoding is best-effort; text search below still answers
+          // best-effort
         }
+        return null;
+      };
+      // Order matters: the raw words first (Google reads every language and
+      // does not invent), then the model's guess as a last resort.
+      center = await geocode(q);
+      if (!center && intent?.place && intent.place !== q) {
+        center = resolveQueryToCoords(intent.place) || (await geocode(intent.place));
       }
+      if (center) mode = 'place';
     }
   } else {
     // No query at all — use Cloudflare's IP geolocation so the app can show
