@@ -8,14 +8,23 @@
 #
 # HOW TO ADD IT
 # It cannot be pushed with the current PAT (repo scope only, no workflow scope).
-# Add it through the GitHub web UI as .github/workflows/cron.yml, and register a
-# repository secret named CRON_SECRET holding the same value that is set on the
-# Cloudflare Pages project.
+# Add it through the GitHub web UI as .github/workflows/cron.yml.
+# The CRON_SECRET repository secret is already registered, and its value matches
+# the CRON_SECRET on the Cloudflare Pages production environment.
+#
+# DRY RUN SWITCH
+# The repository variable REMINDER_DRY_RUN controls whether this actually sends.
+#   REMINDER_DRY_RUN = 1  → calls the endpoint with ?dry_run=1: the run logs who
+#                           would be emailed and writes nothing. This is the
+#                           current setting.
+#   REMINDER_DRY_RUN = 0  → live sending.
+# It is a variable rather than a line in this file so the switch can be flipped
+# from Settings → Secrets and variables → Actions → Variables, with no edit here.
 #
 # SAFETY
-# The reminder endpoint records each (booking, stage) before the next run, so
-# running hourly — or twice by accident — sends nothing extra. It also accepts
-# ?dry_run=1, which reports who would be emailed and writes nothing.
+# The endpoint records each (booking, stage) before the next run, so running
+# hourly — or twice by accident — sends nothing extra. Bookings that predate the
+# feature are excluded outright by migration 054.
 
 name: Scheduled jobs
 
@@ -29,8 +38,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Chase owners who have not answered a booking (6h / 12h / 24h)
+        env:
+          DRY_RUN: ${{ vars.REMINDER_DRY_RUN }}
         run: |
-          curl -sS -X POST 'https://daydreamhub.com/api/cron/booking-reminders' \
+          URL='https://daydreamhub.com/api/cron/booking-reminders'
+          if [ "$DRY_RUN" != "0" ]; then
+            echo "REMINDER_DRY_RUN=${DRY_RUN:-unset} — reporting only, nothing will be sent."
+            URL="$URL?dry_run=1"
+          fi
+          curl -sS -X POST "$URL" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -w '\nHTTP %{http_code}\n' \
             --fail-with-body
