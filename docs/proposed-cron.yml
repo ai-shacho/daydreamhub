@@ -1,21 +1,21 @@
 # Scheduled jobs for DayDreamHub.
 #
-# Cloudflare Pages has no cron triggers, so the /api/cron/* endpoints only run
-# when something calls them. Nothing currently does: production has 19 bookings
-# still sitting in pending_confirmation with a check-in date in the past, and no
-# booking has ever reached completed or no_show — proof that
-# /api/cron/update-booking-status has never been invoked.
+# WHY THIS FILE EXISTS
+# Cloudflare Pages has no cron triggers, so the /api/cron/* endpoints are just
+# URLs — they run only when something calls them. Nothing calls them today, so
+# the owner reminders will never fire until this workflow (or any other
+# scheduler) exists.
 #
-# This workflow is the scheduler. It cannot be pushed with the current PAT
-# (repo scope only, no workflow scope), so add it through the GitHub web UI:
-#   Actions → new workflow → paste this file as .github/workflows/cron.yml
+# HOW TO ADD IT
+# It cannot be pushed with the current PAT (repo scope only, no workflow scope).
+# Add it through the GitHub web UI as .github/workflows/cron.yml, and register a
+# repository secret named CRON_SECRET holding the same value that is set on the
+# Cloudflare Pages project.
 #
-# Required repository secret:
-#   CRON_SECRET — must equal the CRON_SECRET already set on the Pages project.
-#
-# The reminder job is safe to run hourly: each (booking, stage) is recorded in
-# booking_owner_reminders before the next run, so a repeated or overlapping run
-# sends nothing extra.
+# SAFETY
+# The reminder endpoint records each (booking, stage) before the next run, so
+# running hourly — or twice by accident — sends nothing extra. It also accepts
+# ?dry_run=1, which reports who would be emailed and writes nothing.
 
 name: Scheduled jobs
 
@@ -35,19 +35,29 @@ jobs:
             -w '\nHTTP %{http_code}\n' \
             --fail-with-body
 
-  booking-status:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Roll past bookings to completed / no_show
-        # Date-based, so once a day is enough.
-        if: github.event_name == 'workflow_dispatch' || fromJSON(format('{0}', github.run_number)) > 0
-        run: |
-          hour=$(date -u +%H)
-          if [ "$hour" != "01" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
-            echo "Not the 01:00 UTC run — skipping."
-            exit 0
-          fi
-          curl -sS -X POST 'https://daydreamhub.com/api/cron/update-booking-status' \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -w '\nHTTP %{http_code}\n' \
-            --fail-with-body
+# ---------------------------------------------------------------------------
+# NOT ENABLED: /api/cron/update-booking-status
+#
+# This endpoint already exists and has never once run — production still has 19
+# bookings in pending_confirmation whose check-in date has passed, and no
+# booking has ever reached completed or no_show. Scheduling it would flip all of
+# that backlog in a single run, so it needs a decision of its own rather than
+# being switched on as a side effect of the reminders.
+#
+# To enable it later, add '5 1 * * *' to the schedule above and this job, gated
+# so each cron line triggers only its own job:
+#
+#   booking-status:
+#     if: github.event.schedule == '5 1 * * *' || github.event_name == 'workflow_dispatch'
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Roll past bookings to completed / no_show
+#         run: |
+#           curl -sS -X POST 'https://daydreamhub.com/api/cron/update-booking-status' \
+#             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+#             -w '\nHTTP %{http_code}\n' \
+#             --fail-with-body
+#
+# and add the matching guard to owner-booking-reminders:
+#     if: github.event.schedule == '17 * * * *' || github.event_name == 'workflow_dispatch'
+# ---------------------------------------------------------------------------
