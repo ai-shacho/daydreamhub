@@ -91,7 +91,7 @@ const INTENT_RE = /[0-9０-９]|[$￥¥]|ドル|円|予算|以内|以下|まで|
 
 // Deterministic budget extraction — preferred over the LLM's numbers, which
 // sometimes arrive silently currency-converted despite instructions.
-const OPEN_NOW_RE = /今すぐ|いますぐ|営業中|open now|right now/i;
+const OPEN_NOW_RE = /今すぐ|いますぐ|営業中|open now|right now|现在|馬上|馬上可以|지금|바로|ตอนนี้|เดี๋ยวนี้|sekarang|ngay bây giờ|bây giờ/i;
 
 async function toUsd(env: any, amount: number, currency: string): Promise<number | null> {
   if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -105,13 +105,34 @@ async function toUsd(env: any, amount: number, currency: string): Promise<number
   return null;
 }
 
+// Money as it is actually spoken, per language. Ordered so that the more
+// specific words win before the bare symbols.
+const BUDGET_PATTERNS: Array<[RegExp, string]> = [
+  [/(\d[\d,]*)\s*(?:円|えん)/, 'JPY'],
+  [/(\d[\d,]*)\s*(?:ドル|dollars?|usd|bucks|美元|美金|달러)/i, 'USD'],
+  [/[$＄]\s*(\d[\d,]*)/, 'USD'],
+  [/(\d[\d,]*)\s*(?:ユーロ|euros?|eur|欧元)/i, 'EUR'],
+  [/(\d[\d,]*)\s*(?:元|块|人民币|rmb|cny)/i, 'CNY'],
+  [/(\d[\d,]*)\s*(?:원|won|krw)/i, 'KRW'],
+  [/(\d[\d,]*)\s*(?:บาท|baht|thb)/i, 'THB'],
+  [/(?:rp\.?\s*)(\d[\d,\.]*)/i, 'IDR'],
+  [/(\d[\d,\.]*)\s*(?:rupiah|idr)/i, 'IDR'],
+  [/(\d[\d,\.]*)\s*(?:đồng|dong|vnd)/i, 'VND'],
+  [/(?:rm\s*)(\d[\d,]*)/i, 'MYR'],
+  [/(\d[\d,]*)\s*(?:ringgit|myr)/i, 'MYR'],
+  [/(?:₱\s*)(\d[\d,]*)/, 'PHP'],
+  [/(\d[\d,]*)\s*(?:peso|php)/i, 'PHP'],
+  [/(\d[\d,]*)\s*(?:台幣|新台幣|twd)/i, 'TWD'],
+];
+
 function parseBudgetFromText(q: string): { amount: number; currency: string } | null {
-  let m = q.match(/(\d[\d,]*)\s*円/);
-  if (m) return { amount: Number(m[1].replace(/,/g, '')), currency: 'JPY' };
-  m = q.match(/[$＄]\s*(\d[\d,]*)/) || q.match(/(\d[\d,]*)\s*(?:ドル|dollars?|usd|bucks)/i);
-  if (m) return { amount: Number(m[1].replace(/,/g, '')), currency: 'USD' };
-  m = q.match(/(\d[\d,]*)\s*(?:ユーロ|euros?|eur)/i);
-  if (m) return { amount: Number(m[1].replace(/,/g, '')), currency: 'EUR' };
+  for (const [re, cur] of BUDGET_PATTERNS) {
+    const m = q.match(re);
+    if (m) {
+      const amount = Number(m[1].replace(/[,\.](?=\d{3}\b)/g, '').replace(/,/g, ''));
+      if (Number.isFinite(amount) && amount > 0) return { amount, currency: cur };
+    }
+  }
   return null;
 }
 
@@ -123,13 +144,13 @@ async function extractIntent(
 ): Promise<{ place: string | null; budgetUsd: number | null; openNow: boolean } | null> {
   if (!env?.AI) return null;
   const sys =
-    'You extract search intent from day-use hotel queries (Japanese or English). ' +
+    'You extract search intent from day-use hotel queries. The user may write in ANY language (English, Japanese, Chinese, Korean, Thai, Indonesian, Vietnamese, …). ' +
     'Reply with ONLY a JSON object, no prose: ' +
     '{"place": string|null (location/airport/city mentioned, keep original language), ' +
     '"budget": number|null (max budget as stated, NO currency conversion), ' +
     '"currency": string|null (ISO code of the stated budget, e.g. "USD", "JPY"), ' +
     '"open_now": boolean (true if they want somewhere usable right now)}';
-  const models = ['@cf/meta/llama-3.1-8b-instruct', '@cf/mistral/mistral-7b-instruct-v0.1'];
+  const models = ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'];
   for (const model of models) {
     try {
       const r = await env.AI.run(model, {
@@ -234,7 +255,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     center = resolveQueryToCoords(q);
     // Bare place names skip the AI round-trip; richer queries ("予算50ドルで
     // 今すぐ") get interpreted, which can also rescue an unresolved place.
-    if (!center || INTENT_RE.test(q)) {
+    if (!center || INTENT_RE.test(q) || OPEN_NOW_RE.test(q)) {
       const env = (locals as any).runtime?.env;
       intent = await extractIntent(env, q);
       if (!intent) {
@@ -250,29 +271,36 @@ export const GET: APIRoute = async ({ request, locals }) => {
           };
         }
       }
-      if (!center && intent?.place) center = resolveQueryToCoords(intent.place);
     }
     if (center) {
       mode = 'place';
     } else {
-      // Unknown place name (any language) — fall back to Google geocoding,
-      // same key the site's /api/geocode uses.
       const apiKey = (locals as any).runtime?.env?.GOOGLE_PLACES_API_KEY;
-      if (apiKey) {
+      const gLang = (url.searchParams.get('lang') || 'en').slice(0, 5);
+      const geocode = async (address: string) => {
+        if (!apiKey || !address) return null;
         try {
           const res = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(intent?.place || q)}&key=${apiKey}`
+            `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}` +
+              `&language=${encodeURIComponent(gLang)}&key=${apiKey}`
           );
           const data = (await res.json()) as any;
           const loc = data?.results?.[0]?.geometry?.location;
           if (data?.status === 'OK' && loc) {
-            center = { lat: loc.lat, lng: loc.lng, label: data.results[0].formatted_address || q };
-            mode = 'place';
+            return { lat: loc.lat, lng: loc.lng, label: data.results[0].formatted_address || address };
           }
         } catch {
-          // geocoding is best-effort; text search below still answers
+          // best-effort
         }
+        return null;
+      };
+      // Order matters: the raw words first (Google reads every language and
+      // does not invent), then the model's guess as a last resort.
+      center = await geocode(q);
+      if (!center && intent?.place && intent.place !== q) {
+        center = resolveQueryToCoords(intent.place) || (await geocode(intent.place));
       }
+      if (center) mode = 'place';
     }
   } else {
     // No query at all — use Cloudflare's IP geolocation so the app can show
@@ -340,7 +368,21 @@ export const GET: APIRoute = async ({ request, locals }) => {
         .slice(0, limit);
     } else {
       // No coordinates resolvable — plain text search over names and cities.
-      const like = `%${q}%`;
+      // D1 rejects long or wildcard-laden LIKE patterns ("pattern too
+      // complex"), and this is a last-resort path, so keep the term short and
+      // literal rather than 500-ing on a sentence someone dictated.
+      // D1 caps LIKE patterns at roughly 50 bytes, not characters — Thai and
+      // Japanese spend three bytes a glyph, so a short dictated phrase blows
+      // the limit. Trim by encoded length, on a character boundary.
+      const enc = new TextEncoder();
+      let term = q.replace(/[%_\\]/g, ' ').trim();
+      while (enc.encode(term).length > 44) term = term.slice(0, -1);
+      if (!term) {
+        return new Response(JSON.stringify({ mode, center, intent: null, hotels: [] }), {
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+        });
+      }
+      const like = `%${term}%`;
       const result = await db
         .prepare(
           `SELECT h.id, h.name, h.name_ja, h.slug, h.city, h.country, h.thumbnail_url,
