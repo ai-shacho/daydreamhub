@@ -309,7 +309,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         padding: calc(12px + env(safe-area-inset-top)) 18px 10px;
         background: var(--surface);
       }
-      header.bar img { width: 28px; height: 28px; border-radius: 6px; }
+      header.bar img { height: 20px; width: auto; }
       header.bar strong { font-size: 16px; letter-spacing: .02em; }
       #home main { padding: 14px 18px 40px; max-width: 560px; margin: 0 auto; }
       h1 { font-size: 25px; line-height: 1.3; margin: 4px 0 4px; font-weight: 800; }
@@ -685,8 +685,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
     <!-- Home: choose how to search -->
     <div id="home">
       <header class="bar">
-        <img src="/logo.png" alt="DDH" />
-        <strong>DayDreamHub</strong>
+        <img src="/logo-wordmark.png" alt="DayDreamHub" width="1209" height="191" />
       </header>
       <main>
         <h1>{t.tagline}</h1>
