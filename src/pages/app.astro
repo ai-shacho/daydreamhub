@@ -33,7 +33,10 @@ const t = isJa
       nearLabel: 'の近く',
       results: '件',
       popular: '人気エリアから選ぶ',
-      byCountry: '国・都市から選ぶ',
+      byCountry: 'エリアから探す',
+      allRegions: 'すべての地域',
+      countryUnit: 'カ国',
+      cityUnit: '都市',
       hotelsUnit: '軒',
       loadingAreas: '読み込み中…',
       openShort: '利用時間内',
@@ -151,7 +154,10 @@ const t = isJa
       nearLabel: '',
       results: ' places',
       popular: 'Popular areas',
-      byCountry: 'Browse by country',
+      byCountry: 'Browse by area',
+      allRegions: 'All regions',
+      countryUnit: ' countries',
+      cityUnit: ' cities',
       hotelsUnit: '',
       loadingAreas: 'Loading…',
       openShort: 'Usable now',
@@ -366,24 +372,27 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         color: #fff; font-size: 14px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,.6);
       }
       .area:active { transform: scale(.98); }
-      .country-list { border: 1.5px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
-      .country-row {
-        width: 100%; display: flex; align-items: center; gap: 10px; padding: 13px 14px;
-        background: none; border: 0; border-top: 1px solid var(--line); cursor: pointer;
-        font-size: 14px; color: var(--text); text-align: left;
+      .area-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .area-card {
+        position: relative; border: 0; padding: 0; border-radius: 14px; overflow: hidden;
+        aspect-ratio: 16 / 10; cursor: pointer; background: var(--line); text-align: left;
       }
-      .country-row:first-child { border-top: 0; }
-      .country-row .cname { flex: 1; font-weight: 600; }
-      .country-row .ccount { color: var(--muted); font-size: 12px; }
-      .country-row .carrow { color: var(--muted); transition: transform .2s; }
-      .country-row.open .carrow { transform: rotate(90deg); }
-      .city-wrap { display: none; padding: 4px 14px 12px; flex-wrap: wrap; gap: 8px; background: #fbfdfe; border-top: 1px solid var(--line); }
-      .city-wrap.open { display: flex; }
-      .city-chip {
-        padding: 8px 12px; border-radius: 999px; border: 1.5px solid var(--line);
-        background: var(--surface); color: var(--teal-dark); font-size: 13px; font-weight: 600; cursor: pointer;
+      .area-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+      .area-card::after {
+        content: ''; position: absolute; inset: 0;
+        background: linear-gradient(180deg, rgba(0,0,0,0) 35%, rgba(0,0,0,.72) 100%);
       }
-      .city-chip .n { color: var(--muted); font-weight: 400; margin-left: 4px; }
+      .area-card .ac-body { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; }
+      .area-card .ac-name { color: #fff; font-size: 14px; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+      .area-card .ac-sub { color: rgba(255,255,255,.85); font-size: 11px; margin-top: 2px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+      .area-card:active { transform: scale(.98); }
+      .crumbs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+      .crumbs button {
+        background: none; border: 0; padding: 0; cursor: pointer;
+        color: var(--teal-dark); font-weight: 600; font-size: 13px;
+      }
+      .crumbs .sep { color: var(--muted); }
+      .crumbs .cur { color: var(--muted); font-weight: 600; }
       #home footer { margin-top: 26px; text-align: center; font-size: 12px; color: var(--muted); }
       #home footer a { color: var(--teal-dark); font-weight: 600; }
       .install-hint { margin-top: 10px; font-size: 11px; }
@@ -738,7 +747,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         </div>
 
         <div class="popular-title">{t.byCountry}</div>
-        <div class="country-list" id="countryList"><div style="padding:14px;color:var(--muted);font-size:13px">{t.loadingAreas}</div></div>
+        <div class="crumbs" id="areaCrumbs" style="display:none"></div>
+        <div class="area-grid" id="areaGrid"></div>
+        <div id="areaLoading" style="color:var(--muted);font-size:13px">{t.loadingAreas}</div>
 
         <footer>
           <a href={isJa ? '/ja' : '/'}>{t.viewSite}</a>
@@ -1743,42 +1754,87 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         b.addEventListener('click', () => { $('q').value = b.dataset.q; search({ q: b.dataset.q }); })
       );
 
-      // Browse by country: the eight photo tiles only cover the headline areas,
-      // so the full inventory is reachable as a country → city drill-down.
-      fetch('/api/app/areas')
+      // Browse by area: region → country → city, the same drill-down as the
+      // website, so anywhere with listings is reachable without knowing what
+      // to type. Photo cards at every level; breadcrumb to walk back up.
+      let areaData = [];
+      const areaGrid = $('areaGrid');
+      const crumbs = $('areaCrumbs');
+
+      function areaCardHtml(img, name, sub, attr) {
+        return `<button class="area-card" ${attr}>
+          <img src="${esc(img)}" alt="" loading="lazy" />
+          <div class="ac-body">
+            <div class="ac-name">${esc(name)}</div>
+            <div class="ac-sub">${esc(sub)}</div>
+          </div>
+        </button>`;
+      }
+      function setCrumbs(parts) {
+        if (!parts.length) { crumbs.style.display = 'none'; crumbs.innerHTML = ''; return; }
+        crumbs.style.display = 'flex';
+        crumbs.innerHTML = parts
+          .map((p, i) =>
+            i === parts.length - 1
+              ? `<span class="cur">${esc(p.label)}</span>`
+              : `<button data-crumb="${esc(p.go)}">${esc(p.label)}</button><span class="sep">›</span>`
+          )
+          .join('');
+      }
+      function showRegions() {
+        setCrumbs([]);
+        areaGrid.innerHTML = areaData
+          .map((r, i) =>
+            areaCardHtml(r.image, r.label, `${r.countryCount}${t.countryUnit} ・ ${r.hotels}${t.hotelsUnit}`, `data-r="${i}"`)
+          )
+          .join('');
+      }
+      function showCountries(ri) {
+        const r = areaData[ri];
+        if (!r) return;
+        setCrumbs([{ label: t.allRegions, go: 'root' }, { label: r.label }]);
+        areaGrid.innerHTML = r.countries
+          .map((c, ci) =>
+            areaCardHtml(c.image, c.label, `${c.cities.length}${t.cityUnit} ・ ${c.hotels}${t.hotelsUnit}`, `data-r="${ri}" data-c="${ci}"`)
+          )
+          .join('');
+      }
+      function showCities(ri, ci) {
+        const r = areaData[ri];
+        const c = r && r.countries[ci];
+        if (!c) return;
+        setCrumbs([{ label: t.allRegions, go: 'root' }, { label: r.label, go: String(ri) }, { label: c.label }]);
+        areaGrid.innerHTML = c.cities
+          .map((ct) => areaCardHtml(ct.image, ct.label, `${ct.hotels}${t.hotelsUnit}`, `data-city="${esc(ct.city)}"`))
+          .join('');
+      }
+      areaGrid.addEventListener('click', (e) => {
+        const card = e.target.closest && e.target.closest('.area-card');
+        if (!card) return;
+        if (card.dataset.city) {
+          track('app_city_pick', { city: card.dataset.city });
+          search({ city: card.dataset.city });
+        } else if (card.dataset.c != null) {
+          showCities(Number(card.dataset.r), Number(card.dataset.c));
+        } else {
+          showCountries(Number(card.dataset.r));
+        }
+      });
+      crumbs.addEventListener('click', (e) => {
+        const b = e.target.closest && e.target.closest('button[data-crumb]');
+        if (!b) return;
+        if (b.dataset.crumb === 'root') showRegions();
+        else showCountries(Number(b.dataset.crumb));
+      });
+      fetch('/api/app/areas' + (isJa ? '?lang=ja' : ''))
         .then((r) => r.json())
         .then((d) => {
-          const list = $('countryList');
-          const countries = d.countries || [];
-          if (!countries.length) { list.style.display = 'none'; return; }
-          list.innerHTML = countries
-            .map((c, i) => `
-              <button class="country-row" data-c="${i}">
-                <span class="cname">${esc(cityJa(c.country))}</span>
-                <span class="ccount">${c.hotels}${t.hotelsUnit}</span>
-                <span class="carrow">›</span>
-              </button>
-              <div class="city-wrap" data-w="${i}">
-                ${c.cities.map((ct) => `<button class="city-chip" data-city="${esc(ct.city)}">${esc(cityJa(ct.city))}<span class="n">${ct.hotels}</span></button>`).join('')}
-              </div>`)
-            .join('');
-          list.addEventListener('click', (e) => {
-            const chip = e.target.closest && e.target.closest('.city-chip');
-            if (chip) {
-              track('app_city_pick', { city: chip.dataset.city });
-              search({ city: chip.dataset.city });
-              return;
-            }
-            const row = e.target.closest && e.target.closest('.country-row');
-            if (!row) return;
-            const w = list.querySelector(`.city-wrap[data-w="${row.dataset.c}"]`);
-            const opening = !row.classList.contains('open');
-            list.querySelectorAll('.country-row.open').forEach((r) => r.classList.remove('open'));
-            list.querySelectorAll('.city-wrap.open').forEach((x) => x.classList.remove('open'));
-            if (opening) { row.classList.add('open'); w.classList.add('open'); }
-          });
+          areaData = d.regions || [];
+          $('areaLoading').style.display = 'none';
+          if (!areaData.length) return;
+          showRegions();
         })
-        .catch(() => { $('countryList').style.display = 'none'; });
+        .catch(() => { $('areaLoading').style.display = 'none'; });
 
       // Voice = conversation. Recognition results go through handleUtterance,
       // and speak() auto-relistens after the reply for a hands-free loop.
