@@ -9,16 +9,14 @@ function escapeHtml(str: string): string {
 
 const SITE_URL = 'https://daydreamhub.com';
 
-const MONTH_NAMES_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTH_NAMES_SHORT_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function formatDate(dateStr: string): string {
-  if (!dateStr) return dateStr;
-  const parts = dateStr.split('-');
-  if (parts.length !== 3) return dateStr;
-  const month = MONTH_NAMES_EN[parseInt(parts[1]) - 1] || parts[1];
-  return `${month} ${parseInt(parts[2])}, ${parts[0]}`;
+  return formatDateYyyyMmmDd(dateStr);
 }
 
+// "2026-08-12" → "2026-Aug-12th". Owners and guests read these emails from
+// everywhere, and 08/12 means August 12th in some countries and 8 December in
+// others; the spelled-out month plus the ordinal removes the ambiguity.
 function formatDateYyyyMmmDd(dateStr: string): string {
   if (!dateStr) return dateStr;
   const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -26,7 +24,9 @@ function formatDateYyyyMmmDd(dateStr: string): string {
   const monthIdx = Number(m[2]) - 1;
   const mon = MONTH_NAMES_SHORT_EN[monthIdx];
   if (!mon) return dateStr;
-  return `${m[1]}-${mon}-${m[3]}`;
+  const day = Number(m[3]);
+  const suffix = day % 100 >= 11 && day % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] || 'th';
+  return `${m[1]}-${mon}-${m[3]}${suffix}`;
 }
 
 function hotelLink(hotelName: string, hotelSlug?: string): string {
@@ -348,7 +348,7 @@ function ownerBookingTable(data: OwnerBookingData): string {
     ['Guest Email', data.guestEmail],
     ['Guest Phone', data.guestPhone || '-'],
     ['Nationality', data.guestNationality || '-'],
-    ['Check-in Date', data.checkInDate],
+    ['Check-in Date', formatDateYyyyMmmDd(data.checkInDate)],
     ['Plan', data.planName],
     ['Adults', String(data.adults)],
     ['Children', String(data.children)],
@@ -432,7 +432,7 @@ export async function sendBookingNotificationToHotel(
   apiKey: string,
   data: OwnerBookingData
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = `[Action Required] DayDreamHub booking #${data.bookingId} — new request from ${data.guestName} · ${data.checkInDate}`;
+  const subject = `[Action Required] DayDreamHub booking #${data.bookingId} — new request from ${data.guestName} · ${formatDateYyyyMmmDd(data.checkInDate)}`;
   const html = ownerEmailShell({
     headerBg: '#b45309',
     emoji: '🔔',
@@ -457,7 +457,7 @@ export async function sendBookingNotificationToHotel(
 }
 
 // How long a booking has gone unanswered, and how hard the email pushes.
-export type ReminderStage = 6 | 12 | 24;
+export type ReminderStage = 6 | 12;
 
 const REMINDER_COPY: Record<ReminderStage, {
   subjectTag: string;
@@ -496,20 +496,6 @@ const REMINDER_COPY: Record<ReminderStage, {
       or decline — either answer helps them; silence does not.
     </div>`,
   },
-  24: {
-    subjectTag: '[Urgent]',
-    subjectPhrase: 'your guest has been waiting a full day',
-    headerBg: '#b91c1c',
-    emoji: '🚨',
-    title: 'Waiting a Full Day',
-    subtitle: 'Please respond to this guest today.',
-    box: `
-    <div style="background:#fee2e2;border:1px solid #f87171;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#7f1d1d">
-      🚨 <strong>A full day has gone by and this guest still has no answer.</strong> They were told to expect
-      one within 24 hours, and their trip is on hold until you reply. Please confirm the booking now if you
-      can take it, or decline it so we can refund them and they can find another room.
-    </div>`,
-  },
 };
 
 // Reminder for a booking the owner has not acted on. Sent by the reminder cron,
@@ -520,7 +506,7 @@ export async function sendOwnerBookingReminder(
   data: OwnerBookingData
 ): Promise<{ success: boolean; error?: string }> {
   const copy = REMINDER_COPY[stage];
-  const subject = `${copy.subjectTag} DayDreamHub booking #${data.bookingId} — ${copy.subjectPhrase} · ${data.checkInDate}`;
+  const subject = `${copy.subjectTag} DayDreamHub booking #${data.bookingId} — ${copy.subjectPhrase} · ${formatDateYyyyMmmDd(data.checkInDate)}`;
   const html = ownerEmailShell({
     headerBg: copy.headerBg,
     emoji: copy.emoji,

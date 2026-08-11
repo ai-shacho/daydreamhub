@@ -4,18 +4,18 @@ import { sendOwnerBookingReminder, type ReminderStage } from '../../../lib/email
 // Chase owners who have not answered a paid booking request.
 //
 // The guest's money is already taken at this point, so silence from the hotel
-// is the worst state the booking can be in. Reminders go out at 6, 12 and 24
-// hours; the 24-hour mark is the deadline in the owner terms, and the terms
-// allow no more than 48.
+// is the worst state the booking can be in. Reminders go out at 6 and 12 hours
+// and then stop: past that point the owner has been told twice, and a third
+// automated email adds nothing that a human following up would not do better.
 //
 // Idempotent by construction: a stage is only sent if there is no row for
 // (booking, stage) in booking_owner_reminders, and the row is written before we
 // move on. Running this every hour, or twice by accident, sends nothing extra.
-const STAGES: ReminderStage[] = [24, 12, 6];   // highest first, so a long-overdue booking gets the strongest one
+const STAGES: ReminderStage[] = [12, 6];   // highest first, so an older booking gets the more urgent one
 
 // Sending stage N also marks every earlier stage as done. Without this, a
-// booking that is already 30 hours old would match all three queries on the
-// first run and land three emails in the owner's inbox at once.
+// booking that is already 15 hours old would match both queries on the first
+// run and land two emails in the owner's inbox at once.
 async function markSent(db: any, bookingId: number, stage: ReminderStage) {
   for (const s of STAGES.filter((x) => x <= stage)) {
     await db.prepare('INSERT OR IGNORE INTO booking_owner_reminders (booking_id, stage) VALUES (?, ?)')
@@ -78,7 +78,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     // alone — chasing a hotel over a stay that cannot happen is just noise.
     //
     // Bookings that predate this feature are excluded by migration 054, which
-    // pre-recorded all three stages for them. Deleting a hotel's rows from
+    // pre-recorded every stage for them. Deleting a hotel's rows from
     // booking_owner_reminders is what opts its existing bookings back in.
     const due: any[] = ((await db.prepare(
       `SELECT b.id, b.hotel_id, b.guest_name, b.guest_email, b.guest_phone, b.guest_nationality,
