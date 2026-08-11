@@ -76,6 +76,9 @@ if (isJa) {
 let heroHotels: any[] = [];
 let categoryHotels: Record<string, any[]> = {};
 let allCities: any[] = [];
+// Hotel names for the location suggestions — the field accepts a property name,
+// so it should suggest one.
+let hotelNames: any[] = [];
 let totalHotels = 0;
 let totalPlans = 0;
 let recentBlogs: any[] = [];
@@ -122,13 +125,17 @@ try {
       ).bind(cat.planType).all().catch(() => ({ results: [] }))
     );
 
-    const [heroResult, cityResult, statsH, statsP, blogResult, mapResult, ...categoryResults] =
+    const [heroResult, cityResult, hotelNameResult, statsH, statsP, blogResult, mapResult, ...categoryResults] =
       await Promise.all([
         heroQuery,
         DB.prepare(
           `SELECT TRIM(city) as city, TRIM(country) as country, COUNT(*) as hotel_count
            FROM hotels WHERE city != '' AND status = 'active'
            GROUP BY TRIM(LOWER(city)), TRIM(LOWER(country)) ORDER BY hotel_count DESC LIMIT 60`
+        ).all().catch(() => ({ results: [] })),
+        DB.prepare(
+          `SELECT name, name_ja, city, country FROM hotels
+           WHERE status = 'active' AND name != '' ORDER BY name`
         ).all().catch(() => ({ results: [] })),
         DB.prepare("SELECT COUNT(*) as c FROM hotels WHERE status = 'active'").first().catch(() => ({ c: 0 })),
         DB.prepare("SELECT COUNT(*) as c FROM plans WHERE status = 'active'").first().catch(() => ({ c: 0 })),
@@ -148,6 +155,7 @@ try {
 
     heroHotels = heroResult?.results ?? [];
     allCities = cityResult?.results ?? [];
+    hotelNames = hotelNameResult?.results ?? [];
     totalHotels = statsH?.c || 0;
     totalPlans = statsP?.c || 0;
     recentBlogs = blogResult?.results ?? [];
@@ -647,7 +655,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
           <!-- Location -->
           <div class="relative flex-1 min-w-0 px-4 py-1.5 md:border-r md:border-gray-200" id="location-wrapper">
             <label class="block text-[11px] text-gray-500 font-semibold">{isJa ? '場所' : 'Where'}</label>
-            <input type="text" name="location" id="location-input" placeholder={isJa ? '都市名または空港名' : 'City or airport'} autocomplete="off"
+            <input type="text" name="location" id="location-input" placeholder={isJa ? '都市名・国名・ホテル名' : 'City, country, or hotel name'} autocomplete="off"
               class="w-full bg-transparent text-sm font-medium text-gray-800 placeholder-gray-400 focus:outline-none" />
             <ul id="location-suggestions"
               class="hidden absolute left-0 right-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto text-sm">
@@ -765,7 +773,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
               class="flex-shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-white font-bold text-sm md:text-base px-5 py-2.5 rounded-xl transition-colors flex items-center gap-1.5"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
               </svg>
               Send
             </button>
@@ -855,8 +863,8 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
         {geoDrillData.map((r, i) => (
           <button type="button" data-region-idx={i}
             class="geo-region-card group relative rounded-xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow text-left cursor-pointer">
-            <img src={r.image} alt={r.regionLabel} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+            <img src={r.image} alt={r.regionLabel} class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/5"></div>
             <div class="absolute bottom-0 left-0 right-0 p-3">
               <h3 class="text-white font-semibold text-base">{r.regionLabel}</h3>
               <p class="text-white/70 text-xs">{isJa ? `${r.countryCount}カ国・${r.hotelCount}軒` : `${r.countryCount} ${r.countryCount === 1 ? 'country' : 'countries'} · ${r.hotelCount} hotels`}</p>
@@ -882,21 +890,27 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
   <!-- Browse by Speciality -->
   <section class="py-10 bg-white">
     <div class="max-w-7xl mx-auto px-4">
-      <h2 class="text-2xl font-bold text-gray-800 mb-2">{isJa ? '目的から探す' : 'Browse by Speciality'}</h2>
+      <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-2">{isJa ? '目的から探す' : 'Browse by Speciality'}</h2>
       <p class="text-sm text-gray-500 mb-6">{isJa ? '理想の過ごし方から選べます' : 'Choose your ideal stay experience'}</p>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {specialityCards.map(s => (
           <a href={`/search?speciality=${s.value}`}
             class="group relative rounded-2xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow">
             <img src={s.img} alt={s.label}
-              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
-            <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+              class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/5"></div>
             <div class="absolute bottom-0 left-0 right-0 p-4">
               <p class="font-bold text-white text-sm leading-tight">{s.label}</p>
               <p class="text-xs text-white/80 mt-0.5">{s.desc}</p>
             </div>
           </a>
         ))}
+        <a href="/search"
+          class="group relative rounded-2xl overflow-hidden aspect-[4/3] shadow-sm hover:shadow-lg transition-shadow bg-gradient-to-br from-teal-600 to-cyan-700 flex flex-col items-center justify-center text-white">
+          <svg class="w-7 h-7 mb-2 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <p class="font-bold text-sm">{isJa ? 'すべて見る' : 'See all'}</p>
+          <p class="text-xs text-white/80 mt-0.5">{isJa ? '条件を指定して検索' : 'Search with filters'}</p>
+        </a>
       </div>
     </div>
   </section>
@@ -915,8 +929,8 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       }
 
       function cardInner(img, alt, title, sub) {
-        return '<img src="' + esc(img) + '" alt="' + esc(alt) + '" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
-          '<div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>' +
+        return '<img src="' + esc(img) + '" alt="' + esc(alt) + '" class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />' +
+          '<div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/5"></div>' +
           '<div class="absolute bottom-0 left-0 right-0 p-3">' +
             '<h3 class="text-white font-semibold text-sm">' + esc(title) + '</h3>' +
             '<p class="text-white/70 text-xs">' + esc(sub) + '</p>' +
@@ -1027,7 +1041,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
       <div class="flex flex-wrap justify-center gap-4">
         {roomTypes.map(rt => (
           <a href={`/search?propertyType=${encodeURIComponent(rt.value)}`} class="group relative rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow w-[calc(50%-0.5rem)] sm:w-[calc(33.333%-0.75rem)] lg:w-[calc(20%-0.8rem)]" style="aspect-ratio:1">
-            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80&fm=webp`} alt={rt.label} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+            <img src={`https://images.unsplash.com/${rt.img}?w=300&q=80&fm=webp`} alt={rt.label} class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
             <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
             <div class="absolute bottom-0 left-0 right-0 p-3 text-center">
               <h3 class="text-white font-semibold text-sm">{rt.label}</h3>
@@ -1058,7 +1072,7 @@ const uniqueCityCount = new Set(mergedCities.map((c: any) => c.city)).size || 85
             <a href={`/blog/${post.slug}`} class="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-shadow border border-gray-100">
               <div class="aspect-[16/9] overflow-hidden bg-gray-100">
                 {post.thumbnail_url ? (
-                  <img src={post.thumbnail_url} alt={post.title} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                  <img src={post.thumbnail_url} alt={post.title} class="ddh-card-img w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                 ) : (
                   <div class="w-full h-full bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center">
                     <svg class="w-12 h-12 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
@@ -1483,10 +1497,10 @@ function escHtml(s) {
         }).join('');
         callBtns =
           '<div class="mt-2 space-y-1.5">' +
-            '<p class="text-[11px] text-white/60 mb-1">📞 AI calls up to 3 hotels for you — <strong class="text-amber-300">$7 total</strong> (refund if none available)</p>' +
+            '<p class="text-[11px] text-white/60 mb-1">📞 The AI calls the hotel to check availability and price — free. A $7 booking fee applies only when you accept the quote.</p>' +
             items +
             '<button onclick="window._heroCallBook(this)" class="mt-1 w-full flex items-center justify-center gap-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors">' +
-              '📞 Call selected hotels ($7)' +
+              '📞 Get a price by phone (free)' +
             '</button>' +
           '</div>';
       }
@@ -1604,7 +1618,7 @@ function escHtml(s) {
       '<div class="bg-gray-900/80 border border-white/20 text-white rounded-xl rounded-tl-none px-4 py-3 text-sm max-w-[92%] w-full" id="call-booking-form">' +
         '<p class="font-bold text-sm mb-0.5">📞 AI Phone Booking — <span class="text-amber-300">' + selected.length + ' hotel' + (selected.length > 1 ? 's' : '') + '</span></p>' +
         '<ul class="text-xs mb-2 space-y-0.5 pl-1">' + hotelListHtml + '</ul>' +
-        '<p class="text-white/60 text-xs mb-2">AI calls these hotels in order until one confirms. Fee: <strong class="text-amber-400">$7 total</strong> (refund if none available)</p>' +
+        '<p class="text-white/60 text-xs mb-2">The AI calls the hotel to check availability and price — free. We will email you a quote; you only pay a <strong class="text-amber-400">$7 booking fee</strong> when you accept (refunded in full if the hotel cannot confirm).</p>' +
         '<div class="space-y-1.5">' +
           '<div class="grid grid-cols-2 gap-2">' +
             '<div>' +
@@ -1619,11 +1633,6 @@ function escHtml(s) {
           '<div>' +
             '<label class="text-[11px] text-white/50 block mb-0.5">Phone</label>' +
             '<input id="call-guest-phone" type="tel" placeholder="+1 555 123 4567" class="w-full bg-white/10 text-white placeholder-white/30 rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none" />' +
-          '</div>' +
-          '<div>' +
-            '<label class="text-[11px] text-white/50 block mb-0.5">💵 Max budget (' + budgetCur + ') <span class="text-amber-300">*</span></label>' +
-            '<input id="call-max-budget" type="number" min="1" step="1" placeholder="e.g. 80" class="w-full bg-white/10 text-white placeholder-white/30 rounded px-2 py-1.5 text-xs border border-white/20 focus:border-amber-400 focus:outline-none" />' +
-            '<p class="text-[10px] text-white/40 mt-0.5">We will not book any plan above this amount.</p>' +
           '</div>' +
           '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
             '<div>' +
@@ -1652,14 +1661,14 @@ function escHtml(s) {
         '</div>' +
         '<button onclick="window._heroSubmitCallBook()" ' +
           'class="mt-2 w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5">' +
-          '💳 Pay $7 via PayPal → AI Booking' +
+          '📞 Get a price by phone (free)' +
         '</button>' +
         '<button onclick="document.getElementById(\'call-booking-form\').closest(\'.flex\').remove()" ' +
           'class="mt-1 w-full text-white/40 hover:text-white/70 text-[11px] py-0.5 transition-colors">Cancel</button>' +
       '</div>';
     messagesEl.appendChild(formDiv);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-    btn.textContent = '📞 Call selected hotels ($7)';
+    btn.textContent = '📞 Get a price by phone (free)';
     btn.disabled = false;
     // Init flatpickr for call-checkin-date (English locale)
     if (window.flatpickr) {
@@ -1673,7 +1682,7 @@ function escHtml(s) {
 
   window._heroSubmitCallBook = async function() {
     var submitBtn = event?.target;
-    var defaultSubmitText = '💳 Pay $7 via PayPal → AI Booking';
+    var defaultSubmitText = '📞 Get a price by phone (free)';
     var resetSubmitBtn = function() {
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -1689,12 +1698,6 @@ function escHtml(s) {
     var checkinTime = document.getElementById('call-checkin-time')?.value || '10:00';
     var checkoutTime = document.getElementById('call-checkout-time')?.value || '18:00';
     var guests = document.getElementById('call-guests')?.value || '2';
-    var maxBudget = Number(document.getElementById('call-max-budget')?.value || 0);
-    if (!(maxBudget > 0)) {
-      resetSubmitBtn();
-      alert('Please enter your maximum budget.');
-      return;
-    }
     if (!name || !email || !date) {
       resetSubmitBtn();
       alert('Please fill in name, email, and date');
@@ -1725,7 +1728,6 @@ function escHtml(s) {
           message: '__create_call_group_direct',
           locale: document.documentElement.lang || 'en',
           _call_group: {
-            max_price: maxBudget,
             hotels: selectedHotels.map(function(h) {
               return { hotel_name: h.name, hotel_phone: h.phone, hotel_source: 'external' };
             }),
@@ -1742,257 +1744,17 @@ function escHtml(s) {
         })
       });
       var data = await res.json();
-      if (data.error) { addMsg('❌ Error: ' + data.error, 'assistant'); if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; } return; }
+      if (data.error) { addMsg('❌ Error: ' + data.error, 'assistant'); if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '📞 Get a price by phone (free)'; } return; }
 
       var groupId = data.group_id;
-      var paypalOrderId = data.paypal_order_id;
-
-      if (!groupId || !paypalOrderId) {
-        addMsg('❌ Failed to create booking request.', 'assistant');
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
+      if (!groupId) {
+        addMsg('❌ Failed to start the call. Please try again.', 'assistant');
+        resetSubmitBtn();
         return;
       }
-
-      // Step 2: PayPal JS SDKでページ内決済
-      var paypalContainer = document.getElementById('call-paypal-container');
-      if (!paypalContainer) {
-        // コンテナを動的に挿入
-        paypalContainer = document.createElement('div');
-        paypalContainer.id = 'call-paypal-container';
-        paypalContainer.style.marginTop = '8px';
-        submitBtn?.parentNode?.insertBefore(paypalContainer, submitBtn);
-        submitBtn.style.display = 'none';
-      }
-
-      // PayPal SDKをロード（未ロードの場合）
-      var loadPayPalSDK = function(clientId) {
-        return new Promise(function(resolve, reject) {
-          if (window.paypal) { resolve(window.paypal); return; }
-          var done = false;
-          var timer = setTimeout(function() {
-            if (done) return;
-            done = true;
-            reject(new Error('PayPal SDK load timeout'));
-          }, 15000);
-          var script = document.createElement('script');
-          script.src = 'https://www.paypal.com/sdk/js?client-id=' + clientId + '&currency=USD&intent=capture&locale=en_US';
-          script.onload = function() {
-            if (done) return;
-            done = true;
-            clearTimeout(timer);
-            resolve(window.paypal);
-          };
-          script.onerror = function(err) {
-            if (done) return;
-            done = true;
-            clearTimeout(timer);
-            reject(err || new Error('PayPal SDK load failed'));
-          };
-          document.head.appendChild(script);
-        });
-      };
-
-      // PayPal client IDをAPIから取得
-      var configRes = await fetch('/api/concierge/pay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'config' })
-      });
-      var configData = await configRes.json();
-      var clientId = configData.client_id || '';
-
-      if (!clientId) {
-        addMsg('❌ PayPal configuration error.', 'assistant');
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
-        return;
-      }
-
-      try {
-        await loadPayPalSDK(clientId);
-      } catch (sdkErr) {
-        if (data.paypal_url) {
-          window.open(data.paypal_url, '_blank');
-          addMsg('PayPal popup could not be loaded on this device. Opened secure PayPal checkout in a new tab. We will auto-confirm payment and start AI calls.', 'assistant');
-
-          var paidInFallback = false;
-          var fallbackHardError = null;
-          var startedAtFallback = Date.now();
-          while (!paidInFallback && !fallbackHardError && Date.now() - startedAtFallback < 300000) {
-            await new Promise(function(resolve){ setTimeout(resolve, 5000); });
-            try {
-              var capResFallback = await fetch('/api/concierge/pay', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  action: 'capture',
-                  order_id: paypalOrderId,
-                  group_id: groupId,
-                  session_id: sessionId,
-                  guest_name: name,
-                  guest_email: email
-                })
-              });
-              var capDataFallback = await capResFallback.json();
-              var fbStatus = String(capDataFallback?.status || '').toLowerCase();
-              var fbDetail = capDataFallback?.detail || capDataFallback?.error || '';
-              var fbPending = capResFallback.status === 202 || fbStatus === 'pending' || fbStatus === 'processing';
-              if (fbStatus === 'paid') {
-                paidInFallback = true;
-                var callResFallback = await fetch('/api/concierge/chat', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    session_id: sessionId,
-                    message: '__confirm_group_payment:' + groupId,
-                    locale: document.documentElement.lang || 'en',
-                    guest_name: name,
-                    guest_email: email,
-                    guest_phone: phone,
-                    guests: parseInt(guests, 10),
-                    details: {
-                      guest_phone: phone,
-                      guests: parseInt(guests, 10)
-                    }
-                  })
-                });
-                var callDataFallback = await callResFallback.json();
-                var firstCallFallback = callDataFallback?.metadata?.call_id;
-                if (firstCallFallback) {
-                  window._startCallPolling(firstCallFallback, sessionId, document.documentElement.lang || 'en');
-                }
-                addMsg('✅ Payment confirmed! AI has started calling hotels now. We will email you the result.', 'assistant');
-              } else if (!fbPending && (capResFallback.status >= 400 || fbStatus === 'failed' || fbStatus === 'error' || fbStatus === 'cancelled')) {
-                fallbackHardError = fbDetail || ('HTTP ' + capResFallback.status);
-              }
-            } catch (_fallbackErr) {
-              // keep polling
-            }
-          }
-
-          if (!paidInFallback) {
-            addMsg('Payment confirmation is taking longer than expected (your payment may already be captured). Please recheck shortly or contact support.' + (fallbackHardError ? ('\n\nDetail: ' + fallbackHardError) : ''), 'assistant');
-          }
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = 'Complete payment in new tab'; }
-          return;
-        }
-        throw sdkErr;
-      }
-
-      window.paypal.Buttons({
-        createOrder: function() { return paypalOrderId; },
-        onApprove: async function(ppData) {
-          paypalContainer.innerHTML = '<p style="color:#4ade80;font-size:12px;text-align:center;">Processing payment...</p>';
-          // Step 3: capture
-          var capRes = await fetch('/api/concierge/pay', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'capture',
-              order_id: ppData.orderID,
-              group_id: groupId,
-              session_id: sessionId,
-              guest_name: name,
-              guest_email: email
-            })
-          });
-          var capData = await capRes.json();
-          var capStatus = String(capData?.status || '').toLowerCase();
-          var capDetail = capData?.detail || capData?.error || '';
-          if (capStatus === 'paid') {
-            paypalContainer.innerHTML = '';
-            // Step 4: 電話発信
-            var callRes = await fetch('/api/concierge/chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                session_id: sessionId,
-                message: '__confirm_group_payment:' + groupId,
-                locale: document.documentElement.lang || 'en',
-                guest_name: name,
-                guest_email: email,
-                guest_phone: phone,
-                guests: parseInt(guests, 10),
-                details: {
-                  guest_phone: phone,
-                  guests: parseInt(guests, 10)
-                }
-              })
-            });
-            var callData = await callRes.json();
-            var hotelListText = selectedHotels.map(function(h, i){ return (i+1) + '. ' + h.name; }).join('\n');
-            addMsg('✅ Payment confirmed! Our AI will call the following hotel' + (selectedHotels.length > 1 ? 's in order' : '') + ':\n\n' + hotelListText + '\n\n👤 ' + name + '\n📅 ' + date + ' ' + checkinTime + '–' + checkoutTime, 'assistant');
-            var firstCallId = callData?.metadata?.call_id;
-            if (firstCallId) {
-              window._startCallPolling(firstCallId, sessionId, document.documentElement.lang || 'en');
-            }
-          } else {
-            var pollPaid = false;
-            var pollHardError = null;
-            var pollStart = Date.now();
-            while (!pollPaid && !pollHardError && Date.now() - pollStart < 300000) {
-              await new Promise(function(resolve){ setTimeout(resolve, 5000); });
-              try {
-                var pollRes = await fetch('/api/concierge/pay', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    action: 'capture',
-                    order_id: ppData.orderID,
-                    group_id: groupId,
-                    session_id: sessionId,
-                    guest_name: name,
-                    guest_email: email
-                  })
-                });
-                var pollData = await pollRes.json();
-                var pollStatus = String(pollData?.status || '').toLowerCase();
-                var pollDetail = pollData?.detail || pollData?.error || '';
-                var isPending = pollRes.status === 202 || pollStatus === 'pending' || pollStatus === 'processing';
-                if (pollStatus === 'paid') {
-                  pollPaid = true;
-                  paypalContainer.innerHTML = '';
-                  var callRes2 = await fetch('/api/concierge/chat', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      session_id: sessionId,
-                      message: '__confirm_group_payment:' + groupId,
-                      locale: document.documentElement.lang || 'en',
-                      guest_name: name,
-                      guest_email: email,
-                      guest_phone: phone,
-                      guests: parseInt(guests, 10),
-                      details: { guest_phone: phone, guests: parseInt(guests, 10) }
-                    })
-                  });
-                  var callData2 = await callRes2.json();
-                  var firstCallId2 = callData2?.metadata?.call_id;
-                  if (firstCallId2) window._startCallPolling(firstCallId2, sessionId, document.documentElement.lang || 'en');
-                  addMsg('✅ Payment confirmed! AI calling has started.', 'assistant');
-                } else if (!isPending && (pollRes.status >= 400 || pollStatus === 'failed' || pollStatus === 'error' || pollStatus === 'cancelled')) {
-                  pollHardError = pollDetail || ('HTTP ' + pollRes.status);
-                }
-              } catch (_pollErr) {}
-            }
-            paypalContainer.innerHTML = '';
-            if (!pollPaid) {
-              addMsg('Payment confirmation is taking longer than expected (your payment may already be captured). Please recheck shortly or contact support.' + (pollHardError ? ('\n\nDetail: ' + pollHardError) : ''), 'assistant');
-              if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
-            }
-          }
-        },
-        onCancel: function() {
-          paypalContainer.innerHTML = '';
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
-          addMsg('Payment cancelled.', 'assistant');
-        },
-        onError: function(err) {
-          paypalContainer.innerHTML = '';
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.style.display = ''; submitBtn.textContent = '💳 Pay $7 via PayPal → AI Booking'; }
-          addMsg('❌ PayPal error. Please try again.', 'assistant');
-        }
-      }).render('#call-paypal-container');
-
-      if (submitBtn) submitBtn.textContent = 'Complete payment above ↑';
+      addMsg("📞 We're calling the hotel now to check availability and the price. We'll email you a quote shortly — you only pay the $7 booking fee if you accept.", 'assistant');
+      var _cardEl = document.getElementById('call-booking-form');
+      if (_cardEl) { var _w = _cardEl.closest('.flex'); if (_w) _w.remove(); }
 
     } catch(e) {
       addMsg('❌ Network error. Please try again.', 'assistant');
@@ -2249,7 +2011,7 @@ function escHtml(s) {
 <!-- Flatpickr: English date picker for Check-in -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" media="print" onload="this.media='all'" /><noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" /></noscript>
 
-<script is:inline define:vars={{ allCities }}>
+<script is:inline define:vars={{ allCities, hotelNames }}>
 (function() {
   // 世界のメジャー都市（DB未登録でも検索可能にする）
   var WORLD_CITIES = [
@@ -2348,6 +2110,13 @@ function escHtml(s) {
 
   var cities = dbCities.concat(worldExtras);
 
+  // Properties the guest can search by name. Shape matches the city entries so
+  // the same renderer handles both; `isHotel` only changes the badge.
+  var hotelEntries = (hotelNames || []).map(function (h) {
+    var where = [ (h.city || '').trim(), (h.country || '').trim() ].filter(Boolean).join(', ');
+    return { city: (h.name || '').trim(), nameJa: (h.name_ja || '').trim(), country: where, inDB: true, isHotel: true };
+  }).filter(function (h) { return h.city; });
+
   var input = document.getElementById('location-input');
   var list  = document.getElementById('location-suggestions');
   if (!input || !list) return;
@@ -2373,9 +2142,11 @@ function escHtml(s) {
       return;
     }
     list.innerHTML = items.map(function(c, i) {
-      var badge = c.inDB
-        ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">DDH</span>'
-        : '';
+      var badge = c.isHotel
+        ? '<span class="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">Hotel</span>'
+        : (c.inDB
+            ? '<span class="text-[10px] bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold ml-1.5 flex-shrink-0">DDH</span>'
+            : '');
       return '<li class="px-4 py-2.5 cursor-pointer hover:bg-teal-50 text-gray-800 flex justify-between items-center suggestion-item" data-city="' + escHtml(c.city) + '" data-idx="' + i + '">' +
              '<span class="font-medium flex items-center">' + highlight(c.city, q) + badge + '</span>' +
              '<span class="text-gray-400 text-xs ml-2 flex-shrink-0">' + escHtml(c.country) + '</span>' +
@@ -2429,7 +2200,14 @@ function escHtml(s) {
       }
     });
     // DB優先: prefix(DB) → prefix(world) → contains(DB) → contains(world)
-    return prefixDB.concat(prefixWorld).concat(containsDB).concat(containsWorld).slice(0, 10);
+    // A typed property name should surface the property itself first.
+    var hotelHits = [];
+    for (var hi = 0; hi < hotelEntries.length && hotelHits.length < 5; hi++) {
+      var he = hotelEntries[hi];
+      var hn = normalize(he.city), hj = normalize(he.nameJa);
+      if (hn.startsWith(nq) || hn.includes(nq) || (hj && hj.includes(nq))) hotelHits.push(he);
+    }
+    return hotelHits.concat(prefixDB, prefixWorld, containsDB, containsWorld).slice(0, 10);
   }
 
   input.addEventListener('input', function() {
@@ -2499,3 +2277,12 @@ function escHtml(s) {
 </script>
 
 </Layout>
+
+<style is:global>
+  /* Stock photography arrives in wildly different grades; a light, uniform
+     correction stops the card rows from looking like a clip-art collage. */
+  .ddh-card-img { filter: saturate(0.92) contrast(1.06) brightness(0.97); }
+  /* Captions sit on photos we do not control — the scrim does most of the
+     work, this covers the brightest edge cases. */
+  .group .absolute h3, .group .absolute p { text-shadow: 0 1px 3px rgba(0,0,0,.45); }
+</style>
