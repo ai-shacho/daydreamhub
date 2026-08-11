@@ -14,9 +14,9 @@ function formatDate(dateStr: string): string {
   return formatDateYyyyMmmDd(dateStr);
 }
 
-// "2026-08-12" → "2026-Aug-12th". Owners and guests read these emails from
-// everywhere, and 08/12 means August 12th in some countries and 8 December in
-// others; the spelled-out month plus the ordinal removes the ambiguity.
+// "2026-08-12" → "2026-Aug-12". Owners and guests read these emails from
+// everywhere, and 08/12 means August 12 in some countries and 8 December in
+// others; spelling the month out settles it.
 function formatDateYyyyMmmDd(dateStr: string): string {
   if (!dateStr) return dateStr;
   const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -24,9 +24,7 @@ function formatDateYyyyMmmDd(dateStr: string): string {
   const monthIdx = Number(m[2]) - 1;
   const mon = MONTH_NAMES_SHORT_EN[monthIdx];
   if (!mon) return dateStr;
-  const day = Number(m[3]);
-  const suffix = day % 100 >= 11 && day % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] || 'th';
-  return `${m[1]}-${mon}-${m[3]}${suffix}`;
+  return `${m[1]}-${mon}-${m[3]}`;
 }
 
 function hotelLink(hotelName: string, hotelSlug?: string): string {
@@ -457,7 +455,7 @@ export async function sendBookingNotificationToHotel(
 }
 
 // How long a booking has gone unanswered, and how hard the email pushes.
-export type ReminderStage = 6 | 12;
+export type ReminderStage = 6 | 12 | 24;
 
 const REMINDER_COPY: Record<ReminderStage, {
   subjectTag: string;
@@ -494,6 +492,20 @@ const REMINDER_COPY: Record<ReminderStage, {
       📩 <strong>Your guest has been waiting half a day for an answer.</strong> They have already paid and
       cannot make any other arrangements until they hear from you. Please open the Owner Portal and confirm
       or decline — either answer helps them; silence does not.
+    </div>`,
+  },
+  24: {
+    subjectTag: '[Urgent]',
+    subjectPhrase: 'your guest has been waiting a full day',
+    headerBg: '#b91c1c',
+    emoji: '🚨',
+    title: 'Waiting a Full Day',
+    subtitle: 'Please respond to this guest today.',
+    box: `
+    <div style="background:#fee2e2;border:1px solid #f87171;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#7f1d1d">
+      🚨 <strong>A full day has gone by and this guest still has no answer.</strong> They were told to expect
+      one within 24 hours, and their trip is on hold until you reply. Please confirm the booking now if you
+      can take it, or decline it so we can refund them and they can find another room.
     </div>`,
   },
 };

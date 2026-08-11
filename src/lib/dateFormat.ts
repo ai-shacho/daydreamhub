@@ -1,16 +1,8 @@
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 /**
- * "12" → "12th". The month is already spelled out, but the ordinal makes it
- * unmistakable which number is the day for readers used to D/M or M/D order.
- */
-export function ordinalSuffix(day: number): string {
-  if (day % 100 >= 11 && day % 100 <= 13) return 'th';
-  return { 1: 'st', 2: 'nd', 3: 'rd' }[day % 10] || 'th';
-}
-
-/**
- * 任意の日時文字列を "2026-Jan-26th"（日本語ロケールでは "2026年1月26日"）に変換する。
+ * 任意の日時文字列を "2026-Jan-26"（日本語ロケールでは "2026年1月26日"）に変換する。
+ * 月名を綴ることで、08/12 が8月12日か12月8日かで読み違えられるのを防ぐ。
  * 無効値は "-" を返す。
  *
  * ロケール未指定なら英語表記。管理画面・オーナー画面は英語のままにしたいので、
@@ -26,9 +18,8 @@ export function formatDisplayDate(dateStr: string | null | undefined, locale?: s
   const year = d.getUTCFullYear();
   if (locale === 'ja') return `${year}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
   const month = MONTHS[d.getUTCMonth()];
-  const dayNum = d.getUTCDate();
-  const day = String(dayNum).padStart(2, '0');
-  return `${year}-${month}-${day}${ordinalSuffix(dayNum)}`;
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /** <script> 内で使うインライン版（ブラウザ実行環境用）*/
@@ -40,8 +31,6 @@ function formatDisplayDate(dateStr, locale) {
   var d = new Date(normalized);
   if (isNaN(d.getTime())) return '-';
   if (locale === 'ja') return d.getUTCFullYear() + '年' + (d.getUTCMonth() + 1) + '月' + d.getUTCDate() + '日';
-  var dayNum = d.getUTCDate();
-  var suffix = (dayNum % 100 >= 11 && dayNum % 100 <= 13) ? 'th' : ({1:'st',2:'nd',3:'rd'}[dayNum % 10] || 'th');
-  return d.getUTCFullYear() + '-' + MONTHS[d.getUTCMonth()] + '-' + String(dayNum).padStart(2, '0') + suffix;
+  return d.getUTCFullYear() + '-' + MONTHS[d.getUTCMonth()] + '-' + String(d.getUTCDate()).padStart(2, '0');
 }
 `;
