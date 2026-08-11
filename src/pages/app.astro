@@ -4,6 +4,7 @@
 // area tiles). Two screens: a launcher home and a full-screen map results view
 // with a draggable bottom sheet (Google Maps / Airbnb pattern).
 import { resolvePayPalConfig } from '../lib/paypal';
+import { VOICE_LANGS } from '../lib/voiceLangs';
 
 const acceptLang = Astro.request.headers.get('accept-language') || '';
 const urlLang = Astro.url.searchParams.get('lang');
@@ -57,6 +58,7 @@ const t = isJa
       chatGreeting: 'こんにちは！どこで休憩したいですか？「バンコク」や「チャンギ空港の近くで安いところ」のように話しかけてください。',
       chatPlaceholder: 'メッセージを入力…',
       convOn: '会話モード',
+      voiceLangTitle: '話す言語',
       convStart: '会話モードをオンにしますか？',
       convDesc: 'マイクが続けて聞き取り、返答を音声で読み上げます。ボタンでいつでも停止できます。イヤホンの利用をおすすめします。',
       convYes: '会話をはじめる',
@@ -187,6 +189,7 @@ const t = isJa
       chatGreeting: 'Hi! Where would you like to rest? Try "Bangkok" or "somewhere cheap near Changi Airport".',
       chatPlaceholder: 'Type a message…',
       convOn: 'Conversation',
+      voiceLangTitle: 'Speaking language',
       convStart: 'Turn on conversation mode?',
       convDesc: 'The mic keeps listening and replies are read aloud. You can stop any time. Headphones recommended.',
       convYes: 'Start talking',
@@ -858,6 +861,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       <div class="chat-head">
         <button class="back" id="chatBack">←</button>
         <div class="ttl">💬 {t.chatTitle}</div>
+        <button class="conv" id="langBtn">🌐 <span id="langNow"></span></button>
         <button class="conv" id="convToggle">🎙 {t.convOn}</button>
       </div>
       <div class="conv-state" id="convState">
@@ -1007,6 +1011,13 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       </div>
     </div>
 
+    <div class="modal-back" id="langModal">
+      <div class="modal-card">
+        <h3>{t.voiceLangTitle}</h3>
+        <div id="langList" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+
     <div class="modal-back" id="convModal">
       <div class="modal-card">
         <h3>{t.convStart}</h3>
@@ -1022,7 +1033,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       <button class="x" id="installX" aria-label="close">✕</button>
     </div>
 
-    <script define:vars={{ t, isJa, paypalClientId, testPay }}>
+    <script define:vars={{ t, isJa, paypalClientId, testPay, VOICE_LANGS }}>
       const $ = (id) => document.getElementById(id);
       const list = $('list');
       const sheet = $('sheet');
@@ -1524,7 +1535,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         }
         if (!greeted) {
           greeted = true;
-          aiSay(t.chatGreeting, {});
+          aiSay(vt('greeting'), {});
         }
       }
       function closeChat() { if (convOn) stopConv(true); back(); }
@@ -1552,9 +1563,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         }
         const chips = [];
         if (o.chips) {
-          chips.push(`<button class="primary" data-act="map">${t.chatShowMap}</button>`);
-          if (sortBy !== 'price') chips.push(`<button data-act="cheaper">${t.chipCheaper}</button>`);
-          if (!openOnly) chips.push(`<button data-act="open">${t.chipOpen}</button>`);
+          chips.push(`<button class="primary" data-act="map">${vt('chipMap')}</button>`);
+          if (sortBy !== 'price') chips.push(`<button data-act="cheaper">${vt('chipCheaper')}</button>`);
+          if (!openOnly) chips.push(`<button data-act="open">${vt('chipOpen')}</button>`);
         }
         if (o.cgChip) chips.push(`<button class="primary" data-act="concierge">${t.chipConcierge}</button>`);
         if (chips.length) inner += `<div class="chat-chips">${chips.join('')}</div>`;
@@ -1742,13 +1753,13 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           sortBy = 'price';
           $('sortBtn').textContent = t.sortPrice + ' ⇅';
           renderView();
-          aiSay(t.chatSorted, { cards: true, chips: true });
+          aiSay(vt('sorted'), { cards: true, chips: true });
         }
         if (act === 'open') {
           openOnly = true;
           $('openBtn').classList.add('on');
           renderView();
-          aiSay(t.chatOpenOnly, { cards: true, chips: true });
+          aiSay(vt('openOnly'), { cards: true, chips: true });
         }
         track('app_chat_refine', { act });
       }
@@ -1781,28 +1792,28 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             budget = String(usd);
             $('budgetSel').classList.add('on');
             renderView();
-            aiSay(fmt(t.chatBudget, { b: usd, n: currentView.length }), { cards: true, chips: true });
+            aiSay(fmt(vt('budget'), { b: usd, n: currentView.length }), { cards: true, chips: true });
             return;
           }
         }
 
         showTyping();
         try {
-          const res = await fetch('/api/app/nearby?' + new URLSearchParams({ q: text, limit: 24 }));
+          const res = await fetch('/api/app/nearby?' + new URLSearchParams({ q: text, limit: 24, lang: V.code }));
           const data = await res.json();
           if (data.error) throw new Error(data.error);
           track('app_search', { mode: data.mode, q: text });
-          if (!data.hotels || !data.hotels.length) { aiSay(t.chatNoHit, { cgChip: true }); return; }
+          if (!data.hotels || !data.hotels.length) { aiSay(vt('noHit'), { cgChip: true }); return; }
           applyIntent(data.intent);
           render(data);
           const label = (data.center && data.center.label) || text;
           lastPlaceLabel = label;
           loadExternal();
           const prices = currentView.map((h) => h.minPrice).filter((v) => v != null);
-          const cheap = prices.length ? fmt(t.chatCheap, { p: Math.min(...prices) }) : '';
-          aiSay(fmt(t.chatFound, { label, n: currentView.length, cheap }), { cards: true, chips: true });
+          const cheap = prices.length ? fmt(vt('cheap'), { p: Math.min(...prices) }) : '';
+          aiSay(fmt(vt('found'), { label, n: currentView.length, cheap }), { cards: true, chips: true });
         } catch (e) {
-          aiSay(t.chatNoHit, {});
+          aiSay(vt('noHit'), {});
         }
       }
 
@@ -1934,7 +1945,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         if (window.__ddhRec) { try { window.__ddhRec.stop(); } catch (e) {} return; }
         const rec = new SR();
         window.__ddhRec = rec;
-        rec.lang = isJa ? 'ja-JP' : 'en-US';
+        rec.lang = V.speech;
         rec.interimResults = false;
         rec.maxAlternatives = 1;
         btn.classList.add('listening');
@@ -1946,6 +1957,42 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         rec.onerror = () => {};
         rec.start();
       }
+      // ---- spoken language ---------------------------------------------
+      // The chrome stays EN/JA, but the concierge listens and answers in the
+      // guest's own language: an arrival at Suvarnabhumi should just talk.
+      let V = (() => {
+        let saved = null;
+        try { saved = localStorage.getItem('ddhVoiceLang'); } catch (e) {}
+        const want = saved || navigator.language || (isJa ? 'ja' : 'en');
+        const low = String(want).toLowerCase();
+        return (
+          VOICE_LANGS.find((l) => l.code.toLowerCase() === low) ||
+          VOICE_LANGS.find((l) => low.startsWith(l.code.split('-')[0].toLowerCase())) ||
+          VOICE_LANGS.find((l) => l.code === (isJa ? 'ja' : 'en'))
+        );
+      })();
+      const vt = (k) => (V && V.t[k]) || '';
+      function paintLang() { $('langNow').textContent = V.label; }
+      paintLang();
+      $('langList').innerHTML = VOICE_LANGS
+        .map((l) => `<button data-lang="${l.code}" style="width:100%;padding:13px;border-radius:12px;cursor:pointer;background:var(--surface);color:var(--text);border:1.5px solid var(--line);font-size:15px;font-weight:600">${esc(l.label)}</button>`)
+        .join('');
+      $('langList').addEventListener('click', (e) => {
+        const b = e.target.closest && e.target.closest('button[data-lang]');
+        if (!b) return;
+        V = VOICE_LANGS.find((l) => l.code === b.dataset.lang) || V;
+        try { localStorage.setItem('ddhVoiceLang', V.code); } catch (err) {}
+        paintLang();
+        $('langModal').classList.remove('show');
+        track('app_voice_lang', { lang: V.code });
+        // Restart listening in the new language if a conversation is running.
+        if (convOn) { try { convRec && convRec.stop(); } catch (err) {} }
+      });
+      $('langBtn').addEventListener('click', () => $('langModal').classList.add('show'));
+      $('langModal').addEventListener('click', (e) => {
+        if (e.target === $('langModal')) $('langModal').classList.remove('show');
+      });
+
       // ---- conversation mode ----------------------------------------------
       // Voice as a back-and-forth: while it is on the mic re-opens after every
       // reply and replies are spoken, so the user never taps between turns.
@@ -1965,9 +2012,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         try {
           speechSynthesis.cancel();
           const u = new SpeechSynthesisUtterance(text);
-          u.lang = isJa ? 'ja-JP' : 'en-US';
+          u.lang = V.speech;
           u.rate = 1.05;
-          convStatus(t.convSpeaking);
+          convStatus(vt('speaking'));
           u.onend = () => onDone && onDone();
           u.onerror = () => onDone && onDone();
           speechSynthesis.speak(u);
@@ -1981,11 +2028,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         if (!convOn || !SR || convRec) return;
         const rec = new SR();
         convRec = rec;
-        rec.lang = isJa ? 'ja-JP' : 'en-US';
+        rec.lang = V.speech;
         rec.interimResults = false;
         rec.maxAlternatives = 1;
         rec.continuous = false;
-        convStatus(t.convListening);
+        convStatus(vt('listening'));
         $('chatMic').classList.add('listening');
         rec.onresult = (e) => {
           const text = e.results[0][0].transcript;
