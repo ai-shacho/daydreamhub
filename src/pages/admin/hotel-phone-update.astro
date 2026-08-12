@@ -1,0 +1,222 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+import { HOTEL_PHONE_ROWS } from '../../lib/data/hotelPhoneRows';
+import { toInternational } from '../../lib/phoneFormat';
+
+const runtime = (Astro.locals as any).runtime;
+const db = runtime?.env?.DB;
+const admin = await verifyAdmin(Astro.request, runtime?.env?.JWT_SECRET || 'dev-secret');
+if (!admin) return Astro.redirect('/admin/login');
+
+// Match the old signup submissions to live listings, so the numbers can be put
+// back where they belong. Nothing is written until an admin ticks rows and
+// presses Apply.
+let hotels: any[] = [];
+let error = '';
+if (db) {
+  try {
+    const r = await db.prepare(
+      "SELECT id, name, email, contact_email, country, city, phone, notify_phone, status FROM hotels ORDER BY name"
+    ).all();
+    hotels = r?.results || [];
+  } catch (e: any) {
+    error = e.message || 'Failed to load hotels';
+  }
+}
+
+const norm = (s: string) => String(s || '').toLowerCase().normalize('NFKC').replace(/[^a-z0-9]+/g, '');
+
+// Two ways in: the hotel's name, or any email address on the submission. The
+// email route matters — one operator in Oulu runs six listings whose names look
+// nothing like what they signed up as.
+const byName = new Map<string, any>();
+const byEmail = new Map<string, any>();
+for (const row of HOTEL_PHONE_ROWS) {
+  if (row.name) byName.set(norm(row.name), row);
+  for (const e of row.emails) byEmail.set(e.trim().toLowerCase(), row);
+}
+
+type Match = {
+  hotel: any;
+  row: any;
+  how: 'name' | 'email';
+  phone: ReturnType<typeof toInternational>;
+  notify: ReturnType<typeof toInternational>;
+};
+
+const ready: Match[] = [];     // both numbers understood — safe to apply in bulk
+const check: Match[] = [];     // a number needed an assumption; read before applying
+const already: Match[] = [];   // the listing already has a phone
+let unmatched = 0;
+
+for (const h of hotels) {
+  let row = byName.get(norm(h.name));
+  let how: 'name' | 'email' = 'name';
+  if (!row) {
+    for (const key of [h.email, h.contact_email]) {
+      const v = String(key || '').trim().toLowerCase();
+      if (v && byEmail.has(v)) { row = byEmail.get(v); how = 'email'; break; }
+    }
+  }
+  if (!row) { unmatched++; continue; }
+
+  const phone = toInternational(row.hotel_phone, h.country);
+  const notify = toInternational(row.contact_phone, h.country);
+  if (!phone.value && !notify.value) { unmatched++; continue; }
+
+  const m: Match = { hotel: h, row, how, phone, notify };
+  if (String(h.phone || '').trim()) already.push(m);
+  else if ((phone.value && !phone.confident) || (notify.value && !notify.confident)) check.push(m);
+  else ready.push(m);
+}
+
+const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]; preTicked: boolean }> = [
+  { key: 'ready', title: 'Ready to apply', blurb: 'Every number already carried its country code. Nothing was assumed.', rows: ready, preTicked: true },
+  { key: 'check', title: 'Read before applying', blurb: 'A country code had to be worked out from the listing\'s country. Check each one.', rows: check, preTicked: false },
+  { key: 'already', title: 'Listing already has a phone', blurb: 'Left alone. Tick only if the old number is better than what is on file.', rows: already, preTicked: false },
+];
+---
+
+<AdminLayout title="Hotel Phone Update" activeNav="hotels">
+  <div class="mb-6">
+    <h2 class="text-xl font-semibold text-slate-900">📞 Hotel Phone Update</h2>
+    <p class="text-sm text-slate-500 mt-1">
+      Phone numbers from the old site's listing applications, matched to live listings.
+      Only {hotels.filter((h: any) => String(h.phone || '').trim()).length} of {hotels.length} listings have a number on file today.
+    </p>
+  </div>
+
+  {error && <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+    {[['Ready', ready.length, 'text-emerald-700 bg-emerald-50 border-emerald-200'],
+      ['Needs a look', check.length, 'text-amber-700 bg-amber-50 border-amber-200'],
+      ['Already has one', already.length, 'text-slate-600 bg-slate-50 border-slate-200'],
+      ['No match', unmatched, 'text-slate-400 bg-white border-slate-200']].map(([label, n, cls]) => (
+      <div class={`rounded-lg border px-4 py-3 ${cls}`}>
+        <div class="text-2xl font-bold">{n}</div>
+        <div class="text-xs">{label}</div>
+      </div>
+    ))}
+  </div>
+
+  <div id="apply-result" class="hidden mb-4 px-4 py-3 rounded-lg text-sm"></div>
+
+  {sections.map(sec => (
+    <section class="mb-8">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <h3 class="font-semibold text-slate-800">{sec.title} <span class="text-slate-400 font-normal">({sec.rows.length})</span></h3>
+          <p class="text-xs text-slate-500">{sec.blurb}</p>
+        </div>
+        {sec.rows.length > 0 && (
+          <button class="apply-btn text-sm px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors" data-section={sec.key}>
+            Apply ticked rows
+          </button>
+        )}
+      </div>
+
+      {sec.rows.length === 0 ? (
+        <p class="text-sm text-slate-400 py-4">Nothing here.</p>
+      ) : (
+        <div class="bg-white rounded-lg shadow overflow-x-auto">
+          <table class="w-full text-sm" data-section-table={sec.key}>
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-left">
+                <th class="px-3 py-2 w-8"><input type="checkbox" class="tick-all" data-section={sec.key} checked={sec.preTicked} /></th>
+                <th class="px-3 py-2 font-medium text-slate-600">Hotel</th>
+                <th class="px-3 py-2 font-medium text-slate-600">Matched by</th>
+                <th class="px-3 py-2 font-medium text-slate-600">Main line</th>
+                <th class="px-3 py-2 font-medium text-slate-600">Contact person</th>
+                <th class="px-3 py-2 font-medium text-slate-600">On file now</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {sec.rows.map(m => (
+                <tr class="hover:bg-slate-50">
+                  <td class="px-3 py-2 align-top">
+                    <input type="checkbox" class="row-tick" checked={sec.preTicked}
+                      data-section={sec.key}
+                      data-hotel-id={m.hotel.id}
+                      data-phone={m.phone.value}
+                      data-notify={m.notify.value} />
+                  </td>
+                  <td class="px-3 py-2 align-top">
+                    <a href={`/admin/hotels/${m.hotel.id}/edit`} class="font-medium text-teal-700 hover:underline">{m.hotel.name}</a>
+                    <div class="text-xs text-slate-400">{m.hotel.city}, {m.hotel.country} · {m.hotel.status}</div>
+                    <div class="text-xs text-slate-400">applied {m.row.date}{m.row.person ? ` · ${m.row.person}` : ''}</div>
+                  </td>
+                  <td class="px-3 py-2 align-top text-xs text-slate-500">{m.how}</td>
+                  <td class="px-3 py-2 align-top font-mono text-xs">
+                    {m.phone.value || <span class="text-slate-300">—</span>}
+                    {m.phone.value && !m.phone.confident && <div class="text-amber-600 font-sans">{m.phone.note}</div>}
+                    <div class="text-slate-300 font-sans">was: {m.row.hotel_phone || '—'}</div>
+                  </td>
+                  <td class="px-3 py-2 align-top font-mono text-xs">
+                    {m.notify.value || <span class="text-slate-300">—</span>}
+                    {m.notify.value && !m.notify.confident && <div class="text-amber-600 font-sans">{m.notify.note}</div>}
+                  </td>
+                  <td class="px-3 py-2 align-top font-mono text-xs text-slate-500">
+                    {m.hotel.phone || <span class="text-slate-300">—</span>}
+                    {m.hotel.notify_phone && <div>{m.hotel.notify_phone}</div>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  ))}
+</AdminLayout>
+
+<script>
+  document.querySelectorAll('.tick-all').forEach(box => {
+    box.addEventListener('change', () => {
+      const sec = box.getAttribute('data-section');
+      document.querySelectorAll(`.row-tick[data-section="${sec}"]`).forEach(t => {
+        t.checked = box.checked;
+      });
+    });
+  });
+
+  document.querySelectorAll('.apply-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const sec = btn.getAttribute('data-section');
+      const ticked = [...document.querySelectorAll(`.row-tick[data-section="${sec}"]`)].filter(t => t.checked);
+      if (!ticked.length) return;
+      if (!confirm(`Write ${ticked.length} listing(s)?`)) return;
+
+      const rows = ticked.map(t => ({
+        hotel_id: Number(t.getAttribute('data-hotel-id')),
+        phone: t.getAttribute('data-phone') || '',
+        notify_phone: t.getAttribute('data-notify') || '',
+      }));
+
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = 'Applying...';
+      const out = document.getElementById('apply-result');
+      try {
+        const res = await fetch('/api/admin/hotel-phone-update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-emerald-50 text-emerald-800 border border-emerald-200';
+        out.textContent = `Updated ${data.updated} listing(s).` + (data.skipped?.length ? ` Skipped ${data.skipped.length}: ${data.skipped.map(s => s.why).join('; ')}` : '');
+        out.classList.remove('hidden');
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (e) {
+        out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200';
+        out.textContent = e.message;
+        out.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
+  });
+</script>
