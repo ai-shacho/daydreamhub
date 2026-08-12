@@ -36,7 +36,7 @@ if (Astro.request.method === 'POST') {
     if (!error && RESEND_API_KEY) {
       const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-  <h2 style="color:#0d9488">新しいお問い合わせ — DaydreamHub (日本語)</h2>
+  <h2 style="color:#0d9488">新しいお問い合わせ — DayDreamHub (日本語)</h2>
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
     <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;width:30%">カテゴリー</td><td style="padding:8px 12px;border:1px solid #ddd">${category}</td></tr>
     <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">お名前</td><td style="padding:8px 12px;border:1px solid #ddd">${name}</td></tr>
@@ -49,7 +49,7 @@ if (Astro.request.method === 'POST') {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'DaydreamHub Contact <noreply@daydreamhub.com>',
+          from: 'DayDreamHub Contact <noreply@daydreamhub.com>',
           to: [ADMIN_EMAIL],
           reply_to: email,
           subject: `[お問い合わせ] ${category} — ${name}: ${subject || message.slice(0, 50)}`,

@@ -21,8 +21,8 @@ function stripInternalModelBlocks(text: string): string {
   text = text.replace(/\[?\{[\s\S]*?"tool_name"[\s\S]*?\}\]?/g, '');
   text = text.replace(/\[?\{[\s\S]*?"tool_use_id"[\s\S]*?\}\]?/g, '');
 
-  // Remove leaked role-play prefixes ("DaydreamHub: ...", "Concierge: ...") — keep the content
-  text = text.replace(/^\s*(?:DaydreamHub|AIコンシェルジュ|コンシェルジュ|Assistant|Concierge)\s*[:：]\s*/gim, '');
+  // Remove leaked role-play prefixes ("DayDreamHub: ...", "Concierge: ...") — keep the content
+  text = text.replace(/^\s*(?:DayDreamHub|AIコンシェルジュ|コンシェルジュ|Assistant|Concierge)\s*[:：]\s*/gim, '');
   // Remove stage-direction lines like "（ゲストのメッセージに〜の場合）" / "(if the guest ...)"
   text = text.replace(/^\s*[（(][^（）()\n]*(?:ゲスト|お客様|場合|guest|if the)[^（）()\n]*[）)]\s*$/gim, '');
   // If a scenario-script leak still remains mid-text, cut the reply at the first stage direction
@@ -577,11 +577,11 @@ async function telnyxOrchestrate(
               hotelContext = `\n\n## EXTERNAL HOTELS (AI phone booking - $7 service fee):\n${extLines}\n\n⚠️ MANDATORY: You MUST list ALL ${extHotels.length} external hotels above verbatim. Do NOT skip any. Show name + 📍address + 📞phone for each. Include the $7 AI phone booking fee note.`;
             }
           } else if (results.length === 0) {
-            hotelContext = `\n\nNo hotels found for "${city}". Tell the user DaydreamHub doesn't have partner hotels in ${city} yet, but our AI concierge can search and call local hotels for $7.`;
+            hotelContext = `\n\nNo hotels found for "${city}". Tell the user DayDreamHub doesn't have partner hotels in ${city} yet, but our AI concierge can search and call local hotels for $7.`;
           }
         } catch (_e) {
           if (results.length === 0) {
-            hotelContext = `\n\nNo hotels found for "${city}". Tell the user DaydreamHub doesn't have partner hotels in ${city} yet.`;
+            hotelContext = `\n\nNo hotels found for "${city}". Tell the user DayDreamHub doesn't have partner hotels in ${city} yet.`;
           }
         }
       }

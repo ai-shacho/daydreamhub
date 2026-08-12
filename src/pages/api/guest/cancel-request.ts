@@ -116,7 +116,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
           method: 'POST',
           headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            from: 'DaydreamHub <noreply@daydreamhub.com>',
+            from: 'DayDreamHub <noreply@daydreamhub.com>',
             to: hotelTo,
             subject: `[Booking Cancelled] #${booking.id} — ${booking.guest_name}`,
             html: `<div style="font-family:Arial,sans-serif"><h3>Booking Cancelled by Guest</h3><p>Booking <strong>#${booking.id}</strong> has been cancelled.</p><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${booking.guest_name} (${booking.guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Date:</td><td>${booking.check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${booking.plan_name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Reason:</td><td>${reason || 'Not specified'}</td></tr></table></div>`,

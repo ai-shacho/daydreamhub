@@ -163,19 +163,19 @@ export async function sendWelcomeEmail(
     email: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = 'Welcome to DaydreamHub 🌿';
+  const subject = 'Welcome to DayDreamHub 🌿';
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:#46a3c2;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
     <div style="font-size:40px;margin-bottom:12px">🌿</div>
-    <h1 style="margin:0;font-size:24px;font-weight:700">Welcome to DaydreamHub!</h1>
+    <h1 style="margin:0;font-size:24px;font-weight:700">Welcome to DayDreamHub!</h1>
     <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Your account has been created successfully.</p>
   </div>
 
   <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#ffffff">
     <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.name)}</strong> 👋</p>
     <p style="color:#374151;line-height:1.6">
-      Thank you for joining DaydreamHub — the easiest way to book day-use hotel rooms worldwide.
+      Thank you for joining DayDreamHub — the easiest way to book day-use hotel rooms worldwide.
       Enjoy a pool, spa, workspace, or simply a place to relax between flights.
     </p>
 
@@ -202,7 +202,7 @@ export async function sendWelcomeEmail(
 
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.email,
     subject,
     html,
@@ -224,18 +224,18 @@ export async function sendStaffInvitationEmail(
   const roleDesc = data.staffRole === 'co_owner'
     ? 'You have <strong>full access</strong> — same permissions as the hotel owner, including hotel editing, reports, and staff management.'
     : 'You can <strong>manage bookings, calendar, messages, and reviews</strong>. Hotel editing, reports, and staff management are restricted.';
-  const subject = `You're invited to DaydreamHub Owner Portal 🏨`;
+  const subject = `You're invited to DayDreamHub Owner Portal 🏨`;
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:#46a3c2;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
     <div style="font-size:40px;margin-bottom:12px">🏨</div>
     <h1 style="margin:0;font-size:24px;font-weight:700">You've Been Invited!</h1>
-    <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Join the DaydreamHub Owner Portal</p>
+    <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Join the DayDreamHub Owner Portal</p>
   </div>
   <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
     <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.name)}</strong> 👋</p>
     <p style="color:#374151;line-height:1.6">
-      ${data.inviterName ? `<strong>${escapeHtml(data.inviterName)}</strong> has invited you` : 'You have been invited'} to join <strong>${escapeHtml(data.hotelName)}</strong> on DaydreamHub Owner Portal as a <strong>${roleLabel}</strong>.
+      ${data.inviterName ? `<strong>${escapeHtml(data.inviterName)}</strong> has invited you` : 'You have been invited'} to join <strong>${escapeHtml(data.hotelName)}</strong> on DayDreamHub Owner Portal as a <strong>${roleLabel}</strong>.
     </p>
 
     <div style="background:#eef7fb;border:1px solid #b3d9e8;border-radius:8px;padding:20px;margin:24px 0">
@@ -270,7 +270,7 @@ export async function sendStaffInvitationEmail(
 
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.email,
     subject,
     html,
@@ -281,17 +281,17 @@ export async function sendOwnerAccountEmail(
   apiKey: string,
   data: { name: string; email: string; password: string }
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = 'Your DaydreamHub Owner Account is Ready 🏨';
+  const subject = 'Your DayDreamHub Owner Account is Ready 🏨';
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:#46a3c2;color:white;padding:32px 24px;text-align:center;border-radius:8px 8px 0 0">
     <div style="font-size:40px;margin-bottom:12px">🏨</div>
-    <h1 style="margin:0;font-size:24px;font-weight:700">Welcome to DaydreamHub Owner Portal!</h1>
+    <h1 style="margin:0;font-size:24px;font-weight:700">Welcome to DayDreamHub Owner Portal!</h1>
     <p style="margin:8px 0 0;opacity:0.9;font-size:15px">Your hotel management account has been created.</p>
   </div>
   <div style="padding:32px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
     <p style="font-size:16px;margin-top:0">Hi <strong>${escapeHtml(data.name)}</strong> 👋</p>
-    <p style="color:#374151;line-height:1.6">Your owner account for DaydreamHub has been set up. You can now manage your hotel listings, bookings, and more.</p>
+    <p style="color:#374151;line-height:1.6">Your owner account for DayDreamHub has been set up. You can now manage your hotel listings, bookings, and more.</p>
     <div style="background:#eef7fb;border:1px solid #b3d9e8;border-radius:8px;padding:20px;margin:24px 0">
       <h2 style="margin:0 0 14px;font-size:15px;color:#46a3c2;font-weight:700">🔑 Your Login Details</h2>
       <table style="font-size:14px;color:#374151">
@@ -314,7 +314,7 @@ export async function sendOwnerAccountEmail(
 
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.email,
     subject,
     html,
@@ -457,7 +457,7 @@ export async function sendBookingNotificationToHotel(
   });
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.hotelEmail,
     subject,
     html,
@@ -501,7 +501,7 @@ export async function sendAdminBookingNotification(
   <p style="margin:16px 0 0"><a href="${SITE_URL}/admin/bookings/${data.bookingId}" style="color:#0d9488;font-size:13px">Open in admin →</a></p>
 </div>`;
 
-  return sendEmail({ apiKey, from: 'DaydreamHub <noreply@daydreamhub.com>', to, subject: `[New Booking] #${data.bookingId} — ${data.guestName} / ${data.hotelName}`, html });
+  return sendEmail({ apiKey, from: 'DayDreamHub <noreply@daydreamhub.com>', to, subject: `[New Booking] #${data.bookingId} — ${data.guestName} / ${data.hotelName}`, html });
 }
 
 // How long a booking has gone unanswered, and how hard the email pushes.
@@ -580,7 +580,7 @@ export async function sendOwnerBookingReminder(
   });
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.hotelEmail,
     subject,
     html,
@@ -600,7 +600,7 @@ export async function sendConciergeCallStartedEmail(
   }
 ): Promise<{ success: boolean; error?: string }> {
   const count = data.hotelNames.length;
-  const subject = `🔔 We're calling ${count} hotel${count === 1 ? '' : 's'} for you - DaydreamHub`;
+  const subject = `🔔 We're calling ${count} hotel${count === 1 ? '' : 's'} for you - DayDreamHub`;
   const hotelList = data.hotelNames
     .map((n, i) => `<li style="margin:4px 0">${i + 1}. ${escapeHtml(n)}</li>`)
     .join('');
@@ -613,7 +613,7 @@ export async function sendConciergeCallStartedEmail(
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
   <div style="background:#0ea5e9;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
     <h1 style="margin:0;font-size:22px">📞 Calling Hotels Now</h1>
-    <p style="margin:8px 0 0;opacity:0.9">DaydreamHub AI Concierge</p>
+    <p style="margin:8px 0 0;opacity:0.9">DayDreamHub AI Concierge</p>
   </div>
   <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
     <p style="font-size:16px">Hello ${escapeHtml(data.guestName || 'there')},</p>
@@ -630,7 +630,7 @@ export async function sendConciergeCallStartedEmail(
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject,
     html,
@@ -652,12 +652,12 @@ export async function sendConciergeConfirmation(
     aiSummary?: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = `Your Hotel Booking at ${data.hotelName} - DaydreamHub`;
+  const subject = `Your Hotel Booking at ${data.hotelName} - DayDreamHub`;
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
   <div style="background:#059669;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
     <h1 style="margin:0;font-size:24px">Booking Confirmed!</h1>
-    <p style="margin:8px 0 0;opacity:0.9">DaydreamHub AI Concierge</p>
+    <p style="margin:8px 0 0;opacity:0.9">DayDreamHub AI Concierge</p>
   </div>
   <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
     <p style="font-size:16px">Hello ${escapeHtml(data.guestName)},</p>
@@ -674,12 +674,12 @@ export async function sendConciergeConfirmation(
     <div style="margin:16px 0;padding:12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:4px">
       <strong>Important:</strong> Payment is made directly at the hotel upon check-in. Please note that depending on the hotel, you may be required to pay in the local currency. The $7 service fee was for the AI booking call only.
     </div>
-    <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub AI Concierge - <a href="${SITE_URL}">daydreamhub.com</a></p>
+    <p style="color:#666;font-size:12px;margin-top:24px">DayDreamHub AI Concierge - <a href="${SITE_URL}">daydreamhub.com</a></p>
   </div>
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject,
     html,
@@ -779,7 +779,7 @@ export async function sendGuestBookingStatusUpdate(
 
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject,
     html,
@@ -810,7 +810,7 @@ export async function sendGuestBookingConfirmation(
     cancellationHours?: number | null;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = `Booking Request Received #${data.bookingId} — DaydreamHub`;
+  const subject = `Booking Request Received #${data.bookingId} — DayDreamHub`;
   const guestCount = describeParty(data.adults, data.children, data.infants);
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
@@ -866,7 +866,7 @@ export async function sendGuestBookingConfirmation(
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject,
     html,
@@ -883,7 +883,7 @@ export async function sendPaymentFailureEmail(
     errorMessage: string;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = `Payment Failed — DaydreamHub`;
+  const subject = `Payment Failed — DayDreamHub`;
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:#6b7280;color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
@@ -911,7 +911,7 @@ export async function sendPaymentFailureEmail(
     </div>
 
     <div style="text-align:center;margin:24px 0">
-      <a href="${SITE_URL}" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Return to DaydreamHub</a>
+      <a href="${SITE_URL}" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px">Return to DayDreamHub</a>
     </div>
 
     ${emailFooter()}
@@ -920,7 +920,7 @@ export async function sendPaymentFailureEmail(
 
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject,
     html,
@@ -947,7 +947,7 @@ export async function sendAltChoiceEmail(
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
   <div style="background:#d97706;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
     <h1 style="margin:0;font-size:24px">Hotels Unavailable</h1>
-    <p style="margin:8px 0 0;opacity:0.9">DaydreamHub Booking #${data.bookingId}</p>
+    <p style="margin:8px 0 0;opacity:0.9">DayDreamHub Booking #${data.bookingId}</p>
   </div>
   <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
     <p style="font-size:16px">Hello ${escapeHtml(data.guestName)},</p>
@@ -961,12 +961,12 @@ export async function sendAltChoiceEmail(
     <div style="margin:16px 0;padding:12px;background:#fef3c7;border:1px solid #fbbf24;border-radius:4px">
       <strong>This offer expires in 24 hours.</strong> After that, a full refund will be issued automatically.
     </div>
-    <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub - Day-Use Hotel Booking</p>
+    <p style="color:#666;font-size:12px;margin-top:24px">DayDreamHub - Day-Use Hotel Booking</p>
   </div>
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject,
     html,
@@ -985,12 +985,12 @@ export async function sendConciergeDeclineToGuest(
     guests: number;
   }
 ): Promise<{ success: boolean; error?: string }> {
-  const subject = `Your Booking Request at ${data.hotelName} Was Declined - DaydreamHub`;
+  const subject = `Your Booking Request at ${data.hotelName} Was Declined - DayDreamHub`;
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
   <div style="background:#dc2626;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
     <h1 style="margin:0;font-size:24px">Booking Not Available</h1>
-    <p style="margin:8px 0 0;opacity:0.9">DaydreamHub AI Concierge</p>
+    <p style="margin:8px 0 0;opacity:0.9">DayDreamHub AI Concierge</p>
   </div>
   <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
     <p style="font-size:16px">Hello ${escapeHtml(data.guestName)},</p>
@@ -1006,12 +1006,12 @@ export async function sendConciergeDeclineToGuest(
       <strong>Refund Notice:</strong> Your $7 service fee will be refunded within 5–10 business days. No action is required on your part.
     </div>
     <p>We're sorry for the inconvenience. Please visit <a href="${SITE_URL}">daydreamhub.com</a> to search for other available hotels.</p>
-    <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub AI Concierge - <a href="${SITE_URL}">daydreamhub.com</a></p>
+    <p style="color:#666;font-size:12px;margin-top:24px">DayDreamHub AI Concierge - <a href="${SITE_URL}">daydreamhub.com</a></p>
   </div>
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject,
     html,
@@ -1056,12 +1056,12 @@ export async function sendAdminRefundAlert(
       <strong>Refund amount: $7.00</strong><br>
       Guest has already been notified that a refund is being processed.
     </div>
-    <p style="color:#666;font-size:12px;margin-top:24px">DaydreamHub Admin Alert</p>
+    <p style="color:#666;font-size:12px;margin-top:24px">DayDreamHub Admin Alert</p>
   </div>
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.adminEmail,
     subject,
     html,
@@ -1097,7 +1097,7 @@ export async function sendReviewRequestNotification(
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: 'contact@daydreamhub.com',
     subject,
     html,
@@ -1144,7 +1144,7 @@ export async function sendListingChangesRequestedEmail(
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.ownerEmail,
     subject,
     html,
@@ -1188,7 +1188,7 @@ export async function sendListingApprovedEmail(
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.ownerEmail,
     subject,
     html,
@@ -1244,7 +1244,7 @@ export async function sendConciergeQuoteEmail(
 </div>`;
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject,
     html,
@@ -1277,7 +1277,7 @@ export async function sendConciergeResultEmail(
   };
   const resultMeta = {
     success: {
-      subject: `✅ Booking confirmed${data.hotelName ? ` - ${data.hotelName}` : ''} | DaydreamHub`,
+      subject: `✅ Booking confirmed${data.hotelName ? ` - ${data.hotelName}` : ''} | DayDreamHub`,
       title: 'Booking Confirmed',
       color: '#059669',
       message: data.hotelName
@@ -1285,7 +1285,7 @@ export async function sendConciergeResultEmail(
         : 'Great news — we confirmed your booking.',
     },
     no_answer: {
-      subject: `📞 We couldn't reach the hotel this time | DaydreamHub`,
+      subject: `📞 We couldn't reach the hotel this time | DayDreamHub`,
       title: 'No Response from Hotel',
       color: '#6b7280',
       message: data.hotelName
@@ -1293,7 +1293,7 @@ export async function sendConciergeResultEmail(
         : 'We could not get a response from the hotel during this call attempt.',
     },
     declined: {
-      subject: `❌ Hotel could not accept the request | DaydreamHub`,
+      subject: `❌ Hotel could not accept the request | DayDreamHub`,
       title: 'Request Not Accepted',
       color: '#dc2626',
       message: data.hotelName
@@ -1301,7 +1301,7 @@ export async function sendConciergeResultEmail(
         : 'The hotel could not accept this request.',
     },
     over_budget: {
-      subject: `💸 Offered prices exceeded your budget | DaydreamHub`,
+      subject: `💸 Offered prices exceeded your budget | DayDreamHub`,
       title: 'Over Budget',
       color: '#d97706',
       message: data.hotelName
@@ -1309,7 +1309,7 @@ export async function sendConciergeResultEmail(
         : `The hotel had availability, but every offered plan was above your maximum budget${data.priceQuoted ? ` (lowest offer: ${escapeHtml(fmtQuoted(data.priceQuoted))})` : ''}, so we did not confirm the booking.`,
     },
     all_failed: {
-      subject: `⚠️ All contacted hotels were unavailable | DaydreamHub`,
+      subject: `⚠️ All contacted hotels were unavailable | DayDreamHub`,
       title: 'All Hotels Unavailable',
       color: '#d97706',
       message: 'We contacted all candidate hotels but none could confirm your request.',
@@ -1333,18 +1333,18 @@ export async function sendConciergeResultEmail(
   const actionNote = data.resultType === 'success'
     ? 'Please keep this email for reference when checking in. Payment is made directly at the hotel upon check-in. Please note that depending on the hotel, you may be required to pay in the local currency.'
     : data.resultType === 'no_answer'
-      ? 'You can try another hotel search anytime on DaydreamHub. If we are unable to reach any of the selected hotels after attempting all of them, your $7 fee will be fully refunded.'
+      ? 'You can try another hotel search anytime on DayDreamHub. If we are unable to reach any of the selected hotels after attempting all of them, your $7 fee will be fully refunded.'
       : data.resultType === 'all_failed'
         ? 'We called all the selected hotels, but none were available or answered. Your $7 fee is being refunded.'
         : data.resultType === 'over_budget'
           ? 'If you would like, you can raise your maximum budget and request the call again — the lowest offered price above is a good reference.'
-          : 'You can try another hotel search anytime on DaydreamHub.';
+          : 'You can try another hotel search anytime on DayDreamHub.';
 
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:${resultMeta.color};color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
     <h1 style="margin:0;font-size:24px">${resultMeta.title}</h1>
-    <p style="margin:8px 0 0;opacity:0.9">DaydreamHub AI Concierge</p>
+    <p style="margin:8px 0 0;opacity:0.9">DayDreamHub AI Concierge</p>
   </div>
   <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
     <p style="font-size:16px">Hello ${escapeHtml(data.guestName || 'there')},</p>
@@ -1368,7 +1368,7 @@ export async function sendConciergeResultEmail(
 
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: data.guestEmail,
     subject: resultMeta.subject,
     html,
@@ -1425,7 +1425,7 @@ export async function sendAdminBookingStatusUpdate(
       <tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb">Action By</td><td style="padding:8px 12px;border:1px solid #e5e7eb"><strong>${actionLabel}</strong></td></tr>
       ${data.cancelReason ? `<tr><td style="padding:8px 12px;border:1px solid #e5e7eb;font-weight:600;background:#f9fafb">Reason</td><td style="padding:8px 12px;border:1px solid #e5e7eb">${escapeHtml(data.cancelReason)}</td></tr>` : ''}
     </table>
-    <p style="margin-top:24px;color:#6b7280;font-size:12px">DaydreamHub Admin Notification</p>
+    <p style="margin-top:24px;color:#6b7280;font-size:12px">DayDreamHub Admin Notification</p>
   </div>
 </div>`;
 
@@ -1439,7 +1439,7 @@ export async function sendAdminBookingStatusUpdate(
 
   return sendEmail({
     apiKey,
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to,
     subject,
     html,

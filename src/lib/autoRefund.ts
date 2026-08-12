@@ -63,7 +63,7 @@ export async function autoRefundBooking(
           method: 'POST',
           headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            from: 'DaydreamHub <noreply@daydreamhub.com>',
+            from: 'DayDreamHub <noreply@daydreamhub.com>',
             to: [adminEmail],
             subject: `[REFUND FAILED] Booking #${bookingId} — Manual action required`,
             html: `<div style="font-family:Arial,sans-serif"><h3 style="color:#dc2626">Refund Failed — Manual Action Required</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${bookingId}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${booking.total_price_usd}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Capture ID:</td><td>${booking.paypal_capture_id || 'N/A'}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Reason:</td><td>${reason}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Error:</td><td style="color:#dc2626">${message}</td></tr></table><p style="margin-top:16px;color:#374151">Please process this refund manually via PayPal Dashboard.</p></div>`,

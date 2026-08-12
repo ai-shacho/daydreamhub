@@ -793,7 +793,7 @@ async function sendAdminConciergeBookedEmail(env: any, db: DbLike | null, concie
   const details: any = normalizeConciergeDetails(parseJsonWithGuard(call.request_details, 'concierge_calls.request_details(admin_email)'));
 
   const payload = {
-    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    from: 'DayDreamHub <noreply@daydreamhub.com>',
     to: [env.ADMIN_EMAIL],
     subject: `[AI Concierge] Booking confirmed - ${call.hotel_name || 'Unknown hotel'}`,
     html: `

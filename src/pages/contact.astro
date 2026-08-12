@@ -36,7 +36,7 @@ if (Astro.request.method === 'POST') {
     if (!error && RESEND_API_KEY) {
       const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-  <h2 style="color:#0d9488">New Contact Inquiry — DaydreamHub</h2>
+  <h2 style="color:#0d9488">New Contact Inquiry — DayDreamHub</h2>
   <table style="border-collapse:collapse;width:100%;margin:16px 0">
     <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9;width:30%">Category</td><td style="padding:8px 12px;border:1px solid #ddd">${category}</td></tr>
     <tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">Name</td><td style="padding:8px 12px;border:1px solid #ddd">${name}</td></tr>
@@ -49,7 +49,7 @@ if (Astro.request.method === 'POST') {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'DaydreamHub Contact <noreply@daydreamhub.com>',
+          from: 'DayDreamHub Contact <noreply@daydreamhub.com>',
           to: [ADMIN_EMAIL],
           reply_to: email,
           subject: `[Contact] ${category} — ${name}: ${subject || message.slice(0, 50)}`,
@@ -70,7 +70,7 @@ if (Astro.request.method === 'POST') {
 }
 ---
 
-<Layout title="Contact Us — DaydreamHub" description="Contact DaydreamHub support team for booking help, partnership inquiries, or general questions.">
+<Layout title="Contact Us — DayDreamHub" description="Contact DayDreamHub support team for booking help, partnership inquiries, or general questions.">
   <div class="max-w-4xl mx-auto px-4 py-12">
     <!-- Header -->
     <div class="text-center mb-10">

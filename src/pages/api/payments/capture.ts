@@ -386,7 +386,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
               direction: 'outbound',
               recipientEmail: guest_email,
               senderEmail: 'noreply@daydreamhub.com',
-              subject: `Booking Request Received #${bookingId} — DaydreamHub`,
+              subject: `Booking Request Received #${bookingId} — DayDreamHub`,
               body: `Guest booking confirmation for #${bookingId}`,
               status: guestEmailResult.success ? 'sent' : 'failed',
               errorDetail: guestEmailResult.error,

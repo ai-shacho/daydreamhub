@@ -16,12 +16,12 @@ try {
 } catch (e) {}
 ---
 
-<Layout title="How DaydreamHub Works — Day-Use Hotel Booking">
+<Layout title="How DayDreamHub Works — Day-Use Hotel Booking">
 
   <!-- Hero -->
   <section class="bg-gradient-to-br from-teal-900 via-teal-800 to-teal-700 text-white py-20">
     <div class="max-w-4xl mx-auto px-6 text-center">
-      <span class="inline-block bg-amber-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-wider">DaydreamHub とは</span>
+      <span class="inline-block bg-amber-400 text-gray-900 text-xs font-bold px-3 py-1 rounded-full mb-4 uppercase tracking-wider">DayDreamHub とは</span>
       <h1 class="text-4xl md:text-5xl font-bold mb-5 leading-tight">
         ホテルを<span class="text-amber-400">数時間だけ</span>予約できる<br class="hidden md:block"/>世界初のデイユース特化プラットフォーム
       </h1>
@@ -86,7 +86,7 @@ try {
         <div class="grid md:grid-cols-3 gap-8">
           {[
             { step: '01', icon: '🔍', title: '都市・日時を入力', desc: 'ホームページのAIチャットに都市名・日付・時間・人数を入力。どんな小さな都市でも対応。' },
-            { step: '02', icon: '🤖', title: 'AIがホテルを提案', desc: 'DaydreamHub登録ホテルを優先表示。未登録エリアはGoogleマップから実在するホテルを検索。' },
+            { step: '02', icon: '🤖', title: 'AIがホテルを提案', desc: 'DayDreamHub登録ホテルを優先表示。未登録エリアはGoogleマップから実在するホテルを検索。' },
             { step: '03', icon: '✅', title: '予約・完了', desc: 'DDH登録ホテルはサイト上で予約リクエスト。通常24時間以内にホテルが確定します。未登録ホテルはAIが電話して空き確認（$7）。' },
           ].map(s => (
             <div class="text-center relative">
@@ -107,7 +107,7 @@ try {
   <section class="py-16 bg-white">
     <div class="max-w-5xl mx-auto px-6">
       <h2 class="text-3xl font-bold text-gray-800 text-center mb-3">2種類の予約方法</h2>
-      <p class="text-gray-500 text-center mb-10">DaydreamHub登録ホテルかどうかで方法が異なります</p>
+      <p class="text-gray-500 text-center mb-10">DayDreamHub登録ホテルかどうかで方法が異なります</p>
       <div class="grid md:grid-cols-2 gap-6">
 
         <!-- Direct Booking -->
@@ -119,7 +119,7 @@ try {
             <h3 class="absolute bottom-4 left-6 text-xl font-bold text-white">DDH登録ホテル — 直接予約</h3>
           </div>
           <div class="p-8">
-            <p class="text-gray-500 text-sm mb-4 leading-relaxed">DaydreamHubと提携しているホテルにリクエストを送信。事前決済で、ホテルが承認しない場合は全額返金。サービス手数料は<strong class="text-teal-600">一切かかりません</strong>。</p>
+            <p class="text-gray-500 text-sm mb-4 leading-relaxed">DayDreamHubと提携しているホテルにリクエストを送信。事前決済で、ホテルが承認しない場合は全額返金。サービス手数料は<strong class="text-teal-600">一切かかりません</strong>。</p>
             <ul class="space-y-2 text-sm text-gray-600">
               {['✅ 追加手数料なし', '✅ リクエスト方式（ホテル承認後確定）', '✅ 未承認なら全額返金', '✅ オンライン決済対応', '✅ 予約確認メール自動送信', '✅ 世界60都市以上'].map(i => (
                 <li>{i}</li>
@@ -163,7 +163,7 @@ try {
       <p class="text-gray-500 mb-10">透明性のある料金体系</p>
       <div class="grid md:grid-cols-3 gap-4 text-sm">
         {[
-          { label: 'DaydreamHub登録ホテル予約', price: '無料', desc: 'プラットフォーム手数料なし', color: 'bg-teal-50 border-teal-200' },
+          { label: 'DayDreamHub登録ホテル予約', price: '無料', desc: 'プラットフォーム手数料なし', color: 'bg-teal-50 border-teal-200' },
           { label: 'AI電話代行サービス（3件まで）', price: '$7', desc: '未登録ホテルへの電話確認', color: 'bg-blue-50 border-blue-200' },
           { label: '返金保証', price: '100%', desc: '全件不成立の場合', color: 'bg-amber-50 border-amber-200' },
         ].map(p => (
@@ -186,10 +186,10 @@ try {
         {[
           { q: 'デイユースとはどういう意味ですか？', a: 'ホテルの客室を宿泊せずに数時間だけ利用するサービスです。例えば10:00〜18:00の8時間プランなど、時間単位でホテルを使えます。' },
           { q: '最短何時間から利用できますか？', a: 'ホテルやプランによって異なりますが、1時間〜の短時間プランから8時間・半日プランまで様々です。ご希望の時間を入力してAIにご相談ください。' },
-          { q: 'DaydreamHub未登録のホテルに予約できますか？', a: 'はい、AI電話代行サービス（$7）をご利用いただくことで、Googleマップに掲載されている世界中のホテルに電話してデイユースの空き確認ができます。' },
+          { q: 'DayDreamHub未登録のホテルに予約できますか？', a: 'はい、AI電話代行サービス（$7）をご利用いただくことで、Googleマップに掲載されている世界中のホテルに電話してデイユースの空き確認ができます。' },
           { q: 'AI電話代行の$7はいつ請求されますか？', a: 'ボタンを押してPayPal決済を完了した時点です。AIが電話する前にお支払いいただきますが、全件不成立の場合は100%返金します。' },
           { q: '予約後のキャンセルは可能ですか？', a: 'ホテルごとのキャンセルポリシーに従います。詳細は予約完了画面またはメールでご確認ください。' },
-          { q: 'ホテルをDaydreamHubに登録したい場合は？', a: '「ホテルオーナーの方へ」ページよりお申し込みください。登録・掲載料は無料です。', link: '/for-hotel-owner' },
+          { q: 'ホテルをDayDreamHubに登録したい場合は？', a: '「ホテルオーナーの方へ」ページよりお申し込みください。登録・掲載料は無料です。', link: '/for-hotel-owner' },
         ].map((item, i) => (
           <details class="border border-gray-200 rounded-xl group">
             <summary class="px-6 py-4 cursor-pointer font-medium text-gray-800 flex justify-between items-center hover:bg-gray-50 rounded-xl list-none">

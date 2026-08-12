@@ -71,16 +71,16 @@ export const PATCH: APIRoute = async ({ request, params, locals }) => {
         method: 'POST',
         headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'DaydreamHub <noreply@daydreamhub.com>',
+          from: 'DayDreamHub <noreply@daydreamhub.com>',
           to: [owner_email],
-          subject: `Hotel Assigned: ${hotelName} — DaydreamHub`,
+          subject: `Hotel Assigned: ${hotelName} — DayDreamHub`,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
             <div style="background:#4f46e5;color:white;padding:24px;text-align:center;border-radius:8px 8px 0 0">
               <h1 style="margin:0;font-size:20px">🏨 Hotel Assigned to Your Account</h1>
             </div>
             <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
               <p>Hi <strong>${(owner as any).name}</strong>,</p>
-              <p><strong>${hotelName}</strong> has been assigned to your DaydreamHub owner account.</p>
+              <p><strong>${hotelName}</strong> has been assigned to your DayDreamHub owner account.</p>
               <p>You can now manage this hotel from the Owner Portal:</p>
               <div style="text-align:center;margin:24px 0">
                 <a href="${runtime?.env?.SITE_URL || 'https://daydreamhub.com'}/login?redirect=/owner" style="display:inline-block;padding:12px 28px;background:#4f46e5;color:white;text-decoration:none;border-radius:8px;font-weight:700">Go to Owner Portal →</a>

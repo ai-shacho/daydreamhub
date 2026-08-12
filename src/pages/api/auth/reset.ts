@@ -62,14 +62,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
       method: 'POST',
       headers: { Authorization: `Bearer ${resendApiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'DaydreamHub <noreply@daydreamhub.com>',
+        from: 'DayDreamHub <noreply@daydreamhub.com>',
         to: [email],
-        subject: 'Reset your DaydreamHub password',
+        subject: 'Reset your DayDreamHub password',
         html: `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:#0d9488;color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
     <h1 style="margin:0;font-size:22px">Password Reset</h1>
-    <p style="margin:6px 0 0;opacity:0.85;font-size:14px">DaydreamHub</p>
+    <p style="margin:6px 0 0;opacity:0.85;font-size:14px">DayDreamHub</p>
   </div>
   <div style="padding:28px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#fff">
     <p>Hello${user.name ? ' ' + user.name : ''},</p>
@@ -79,7 +79,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     </div>
     <p style="color:#6b7280;font-size:13px">This link will expire in <strong>1 hour</strong>. If you did not request a password reset, please ignore this email.</p>
     <hr style="border:none;border-top:1px solid #f3f4f6;margin:20px 0"/>
-    <p style="color:#9ca3af;font-size:12px">DaydreamHub — Day-Use Hotel Booking Worldwide</p>
+    <p style="color:#9ca3af;font-size:12px">DayDreamHub — Day-Use Hotel Booking Worldwide</p>
   </div>
 </div>`,
       }),
