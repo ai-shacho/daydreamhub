@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { requireAdmin } from '../../../lib/apiAuth';
 import { parseCancellationHours } from '../../../lib/listingReadiness';
 import { resolvePlanPriceFields } from '../../../lib/currency';
 
@@ -15,6 +16,11 @@ async function ensureSortOrder(d: any) {
 
 // GET: ?hotel_id=xxx
 export const GET: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const d = db(locals);
   if (!d) return json({ error: 'DB unavailable' }, 500);
   const url = new URL(request.url);
@@ -29,6 +35,11 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
 // POST: create plan
 export const POST: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const d = db(locals);
   if (!d) return json({ error: 'DB unavailable' }, 500);
   let body: any;
@@ -50,6 +61,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 // PUT: update plan
 export const PUT: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const d = db(locals);
   if (!d) return json({ error: 'DB unavailable' }, 500);
   let body: any;
@@ -85,6 +101,11 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
 // PATCH: reorder plans [{id, sort_order}]
 export const PATCH: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const d = db(locals);
   if (!d) return json({ error: 'DB unavailable' }, 500);
   let body: any;
@@ -102,6 +123,11 @@ export const PATCH: APIRoute = async ({ request, locals }) => {
 
 // DELETE: ?id=xxx
 export const DELETE: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const d = db(locals);
   if (!d) return json({ error: 'DB unavailable' }, 500);
   const url = new URL(request.url);
