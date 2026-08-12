@@ -85,10 +85,49 @@ export function toInternational(raw: string | null | undefined, country?: string
     return { value: `+${code}${s.replace(/^0+/, '')}`, confident: false, note: `assumed a ${country} national number` };
   }
 
+  // North American numbers are always ten digits nationally, so there is
+  // nothing to work out — 4107800030 in the USA is +1 410 780 0030.
+  if (code === '1' && s.length === 10) {
+    return { value: `+1${s}`, confident: true, note: '' };
+  }
+
   // Already carries its country code, just without the plus.
   if (s.startsWith(code)) {
     return { value: `+${s}`, confident: true, note: '' };
   }
 
+  // It may already carry a *different* country's code. "2302024000" on a Dubai
+  // listing turned out to be a Mauritian hotel's line (+230 202 4000); prefixing
+  // 971 to it produced a number that dials nowhere. Say so rather than build it.
+  const foreign = matchesAnotherCountryCode(s, code);
+  if (foreign) {
+    // Two readings, and the data cannot say which. Offer the one the listing's
+    // country implies and name the other, rather than silently picking. A Dubai
+    // listing carrying 2302024000 read either way: +971 230 202 4000, or the
+    // Mauritian hotel line +230 202 4000 it turned out to be.
+    return {
+      value: `+${code}${s}`,
+      confident: false,
+      note: `also reads as +${s} (${foreign.country}) — confirm which before applying`,
+    };
+  }
+
   return { value: `+${code}${s}`, confident: false, note: `assumed a ${country} number` };
+}
+
+/** A country code, other than the listing's own, that this number begins with. */
+function matchesAnotherCountryCode(digits: string, ownCode: string): { code: string; country: string } | null {
+  let best: { code: string; country: string } | null = null;
+  for (const [country, code] of Object.entries(DIAL_CODES)) {
+    // Only three-digit codes are worth suspecting. Two-digit ones (41, 44, 66)
+    // collide with ordinary area codes far too often to mean anything: a
+    // Baltimore number starting 410 is not a Swiss number.
+    if (code.length < 3 || code === ownCode || !digits.startsWith(code)) continue;
+    // A country code only explains the number if what follows is a plausible
+    // national number rather than a couple of stray digits.
+    const rest = digits.length - code.length;
+    if (rest < 6 || rest > 12) continue;
+    if (!best || code.length > best.code.length) best = { code, country };
+  }
+  return best;
 }
