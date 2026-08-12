@@ -418,10 +418,13 @@ function ownerEmailShell(opts: {
     <p style="color:#6b7280;font-size:12px;line-height:1.7">
       Guests are told to expect an answer within 24 hours, so the sooner you respond the better —
       and if the room is not available, declining helps them more than waiting does.
-      To ask the guest something, use Messages in the Owner Portal rather than replying here:
-      the thread stays attached to the booking, and DayDreamHub can see it if you need us to step in.
-      This mailbox is not monitored.
     </p>
+    <div style="background:#f1f5f9;border-left:3px solid #94a3b8;border-radius:4px;padding:12px 14px;margin:16px 0;color:#475569;font-size:12px;line-height:1.7">
+      <strong>Send-only address.</strong> This mailbox does not receive mail. A reply to this message
+      reaches no one — not DayDreamHub, and not the guest.
+      To contact the guest, open <strong>Messages</strong> in the Owner Portal: the thread stays attached
+      to the booking and DayDreamHub can see it if you need us to step in.
+    </div>
 
     ${emailFooter()}
   </div>
