@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getOwnerHotelIds } from '../../../lib/ownerAuth';
 import { requireOwner } from '../../../lib/apiAuth';
+import { parseCancellationHours } from '../../../lib/listingReadiness';
 import { resolvePlanPriceFields } from '../../../lib/currency';
 
 const json = { 'Content-Type': 'application/json' };
@@ -23,6 +24,9 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   if (!hotel_id || !name) return new Response(JSON.stringify({ error: 'hotel_id and name required' }), { status: 400, headers: json });
 
+  const cancel = parseCancellationHours(cancellation_hours);
+  if (!cancel.ok) return new Response(JSON.stringify({ error: cancel.error }), { status: 400, headers: json });
+
   // オーナーが所有するホテルか確認
   const ownerHotelIds = await getOwnerHotelIds(db, owner);
   if (!ownerHotelIds.includes(Number(hotel_id))) {
@@ -38,7 +42,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`
     ).bind(hotel_id, name, name_ja||null, description||'', description_ja||null,
       pricing.price_usd, pricing.price_local, check_in_time||'', check_out_time||'', plan_type||'daycation',
-      max_guests||2, duration_hours||null, cancellation_policy||'', cancellation_hours ?? 24,
+      max_guests||2, duration_hours||null, cancellation_policy||'', cancel.value,
       room_type||null, room_type_image_url||null).run();
     return new Response(JSON.stringify({ success: true, id: r.meta?.last_row_id, pricing }), { status: 201, headers: json });
   } catch (e) {
@@ -64,6 +68,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   const ownerHotelIds = await getOwnerHotelIds(db, owner);
   if (!ownerHotelIds.includes(Number(hotel_id))) {
     return new Response(JSON.stringify({ error: 'Hotel not found' }), { status: 404, headers: json });
+  }
+
+  if ('cancellation_hours' in fields) {
+    const cancel = parseCancellationHours(fields.cancellation_hours);
+    if (!cancel.ok) return new Response(JSON.stringify({ error: cancel.error }), { status: 400, headers: json });
+    fields.cancellation_hours = cancel.value;
   }
 
   const allowed = ['name','name_ja','description','description_ja','check_in_time',

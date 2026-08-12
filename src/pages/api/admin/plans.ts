@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { parseCancellationHours } from '../../../lib/listingReadiness';
 import { resolvePlanPriceFields } from '../../../lib/currency';
 
 const db = (locals: any) => (locals as any).runtime?.env?.DB;
@@ -32,15 +33,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!d) return json({ error: 'DB unavailable' }, 500);
   let body: any;
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
-  const { hotel_id, name, name_ja, description, description_ja, price_usd, check_in_time, check_out_time, plan_type, max_guests, duration_hours, cancellation_policy } = body;
+  const { hotel_id, name, name_ja, description, description_ja, price_usd, check_in_time, check_out_time, plan_type, max_guests, duration_hours, cancellation_policy, cancellation_hours } = body;
   if (!hotel_id || !name) return json({ error: 'hotel_id and name required' }, 400);
+  const cancel = parseCancellationHours(cancellation_hours);
+  if (!cancel.ok) return json({ error: cancel.error }, 400);
   try {
     // Price arrives in the hotel's currency; both columns resolved server-side.
     const pricing = await resolvePlanPriceFields(d, hotel_id, body.price ?? body.price_local ?? price_usd ?? 0);
     const r = await d.prepare(
-      `INSERT INTO plans (hotel_id,name,name_ja,description,description_ja,price_usd,price_local,check_in_time,check_out_time,plan_type,max_guests,duration_hours,cancellation_policy,is_active)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1)`
-    ).bind(hotel_id, name, name_ja||null, description||'', description_ja||null, pricing.price_usd, pricing.price_local, check_in_time||'', check_out_time||'', plan_type||'daycation', max_guests||2, duration_hours||null, cancellation_policy||'').run();
+      `INSERT INTO plans (hotel_id,name,name_ja,description,description_ja,price_usd,price_local,check_in_time,check_out_time,plan_type,max_guests,duration_hours,cancellation_policy,cancellation_hours,is_active)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)`
+    ).bind(hotel_id, name, name_ja||null, description||'', description_ja||null, pricing.price_usd, pricing.price_local, check_in_time||'', check_out_time||'', plan_type||'daycation', max_guests||2, duration_hours||null, cancellation_policy||'', cancel.value).run();
     return json({ success: true, id: r.meta?.last_row_id, pricing });
   } catch (e) { return json({ error: String(e) }, 500); }
 };
@@ -53,7 +56,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   try { body = await request.json(); } catch { return json({ error: 'Invalid JSON' }, 400); }
   const { id, ...fields } = body;
   if (!id) return json({ error: 'id required' }, 400);
-  const allowed = ['name','name_ja','description','description_ja','check_in_time','check_out_time','plan_type','max_guests','duration_hours','cancellation_policy','is_active','sort_order'];
+  if ('cancellation_hours' in fields) {
+    const c = parseCancellationHours(fields.cancellation_hours);
+    if (!c.ok) return json({ error: c.error }, 400);
+    fields.cancellation_hours = c.value;
+  }
+  const allowed = ['name','name_ja','description','description_ja','check_in_time','check_out_time','plan_type','max_guests','duration_hours','cancellation_policy','cancellation_hours','is_active','sort_order'];
   const updates: string[] = []; const params: any[] = [];
   for (const k of allowed) { if (k in fields) { updates.push(`${k} = ?`); params.push(fields[k]); } }
 

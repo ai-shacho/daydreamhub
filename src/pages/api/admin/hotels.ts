@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { publishBlockReason } from '../../../lib/listingReadiness';
 import { sendListingApprovedEmail } from '../../../lib/email';
 import { requireAdmin } from '../../../lib/apiAuth';
 import { isValidPropertyType, normalizePropertyType } from '../../../lib/propertyTypes';
@@ -135,6 +136,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   // longer shows up in the "Review requested" queue or as "Changes requested".
   const becomingActive = fields.status === 'active' || fields.is_active == 1;
   if (becomingActive) {
+    // Last gate before the public sees it. The owner form blocks this too, but
+    // an admin can flip a listing live without ever opening that form.
+    const blocked = await publishBlockReason(db, id);
+    if (blocked) {
+      return new Response(JSON.stringify({ error: blocked }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
     updates.push('review_requested_at = NULL');
     updates.push('review_changes_requested_at = NULL');
     updates.push('review_feedback = NULL');

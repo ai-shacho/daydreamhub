@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireOwner } from '../../../lib/apiAuth';
 import { sendReviewRequestNotification } from '../../../lib/email';
+import { publishBlockReason } from '../../../lib/listingReadiness';
 
 export const POST: APIRoute = async ({ request, locals }) => {
   const env = (locals as any).runtime?.env;
@@ -27,6 +28,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!hotel) return new Response(JSON.stringify({ error: 'Hotel not found' }), { status: 404, headers: { 'Content-Type': 'application/json' } });
   if (hotel.is_active) return new Response(JSON.stringify({ error: 'Already published' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   if (hotel.review_requested_at) return new Response(JSON.stringify({ error: 'Review already requested' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+
+  // Nothing reaches a guest without stating its cancellation terms.
+  const blocked = await publishBlockReason(db, hotelId);
+  if (blocked) {
+    return new Response(JSON.stringify({ error: blocked }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }
 
   const now = new Date().toISOString();
   // (Re-)submitting for review clears any prior "changes requested" state.
