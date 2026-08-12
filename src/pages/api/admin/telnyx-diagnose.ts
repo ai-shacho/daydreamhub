@@ -1,7 +1,13 @@
 import type { APIRoute } from 'astro';
+import { requireAdmin } from '../../../lib/apiAuth';
 import { CALL_SCRIPT_PROMPT } from '../../../lib/callScript';
 
 export const GET: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const url = new URL(request.url);
   const secret = url.searchParams.get('key');
   if (secret !== 'ddh-diag-2026') {

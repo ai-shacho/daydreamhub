@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { requireAdmin } from '../../../lib/apiAuth';
 import { sendWelcomeEmail, sendOwnerAccountEmail } from '../../../lib/email';
 
 async function hashPassword(password: string): Promise<string> {
@@ -9,6 +10,11 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 export const GET: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 
@@ -34,6 +40,11 @@ export const GET: APIRoute = async ({ request, locals }) => {
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 
@@ -77,6 +88,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 };
 
 export const PUT: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 
@@ -112,6 +128,11 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return new Response(JSON.stringify({ error: 'DB unavailable' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
 

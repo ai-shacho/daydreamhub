@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 async function ensureTable(db: any) {
   try {
@@ -19,6 +20,11 @@ async function ensureTable(db: any) {
 
 // GET: list news
 export const GET: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return json({ error: 'DB unavailable' }, 500);
   await ensureTable(db);
@@ -38,6 +44,11 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
 // POST: create news
 export const POST: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return json({ error: 'DB unavailable' }, 500);
   await ensureTable(db);
@@ -58,6 +69,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 // PUT: update news
 export const PUT: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return json({ error: 'DB unavailable' }, 500);
 
@@ -77,6 +93,11 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
 // DELETE: delete news
 export const DELETE: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return json({ error: 'DB unavailable' }, 500);
 

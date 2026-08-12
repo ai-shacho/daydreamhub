@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { requireAdmin } from '../../../lib/apiAuth';
 
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -6,6 +7,11 @@ function json(data: any, status = 200) {
 
 // GET: ?hotel_id=xxx
 export const GET: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return json({ error: 'DB unavailable' }, 500);
   const url = new URL(request.url);
@@ -17,6 +23,11 @@ export const GET: APIRoute = async ({ request, locals }) => {
 
 // POST: upload image (multipart/form-data with file + hotel_id)
 export const POST: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const env = (locals as any).runtime?.env;
   const db = env?.DB;
   const r2 = env?.IMAGES;
@@ -62,6 +73,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
 // PUT: reorder images [{ id, sort_order }]
 export const PUT: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const db = (locals as any).runtime?.env?.DB;
   if (!db) return json({ error: 'DB unavailable' }, 500);
   let body: any;
@@ -76,6 +92,11 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 
 // DELETE: ?id=xxx
 export const DELETE: APIRoute = async ({ request, locals }) => {
+  {
+    const { response } = await requireAdmin(request, (locals as any).runtime?.env?.JWT_SECRET || 'dev-secret');
+    if (response) return response;
+  }
+
   const env = (locals as any).runtime?.env;
   const db = env?.DB;
   const r2 = env?.IMAGES;
