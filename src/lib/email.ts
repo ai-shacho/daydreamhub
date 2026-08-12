@@ -418,7 +418,9 @@ function ownerEmailShell(opts: {
     <p style="color:#6b7280;font-size:12px;line-height:1.7">
       Guests are told to expect an answer within 24 hours, so the sooner you respond the better —
       and if the room is not available, declining helps them more than waiting does.
-      Replying to this email reaches the guest directly.
+      To ask the guest something, use Messages in the Owner Portal rather than replying here:
+      the thread stays attached to the booking, and DayDreamHub can see it if you need us to step in.
+      This mailbox is not monitored.
     </p>
 
     ${emailFooter()}
@@ -450,7 +452,6 @@ export async function sendBookingNotificationToHotel(
     to: data.hotelEmail,
     subject,
     html,
-    replyTo: data.guestEmail,
   });
 }
 
@@ -534,7 +535,6 @@ export async function sendOwnerBookingReminder(
     to: data.hotelEmail,
     subject,
     html,
-    replyTo: data.guestEmail,
   });
 }
 
