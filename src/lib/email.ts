@@ -464,6 +464,46 @@ export async function sendBookingNotificationToHotel(
   });
 }
 
+// The DDH copy of a new booking. It lived as one long HTML string inside the
+// payment handler, which is why it kept falling behind the guest and hotel
+// emails — USD only, raw ISO dates, its own add-on formatting. Same helpers as
+// the rest of this file now, so it moves when they do.
+export async function sendAdminBookingNotification(
+  apiKey: string,
+  to: string[],
+  data: OwnerBookingData,
+): Promise<{ success: boolean; error?: string }> {
+  const cell = (label: string, value: string) =>
+    `<tr><td style="padding:6px 14px 6px 0;color:#6b7280;font-size:13px;vertical-align:top;white-space:nowrap">${escapeHtml(label)}</td><td style="padding:6px 0;font-size:13px;color:#1f2937">${value}</td></tr>`;
+
+  const hasFx = !!(data.localCurrency && data.localCurrency !== 'USD' && data.localAmount != null);
+  const addOns = (data.options || [])
+    .map((o) => `${escapeHtml(o.name)} <span style="color:#6b7280">(${escapeHtml(optionCoverage(o))})</span> — ${escapeHtml(formatAmountDual(Number(o.amount_usd || 0), data.localCurrency, o.amount_local ?? null))}`)
+    .join('<br>');
+
+  const html = `
+<div style="font-family:Arial,sans-serif;max-width:620px">
+  <h3 style="margin:0 0 14px;color:#1f2937">New Booking Received</h3>
+  <table style="border-collapse:collapse">
+    ${cell('Booking ID', `#${data.bookingId}`)}
+    ${cell('Guest', escapeHtml(data.guestName))}
+    ${cell('Email', escapeHtml(data.guestEmail))}
+    ${cell('Phone', escapeHtml(data.guestPhone || '-'))}
+    ${cell('Nationality', escapeHtml(data.guestNationality || '-'))}
+    ${cell('Hotel', escapeHtml(data.hotelName))}
+    ${cell('Plan', escapeHtml(data.planName))}
+    ${cell('Check-in', escapeHtml(formatDateYyyyMmmDd(data.checkInDate)))}
+    ${cell('Guests', `${data.adults} adults / ${data.children} children / ${data.infants} infants`)}
+    ${addOns ? cell('Add-ons', addOns) : ''}
+    ${cell('Amount', `<strong>${escapeHtml(formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount))}</strong>`)}
+    ${hasFx ? cell('Exchange Rate', escapeHtml(`1 USD = ${data.fxRate} ${data.localCurrency} (at payment time; charged in USD)`)) : ''}
+  </table>
+  <p style="margin:16px 0 0"><a href="${SITE_URL}/admin/bookings/${data.bookingId}" style="color:#0d9488;font-size:13px">Open in admin →</a></p>
+</div>`;
+
+  return sendEmail({ apiKey, from: 'DaydreamHub <noreply@daydreamhub.com>', to, subject: `[New Booking] #${data.bookingId} — ${data.guestName} / ${data.hotelName}`, html });
+}
+
 // How long a booking has gone unanswered, and how hard the email pushes.
 export type ReminderStage = 6 | 12 | 24;
 
