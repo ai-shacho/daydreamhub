@@ -41,7 +41,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   // Server-side charge resolution (local price × payment-time rate → USD).
   // Shared with capture.ts via resolveBookingCharge so amounts always match.
-  const charge = await resolveBookingCharge(db, plan_id);
+  const charge = await resolveBookingCharge(db, plan_id, {
+    options: Array.isArray(body.options) ? body.options : [],
+    adults: Number(body.adults) || 1,
+    children: Number(body.children) || 0,
+    infants: Number(body.infants) || 0,
+  });
 
   if (!charge) {
     return new Response(JSON.stringify({ error: 'Plan not found' }), {
@@ -59,8 +64,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const orderId = await createOrder(accessToken, totalAmount, PAYPAL_MODE, planName, idempotencyKey);
 
     // NOTE: No DB write here. Booking is created only after PayPal capture succeeds.
+    // The amounts are echoed back so the caller can show/verify exactly what the
+    // order was created for, add-ons included.
     return new Response(
-      JSON.stringify({ order_id: orderId }),
+      JSON.stringify({
+        order_id: orderId,
+        amount: totalAmount,
+        base_usd: charge.baseUsd,
+        options_total_usd: charge.optionsUsd,
+        currency: 'USD',
+      }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {

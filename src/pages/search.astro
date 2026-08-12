@@ -46,7 +46,9 @@ let whereClauses: string[] = ["h.status = 'active'"];
 let params: any[] = [];
 
 if (location) {
-  whereClauses.push("(h.city LIKE ?1 OR h.country LIKE ?1 OR h.name LIKE ?1)");
+  // Japanese names and the street address are matched too, so a guest who
+  // knows the property (or types 渋谷) finds it rather than only its city.
+  whereClauses.push("(h.city LIKE ?1 OR h.country LIKE ?1 OR h.name LIKE ?1 OR h.name_ja LIKE ?1 OR h.address LIKE ?1)");
   params.push(`%${location}%`);
 }
 if (speciality) {

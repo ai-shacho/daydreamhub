@@ -102,9 +102,14 @@ const statusColor: Record<string, string> = {
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1">ゲストメール（テスト用）</label>
-          <input id="guest-email" type="email" placeholder="test@example.com"
+          <input id="guest-email" type="email" placeholder="delivered@resend.dev"
             class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-          <p class="text-xs text-slate-400 mt-0.5">入力すると、予約確定時にこの宛先へ確認メールを送信します。</p>
+          <p class="text-xs text-slate-400 mt-0.5">通話①で金額が取れたら、この宛先へ見積りメール（「Book at this price」リンク）が届きます。承認→$7→通話②で確定。</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">ゲスト電話番号（テスト用）</label>
+          <input id="guest-phone" type="tel" value="+81 8012345678" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+          <p class="text-xs text-slate-400 mt-0.5">確定時の通話で読み上げられるゲストの電話番号。</p>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -139,7 +144,7 @@ const statusColor: Record<string, string> = {
 
         <button type="submit" id="dial-btn"
           class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-medium py-2.5 rounded-lg transition-colors">
-          Conciergeテスト発信（phase=booking）
+          Conciergeテスト発信（2段階：見積り→承認→確定）
         </button>
       </form>
       <div id="dial-result" class="hidden mt-4 p-3 rounded-lg text-sm"></div>
@@ -210,6 +215,7 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
   const note = document.getElementById('call-note').value.trim();
   const guestName = document.getElementById('guest-name').value.trim();
   const guestEmail = document.getElementById('guest-email').value.trim();
+  const guestPhone = (document.getElementById('guest-phone').value || '').trim();
   const guestCount = Number(document.getElementById('guest-count').value || 1);
   const checkInDate = document.getElementById('check-in-date').value;
   const checkInTime = document.getElementById('check-in-time').value;
@@ -234,10 +240,11 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'dial',
-        phase: 'booking',
+        phase: 'concierge',
         to_number: toNumber,
         guest_name: guestName || 'Test Guest',
         guest_email: guestEmail || null,
+        guest_phone: guestPhone || '+81 8012345678',
         guest_count: Number.isFinite(guestCount) ? Math.max(1, guestCount) : 1,
         check_in_date: checkInDate,
         check_in_time: checkInTime,
@@ -259,7 +266,7 @@ document.getElementById('dial-form')?.addEventListener('submit', async function(
     result.textContent = `❌ 通信エラー: ${e.message}`;
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Conciergeテスト発信（phase=booking）';
+    btn.textContent = 'Conciergeテスト発信（2段階：見積り→承認→確定）';
   }
 });
 

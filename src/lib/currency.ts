@@ -108,10 +108,138 @@ export async function repriceHotelPlansForCurrency(db: any, hotelId: number | st
 // Non-USD hotels: price_local × payment-time rate (daily-cached) → USD base;
 // USD hotels: price_usd as-is. Fee formula must stay identical everywhere.
 // Returns the fx snapshot (local currency / local total / rate) for storage.
-export async function resolveBookingCharge(db: any, planId: number | string): Promise<null | {
+export type OptionSelection = { id: number | string; quantity?: number };
+
+export type PricedOption = {
+  option_id: number;
+  name: string;
+  pricing_type: string;
+  unit_price_local: number;
+  unit_price_usd: number;
+  child_unit_price_local: number | null;
+  child_unit_price_usd: number | null;
+  infant_unit_price_local: number | null;
+  infant_unit_price_usd: number | null;
+  quantity: number;
+  child_quantity: number;
+  infant_quantity: number;
+  amount_local: number;
+  amount_usd: number;
+};
+
+// Price the add-ons a guest picked. Quantities are derived from the party size
+// rather than trusted from the client: per_room is a flat charge, per_person
+// multiplies by the age bands the hotel says the option counts (a day pass may
+// count infants, a wine tasting may count adults only), and per_adult_child
+// charges each band at its own rate, so an infant can be free by leaving that
+// rate at zero.
+async function priceSelectedOptions(
+  db: any,
+  planId: number | string,
+  selection: OptionSelection[],
+  adults: number,
+  children: number,
+  infants: number,
+  currency: string,
+  fxRate: number,
+): Promise<{ options: PricedOption[]; optionsUsd: number; optionsLocal: number }> {
+  const wanted = new Map<number, number>();
+  for (const s of selection || []) {
+    const id = Number(s?.id);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    const q = Math.max(1, Math.floor(Number(s?.quantity) || 1));
+    wanted.set(id, q);
+  }
+  if (!wanted.size) return { options: [], optionsUsd: 0, optionsLocal: 0 };
+
+  const ids = [...wanted.keys()];
+  const rows: any[] = ((await db
+    .prepare(
+      `SELECT * FROM plan_options
+        WHERE plan_id = ? AND is_active = 1 AND id IN (${ids.map(() => '?').join(',')})`
+    )
+    .bind(planId, ...ids)
+    .all()
+    .catch(() => null))?.results) || [];
+
+  const partyAdults = Math.max(0, Math.floor(Number(adults) || 0));
+  const partyChildren = Math.max(0, Math.floor(Number(children) || 0));
+  const partyInfants = Math.max(0, Math.floor(Number(infants) || 0));
+  const options: PricedOption[] = [];
+  let optionsUsd = 0;
+  let optionsLocal = 0;
+
+  for (const row of rows) {
+    const unitUsd = Number(row.price_usd || 0);
+    const unitLocal = Number(row.price_local ?? unitUsd);
+    const childUsd = row.child_price_usd == null ? null : Number(row.child_price_usd);
+    const childLocal = row.child_price_local == null ? null : Number(row.child_price_local);
+    const infantUsd = row.infant_price_usd == null ? null : Number(row.infant_price_usd);
+    const infantLocal = row.infant_price_local == null ? null : Number(row.infant_price_local);
+    const type = String(row.pricing_type || 'per_room');
+
+    let qty = 1;
+    let childQty = 0;
+    let infantQty = 0;
+    if (type === 'per_person') {
+      // Legacy rows predate the flags; treat a missing value as the old default.
+      const cA = row.counts_adults == null ? 1 : Number(row.counts_adults);
+      const cC = row.counts_children == null ? 1 : Number(row.counts_children);
+      const cI = row.counts_infants == null ? 0 : Number(row.counts_infants);
+      qty = (cA ? partyAdults : 0) + (cC ? partyChildren : 0) + (cI ? partyInfants : 0);
+      if (qty <= 0) continue;   // nobody in the party is counted — no charge
+    } else if (type === 'per_adult_child') {
+      qty = partyAdults;
+      childQty = partyChildren;
+      infantQty = partyInfants;
+    } else {
+      qty = wanted.get(Number(row.id)) || 1; // per_room — a flat charge, optionally repeated
+    }
+
+    const amountUsd = roundForCurrency(
+      unitUsd * qty + (childUsd ?? 0) * childQty + (infantUsd ?? 0) * infantQty, 'USD');
+    const amountLocal = roundForCurrency(
+      unitLocal * qty + (childLocal ?? 0) * childQty + (infantLocal ?? 0) * infantQty, currency);
+    if (amountUsd <= 0) continue;
+
+    options.push({
+      option_id: Number(row.id),
+      name: String(row.name || ''),
+      pricing_type: type,
+      unit_price_local: unitLocal,
+      unit_price_usd: unitUsd,
+      child_unit_price_local: childLocal,
+      child_unit_price_usd: childUsd,
+      infant_unit_price_local: infantLocal,
+      infant_unit_price_usd: infantUsd,
+      quantity: qty,
+      child_quantity: childQty,
+      infant_quantity: infantQty,
+      amount_local: amountLocal,
+      amount_usd: amountUsd,
+    });
+    optionsUsd += amountUsd;
+    optionsLocal += amountLocal;
+  }
+
+  return {
+    options,
+    optionsUsd: Math.round(optionsUsd * 100) / 100,
+    optionsLocal: roundForCurrency(optionsLocal, currency),
+  };
+}
+
+export async function resolveBookingCharge(
+  db: any,
+  planId: number | string,
+  extras?: { options?: OptionSelection[]; adults?: number; children?: number; infants?: number },
+): Promise<null | {
   plan: any;
   currency: string;
   baseUsd: number;
+  optionsUsd: number;
+  optionsLocal: number;
+  options: PricedOption[];
   processingFee: number;
   serviceFee: number;
   totalAmount: number;
@@ -136,14 +264,31 @@ export async function resolveBookingCharge(db: any, planId: number | string): Pr
     }
   }
 
+  // Paid add-ons are charged on top of the room and go through the same fee
+  // formula, so the guest pays for them in the one PayPal capture.
+  const { options, optionsUsd, optionsLocal } = await priceSelectedOptions(
+    db,
+    planId,
+    extras?.options || [],
+    extras?.adults ?? 1,
+    extras?.children ?? 0,
+    extras?.infants ?? 0,
+    currency,
+    fxRate,
+  );
+  const chargeableUsd = Math.round((baseUsd + optionsUsd) * 100) / 100;
+
   // Fee formula shared by create/capture/booking pages — keep in sync everywhere.
-  const processingFee = Math.round(baseUsd * 0.06 * 100) / 100;
-  const serviceFeeBase = Math.round(baseUsd * 0.10 * 100) / 100;
+  const processingFee = Math.round(chargeableUsd * 0.06 * 100) / 100;
+  const serviceFeeBase = Math.round(chargeableUsd * 0.10 * 100) / 100;
   const serviceFee = serviceFeeBase < 10 ? Math.round((10 - serviceFeeBase) * 100) / 100 : 0;
-  const totalAmount = Math.round((baseUsd + processingFee + serviceFee) * 100) / 100;
+  const totalAmount = Math.round((chargeableUsd + processingFee + serviceFee) * 100) / 100;
   const localTotal = currency === 'USD' ? totalAmount : roundForCurrency(totalAmount * fxRate, currency);
 
-  return { plan, currency, baseUsd, processingFee, serviceFee, totalAmount, fxRate, localTotal };
+  return {
+    plan, currency, baseUsd, optionsUsd, optionsLocal, options,
+    processingFee, serviceFee, totalAmount, fxRate, localTotal,
+  };
 }
 
 // Resolve the two price columns from a single amount entered in the hotel's

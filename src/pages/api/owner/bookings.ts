@@ -128,6 +128,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
         WHERE b.id = ?
       `).bind(id).first() as any;
 
+      // The confirmation email is what the guest shows at the front desk, so it
+      // has to list the add-ons they paid for.
+      const bookedOptions: any[] = ((await db.prepare(
+        'SELECT name, pricing_type, quantity, child_quantity, infant_quantity, amount_local, amount_usd FROM booking_options WHERE booking_id = ? ORDER BY id'
+      ).bind(id).all().catch(() => null))?.results) || [];
+
       if (fullBooking?.guest_email) {
         await sendGuestBookingStatusUpdate(RESEND_API_KEY, {
           bookingId: fullBooking.id,
@@ -142,9 +148,11 @@ export const PUT: APIRoute = async ({ request, locals }) => {
           checkOutTime: fullBooking.check_out_time || '',
           adults: fullBooking.adults || 1,
           children: fullBooking.children || 0,
+          infants: fullBooking.infants || 0,
           totalPriceUsd: fullBooking.total_price_usd || 0,
           localCurrency: fullBooking.local_currency || null,
           localAmount: fullBooking.local_amount ?? null,
+          options: bookedOptions,
           status: status as 'confirmed' | 'cancelled',
         });
       }

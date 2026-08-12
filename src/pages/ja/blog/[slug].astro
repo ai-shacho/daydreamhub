@@ -123,7 +123,7 @@ if (!post) {
 const displayTitle = post ? (locale === 'ja' && post.title_ja ? post.title_ja : post.title) : '';
 const displayContent = post ? (locale === 'ja' && post.content_ja ? post.content_ja : post.content) : '';
 const imageUrl = post?.thumbnail_url || '/images/placeholder-hotel.jpg';
-const formattedDate = post ? formatDisplayDate(post.published_at) : '';
+const formattedDate = post ? formatDisplayDate(post.published_at, 'ja') : '';
 ---
 
 <Layout title={post ? displayTitle : t('blog.not_found', locale)} description={post ? (post.excerpt_ja || post.excerpt || '') : ''}>

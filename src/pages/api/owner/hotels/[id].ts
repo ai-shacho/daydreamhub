@@ -85,7 +85,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
       'name', 'name_ja', 'description', 'description_ja',
       'amenities', 'categories', 'property_type',
       'thumbnail_url', 'address', 'latitude', 'longitude',
-      'currency',
+      'currency', 'infant_max_age', 'child_max_age',
     ]);
 
     let newCurrency: string | null = null;

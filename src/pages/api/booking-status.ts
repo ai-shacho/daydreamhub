@@ -59,6 +59,13 @@ export const GET: APIRoute = async ({ url, locals }) => {
     });
   }
 
+  // What the guest bought on top of the room, so the confirmation screen can
+  // account for the whole amount rather than just the plan price.
+  const options: any[] = ((await db.prepare(
+    `SELECT name, pricing_type, quantity, child_quantity, infant_quantity, currency, amount_local, amount_usd
+       FROM booking_options WHERE booking_id = ? ORDER BY id`
+  ).bind(booking.id).all().catch(() => null))?.results) || [];
+
   return new Response(
     JSON.stringify({
       id: booking.id,
@@ -70,6 +77,7 @@ export const GET: APIRoute = async ({ url, locals }) => {
       total_price_usd: booking.total_price_usd,
       guest_name: booking.guest_name,
       guest_email: booking.guest_email,
+      options,
     }),
     { headers: { 'Content-Type': 'application/json' } }
   );

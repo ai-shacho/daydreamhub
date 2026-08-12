@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdmin } from '../../../lib/apiAuth';
+import { currencyForPhone } from '../../../lib/phoneCurrency';
 
 function maskSecret(raw: any): string {
   const value = String(raw || '');
@@ -126,7 +127,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
   }
 
   const toNumber = String(body?.to_number || '').trim();
-  const phase = String(body?.phase || 'booking').trim().toLowerCase() === 'outreach' ? 'outreach' : 'booking';
+  const phaseRaw = String(body?.phase || 'booking').trim().toLowerCase();
+  const phase = phaseRaw === 'outreach' ? 'outreach' : phaseRaw === 'concierge' ? 'concierge' : 'booking';
   const hotelId = toPositiveInt(body?.hotel_id);
   const outreachLeadId = toPositiveInt(body?.lead_id);
   const note = String(body?.note || '').trim();
@@ -137,6 +139,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const conciergeMeta = {
     guest_name: String(body?.guest_name || 'Test Guest').trim() || 'Test Guest',
+    guest_email: String(body?.guest_email || '').trim(),
+    guest_phone: String(body?.guest_phone || '+81 8012345678').trim() || '+81 8012345678',
     guest_count: Math.max(1, Number(body?.guest_count || body?.guests || 1) || 1),
     check_in_date: String(body?.check_in_date || '').trim(),
     check_in_time: String(body?.check_in_time || '').trim(),
@@ -149,6 +153,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   const baseUrl = String(env?.PUBLIC_BASE_URL || env?.SITE_URL || new URL(request.url).origin).replace(/\/$/, '');
 
   let callLogId: number | null = null;
+  let cidParam = '';
   try {
     let logNote = note || `Twilio test call to ${toNumber}`;
 
@@ -159,7 +164,26 @@ export const POST: APIRoute = async ({ request, locals }) => {
       logNote = `${note || 'Twilio concierge test call'} [booking-test:${packed}]`;
     }
 
-    if (db) {
+    if (phase === 'concierge' && db) {
+      // Run the real two-call concierge flow: create a concierge call record so
+      // the webhook (phase=concierge, cid) does inquiry → quote email → (accept
+      // → $7 → call 2). The entered number is treated as the hotel.
+      const sessId = `admintest-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      await db.prepare(`INSERT INTO concierge_sessions (id, locale, created_at, updated_at) VALUES (?, 'en', datetime('now'), datetime('now'))`).bind(sessId).run().catch(() => {});
+      await db.prepare(`INSERT INTO concierge_call_groups (session_id, current_order, total_calls, status, payment_status, guest_name, guest_email, created_at, updated_at) VALUES (?, 1, 1, 'confirming', 'free', ?, ?, datetime('now'), datetime('now'))`).bind(sessId, conciergeMeta.guest_name, conciergeMeta.guest_email || null).run().catch(() => {});
+      const g: any = await db.prepare(`SELECT id FROM concierge_call_groups WHERE session_id = ? ORDER BY id DESC LIMIT 1`).bind(sessId).first().catch(() => null);
+      const gid = g?.id || null;
+      const reqDetails = JSON.stringify({
+        check_in_date: conciergeMeta.check_in_date, check_in_time: conciergeMeta.check_in_time, check_out_time: conciergeMeta.check_out_time,
+        guests: conciergeMeta.guest_count, guest_name: conciergeMeta.guest_name, guest_email: conciergeMeta.guest_email,
+        guest_phone: conciergeMeta.guest_phone,
+        budget_currency: currencyForPhone(toNumber).currency,
+      });
+      await db.prepare(`INSERT INTO concierge_calls (session_id, call_group_id, call_order, hotel_name, hotel_phone, hotel_source, request_details, status, guest_name, guest_email, created_at, updated_at) VALUES (?, ?, 1, 'Test Hotel', ?, 'external', ?, 'calling', ?, ?, datetime('now'), datetime('now'))`).bind(sessId, gid, toNumber, reqDetails, conciergeMeta.guest_name, conciergeMeta.guest_email || null).run().catch(() => {});
+      const c: any = await db.prepare(`SELECT id FROM concierge_calls WHERE session_id = ? ORDER BY id DESC LIMIT 1`).bind(sessId).first().catch(() => null);
+      callLogId = c?.id || null;
+      cidParam = callLogId ? `&cid=${callLogId}` : '';
+    } else if (db) {
       await db.prepare(`
         INSERT INTO call_logs (hotel_id, status, note, provider, phase, from_number, to_number, created_at, updated_at)
         VALUES (?1, 'queued', ?2, 'twilio', ?3, ?4, ?5, datetime('now'), datetime('now'))
@@ -187,13 +211,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
     }
 
-    const twimlUrl = `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&phase=${phase}`;
+    const twimlUrl = `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}${cidParam}&phase=${phase}`;
     const params = new URLSearchParams();
     params.set('To', toNumber);
     params.set('From', fromNumber);
     params.set('Url', twimlUrl);
     params.set('Method', 'POST');
-    params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}&event=status&phase=${phase}`);
+    params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId || ''}${cidParam}&event=status&phase=${phase}`);
     params.set('StatusCallbackMethod', 'POST');
     params.set('Timeout', '120');
     params.set('StatusCallbackEvent', 'initiated');

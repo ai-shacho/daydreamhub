@@ -14,6 +14,10 @@ export function initConfirmationStatus(): void {
   const container = document.querySelector('[data-order-id]') as HTMLElement | null;
   if (!container) return;
 
+  // One script serves /booking/confirmation and its /ja/ twin, so the wording
+  // and the date format follow the path.
+  const ja = location.pathname.startsWith('/ja/');
+
   const orderId = container.getAttribute('data-order-id') || '';
   const paymentStatus = container.getAttribute('data-payment-status') || '';
 
@@ -45,9 +49,48 @@ export function initConfirmationStatus(): void {
     };
     set('detail-hotel', data.hotel_name || '—');
     set('detail-plan', data.plan_name || '—');
-    set('detail-checkin', data.check_in_date ? formatDisplayDate(data.check_in_date) : '—');
+    set('detail-checkin', data.check_in_date ? formatDisplayDate(data.check_in_date, ja ? 'ja' : 'en') : '—');
     set('detail-price', data.total_price_usd != null ? `$${Number(data.total_price_usd).toFixed(2)}` : '—');
+    fillAddOns(data.options || []);
     card.classList.remove('hidden');
+  }
+
+  // The add-ons the guest paid for, listed with who each one covered. Without
+  // this the total on screen is larger than the plan price with no explanation.
+  function fillAddOns(options: any[]): void {
+    const row = document.getElementById('detail-addons-row');
+    const list = document.getElementById('detail-addons');
+    if (!row || !list) return;
+    if (!options.length) { row.classList.add('hidden'); return; }
+    const n = (v: any) => Number(v) || 0;
+    const count = (v: number, one: string, many: string, jaUnit: string) =>
+      ja ? `${v}${jaUnit}` : `${v} ${v === 1 ? one : many}`;
+    const coverage = (o: any) => {
+      if (o.pricing_type === 'per_adult_child') {
+        const parts: string[] = [];
+        if (n(o.quantity) > 0) parts.push(count(n(o.quantity), 'adult', 'adults', '名（大人）'));
+        if (n(o.child_quantity) > 0) parts.push(count(n(o.child_quantity), 'child', 'children', '名（子供）'));
+        if (n(o.infant_quantity) > 0) parts.push(count(n(o.infant_quantity), 'infant', 'infants', '名（幼児）'));
+        return parts.join(ja ? '＋' : ' + ');
+      }
+      if (o.pricing_type === 'per_person') return count(n(o.quantity), 'guest', 'guests', '名');
+      return ja ? '1予約' : count(n(o.quantity) || 1, 'booking', 'bookings', '予約');
+    };
+    list.innerHTML = '';
+    for (const o of options) {
+      const li = document.createElement('li');
+      li.className = 'flex justify-between gap-3';
+      const left = document.createElement('span');
+      left.textContent = `${o.name} (${coverage(o)})`;
+      const right = document.createElement('span');
+      right.className = 'whitespace-nowrap';
+      right.textContent = o.currency && o.currency !== 'USD' && o.amount_local != null
+        ? `${o.currency} ${o.amount_local} (≈ $${Number(o.amount_usd || 0).toFixed(2)})`
+        : `$${Number(o.amount_usd || 0).toFixed(2)}`;
+      li.append(left, right);
+      list.appendChild(li);
+    }
+    row.classList.remove('hidden');
   }
 
   async function checkStatus(): Promise<void> {

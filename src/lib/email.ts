@@ -9,16 +9,14 @@ function escapeHtml(str: string): string {
 
 const SITE_URL = 'https://daydreamhub.com';
 
-const MONTH_NAMES_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTH_NAMES_SHORT_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function formatDate(dateStr: string): string {
-  if (!dateStr) return dateStr;
-  const parts = dateStr.split('-');
-  if (parts.length !== 3) return dateStr;
-  const month = MONTH_NAMES_EN[parseInt(parts[1]) - 1] || parts[1];
-  return `${month} ${parseInt(parts[2])}, ${parts[0]}`;
+  return formatDateYyyyMmmDd(dateStr);
 }
 
+// "2026-08-12" → "2026-Aug-12". Owners and guests read these emails from
+// everywhere, and 08/12 means August 12 in some countries and 8 December in
+// others; spelling the month out settles it.
 function formatDateYyyyMmmDd(dateStr: string): string {
   if (!dateStr) return dateStr;
   const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -49,6 +47,59 @@ function formatAmountDual(totalUsd: number, localCurrency?: string | null, local
   const usd = `$${Number(totalUsd || 0).toFixed(2)} USD`;
   if (!localCurrency || localCurrency === 'USD' || localAmount == null) return usd;
   return `${localCurrency} ${localAmount} (≈ ${usd})`;
+}
+
+// "2 adults, 1 child, 1 infant" — infants are listed because add-ons can now be
+// priced for them, so leaving them out would make an add-on line unexplainable.
+function describeParty(adults: number, children: number, infants?: number): string {
+  const parts = [`${adults} adult${adults === 1 ? '' : 's'}`];
+  if (children > 0) parts.push(`${children} child${children === 1 ? '' : 'ren'}`);
+  if (Number(infants) > 0) parts.push(`${infants} infant${Number(infants) === 1 ? '' : 's'}`);
+  return parts.join(', ');
+}
+
+// An add-on as it was charged, copied from booking_options so the email shows
+// what the guest actually paid rather than today's price for the option.
+export type BookingOptionLine = {
+  name: string;
+  pricing_type?: string | null;
+  quantity?: number | null;
+  child_quantity?: number | null;
+  infant_quantity?: number | null;
+  amount_usd?: number | null;
+  amount_local?: number | null;
+};
+
+// "1 adult + 1 child", "3 guests", "1 booking" — who the charge covered, so the
+// hotel can see at a glance how many breakfasts to lay out.
+function optionCoverage(o: BookingOptionLine): string {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const parts: string[] = [];
+  if (o.pricing_type === 'per_adult_child') {
+    if (Number(o.quantity) > 0) parts.push(plural(Number(o.quantity), 'adult', 'adults'));
+    if (Number(o.child_quantity) > 0) parts.push(plural(Number(o.child_quantity), 'child', 'children'));
+    if (Number(o.infant_quantity) > 0) parts.push(plural(Number(o.infant_quantity), 'infant', 'infants'));
+  } else if (o.pricing_type === 'per_person') {
+    parts.push(plural(Number(o.quantity) || 0, 'guest', 'guests'));
+  } else {
+    parts.push(plural(Number(o.quantity) || 1, 'booking', 'bookings'));
+  }
+  return parts.join(' + ');
+}
+
+// The add-on list as one table cell, so every Booking Details table can drop it
+// in without each template re-deriving the wording.
+function optionsCellHtml(
+  options: BookingOptionLine[] | undefined,
+  localCurrency?: string | null,
+): string {
+  if (!options || !options.length) return '';
+  return options
+    .map((o) => {
+      const amount = formatAmountDual(Number(o.amount_usd || 0), localCurrency, o.amount_local ?? null);
+      return `<div style="margin:0 0 3px">${escapeHtml(o.name)} <span style="color:#6b7280">(${escapeHtml(optionCoverage(o))})</span> — ${escapeHtml(amount)}</div>`;
+    })
+    .join('');
 }
 
 function emailFooter(): string {
@@ -264,35 +315,38 @@ export async function sendOwnerAccountEmail(
   });
 }
 
-export async function sendBookingNotificationToHotel(
-  apiKey: string,
-  data: {
-    bookingId: number;
-    guestName: string;
-    guestEmail: string;
-    guestPhone?: string;
-    checkInDate: string;
-    planName: string;
-    adults: number;
-    children: number;
-    infants: number;
-    totalPriceUsd: number;
-    localCurrency?: string | null;
-    localAmount?: number | null;
-    fxRate?: number | null;
-    notes?: string;
-    hotelName: string;
-    hotelEmail: string | string[];
-  }
-): Promise<{ success: boolean; error?: string }> {
-  const subject = `New Booking #${data.bookingId} - ${data.guestName} on ${data.checkInDate}`;
+type OwnerBookingData = {
+  bookingId: number;
+  guestName: string;
+  guestEmail: string;
+  guestPhone?: string;
+  guestNationality?: string | null;
+  checkInDate: string;
+  planName: string;
+  adults: number;
+  children: number;
+  infants: number;
+  totalPriceUsd: number;
+  localCurrency?: string | null;
+  localAmount?: number | null;
+  fxRate?: number | null;
+  notes?: string;
+  options?: BookingOptionLine[];
+  hotelName: string;
+  hotelEmail: string | string[];
+};
+
+// The booking table the owner needs in order to decide. Shared by the first
+// notification and every reminder so the two can never disagree.
+function ownerBookingTable(data: OwnerBookingData): string {
   const hasFx = !!(data.localCurrency && data.localCurrency !== 'USD' && data.localAmount != null);
   const rows: [string, string][] = [
     ['Booking ID', `#${data.bookingId}`],
     ['Guest Name', data.guestName],
     ['Guest Email', data.guestEmail],
     ['Guest Phone', data.guestPhone || '-'],
-    ['Check-in Date', data.checkInDate],
+    ['Nationality', data.guestNationality || '-'],
+    ['Check-in Date', formatDateYyyyMmmDd(data.checkInDate)],
     ['Plan', data.planName],
     ['Adults', String(data.adults)],
     ['Children', String(data.children)],
@@ -301,29 +355,179 @@ export async function sendBookingNotificationToHotel(
     ...(hasFx ? [['Exchange Rate', `1 USD = ${data.fxRate} ${data.localCurrency} (at payment time; payment was processed in USD)`] as [string, string]] : []),
     ['Notes', data.notes || '-'],
   ];
-  const tableRows = rows
+  // Add-ons sit next to the guest counts: the hotel is the one who has to
+  // deliver them, so they belong in the same table, not a footnote.
+  const addOnsCell = optionsCellHtml(data.options, data.localCurrency);
+  const cells: [string, string][] = rows.map(([label, value]) => [label, escapeHtml(value)]);
+  if (addOnsCell) {
+    cells.splice(cells.findIndex(([l]) => l === 'Total'), 0, ['Add-ons', addOnsCell]);
+  }
+  return cells
     .map(
-      ([label, value]) =>
-        `<tr><td style="padding:8px 12px;border:1px solid #ddd;font-weight:bold;background:#f9f9f9">${escapeHtml(label)}</td><td style="padding:8px 12px;border:1px solid #ddd">${escapeHtml(value)}</td></tr>`
+      ([label, cell], i) =>
+        `<tr><td style="padding:7px 10px;border:1px solid #fde68a;font-weight:600;background:${i % 2 ? '#fffdf5' : '#fffbeb'};width:38%;font-size:13px">${escapeHtml(label)}</td><td style="padding:7px 10px;border:1px solid #fde68a;font-size:13px">${cell}</td></tr>`
     )
     .join('');
-  const html = `
-<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-  <h2 style="color:#333">New Booking Received</h2>
-  <p>A new booking has been made at <strong>${escapeHtml(data.hotelName)}</strong>.</p>
-  <table style="border-collapse:collapse;width:100%;margin:16px 0">
-    ${tableRows}
-  </table>
-  <div style="margin:24px 0;padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px">
-    <strong>⚡ Action Required:</strong> Please log in to your Owner Portal to confirm or decline this booking within 24 hours.
+}
+
+function ownerActionButtons(): string {
+  return `
+    <div style="text-align:center;margin:24px 0">
+      <a href="${SITE_URL}/owner/bookings" style="display:inline-block;padding:14px 32px;background:#b45309;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
+        Confirm or Decline &rarr; Owner Portal
+      </a>
+      <p style="margin:10px 0 0;font-size:12px;color:#9ca3af">Sign in with your owner account to respond.</p>
+    </div>`;
+}
+
+// The owner-facing shell: same shape as the guest emails (coloured band, one
+// card, one action) so a hotel that gets both recognises them as the same
+// product rather than the plain table this used to be.
+function ownerEmailShell(opts: {
+  headerBg: string;
+  emoji: string;
+  title: string;
+  subtitle: string;
+  intro: string;
+  urgencyBox: string;
+  data: OwnerBookingData;
+}): string {
+  return `
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+  <div style="background:${opts.headerBg};color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
+    <p style="margin:0 0 12px;font-size:13px;letter-spacing:1px;text-transform:uppercase;opacity:0.85">DayDreamHub</p>
+    <div style="font-size:36px;margin-bottom:8px">${opts.emoji}</div>
+    <h1 style="margin:0;font-size:22px;font-weight:700">${opts.title}</h1>
+    <p style="margin:6px 0 0;opacity:0.9;font-size:14px">${opts.subtitle}</p>
   </div>
-  <div style="text-align:center;margin:20px 0">
-    <a href="${SITE_URL}/owner/bookings" style="display:inline-block;padding:12px 28px;background:#0d9488;color:white;text-decoration:none;border-radius:8px;font-weight:bold;font-size:15px">
-      Confirm or Decline → Owner Portal
-    </a>
+
+  <div style="padding:28px 24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;background:#ffffff">
+    <p style="font-size:16px;margin-top:0">${opts.intro}</p>
+
+    ${opts.urgencyBox}
+
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:20px;margin:20px 0">
+      <h2 style="margin:0 0 16px;font-size:16px;color:#b45309">📋 Booking Details</h2>
+      <table style="border-collapse:collapse;width:100%">
+        ${ownerBookingTable(opts.data)}
+      </table>
+    </div>
+
+    ${ownerActionButtons()}
+
+    <p style="color:#6b7280;font-size:12px;line-height:1.7">
+      Guests are told to expect an answer within 24 hours, so the sooner you respond the better —
+      and if the room is not available, declining helps them more than waiting does.
+      Replying to this email reaches the guest directly.
+    </p>
+
+    ${emailFooter()}
   </div>
-  <p style="color:#666;font-size:12px">This is an automated notification from DaydreamHub. Reply to this email to contact the guest directly.</p>
 </div>`;
+}
+
+export async function sendBookingNotificationToHotel(
+  apiKey: string,
+  data: OwnerBookingData
+): Promise<{ success: boolean; error?: string }> {
+  const subject = `[Action Required] DayDreamHub booking #${data.bookingId} — new request from ${data.guestName} · ${formatDateYyyyMmmDd(data.checkInDate)}`;
+  const html = ownerEmailShell({
+    headerBg: '#b45309',
+    emoji: '🔔',
+    title: 'Action Required: New Booking',
+    subtitle: 'A guest has paid and is waiting for your decision.',
+    intro: `A new booking request has come in through DayDreamHub for <strong>${escapeHtml(data.hotelName)}</strong>.`,
+    urgencyBox: `
+    <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#78350f">
+      ⏳ <strong>Please confirm or decline within 24 hours.</strong> The guest has already been charged and
+      cannot use the room until you respond.
+    </div>`,
+    data,
+  });
+  return sendEmail({
+    apiKey,
+    from: 'DaydreamHub <noreply@daydreamhub.com>',
+    to: data.hotelEmail,
+    subject,
+    html,
+    replyTo: data.guestEmail,
+  });
+}
+
+// How long a booking has gone unanswered, and how hard the email pushes.
+export type ReminderStage = 6 | 12 | 24;
+
+const REMINDER_COPY: Record<ReminderStage, {
+  subjectTag: string;
+  subjectPhrase: string;
+  headerBg: string;
+  emoji: string;
+  title: string;
+  subtitle: string;
+  box: string;
+}> = {
+  6: {
+    subjectTag: '[Reminder]',
+    subjectPhrase: 'your guest is waiting for confirmation',
+    headerBg: '#b45309',
+    emoji: '⏳',
+    title: 'Your Guest Is Waiting',
+    subtitle: 'This booking has been open for 6 hours.',
+    box: `
+    <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#78350f">
+      ⏳ <strong>A guest paid 6 hours ago and is still waiting to hear from you.</strong> Guests are told to
+      expect an answer within 24 hours, so a reply now leaves them plenty of time to plan. If the room is not
+      available, declining lets them book somewhere else while they still can.
+    </div>`,
+  },
+  12: {
+    subjectTag: '[Please Respond]',
+    subjectPhrase: 'your guest has been waiting half a day',
+    headerBg: '#c2410c',
+    emoji: '📩',
+    title: 'Still Waiting After 12 Hours',
+    subtitle: 'Half a day has passed since this guest booked.',
+    box: `
+    <div style="background:#ffedd5;border:1px solid #fb923c;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#7c2d12">
+      📩 <strong>Your guest has been waiting half a day for an answer.</strong> They have already paid and
+      cannot make any other arrangements until they hear from you. Please open the Owner Portal and confirm
+      or decline — either answer helps them; silence does not.
+    </div>`,
+  },
+  24: {
+    subjectTag: '[Urgent]',
+    subjectPhrase: 'your guest has been waiting a full day',
+    headerBg: '#b91c1c',
+    emoji: '🚨',
+    title: 'Waiting a Full Day',
+    subtitle: 'Please respond to this guest today.',
+    box: `
+    <div style="background:#fee2e2;border:1px solid #f87171;border-radius:6px;padding:14px 16px;margin:16px 0;font-size:13px;color:#7f1d1d">
+      🚨 <strong>A full day has gone by and this guest still has no answer.</strong> They were told to expect
+      one within 24 hours, and their trip is on hold until you reply. Please confirm the booking now if you
+      can take it, or decline it so we can refund them and they can find another room.
+    </div>`,
+  },
+};
+
+// Reminder for a booking the owner has not acted on. Sent by the reminder cron,
+// which is also what stops the same stage going out twice.
+export async function sendOwnerBookingReminder(
+  apiKey: string,
+  stage: ReminderStage,
+  data: OwnerBookingData
+): Promise<{ success: boolean; error?: string }> {
+  const copy = REMINDER_COPY[stage];
+  const subject = `${copy.subjectTag} DayDreamHub booking #${data.bookingId} — ${copy.subjectPhrase} · ${formatDateYyyyMmmDd(data.checkInDate)}`;
+  const html = ownerEmailShell({
+    headerBg: copy.headerBg,
+    emoji: copy.emoji,
+    title: copy.title,
+    subtitle: copy.subtitle,
+    intro: `DayDreamHub booking <strong>#${data.bookingId}</strong> at <strong>${escapeHtml(data.hotelName)}</strong> is still awaiting your confirmation.`,
+    urgencyBox: copy.box,
+    data,
+  });
   return sendEmail({
     apiKey,
     from: 'DaydreamHub <noreply@daydreamhub.com>',
@@ -454,6 +658,8 @@ export async function sendGuestBookingStatusUpdate(
     status: 'confirmed' | 'cancelled';
     cancelReason?: string;
     hotelSlug?: string;
+    infants?: number;
+    options?: BookingOptionLine[];
   }
 ): Promise<{ success: boolean; error?: string }> {
   const isConfirmed = data.status === 'confirmed';
@@ -468,9 +674,7 @@ export async function sendGuestBookingStatusUpdate(
     ? 'Your day-use hotel booking has been confirmed.'
     : 'Unfortunately, your booking request could not be accommodated.';
 
-  const guestCount = data.children > 0
-    ? `${data.adults} adult${data.adults > 1 ? 's' : ''}, ${data.children} child${data.children > 1 ? 'ren' : ''}`
-    : `${data.adults} adult${data.adults > 1 ? 's' : ''}`;
+  const guestCount = describeParty(data.adults, data.children, data.infants);
 
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
@@ -498,6 +702,9 @@ export async function sendGuestBookingStatusUpdate(
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${formatDate(data.checkInDate)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Time</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(data.checkInTime)} – ${escapeHtml(data.checkOutTime)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${escapeHtml(guestCount)}</td></tr>
+        ${optionsCellHtml(data.options, data.localCurrency)
+          ? `<tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Add-ons</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px">${optionsCellHtml(data.options, data.localCurrency)}</td></tr>`
+          : ''}
         <tr><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-weight:600;background:${isConfirmed ? '#f0fdfa' : '#f9fafb'};font-size:13px">Amount</td><td style="padding:7px 10px;border:1px solid ${isConfirmed ? '#d1fae5' : '#e5e7eb'};font-size:13px"><strong>${formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount)}</strong></td></tr>
       </table>
     </div>
@@ -549,13 +756,13 @@ export async function sendGuestBookingConfirmation(
     localCurrency?: string | null;
     localAmount?: number | null;
     notes?: string;
+    infants?: number;
+    options?: BookingOptionLine[];
     cancellationHours?: number | null;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const subject = `Booking Request Received #${data.bookingId} — DaydreamHub`;
-  const guestCount = data.children > 0
-    ? `${data.adults} adult${data.adults > 1 ? 's' : ''}, ${data.children} child${data.children > 1 ? 'ren' : ''}`
-    : `${data.adults} adult${data.adults > 1 ? 's' : ''}`;
+  const guestCount = describeParty(data.adults, data.children, data.infants);
   const html = `
 <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
   <div style="background:#0d9488;color:white;padding:28px 24px;text-align:center;border-radius:8px 8px 0 0">
@@ -578,9 +785,12 @@ export async function sendGuestBookingConfirmation(
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Date</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${formatDate(data.checkInDate)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Time</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(data.checkInTime)} – ${escapeHtml(data.checkOutTime)}</td></tr>
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Guests</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(guestCount)}</td></tr>
+        ${optionsCellHtml(data.options, data.localCurrency)
+          ? `<tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Add-ons</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${optionsCellHtml(data.options, data.localCurrency)}</td></tr>`
+          : ''}
         <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Total Paid</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px"><strong style="color:#0d9488">${formatAmountDual(data.totalPriceUsd, data.localCurrency, data.localAmount)}</strong></td></tr>
         ${data.notes ? `<tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Notes</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${escapeHtml(data.notes)}</td></tr>` : ''}
-        <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Cancellation Policy</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${data.cancellationHours === 0 ? '❌ Non-refundable' : `✅ Free cancellation up to ${data.cancellationHours ?? 24}h before check-in`}</td></tr>
+        <tr><td style="padding:7px 10px;border:1px solid #d1fae5;font-weight:600;background:#f0fdfa;font-size:13px">Cancellation Policy</td><td style="padding:7px 10px;border:1px solid #d1fae5;font-size:13px">${data.cancellationHours === 0 ? '❌ Non-refundable' : `✅ Free cancellation up to ${data.cancellationHours ?? 24}h before check-in<br><span style="color:#6b7280;font-size:12px">Counted in the hotel\u2019s local time, not your own time zone.</span>`}</td></tr>
       </table>
     </div>
 

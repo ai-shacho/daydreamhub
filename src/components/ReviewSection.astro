@@ -1,6 +1,6 @@
 ---
 import { t } from '../lib/i18n';
-import { formatDisplayDate, formatDisplayDateJS } from '../lib/dateFormat';
+import { formatDisplayDate } from '../lib/dateFormat';
 
 interface Props {
   hotelId: number;
@@ -105,7 +105,7 @@ const ratingBreakdown = [5, 4, 3, 2, 1].map((star) => {
                   ))}
                 </div>
               </div>
-              <span class="text-xs text-gray-400">{formatDisplayDate(review.created_at)}</span>
+              <span class="text-xs text-gray-400">{formatDisplayDate(review.created_at, locale)}</span>
             </div>
             {review.title && <h4 class="font-semibold text-slate-800 mb-1">{review.title}</h4>}
             {review.comment && <p class="text-gray-600 text-sm leading-relaxed">{review.comment}</p>}
@@ -153,7 +153,6 @@ const ratingBreakdown = [5, 4, 3, 2, 1].map((star) => {
 </section>
 
 <script>
-  {formatDisplayDateJS}
   // Star rating interaction
   (function() {
     const starBtns = document.querySelectorAll('#star-rating-input .star-btn');

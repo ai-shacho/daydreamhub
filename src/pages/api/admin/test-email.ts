@@ -5,6 +5,7 @@ import {
   sendBookingNotificationToHotel, sendConciergeCallStartedEmail, sendConciergeConfirmation,
   sendGuestBookingStatusUpdate, sendGuestBookingConfirmation, sendPaymentFailureEmail,
   sendConciergeDeclineToGuest, sendListingApprovedEmail, sendConciergeResultEmail,
+  sendConciergeQuoteEmail,
 } from '../../../lib/email';
 
 // Admin-only test-send endpoint. Sends a sample of each email type so we can
@@ -77,6 +78,11 @@ export const GET: APIRoute = async ({ request, locals }) => {
       guestName: 'Test Guest', guestEmail: to, hotelName: common.hotelName,
       date: common.checkInDate, checkIn: common.checkInTime, checkOut: common.checkOutTime, guests: 2,
     } as any),
+    concierge_quote: () => sendConciergeQuoteEmail(resendKey, {
+      guestName: 'Test Guest', guestEmail: to, hotelName: common.hotelName,
+      date: common.checkInDate, checkIn: common.checkInTime, checkOut: common.checkOutTime, guests: 2,
+      price: 8000, priceCurrency: 'JPY', acceptUrl: 'https://daydreamhub.com/concierge/accept?token=sample-token',
+    }),
     concierge_result_success: () => sendConciergeResultEmail(resendKey, {
       guestName: 'Test Guest', guestEmail: to, resultType: 'success', hotelName: common.hotelName,
       date: common.checkInDate, checkIn: common.checkInTime, checkOut: common.checkOutTime, guests: 2,

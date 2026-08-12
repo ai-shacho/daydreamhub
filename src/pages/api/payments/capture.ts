@@ -70,7 +70,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  const { order_id, plan_id, guest_name, guest_email, guest_phone, check_in_date, adults, children, infants, notes } = body;
+  const { order_id, plan_id, guest_name, guest_email, guest_phone, guest_nationality, check_in_date, adults, children, infants, notes } = body;
 
   if (!order_id || !plan_id || !guest_name || !guest_email || !check_in_date) {
     return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -79,8 +79,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
-  // Server-side charge resolution — same resolver as create.ts.
-  const charge = await resolveBookingCharge(db, plan_id);
+  // Server-side charge resolution — same resolver as create.ts, so the add-ons
+  // are re-priced here too rather than trusted from the client.
+  const charge = await resolveBookingCharge(db, plan_id, {
+    options: Array.isArray(body.options) ? body.options : [],
+    adults: Number(adults) || 1,
+    children: Number(children) || 0,
+    infants: Number(infants) || 0,
+  });
 
   if (!charge) {
     return new Response(JSON.stringify({ error: 'Plan not found' }), {
@@ -146,10 +152,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
           .prepare(
             `INSERT INTO bookings (
               plan_id, hotel_id, guest_name, guest_email, guest_phone,
-              check_in_date, adults, children, infants, total_price_usd,
+              guest_nationality, check_in_date, adults, children, infants, total_price_usd,
               local_currency, local_amount, fx_rate,
               status, paypal_order_id, paypal_capture_id, notes, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?, ?, datetime('now'), datetime('now'))`
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?, ?, datetime('now'), datetime('now'))`
           )
           .bind(
             plan_id,
@@ -157,6 +163,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             guest_name,
             guest_email,
             guest_phone || '',
+            guest_nationality || null,
             check_in_date,
             adults || 1,
             children || 0,
@@ -172,6 +179,28 @@ export const POST: APIRoute = async ({ request, locals }) => {
           .run();
         const row: any = await db.prepare('SELECT last_insert_rowid() as id').first();
         bookingId = row?.id;
+
+        // Record the add-ons at the prices charged, so later edits to an option
+        // never rewrite what this guest actually paid.
+        if (bookingId && charge.options.length) {
+          for (const o of charge.options) {
+            await db.prepare(
+              `INSERT INTO booking_options (
+                 booking_id, option_id, name, pricing_type, currency,
+                 unit_price_local, unit_price_usd, child_unit_price_local, child_unit_price_usd,
+                 infant_unit_price_local, infant_unit_price_usd,
+                 quantity, child_quantity, infant_quantity, amount_local, amount_usd
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            ).bind(
+              bookingId, o.option_id, o.name, o.pricing_type, charge.currency,
+              o.unit_price_local, o.unit_price_usd, o.child_unit_price_local, o.child_unit_price_usd,
+              o.infant_unit_price_local, o.infant_unit_price_usd,
+              o.quantity, o.child_quantity, o.infant_quantity, o.amount_local, o.amount_usd
+            ).run().catch((e: any) => console.error('[capture] booking_option insert failed', e));
+          }
+          await db.prepare('UPDATE bookings SET options_total_usd = ? WHERE id = ?')
+            .bind(charge.optionsUsd, bookingId).run().catch(() => {});
+        }
       } catch (dbError) {
         // Payment succeeded at PayPal but DB write failed — log for manual recovery
         console.error(
@@ -210,7 +239,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
       if (RESEND_API_KEY) {
         const hotel = await db
-          .prepare(`SELECT h.name, h.email, h.city, h.country, u.email as owner_login_email
+          .prepare(`SELECT h.name, h.email, h.contact_email, h.city, h.country, u.email as owner_login_email
                     FROM hotels h LEFT JOIN users u ON u.email = h.email
                     WHERE h.id = ?`)
           .bind(hotelId)
@@ -225,9 +254,12 @@ export const POST: APIRoute = async ({ request, locals }) => {
         // ① Hotel notification email
         if (planFull) {
           try {
+            // Notify BOTH the booking-management email (予約管理) and the
+            // person-in-charge email (担当者), plus the owner login, deduped.
             const bookingEmail: string = (hotel as any)?.email || '';
-            const contactEmail: string = (hotel as any)?.owner_login_email || '';
-            const notifyEmails = [...new Set([bookingEmail, contactEmail].filter(Boolean))];
+            const contactEmail: string = (hotel as any)?.contact_email || '';
+            const ownerLoginEmail: string = (hotel as any)?.owner_login_email || '';
+            const notifyEmails = [...new Set([bookingEmail, contactEmail, ownerLoginEmail].filter(Boolean))];
             if (notifyEmails.length > 0) {
               const subject = `New Booking #${bookingId} - ${guest_name} on ${check_in_date}`;
               const emailResult = await sendBookingNotificationToHotel(RESEND_API_KEY, {
@@ -235,6 +267,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 guestName: guest_name,
                 guestEmail: guest_email,
                 guestPhone: guest_phone || '',
+                guestNationality: guest_nationality || '',
                 checkInDate: check_in_date,
                 planName: (planFull as any).name,
                 adults: adults || 1,
@@ -245,6 +278,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
                 localAmount: localTotal,
                 fxRate: charge.fxRate,
                 notes: notes || '',
+                options: charge.options,
                 hotelName: (hotel as any)?.name || '',
                 hotelEmail: notifyEmails,
               });
@@ -279,6 +313,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
             ...(isEmail(adminRaw) ? [adminRaw] : []),
           ])];
           const adminSubject = `[New Booking] #${bookingId} — ${guest_name} / ${(hotel as any)?.name || ''}`;
+          const adminAddOns = charge.options.length
+            ? charge.options
+                .map((o) => `${o.name} × ${o.quantity}${o.child_quantity ? ` + ${o.child_quantity} child` : ''}${o.infant_quantity ? ` + ${o.infant_quantity} infant` : ''} — $${o.amount_usd.toFixed(2)}`)
+                .join('<br>')
+            : '';
           const adminRes = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
@@ -286,7 +325,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
               from: 'DaydreamHub <noreply@daydreamhub.com>',
               to: adminTo,
               subject: adminSubject,
-              html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${bookingId}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${guest_name} (${guest_email})</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(planFull as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${totalAmount}</td></tr></table></div>`,
+              html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${bookingId}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${guest_name}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Email:</td><td>${guest_email}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Phone:</td><td>${guest_phone || '-'}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Nationality:</td><td>${guest_nationality || '-'}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(planFull as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guests:</td><td>${adults || 1} adults / ${children || 0} children / ${infants || 0} infants</td></tr>${adminAddOns ? `<tr><td style="padding:4px 12px 4px 0;color:#888;vertical-align:top">Add-ons:</td><td>${adminAddOns}</td></tr>` : ''}<tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${totalAmount}</td></tr></table></div>`,
             }),
           });
           const adminBody: any = await adminRes.json().catch(() => ({}));
@@ -329,9 +368,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
               checkOutTime: (planFull as any)?.check_out_time || '',
               adults: adults || 1,
               children: children || 0,
+              infants: infants || 0,
               totalPriceUsd: totalAmount,
               localCurrency: charge.currency,
               localAmount: localTotal,
+              options: charge.options,
               notes: notes,
               cancellationHours: (planFull as any)?.cancellation_hours ?? 24,
             });

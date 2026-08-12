@@ -12,6 +12,7 @@ if (!admin) return Astro.redirect('/admin/login');
 const { id } = Astro.params;
 let booking: any = null;
 let callLogs: any[] = [];
+let bookedOptions: any[] = [];
 
 if (db && id) {
   try {
@@ -30,12 +31,33 @@ if (db && id) {
       SELECT * FROM call_logs WHERE booking_id = ?1 ORDER BY created_at DESC
     `).bind(id).all();
     callLogs = logsResult?.results || [];
+
+    // Priced at booking time, so this is what the guest actually paid.
+    const optResult = await db.prepare(
+      'SELECT * FROM booking_options WHERE booking_id = ?1 ORDER BY id'
+    ).bind(id).all().catch(() => null);
+    bookedOptions = optResult?.results || [];
   } catch (e: any) {
     console.error(e);
   }
 }
 
 if (!booking) return new Response('Booking not found', { status: 404 });
+
+// Who an add-on was charged for.
+function optionCoverage(o: any): string {
+  const n = (v: any) => Number(v) || 0;
+  const plural = (v: number, one: string, many: string) => `${v} ${v === 1 ? one : many}`;
+  if (o.pricing_type === 'per_adult_child') {
+    const parts: string[] = [];
+    if (n(o.quantity) > 0) parts.push(plural(n(o.quantity), 'adult', 'adults'));
+    if (n(o.child_quantity) > 0) parts.push(plural(n(o.child_quantity), 'child', 'children'));
+    if (n(o.infant_quantity) > 0) parts.push(plural(n(o.infant_quantity), 'infant', 'infants'));
+    return parts.join(' + ');
+  }
+  if (o.pricing_type === 'per_person') return plural(n(o.quantity), 'guest', 'guests');
+  return plural(n(o.quantity) || 1, 'booking', 'bookings');
+}
 
 const statusColor: Record<string,string> = {
   pending: 'bg-amber-50 text-amber-700',
@@ -83,11 +105,12 @@ const statusColor: Record<string,string> = {
             <p class="font-semibold text-slate-900">{booking.guest_name || '—'}</p>
             <p class="text-sm text-slate-500">{booking.guest_email}</p>
             {booking.guest_phone && <p class="text-sm text-slate-500">{booking.guest_phone}</p>}
+            {booking.guest_nationality && <p class="text-sm text-slate-500">🌐 {booking.guest_nationality}</p>}
           </div>
           <div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Check-in</p>
             <p class="font-semibold text-slate-900">{formatDisplayDate(booking.check_in_date)}</p>
-            <p class="text-sm text-slate-500">{booking.adults} adults{booking.children ? `, ${booking.children} children` : ''}</p>
+            <p class="text-sm text-slate-500">{booking.adults} adults{booking.children ? `, ${booking.children} children` : ''}{booking.infants ? `, ${booking.infants} infants` : ''}</p>
           </div>
           <div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Hotel</p>
@@ -115,6 +138,24 @@ const statusColor: Record<string,string> = {
             {booking.paypal_capture_id && <p class="text-xs text-slate-400 font-mono">{booking.paypal_capture_id}</p>}
           </div>
         </div>
+        {bookedOptions.length > 0 && (
+          <div class="mt-4 pt-4 border-t border-slate-100">
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-2">Add-ons</p>
+            <ul class="space-y-1">
+              {bookedOptions.map(o => (
+                <li class="flex flex-wrap items-baseline gap-x-2 text-sm text-slate-700">
+                  <span class="font-medium">{o.name}</span>
+                  <span class="text-xs text-slate-500">{optionCoverage(o)}</span>
+                  <span>
+                    {o.currency && o.currency !== 'USD' && o.amount_local != null
+                      ? `${o.currency} ${o.amount_local} (≈ $${Number(o.amount_usd || 0).toFixed(2)})`
+                      : `$${Number(o.amount_usd || 0).toFixed(2)}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {booking.notes && (
           <div class="mt-4 pt-4 border-t border-slate-100">
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Notes</p>
