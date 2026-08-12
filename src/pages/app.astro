@@ -8,7 +8,11 @@ import { VOICE_LANGS } from '../lib/voiceLangs';
 
 const acceptLang = Astro.request.headers.get('accept-language') || '';
 const urlLang = Astro.url.searchParams.get('lang');
-const isJa = urlLang ? urlLang === 'ja' : /(^|,)\s*ja/i.test(acceptLang);
+// Precedence: an explicit ?lang, then the choice this device made before
+// (cookie, so the server renders it directly and the page never flashes),
+// then the device's own language.
+const cookieLang = (Astro.request.headers.get('cookie') || '').match(/(?:^|;\s*)ddh_app_lang=(en|ja)/)?.[1];
+const isJa = urlLang ? urlLang === 'ja' : cookieLang ? cookieLang === 'ja' : /(^|,)\s*ja/i.test(acceptLang);
 // Same GA4 property as the main site (Layout.astro) so app usage shows up
 // alongside site traffic, distinguished by the app_* event names.
 const ga4Id = ((Astro.locals as any).runtime?.env?.GA4_MEASUREMENT_ID as string) || 'G-5C6B1R3H1Q';
@@ -343,6 +347,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         background: var(--surface);
       }
       header.bar img { height: 20px; width: auto; }
+      header.bar .ui-lang {
+        margin-left: auto; min-height: 34px; padding: 0 12px; border-radius: 999px;
+        border: 1.5px solid var(--line); background: var(--surface);
+        color: var(--teal-dark); font-size: 13px; font-weight: 700; cursor: pointer;
+      }
       header.bar strong { font-size: 16px; letter-spacing: .02em; }
       #home main { padding: 14px 18px 40px; max-width: 560px; margin: 0 auto; }
       h1 { font-size: 25px; line-height: 1.3; margin: 4px 0 4px; font-weight: 800; }
@@ -786,6 +795,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
     <div id="home">
       <header class="bar">
         <img src="/logo-wordmark.png" alt="DayDreamHub" width="1209" height="191" />
+        <button class="ui-lang" id="uiLang" aria-label="Language">{isJa ? 'EN' : '日本語'}</button>
       </header>
       <main>
         <h1>{t.tagline}</h1>
@@ -1957,6 +1967,16 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         rec.onerror = () => {};
         rec.start();
       }
+      // Interface language. Stored as a cookie so the server renders the right
+      // one on the next launch — the app is opened from a home-screen icon
+      // with no URL to carry a parameter.
+      $('uiLang').addEventListener('click', () => {
+        const next = isJa ? 'en' : 'ja';
+        document.cookie = `ddh_app_lang=${next}; path=/; max-age=31536000; SameSite=Lax`;
+        track('app_ui_lang', { lang: next });
+        location.href = '/app?lang=' + next;
+      });
+
       // ---- spoken language ---------------------------------------------
       // The chrome stays EN/JA, but the concierge listens and answers in the
       // guest's own language: an arrival at Suvarnabhumi should just talk.
