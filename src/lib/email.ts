@@ -102,8 +102,16 @@ function optionsCellHtml(
     .join('');
 }
 
-function emailFooter(): string {
+function emailFooter(sendOnly: boolean = true): string {
+  const sendOnlyNote = sendOnly ? `
+    <div style="background:#f1f5f9;border-left:3px solid #94a3b8;border-radius:4px;padding:12px 14px;margin:24px 0 0;color:#475569;font-size:12px;line-height:1.7">
+      <strong>Send-only address.</strong> This mailbox does not receive mail — a reply to this message
+      reaches no one. To message the hotel about your booking, use <strong>Messages</strong> under
+      <a href="${SITE_URL}/mypage" style="color:#0d9488">My Bookings</a>.
+      For anything else, write to <a href="mailto:contact@daydreamhub.com" style="color:#0d9488">contact@daydreamhub.com</a>.
+    </div>` : '';
   return `
+    ${sendOnlyNote}
     <div style="margin-top:32px;padding-top:24px;border-top:1px solid #e5e7eb;text-align:center">
       <a href="${SITE_URL}" style="text-decoration:none">
         <span style="font-size:18px;font-weight:700;color:#4b5563">DayDream</span><span style="font-size:18px;font-weight:700;color:#5ba8c8">Hub</span>
@@ -426,7 +434,7 @@ function ownerEmailShell(opts: {
       to the booking and DayDreamHub can see it if you need us to step in.
     </div>
 
-    ${emailFooter()}
+    ${emailFooter(false)}
   </div>
 </div>`;
 }
