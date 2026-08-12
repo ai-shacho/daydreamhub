@@ -582,13 +582,23 @@ for (const img of images) {
                 ))}
               </div>
             );
-          } else {
-            return (
-              <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed">
-                {t('hotel.cancel_policy_contact', locale)}
-              </div>
-            );
           }
+          // No prose anywhere, but the plans still carry a rule in hours. Saying
+          // "contact the hotel" while every plan below states its terms reads as
+          // if the site does not know its own data.
+          const known = planCancelHours.filter((h: any) => h !== null);
+          const summary = known.length === 0
+            ? t('hotel.cancel_policy_contact', locale)
+            : !plansShareOneRule
+              ? t('hotel.cancel_policy_varies', locale)
+              : Number(known[0]) === 0
+                ? `❌ ${t('hotel.cancel_policy_none', locale)}`
+                : `✅ ${t('hotel.cancel_policy_free', locale).replace('{hours}', String(known[0]))}`;
+          return (
+            <div class="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-gray-700 leading-relaxed">
+              {summary}
+            </div>
+          );
         })()}
         <p class="mt-2 text-xs text-gray-500">🕘 {t('hotel.cancel_policy_local_time', locale)}</p>
       </section>
