@@ -299,6 +299,17 @@ function renderStars(rating: number) {
   return '\u2605'.repeat(full) + (hasHalf ? '\u2606' : '') + '\u2606'.repeat(5 - full - (hasHalf ? 1 : 0));
 }
 
+// Two hotels on the platform price cancellation differently per plan (S Loft
+// Manado sells non-refundable transit rooms alongside 24-hour tours). There the
+// generated per-plan sentence is the only accurate thing to show. Everywhere
+// else every plan shares one rule, so the hotel's own wording describes it
+// better than a sentence we compose — and repeating a different phrasing on
+// each card is how the page ends up contradicting itself.
+const planCancelHours = plans.map((p: any) => p.cancellation_hours ?? hotel?.cancellation_hours ?? null);
+const plansShareOneRule = new Set(planCancelHours.map((h: any) => String(h))).size <= 1;
+const hotelCancelText = String(hotel?.cancellation_policy || '').trim();
+const useHotelTextOnPlans = plansShareOneRule && !!hotelCancelText;
+
 // Group plans by room_type
 const plansByRoomType: Record<string, typeof plans> = {};
 for (const plan of plans) {
@@ -655,20 +666,16 @@ for (const img of images) {
                           )}
                         </div>
                         {(() => {
-                          // A plan's own rule wins over the hotel-wide blurb: several
-                          // hotels advertise free cancellation while selling
-                          // non-refundable transit rooms.
                           const hours = plan.cancellation_hours ?? hotel.cancellation_hours ?? null;
                           return (
                             <div class="mb-3 text-xs text-gray-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                               <div class="font-medium text-amber-800 mb-1">{t('hotel.cancel_policy', locale)}</div>
-                              {hours === 0 ? (
+                              {useHotelTextOnPlans ? (
+                                <p class="whitespace-pre-line">{hotelCancelText}</p>
+                              ) : hours === 0 ? (
                                 <p class="text-red-600 font-medium">❌ {t('hotel.cancel_policy_none', locale)}</p>
                               ) : hours !== null ? (
-                                <>
-                                  <p>✅ {t('hotel.cancel_policy_free', locale).replace('{hours}', String(hours))}</p>
-                                  <p class="text-gray-500 mt-0.5">{t('hotel.cancel_policy_local_time', locale)}</p>
-                                </>
+                                <p>✅ {t('hotel.cancel_policy_free', locale).replace('{hours}', String(hours))}</p>
                               ) : (
                                 <p>{t('hotel.cancel_policy_contact', locale)}</p>
                               )}
