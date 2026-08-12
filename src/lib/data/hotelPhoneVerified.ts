@@ -81,6 +81,32 @@ export const PHONE_VERIFICATIONS: Record<number, PhoneVerification> = {
     note: 'Matches the published line. Note the property now trades as "imm hotel Ladprao Bangkapi" and thepantiphotels.com redirects away, so the signup email addresses may be dead.',
     source: 'https://www.hotelscombined.com/Hotel/The_Pantip_Hotel_Ladprao_Bangkok.htm',
   },
+  304: {
+    verdict: 'unverified',
+    phone: '',
+    note: 'The inn publishes a Cebu landline (+63 32 254 6372); the mobile we hold appears on no reachable source. Their own domain is parked. It may be a staff mobile — unconfirmed either way.',
+    source: 'https://www.momondo.com/hotels/cebu-city/Dynasty-Tourist-Inn.mhd2017790.ksp',
+  },
+  338: {
+    verdict: 'confirmed',
+    phone: '+66989935113',
+    note: 'Published on the business\'s own contact page. Worth knowing: it is a day spa on the 8th floor of the Pathumwan Princess Hotel, not a hotel — the hotel has its own separate line.',
+    source: 'https://www.bangkokspa.co.th/en/contact',
+  },
+  341: {
+    verdict: 'unverified',
+    phone: '',
+    note: 'No published number anywhere; the only web presence is our own listing. The address is a residential condominium in Lapu-Lapu let out by individual owners, and the name reads as a person — almost certainly a private host rather than a property with a business line.',
+  },
+  349: {
+    verdict: 'unverified',
+    phone: '',
+    note: 'The listing is a herbal spa and wellness clinic on Phetchaburi Road, not accommodation. Its own site has expired and every directory refused to load, so nothing could be confirmed; the number we hold matches no source found.',
+  },
+  792: {
+    verdict: 'test',
+    note: 'No such property in Yerevan. The number is 10 digits after +374 where Armenian numbers are 8, so it cannot be dialled, and the same raw digits appear on the Bangkok listing #80.',
+  },
   247: {
     verdict: 'confirmed',
     phone: '+15624937501',

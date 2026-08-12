@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout.astro';
 import { verifyAdmin } from '../../lib/adminAuth';
 import { HOTEL_PHONE_ROWS } from '../../lib/data/hotelPhoneRows';
 import { toInternational } from '../../lib/phoneFormat';
+import { PHONE_VERIFICATIONS } from '../../lib/data/hotelPhoneVerified';
 
 const runtime = (Astro.locals as any).runtime;
 const db = runtime?.env?.DB;
@@ -43,11 +44,14 @@ type Match = {
   how: 'name' | 'email';
   phone: ReturnType<typeof toInternational>;
   notify: ReturnType<typeof toInternational>;
+  verified?: (typeof PHONE_VERIFICATIONS)[number];
 };
 
 const ready: Match[] = [];     // both numbers understood — safe to apply in bulk
-const check: Match[] = [];     // a number needed an assumption; read before applying
+const checked: Match[] = [];   // looked up on the web; the finding decides
+const check: Match[] = [];     // a number needed an assumption, and nobody has looked yet
 const already: Match[] = [];   // the listing already has a phone
+const rejected: Match[] = [];  // looking it up showed the number does not belong here
 let unmatched = 0;
 
 for (const h of hotels) {
@@ -65,16 +69,39 @@ for (const h of hotels) {
   const notify = toInternational(row.contact_phone, h.country);
   if (!phone.value && !notify.value) { unmatched++; continue; }
 
-  const m: Match = { hotel: h, row, how, phone, notify };
-  if (String(h.phone || '').trim()) already.push(m);
-  else if ((phone.value && !phone.confident) || (notify.value && !notify.confident)) check.push(m);
+  const verified = PHONE_VERIFICATIONS[h.id];
+  const m: Match = { hotel: h, row, how, phone, notify, verified };
+
+  // A number that was actually looked up beats anything the parser worked out.
+  if (verified) {
+    const blank = { value: '', confident: false, note: '' };
+    if (verified.phone) m.phone = { value: verified.phone, confident: true, note: '' };
+    else if (verified.verdict !== 'confirmed') m.phone = blank;
+
+    if (verified.notify_phone !== undefined) {
+      m.notify = { value: verified.notify_phone, confident: !!verified.notify_phone, note: '' };
+    } else if (verified.verdict === 'test' || verified.phone === '') {
+      // The main line was thrown out because it belongs to someone else or the
+      // listing is not real. The second number came from the same submission,
+      // so it goes with it — otherwise a Mauritian hotel's line would still get
+      // dialled, just from the other column.
+      m.notify = blank;
+    }
+  }
+
+  if (verified && !m.phone.value && !m.notify.value) rejected.push(m);
+  else if (String(h.phone || '').trim()) already.push(m);
+  else if (verified) checked.push(m);
+  else if ((m.phone.value && !m.phone.confident) || (m.notify.value && !m.notify.confident)) check.push(m);
   else ready.push(m);
 }
 
 const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]; preTicked: boolean }> = [
   { key: 'ready', title: 'Ready to apply', blurb: 'Every number already carried its country code. Nothing was assumed.', rows: ready, preTicked: true },
-  { key: 'check', title: 'Read before applying', blurb: 'A country code had to be worked out from the listing\'s country. Check each one.', rows: check, preTicked: false },
+  { key: 'checked', title: 'Checked against the web', blurb: 'These were doubtful, so each was looked up on the hotel\'s own site or a tourism registry. The finding is shown per row.', rows: checked, preTicked: true },
+  { key: 'check', title: 'Read before applying', blurb: 'A country code had to be worked out from the listing\'s country, and nobody has checked yet.', rows: check, preTicked: false },
   { key: 'already', title: 'Listing already has a phone', blurb: 'Left alone. Tick only if the old number is better than what is on file.', rows: already, preTicked: false },
+  { key: 'rejected', title: 'Do not import', blurb: 'Looking these up showed the number belongs to someone else, or the listing is not a real property. Nothing to apply.', rows: rejected, preTicked: false },
 ];
 ---
 
@@ -89,9 +116,11 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
 
   {error && <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
 
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
     {[['Ready', ready.length, 'text-emerald-700 bg-emerald-50 border-emerald-200'],
+      ['Web-checked', checked.length, 'text-sky-700 bg-sky-50 border-sky-200'],
       ['Needs a look', check.length, 'text-amber-700 bg-amber-50 border-amber-200'],
+      ['Do not import', rejected.length, 'text-red-700 bg-red-50 border-red-200'],
       ['Already has one', already.length, 'text-slate-600 bg-slate-50 border-slate-200'],
       ['No match', unmatched, 'text-slate-400 bg-white border-slate-200']].map(([label, n, cls]) => (
       <div class={`rounded-lg border px-4 py-3 ${cls}`}>
@@ -146,6 +175,21 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
                     <a href={`/admin/hotels/${m.hotel.id}/edit`} class="font-medium text-teal-700 hover:underline">{m.hotel.name}</a>
                     <div class="text-xs text-slate-400">{m.hotel.city}, {m.hotel.country} · {m.hotel.status}</div>
                     <div class="text-xs text-slate-400">applied {m.row.date}{m.row.person ? ` · ${m.row.person}` : ''}</div>
+                    {m.row.name && m.row.name !== m.hotel.name && (
+                      <div class="text-xs text-slate-400">applied as: {m.row.name.slice(0, 70)}</div>
+                    )}
+                    {m.verified && (
+                      <div class={`mt-1 text-xs rounded px-2 py-1 ${
+                        m.verified.verdict === 'confirmed' ? 'bg-emerald-50 text-emerald-800'
+                        : m.verified.verdict === 'corrected' ? 'bg-sky-50 text-sky-800'
+                        : m.verified.verdict === 'test' ? 'bg-red-50 text-red-700'
+                        : 'bg-amber-50 text-amber-800'}`}>
+                        <strong>{m.verified.verdict}</strong> — {m.verified.note}
+                        {m.verified.source && (
+                          <> <a href={m.verified.source} target="_blank" rel="noopener" class="underline">source</a></>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td class="px-3 py-2 align-top text-xs text-slate-500">{m.how}</td>
                   <td class="px-3 py-2 align-top font-mono text-xs">
