@@ -709,7 +709,7 @@ for (let h = 0; h < 24; h++) {
             Cancellation Policy <span class="text-red-500">*</span>
           </label>
           <input type="number" id="plan-cancellation-hours" name="cancellation_hours" min="0" step="1" required
-            placeholder="e.g. 24 — hours before check-in, hotel local time"
+            placeholder="24 — hours before check-in, hotel local time"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none" />
           <p class="text-xs text-slate-400 mt-1">
             Guests can cancel for free up to X hours before check-in. Set 0 for non-refundable.
@@ -1336,7 +1336,10 @@ for (let h = 0; h < 24; h++) {
       document.getElementById('plan-checkin').value = isEdit ? (plan.check_in_time || '') : '';
       document.getElementById('plan-checkout').value = isEdit ? (plan.check_out_time || '') : '';
       document.getElementById('plan-type').value = isEdit ? (plan.plan_type || '') : '';
-      document.getElementById('plan-cancellation-hours').value = isEdit && plan.cancellation_hours != null ? plan.cancellation_hours : '';
+      // 24 as the starting point for a new plan. Clearing it is still rejected —
+      // required in the browser, and a blank is an error server-side rather than
+      // the 0 (non-refundable) it used to become.
+      document.getElementById('plan-cancellation-hours').value = isEdit && plan.cancellation_hours != null ? plan.cancellation_hours : 24;
       document.getElementById('plan-desc').value = isEdit ? (plan.description || '') : '';
       document.getElementById('plan-overnight-check').checked = false;
       document.getElementById('plan-form-error').classList.add('hidden');
