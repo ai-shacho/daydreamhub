@@ -365,7 +365,7 @@ function ownerBookingTable(data: OwnerBookingData): string {
   return cells
     .map(
       ([label, cell], i) =>
-        `<tr><td style="padding:7px 10px;border:1px solid #fde68a;font-weight:600;background:${i % 2 ? '#fffdf5' : '#fffbeb'};width:38%;font-size:13px">${escapeHtml(label)}</td><td style="padding:7px 10px;border:1px solid #fde68a;font-size:13px">${cell}</td></tr>`
+        `<tr><td style="padding:8px 10px;border:1px solid #e2e8f0;font-weight:600;background:${i % 2 ? '#f8fafc' : '#f1f5f9'};width:38%;font-size:13px;color:#334155">${escapeHtml(label)}</td><td style="padding:8px 10px;border:1px solid #e2e8f0;font-size:13px;background:#ffffff;color:#1f2937">${cell}</td></tr>`
     )
     .join('');
 }
@@ -406,8 +406,8 @@ function ownerEmailShell(opts: {
 
     ${opts.urgencyBox}
 
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:20px;margin:20px 0">
-      <h2 style="margin:0 0 16px;font-size:16px;color:#b45309">📋 Booking Details</h2>
+    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:20px;margin:20px 0">
+      <h2 style="margin:0 0 16px;font-size:16px;color:#334155">📋 Booking Details</h2>
       <table style="border-collapse:collapse;width:100%">
         ${ownerBookingTable(opts.data)}
       </table>
