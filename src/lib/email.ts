@@ -108,7 +108,7 @@ function emailFooter(sendOnly: boolean = true): string {
       <strong>Send-only address.</strong> This mailbox does not receive mail — a reply to this message
       reaches no one. To message the hotel about your booking, use <strong>Messages</strong> under
       <a href="${SITE_URL}/mypage" style="color:#0d9488">My Bookings</a>.
-      For anything else, write to <a href="mailto:contact@daydreamhub.com" style="color:#0d9488">contact@daydreamhub.com</a>.
+      For anything else, write to <a href="mailto:customer@daydreamhub.com" style="color:#0d9488">customer@daydreamhub.com</a>.
     </div>` : '';
   return `
     ${sendOnlyNote}
@@ -134,7 +134,6 @@ async function sendEmail(params: {
   to: string | string[];
   subject: string;
   html: string;
-  replyTo?: string;
 }): Promise<{ success: boolean; error?: string }> {
   const toArray = Array.isArray(params.to) ? params.to : [params.to];
   const res = await fetch('https://api.resend.com/emails', {
@@ -148,7 +147,6 @@ async function sendEmail(params: {
       to: toArray,
       subject: params.subject,
       html: params.html,
-      reply_to: params.replyTo,
     }),
   });
   if (!res.ok) {
@@ -1099,7 +1097,7 @@ export async function sendListingChangesRequestedEmail(
       </a>
     </div>
     <p style="color:#6b7280;font-size:14px;line-height:1.6">
-      Questions? Reply to this email or contact us at <a href="mailto:contact@daydreamhub.com" style="color:#4f46e5">contact@daydreamhub.com</a>.
+      Questions? Write to <a href="mailto:contact@daydreamhub.com" style="color:#4f46e5">contact@daydreamhub.com</a> — this address does not receive replies.
     </p>
     ${emailFooter()}
   </div>
@@ -1200,7 +1198,7 @@ export async function sendConciergeQuoteEmail(
         Book at this price →
       </a>
     </div>
-    <p style="color:#6b7280;font-size:13px;line-height:1.6">After you confirm, we call the hotel again to finalize your booking and email you the confirmation. If you have any questions, reply to this email or contact us at <a href="mailto:contact@daydreamhub.com" style="color:#46a3c2">contact@daydreamhub.com</a>.</p>
+    <p style="color:#6b7280;font-size:13px;line-height:1.6">After you confirm, we call the hotel again to finalize your booking and email you the confirmation. If you have any questions, write to <a href="mailto:customer@daydreamhub.com" style="color:#46a3c2">customer@daydreamhub.com</a> — this address does not receive replies.</p>
     ${emailFooter()}
   </div>
 </div>`;
