@@ -389,6 +389,17 @@ for (let h = 0; h < 24; h++) {
               <input id="new-guests" type="number" min="1" value="2"
                 class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
             </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Room Type</label>
+              <input id="new-room-type" type="text" list="room-type-options" placeholder="e.g. Standard Twin"
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Cancellation Policy (hours) *</label>
+              <input id="new-cancellation-hours" type="number" min="0" step="1" value="24" required
+                class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+              <p class="text-xs text-slate-400 mt-1">Hours before check-in that a guest can cancel for free, counted in the hotel's local time. 0 = non-refundable. Required — guests see this on the plan.</p>
+            </div>
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">Description</label>
@@ -423,6 +434,13 @@ for (let h = 0; h < 24; h++) {
                 </div>
                 <div class="text-xs text-gray-500 mt-0.5">
                   {formatLocalWithUsd(Number(plan.price_local ?? plan.price_usd), hotelCurrency, Number(plan.price_usd))} · {plan.check_in_time}–{plan.check_out_time} · max {plan.max_guests} guests
+                  {plan.room_type ? ` · ${plan.room_type}` : ''}
+                  {' · '}
+                  {plan.cancellation_hours == null
+                    ? <span class="text-red-600 font-medium">no cancellation policy</span>
+                    : Number(plan.cancellation_hours) === 0
+                      ? 'non-refundable'
+                      : `free cancellation ${plan.cancellation_hours}h before`}
                 </div>
               </div>
               <div class="flex gap-1 flex-shrink-0">
@@ -441,6 +459,9 @@ for (let h = 0; h < 24; h++) {
       <!-- Time datalist (shared) -->
       <datalist id="time-options">
         {TIME_OPTIONS.map(t => <option value={t} />)}
+      </datalist>
+      <datalist id="room-type-options">
+        {[...new Set(plans.map((p: any) => p.room_type).filter(Boolean))].map(rt => <option value={rt} />)}
       </datalist>
 
       <!-- Edit Plan Modal -->
@@ -474,6 +495,15 @@ for (let h = 0; h < 24; h++) {
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Check-out</label>
               <input id="edit-plan-checkout" type="text" list="time-options" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Room Type</label>
+              <input id="edit-plan-room-type" type="text" list="room-type-options" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-600 mb-1">Cancellation Policy (hours) *</label>
+              <input id="edit-plan-cancellation-hours" type="number" min="0" step="1" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-teal-400 outline-none" />
+              <p class="text-xs text-slate-400 mt-1">Hours before check-in that a guest can cancel for free, counted in the hotel's local time. 0 = non-refundable. Required — guests see this on the plan.</p>
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-600 mb-1">Max Guests</label>
@@ -715,6 +745,9 @@ document.getElementById('save-plan-btn')?.addEventListener('click', async () => 
     check_in_time: document.getElementById('new-checkin').value,
     check_out_time: document.getElementById('new-checkout').value,
     max_guests: parseInt(document.getElementById('new-guests').value) || 2,
+    room_type: document.getElementById('new-room-type').value.trim() || null,
+    // Sent raw: a blank has to be an error, not a silent 0 (non-refundable).
+    cancellation_hours: document.getElementById('new-cancellation-hours').value.trim(),
     description: document.getElementById('new-desc').value,
   };
   const res = await fetch('/api/admin/plans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -760,6 +793,8 @@ document.getElementById('plans-list')?.addEventListener('click', async function(
       document.getElementById('edit-plan-checkin').value = plan.check_in_time || '';
       document.getElementById('edit-plan-checkout').value = plan.check_out_time || '';
       document.getElementById('edit-plan-guests').value = plan.max_guests || 2;
+      document.getElementById('edit-plan-room-type').value = plan.room_type || '';
+      document.getElementById('edit-plan-cancellation-hours').value = plan.cancellation_hours != null ? plan.cancellation_hours : 24;
       document.getElementById('edit-plan-desc').value = plan.description || '';
 
     }
@@ -788,6 +823,8 @@ document.getElementById('update-plan-btn')?.addEventListener('click', async () =
     check_in_time: document.getElementById('edit-plan-checkin').value,
     check_out_time: document.getElementById('edit-plan-checkout').value,
     max_guests: parseInt(document.getElementById('edit-plan-guests').value) || 2,
+    room_type: document.getElementById('edit-plan-room-type').value.trim() || null,
+    cancellation_hours: document.getElementById('edit-plan-cancellation-hours').value.trim(),
     description: document.getElementById('edit-plan-desc').value,
   };
   if (!body.name) { errEl.textContent = 'Name is required'; errEl.className = 'block text-red-600 text-xs'; return; }
