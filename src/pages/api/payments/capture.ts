@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getAccessToken, captureOrder, resolvePayPalConfig } from '../../../lib/paypal';
-import { sendBookingNotificationToHotel, sendGuestBookingConfirmation, sendPaymentFailureEmail } from '../../../lib/email';
+import { sendBookingNotificationToHotel, sendGuestBookingConfirmation, sendPaymentFailureEmail, sendAdminBookingNotification } from '../../../lib/email';
 import { getBookingInfoForCall, triggerAutoCall } from '../../../lib/autoCall';
 import { resolveBookingCharge, roundForCurrency } from '../../../lib/currency';
 
@@ -313,22 +313,25 @@ export const POST: APIRoute = async ({ request, locals }) => {
             ...(isEmail(adminRaw) ? [adminRaw] : []),
           ])];
           const adminSubject = `[New Booking] #${bookingId} — ${guest_name} / ${(hotel as any)?.name || ''}`;
-          const adminAddOns = charge.options.length
-            ? charge.options
-                .map((o) => `${o.name} × ${o.quantity}${o.child_quantity ? ` + ${o.child_quantity} child` : ''}${o.infant_quantity ? ` + ${o.infant_quantity} infant` : ''} — $${o.amount_usd.toFixed(2)}`)
-                .join('<br>')
-            : '';
-          const adminRes = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: 'DaydreamHub <noreply@daydreamhub.com>',
-              to: adminTo,
-              subject: adminSubject,
-              html: `<div style="font-family:Arial,sans-serif"><h3>New Booking Received</h3><table style="font-size:14px"><tr><td style="padding:4px 12px 4px 0;color:#888">Booking ID:</td><td>#${bookingId}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guest:</td><td>${guest_name}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Email:</td><td>${guest_email}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Phone:</td><td>${guest_phone || '-'}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Nationality:</td><td>${guest_nationality || '-'}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Hotel:</td><td>${(hotel as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Plan:</td><td>${(planFull as any)?.name || ''}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Check-in:</td><td>${check_in_date}</td></tr><tr><td style="padding:4px 12px 4px 0;color:#888">Guests:</td><td>${adults || 1} adults / ${children || 0} children / ${infants || 0} infants</td></tr>${adminAddOns ? `<tr><td style="padding:4px 12px 4px 0;color:#888;vertical-align:top">Add-ons:</td><td>${adminAddOns}</td></tr>` : ''}<tr><td style="padding:4px 12px 4px 0;color:#888">Amount:</td><td>$${totalAmount}</td></tr></table></div>`,
-            }),
+          const adminResult = await sendAdminBookingNotification(RESEND_API_KEY, adminTo, {
+            bookingId: bookingId!,
+            guestName: guest_name,
+            guestEmail: guest_email,
+            guestPhone: guest_phone || '',
+            guestNationality: guest_nationality || '',
+            checkInDate: check_in_date,
+            planName: (planFull as any)?.name || '',
+            adults: adults || 1,
+            children: children || 0,
+            infants: infants || 0,
+            totalPriceUsd: totalAmount,
+            localCurrency: charge.currency,
+            localAmount: localTotal,
+            fxRate: charge.fxRate,
+            options: charge.options,
+            hotelName: (hotel as any)?.name || '',
+            hotelEmail: adminTo,
           });
-          const adminBody: any = await adminRes.json().catch(() => ({}));
           await logMessage({
             db, bookingId: bookingId!, hotelId,
             direction: 'outbound',
@@ -336,8 +339,8 @@ export const POST: APIRoute = async ({ request, locals }) => {
             senderEmail: 'noreply@daydreamhub.com',
             subject: adminSubject,
             body: `Admin booking notification for #${bookingId}`,
-            status: adminRes.ok ? 'sent' : 'failed',
-            errorDetail: adminRes.ok ? null : (adminBody?.message || `HTTP ${adminRes.status}`),
+            status: adminResult.success ? 'sent' : 'failed',
+            errorDetail: adminResult.success ? null : (adminResult.error || 'send failed'),
             messageType: 'admin_booking_notification',
           });
         } catch (e: any) {
@@ -383,7 +386,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
               direction: 'outbound',
               recipientEmail: guest_email,
               senderEmail: 'noreply@daydreamhub.com',
-              subject: `Booking Request Received #${bookingId} — DaydreamHub`,
+              subject: `Booking Request Received #${bookingId} — DayDreamHub`,
               body: `Guest booking confirmation for #${bookingId}`,
               status: guestEmailResult.success ? 'sent' : 'failed',
               errorDetail: guestEmailResult.error,

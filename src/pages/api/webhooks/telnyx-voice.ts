@@ -421,7 +421,7 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
     try { details = JSON.parse(call.request_details || '{}'); } catch {}
 
     const payload = {
-      from: 'DaydreamHub <noreply@daydreamhub.com>',
+      from: 'DayDreamHub <noreply@daydreamhub.com>',
       to: [env.ADMIN_EMAIL],
       subject: `[AI Concierge] Booking confirmed - ${call.hotel_name || 'Unknown hotel'}`,
       html: `

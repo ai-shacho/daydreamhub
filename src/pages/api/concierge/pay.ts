@@ -157,7 +157,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         accessToken,
         CALL_FEE_USD,
         mode,
-        'DaydreamHub AI Phone Booking Service',
+        'DayDreamHub AI Phone Booking Service',
         undefined,
         {
           returnUrl: `${baseUrl}${returnPath}${returnQuery ? `?${returnQuery}` : ''}`,

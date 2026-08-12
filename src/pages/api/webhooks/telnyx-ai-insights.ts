@@ -111,7 +111,7 @@ function generateConfirmationText(data: any): string {
         Booking Confirmation
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-DaydreamHub AIコンシェルジュサービスより
+DayDreamHub AIコンシェルジュサービスより
 ご予約内容をご確認ください。
 
 ■ ホテル名: ${data.hotelName}
@@ -125,7 +125,7 @@ ${data.priceQuoted ? `■ 料金:     ${data.priceQuoted}（ホテルにてお�
 ※ 宿泊料金はチェックイン時にホテルにて直接お支払いいただきます。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DaydreamHub - AI Hotel Booking Concierge
+DayDreamHub - AI Hotel Booking Concierge
 https://daydreamhub.com
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `.trim();

@@ -71,7 +71,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'DaydreamHub <noreply@daydreamhub.com>',
+          from: 'DayDreamHub <noreply@daydreamhub.com>',
           to: [booking.hotel_email],
           reply_to: auth.email,
           subject: `💬 New message from guest — Booking #${booking_id}`,

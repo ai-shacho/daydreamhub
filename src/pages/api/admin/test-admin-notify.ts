@@ -47,7 +47,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'DaydreamHub <noreply@daydreamhub.com>',
+          from: 'DayDreamHub <noreply@daydreamhub.com>',
           to,
           subject: `[TEST] DDH booking notification (${label})`,
           html: `<div style="font-family:Arial,sans-serif"><h3>Test DDH notification</h3><p>This is a test of the admin booking-notification path (<strong>${label}</strong>).</p><p>Recipients: ${to.map((t) => JSON.stringify(t)).join(', ')}</p></div>`,
