@@ -4,6 +4,7 @@ import { verifyAdmin } from '../../lib/adminAuth';
 import { HOTEL_PHONE_ROWS } from '../../lib/data/hotelPhoneRows';
 import { toInternational } from '../../lib/phoneFormat';
 import { PHONE_VERIFICATIONS } from '../../lib/data/hotelPhoneVerified';
+import { CALL_KINDS, KIND_LABEL } from '../../lib/data/hotelCallKind';
 
 const runtime = (Astro.locals as any).runtime;
 const db = runtime?.env?.DB;
@@ -45,6 +46,8 @@ type Match = {
   phone: ReturnType<typeof toInternational>;
   notify: ReturnType<typeof toInternational>;
   verified?: (typeof PHONE_VERIFICATIONS)[number];
+  /** What sort of business it is, and whether an automated call belongs there. */
+  callKind?: (typeof CALL_KINDS)[number];
   /** The published number, when checking found one that differs. */
   suggested?: string;
 };
@@ -72,7 +75,7 @@ for (const h of hotels) {
   if (!phone.value && !notify.value) { unmatched++; continue; }
 
   const verified = PHONE_VERIFICATIONS[h.id];
-  const m: Match = { hotel: h, row, how, phone, notify, verified };
+  const m: Match = { hotel: h, row, how, phone, notify, verified, callKind: CALL_KINDS[h.id] };
 
   // Where the web disagrees, that number is offered as the default choice —
   // but the submitted one stays on the row and stays selectable. A number
@@ -109,6 +112,8 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
 
 for (const sec of sections) allMatched.push(...sec.rows);
 const countries = [...new Set(allMatched.map(m => m.hotel.country).filter(Boolean))].sort();
+const noCall = allMatched.filter(m => m.callKind?.callable === 'no').length;
+const maybeCall = allMatched.filter(m => !m.callKind || m.callKind.callable === 'unclear').length;
 const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).filter(Boolean))]
   .sort((a: any, b: any) => (VERDICT_RANK[a] ?? 9) - (VERDICT_RANK[b] ?? 9));
 ---
@@ -129,8 +134,8 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
       ['Web-checked', checked.length, 'text-sky-700 bg-sky-50 border-sky-200'],
       ['Needs a look', check.length, 'text-amber-700 bg-amber-50 border-amber-200'],
       ['Disagrees', flagged.length, 'text-red-700 bg-red-50 border-red-200'],
-      ['Already has one', already.length, 'text-slate-600 bg-slate-50 border-slate-200'],
-      ['No match', unmatched, 'text-slate-400 bg-white border-slate-200']].map(([label, n, cls]) => (
+      ['Do not call', noCall, 'text-red-700 bg-red-50 border-red-200'],
+      ['Call unclear', maybeCall, 'text-amber-700 bg-amber-50 border-amber-200']].map(([label, n, cls]) => (
       <div class={`rounded-lg border px-4 py-3 ${cls}`}>
         <div class="text-2xl font-bold">{n}</div>
         <div class="text-xs">{label}</div>
@@ -151,6 +156,15 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
           <option value="">Any</option>
           {verdictsPresent.map((v: any) => <option value={v}>{v.replace(/_/g, ' ')}</option>)}
           <option value="__none">not checked</option>
+        </select>
+      </label>
+      <label>
+        <span class="block text-xs font-medium text-slate-600 mb-1">Call this number?</span>
+        <select id="f-callable" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">Any</option>
+          <option value="yes">Yes — staffed property</option>
+          <option value="no">No — spa, salon, private host or test row</option>
+          <option value="unclear">Unclear — needs a person</option>
         </select>
       </label>
       <label>
@@ -205,7 +219,7 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
               <tr class="bg-slate-50 border-b border-slate-200 text-left">
                 <th class="px-3 py-2 w-8"><input type="checkbox" class="tick-all" data-section={sec.key} checked={sec.preTicked} /></th>
                 <th class="px-3 py-2 font-medium text-slate-600">Hotel</th>
-                <th class="px-3 py-2 font-medium text-slate-600">Matched by</th>
+                <th class="px-3 py-2 font-medium text-slate-600">Call?</th>
                 <th class="px-3 py-2 font-medium text-slate-600">Main line</th>
                 <th class="px-3 py-2 font-medium text-slate-600">Contact person</th>
                 <th class="px-3 py-2 font-medium text-slate-600">On file now</th>
@@ -215,6 +229,7 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
               {sec.rows.map(m => (
                 <tr class="hover:bg-slate-50 data-row"
                   data-verdict={m.verified?.verdict || '__none'}
+                  data-callable={m.callKind?.callable || 'unclear'}
                   data-country={m.hotel.country || ''}
                   data-sort-name={String(m.hotel.name || '').toLowerCase()}
                   data-sort-date={m.row.date || ''}
@@ -223,6 +238,7 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
                     m.hotel.name, m.hotel.city, m.hotel.country, m.row.name, m.row.person,
                     m.row.hotel_phone, m.row.contact_phone, m.phone.value, m.notify.value,
                     m.suggested, m.verified?.webPhone, m.verified?.webPhoneAlt,
+                    m.callKind && KIND_LABEL[m.callKind.kind], m.callKind?.why,
                     m.hotel.phone, m.hotel.notify_phone, ...(m.row.emails || []),
                   ].filter(Boolean).join(' ').toLowerCase()}>
                   <td class="px-3 py-2 align-top">
@@ -253,7 +269,23 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
                       </div>
                     )}
                   </td>
-                  <td class="px-3 py-2 align-top text-xs text-slate-500">{m.how}</td>
+                  <td class="px-3 py-2 align-top text-xs">
+                    {m.callKind ? (
+                      <>
+                        <span class={`inline-block rounded px-1.5 py-0.5 font-medium ${
+                          m.callKind.callable === 'yes' ? 'bg-emerald-50 text-emerald-800'
+                          : m.callKind.callable === 'no' ? 'bg-red-50 text-red-700'
+                          : 'bg-amber-50 text-amber-800'}`}>
+                          {m.callKind.callable === 'yes' ? 'Call' : m.callKind.callable === 'no' ? 'Do not call' : 'Unclear'}
+                        </span>
+                        <div class="text-slate-500 mt-1">{KIND_LABEL[m.callKind.kind]}</div>
+                        <div class="text-slate-400 mt-0.5 leading-snug">{m.callKind.why}</div>
+                      </>
+                    ) : (
+                      <span class="inline-block rounded px-1.5 py-0.5 bg-amber-50 text-amber-800 font-medium">Unclear</span>
+                    )}
+                    <div class="text-slate-300 mt-1">matched by {m.how}</div>
+                  </td>
                   <td class="px-3 py-2 align-top font-mono text-xs">
                     {m.suggested ? (
                       <>
@@ -303,6 +335,7 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
   // never written, so filtering can't quietly apply something off-screen.
   const search = document.getElementById('f-search');
   const fVerdict = document.getElementById('f-verdict');
+  const fCallable = document.getElementById('f-callable');
   const fCountry = document.getElementById('f-country');
   const fSort = document.getElementById('f-sort');
   const summary = document.getElementById('f-summary');
@@ -328,6 +361,7 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
   function refresh() {
     const q = (search.value || '').trim().toLowerCase();
     const wantVerdict = fVerdict.value;
+    const wantCallable = fCallable.value;
     const wantCountry = fCountry.value;
     const mode = fSort.value;
     let shown = 0, total = 0;
@@ -341,6 +375,7 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
         const ok =
           (!q || (tr.getAttribute('data-haystack') || '').includes(q)) &&
           (!wantVerdict || tr.getAttribute('data-verdict') === wantVerdict) &&
+          (!wantCallable || tr.getAttribute('data-callable') === wantCallable) &&
           (!wantCountry || tr.getAttribute('data-country') === wantCountry);
         tr.style.display = ok ? '' : 'none';
         if (ok) secShown++;
@@ -367,12 +402,12 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
       : `Showing ${shown} of ${total} matched listings. Applying only ever writes rows that are both ticked and visible, so the ${total - shown} hidden row(s) are safe.`;
   }
 
-  [search, fVerdict, fCountry, fSort].forEach(el => {
+  [search, fVerdict, fCallable, fCountry, fSort].forEach(el => {
     el.addEventListener('input', refresh);
     el.addEventListener('change', refresh);
   });
   document.getElementById('f-clear').addEventListener('click', () => {
-    search.value = ''; fVerdict.value = ''; fCountry.value = ''; fSort.value = 'verdict';
+    search.value = ''; fVerdict.value = ''; fCallable.value = ''; fCountry.value = ''; fSort.value = 'verdict';
     refresh();
   });
   refresh();
