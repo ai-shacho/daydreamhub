@@ -1,9 +1,16 @@
 // Minimal service worker for the /app PWA shell. Network-first with a cached
 // fallback so the shell still opens briefly offline. Scoped to /app — the main
 // site and APIs are never intercepted.
-const CACHE = 'ddh-app-v2';
+const CACHE = 'ddh-app-v3';
+const SHELL = '/app';
 
 self.addEventListener('install', (e) => {
+  // Precache the shell. Without this the first offline load has nothing to fall
+  // back to: the very first navigation happens before this worker controls the
+  // page, so the fetch handler never gets a chance to cache it.
+  e.waitUntil(
+    caches.open(CACHE).then((c) => c.add(SHELL)).catch(() => {})
+  );
   self.skipWaiting();
 });
 
@@ -26,7 +33,17 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((c) => c.put(e.request, copy));
         return res;
       })
-      .catch(() => caches.match(e.request))
+      .catch(async () => {
+        const hit = await caches.match(e.request);
+        if (hit) return hit;
+        // A navigation with nothing cached for that exact URL still has to
+        // render something, or the browser shows its own error page.
+        if (e.request.mode === 'navigate') {
+          const shell = await caches.match(SHELL);
+          if (shell) return shell;
+        }
+        return Response.error();
+      })
   );
 });
 
