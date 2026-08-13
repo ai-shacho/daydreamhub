@@ -72,6 +72,14 @@ export function toInternational(raw: string | null | undefined, country?: string
     if (digits.length < 7 || digits.length > 15) {
       return { value: s, confident: false, note: `${digits.length} digits — outside the 7–15 a real number has` };
     }
+    const trunk = keptTrunkZero(digits, country);
+    if (trunk) {
+      return {
+        value: s,
+        confident: false,
+        note: `the national trunk "0" was kept after +${trunk.code}, so this dials nowhere as written — ${trunk.fixed} is the same number without it`,
+      };
+    }
     return { value: s, confident: true, note: '' };
   }
 
@@ -113,6 +121,29 @@ export function toInternational(raw: string | null | undefined, country?: string
   }
 
   return { value: `+${code}${s}`, confident: false, note: `assumed a ${country} number` };
+}
+
+// Countries whose national numbers genuinely keep a leading zero when dialled
+// from abroad. Italy is the well known one: +39 06 6982 is the Vatican and the
+// 0 is part of the number, not a prefix to strip.
+const TRUNK_ZERO_IS_PART_OF_THE_NUMBER = new Set(['39']);
+
+/**
+ * A number written as country code + "0" + national number — "+60 0127216391"
+ * instead of "+60 127216391". Everywhere but Italy that leading zero is the
+ * domestic trunk prefix and has to go, so the stored string cannot be dialled.
+ * Only says so when the listing's own country supplies the code, since a bare
+ * "+xx0…" is otherwise ambiguous.
+ */
+function keptTrunkZero(digits: string, country: string | null | undefined): { code: string; fixed: string } | null {
+  const code = dialCodeForCountry(country);
+  if (!code || TRUNK_ZERO_IS_PART_OF_THE_NUMBER.has(code)) return null;
+  if (!digits.startsWith(code + '0')) return null;
+
+  const national = digits.slice(code.length).replace(/^0+/, '');
+  // Without the zero it still has to look like a phone number.
+  if (national.length < 6) return null;
+  return { code, fixed: `+${code}${national}` };
 }
 
 /** A country code, other than the listing's own, that this number begins with. */
