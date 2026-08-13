@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.daydreamhub.app",
+      "sha256_cert_fingerprints": [
+        "60:CD:FC:E3:96:2D:71:FC:D0:B0:7C:47:44:B0:F2:F7:06:F5:97:76:B9:71:28:AD:04:47:23:69:92:37:60:FC"
+      ]
+    }
+  }
+]
