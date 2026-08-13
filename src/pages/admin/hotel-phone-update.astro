@@ -89,6 +89,16 @@ for (const h of hotels) {
   else ready.push(m);
 }
 
+// Sorting by verdict puts what needs a decision at the top rather than in
+// alphabetical order, so "someone else's number" never sits below fifty
+// confirmed rows.
+const VERDICT_RANK: Record<string, number> = {
+  wrong_business: 0, not_a_property: 1, differs: 2, not_published: 3, confirmed: 4,
+};
+const rank = (m: Match) => (m.verified ? VERDICT_RANK[m.verified.verdict] ?? 9 : 8);
+
+const allMatched: Match[] = [];
+
 const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]; preTicked: boolean }> = [
   { key: 'ready', title: 'Ready to apply', blurb: 'Every number already carried its country code. Nothing was assumed.', rows: ready, preTicked: true },
   { key: 'checked', title: 'Checked against the web', blurb: 'These were doubtful, so each was looked up on the hotel\'s own site or a tourism registry. The finding is shown per row.', rows: checked, preTicked: true },
@@ -96,6 +106,11 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
   { key: 'already', title: 'Listing already has a phone', blurb: 'Left alone. Tick only if the old number is better than what is on file.', rows: already, preTicked: false },
   { key: 'flagged', title: 'Checking disagrees — decide per row', blurb: 'The number appears to belong to a different business, or the listing may not be a real property. Nothing is deleted: the submitted number is still here and still selectable.', rows: flagged, preTicked: false },
 ];
+
+for (const sec of sections) allMatched.push(...sec.rows);
+const countries = [...new Set(allMatched.map(m => m.hotel.country).filter(Boolean))].sort();
+const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).filter(Boolean))]
+  .sort((a: any, b: any) => (VERDICT_RANK[a] ?? 9) - (VERDICT_RANK[b] ?? 9));
 ---
 
 <AdminLayout title="Hotel Phone Update" activeNav="hotels">
@@ -123,13 +138,54 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
     ))}
   </div>
 
+  <div class="bg-white rounded-lg shadow px-4 py-3 mb-6">
+    <div class="flex flex-wrap items-end gap-3">
+      <label class="flex-1 min-w-[220px]">
+        <span class="block text-xs font-medium text-slate-600 mb-1">Search</span>
+        <input id="f-search" type="search" placeholder="Hotel, city, person, or any number"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+      </label>
+      <label>
+        <span class="block text-xs font-medium text-slate-600 mb-1">Checking result</span>
+        <select id="f-verdict" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">Any</option>
+          {verdictsPresent.map((v: any) => <option value={v}>{v.replace(/_/g, ' ')}</option>)}
+          <option value="__none">not checked</option>
+        </select>
+      </label>
+      <label>
+        <span class="block text-xs font-medium text-slate-600 mb-1">Country</span>
+        <select id="f-country" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <option value="">Any</option>
+          {countries.map((c: any) => <option value={c}>{c}</option>)}
+        </select>
+      </label>
+      <label>
+        <span class="block text-xs font-medium text-slate-600 mb-1">Sort by</span>
+        <select id="f-sort" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+          <option value="verdict">Needs a decision first</option>
+          <option value="name">Hotel name (A–Z)</option>
+          <option value="country">Country, then hotel</option>
+          <option value="date-desc">Applied — newest first</option>
+          <option value="date-asc">Applied — oldest first</option>
+        </select>
+      </label>
+      <button id="f-clear" class="text-sm px-3 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50">
+        Clear
+      </button>
+    </div>
+    <p id="f-summary" class="text-xs text-slate-500 mt-2">
+      Showing all {allMatched.length} matched listings. Applying only ever writes rows that are both ticked and visible.
+    </p>
+  </div>
+
   <div id="apply-result" class="hidden mb-4 px-4 py-3 rounded-lg text-sm"></div>
 
   {sections.map(sec => (
     <section class="mb-8">
       <div class="flex items-center justify-between mb-2">
         <div>
-          <h3 class="font-semibold text-slate-800">{sec.title} <span class="text-slate-400 font-normal">({sec.rows.length})</span></h3>
+          <h3 class="font-semibold text-slate-800">{sec.title} <span class="text-slate-400 font-normal sec-count" data-section={sec.key} data-total={sec.rows.length}>({sec.rows.length})</span></h3>
           <p class="text-xs text-slate-500">{sec.blurb}</p>
         </div>
         {sec.rows.length > 0 && (
@@ -142,6 +198,7 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
       {sec.rows.length === 0 ? (
         <p class="text-sm text-slate-400 py-4">Nothing here.</p>
       ) : (
+        <>
         <div class="bg-white rounded-lg shadow overflow-x-auto">
           <table class="w-full text-sm" data-section-table={sec.key}>
             <thead>
@@ -156,7 +213,18 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
             </thead>
             <tbody class="divide-y divide-slate-100">
               {sec.rows.map(m => (
-                <tr class="hover:bg-slate-50">
+                <tr class="hover:bg-slate-50 data-row"
+                  data-verdict={m.verified?.verdict || '__none'}
+                  data-country={m.hotel.country || ''}
+                  data-sort-name={String(m.hotel.name || '').toLowerCase()}
+                  data-sort-date={m.row.date || ''}
+                  data-sort-rank={rank(m)}
+                  data-haystack={[
+                    m.hotel.name, m.hotel.city, m.hotel.country, m.row.name, m.row.person,
+                    m.row.hotel_phone, m.row.contact_phone, m.phone.value, m.notify.value,
+                    m.suggested, m.verified?.webPhone, m.verified?.webPhoneAlt,
+                    m.hotel.phone, m.hotel.notify_phone, ...(m.row.emails || []),
+                  ].filter(Boolean).join(' ').toLowerCase()}>
                   <td class="px-3 py-2 align-top">
                     <input type="checkbox" class="row-tick" checked={sec.preTicked && !m.suggested}
                       data-section={sec.key}
@@ -222,17 +290,100 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
             </tbody>
           </table>
         </div>
+        <p class="none-visible hidden text-sm text-slate-400 py-4">No rows here match the filter.</p>
+        </>
       )}
     </section>
   ))}
 </AdminLayout>
 
 <script>
+  // Filtering and sorting happen here rather than on the server so that a tick
+  // survives narrowing the list. The one rule that matters: a hidden row is
+  // never written, so filtering can't quietly apply something off-screen.
+  const search = document.getElementById('f-search');
+  const fVerdict = document.getElementById('f-verdict');
+  const fCountry = document.getElementById('f-country');
+  const fSort = document.getElementById('f-sort');
+  const summary = document.getElementById('f-summary');
+
+  const visible = (tr) => tr.style.display !== 'none';
+
+  function compare(a, b, mode) {
+    const name = (tr) => tr.getAttribute('data-sort-name') || '';
+    const date = (tr) => tr.getAttribute('data-sort-date') || '';
+    switch (mode) {
+      case 'name': return name(a).localeCompare(name(b));
+      case 'country':
+        return (a.getAttribute('data-country') || '').localeCompare(b.getAttribute('data-country') || '')
+          || name(a).localeCompare(name(b));
+      case 'date-desc': return date(b).localeCompare(date(a)) || name(a).localeCompare(name(b));
+      case 'date-asc': return date(a).localeCompare(date(b)) || name(a).localeCompare(name(b));
+      default:
+        return Number(a.getAttribute('data-sort-rank')) - Number(b.getAttribute('data-sort-rank'))
+          || name(a).localeCompare(name(b));
+    }
+  }
+
+  function refresh() {
+    const q = (search.value || '').trim().toLowerCase();
+    const wantVerdict = fVerdict.value;
+    const wantCountry = fCountry.value;
+    const mode = fSort.value;
+    let shown = 0, total = 0;
+
+    document.querySelectorAll('[data-section-table]').forEach(table => {
+      const body = table.querySelector('tbody');
+      const rows = [...body.querySelectorAll('tr.data-row')];
+      let secShown = 0;
+
+      for (const tr of rows) {
+        const ok =
+          (!q || (tr.getAttribute('data-haystack') || '').includes(q)) &&
+          (!wantVerdict || tr.getAttribute('data-verdict') === wantVerdict) &&
+          (!wantCountry || tr.getAttribute('data-country') === wantCountry);
+        tr.style.display = ok ? '' : 'none';
+        if (ok) secShown++;
+      }
+      total += rows.length;
+      shown += secShown;
+
+      rows.sort((a, b) => compare(a, b, mode)).forEach(tr => body.appendChild(tr));
+
+      const key = table.getAttribute('data-section-table');
+      const label = document.querySelector(`.sec-count[data-section="${key}"]`);
+      if (label) {
+        const all = Number(label.getAttribute('data-total'));
+        label.textContent = secShown === all ? `(${all})` : `(${secShown} of ${all})`;
+      }
+      const empty = table.parentElement.nextElementSibling;
+      if (empty && empty.classList.contains('none-visible')) {
+        empty.classList.toggle('hidden', secShown > 0);
+      }
+    });
+
+    summary.textContent = shown === total
+      ? `Showing all ${total} matched listings. Applying only ever writes rows that are both ticked and visible.`
+      : `Showing ${shown} of ${total} matched listings. Applying only ever writes rows that are both ticked and visible, so the ${total - shown} hidden row(s) are safe.`;
+  }
+
+  [search, fVerdict, fCountry, fSort].forEach(el => {
+    el.addEventListener('input', refresh);
+    el.addEventListener('change', refresh);
+  });
+  document.getElementById('f-clear').addEventListener('click', () => {
+    search.value = ''; fVerdict.value = ''; fCountry.value = ''; fSort.value = 'verdict';
+    refresh();
+  });
+  refresh();
+
   document.querySelectorAll('.tick-all').forEach(box => {
     box.addEventListener('change', () => {
       const sec = box.getAttribute('data-section');
+      // Only what the filter is currently showing, so "tick all" means what it
+      // looks like it means.
       document.querySelectorAll(`.row-tick[data-section="${sec}"]`).forEach(t => {
-        t.checked = box.checked;
+        if (visible(t.closest('tr'))) t.checked = box.checked;
       });
     });
   });
@@ -248,7 +399,8 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
   document.querySelectorAll('.apply-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const sec = btn.getAttribute('data-section');
-      const ticked = [...document.querySelectorAll(`.row-tick[data-section="${sec}"]`)].filter(t => t.checked);
+      const ticked = [...document.querySelectorAll(`.row-tick[data-section="${sec}"]`)]
+        .filter(t => t.checked && visible(t.closest('tr')));
       if (!ticked.length) return;
       if (!confirm(`Write ${ticked.length} listing(s)?`)) return;
 
