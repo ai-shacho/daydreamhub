@@ -127,6 +127,26 @@ const MANUAL = {
   },
 };
 
+// One submission can sit on several listings, and those listings were checked
+// in different batches by people who got different distances into the same
+// property. Where one reached a page and another was blocked, the one that
+// reached the page wins for all of them: "not found" is a statement about the
+// search, not about the number. Only applied where the submitted number is
+// byte-identical across the listings, which was checked by hand.
+const RECONCILED = {
+  // Same submission as #246/#248, which read the number off a Trip.com mirror
+  // after this batch was blocked by every source it tried.
+  229: { verdict: 'differs', webPhone: '+8562099941969' },
+  230: { verdict: 'differs', webPhone: '+8562099941969' },
+  // Same submission as #354/#355, whose own site publishes exactly this number.
+  348: { verdict: 'confirmed', webPhone: '+84385941487' },
+  // Same submission as #184, confirmed against the branch's directory listing.
+  570: { verdict: 'differs', webPhone: '+6623311022' },
+  // Same property as #291, which reached the club's own contact page and found
+  // the reception line as well as the manager's mobile.
+  302: { webPhone: '+623623304380', webPhoneAlt: '+6281237888444' },
+};
+
 const files = readdirSync(RESULTS_DIR).filter((f) => /^result_.*\.json$/.test(f)).sort();
 const byId = new Map();
 const problems = [];
@@ -148,6 +168,18 @@ for (const file of files) {
     if (byId.has(id)) problems.push(`#${id}: checked twice — ${byId.get(id)._file} and ${file}; keeping the later`);
     byId.set(id, { ...r, _file: file, checked: r.checked || CHECKED });
   }
+}
+
+// Fold in what a sibling listing established, and say so in the note so the
+// row does not look like it was checked more thoroughly than it was.
+for (const [id, patch] of Object.entries(RECONCILED)) {
+  const cur = byId.get(Number(id));
+  if (!cur) { problems.push(`#${id}: reconciliation has no row to apply to`); continue; }
+  byId.set(Number(id), {
+    ...cur,
+    ...patch,
+    note: `${cur.note} [Reconciled: another listing carrying this identical submission got further — see the sibling rows for the same property.]`,
+  });
 }
 
 // Hand-written entries win: they were reasoned about individually.
