@@ -18,6 +18,14 @@ const isJa = urlLang ? urlLang === 'ja' : cookieLang ? cookieLang === 'ja' : /(^
 const ga4Id = ((Astro.locals as any).runtime?.env?.GA4_MEASUREMENT_ID as string) || 'G-5C6B1R3H1Q';
 // In-app checkout: same server-resolved PayPal client id the booking page uses.
 const paypalClientId = (resolvePayPalConfig((Astro.locals as any).runtime?.env).clientId || '').trim();
+// iOS builds no splash screen from the manifest — without a startup image for
+// the exact device geometry it shows a blank white screen until the page paints.
+// [css width, css height, dpr]; images come from scripts/make-ios-splash.py.
+const IOS_SPLASH: [number, number, number][] = [
+  [440, 956, 3], [430, 932, 3], [402, 874, 3], [393, 852, 3],
+  [428, 926, 3], [390, 844, 3], [375, 812, 3], [414, 896, 3],
+  [414, 896, 2], [414, 736, 3], [375, 667, 2],
+];
 // ?test_pay=1 — staging/E2E only: replaces PayPal with the test-capture simulator.
 const testPay = Astro.url.searchParams.get('test_pay') === '1';
 
@@ -309,6 +317,13 @@ const areas: Array<{ label: string; q: string; img: string }> = [
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="DayDreamHub" />
     <link rel="apple-touch-icon" href="/app-icon-180.png" />
+    {IOS_SPLASH.map(([w, h, dpr]) => (
+      <link
+        rel="apple-touch-startup-image"
+        href={`/app-splash/splash-${w * dpr}x${h * dpr}.png`}
+        media={`(device-width: ${w}px) and (device-height: ${h}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: portrait)`}
+      />
+    ))}
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <script async src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}></script>
     <script is:inline define:vars={{ ga4Id }}>
