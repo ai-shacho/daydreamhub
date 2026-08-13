@@ -242,8 +242,8 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
                 <th class="px-3 py-2 w-8"><input type="checkbox" class="tick-all" data-section={sec.key} checked={sec.preTicked} /></th>
                 <th class="px-3 py-2 font-medium text-slate-600">Hotel</th>
                 <th class="px-3 py-2 font-medium text-slate-600">Call?</th>
-                <th class="px-3 py-2 font-medium text-slate-600">Main line</th>
-                <th class="px-3 py-2 font-medium text-slate-600">Contact person</th>
+                <th class="px-3 py-2 font-medium text-slate-600">Main line <span class="font-normal text-slate-400">— the one called</span></th>
+                <th class="px-3 py-2 font-medium text-slate-600">Contact person <span class="font-normal text-slate-400">— never called</span></th>
                 <th class="px-3 py-2 font-medium text-slate-600">On file now</th>
               </tr>
             </thead>
@@ -341,6 +341,9 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
                   <td class="px-3 py-2 align-top font-mono text-xs">
                     {m.notify.value || <span class="text-slate-300">—</span>}
                     {m.notify.value && !m.notify.confident && <div class="text-amber-600 font-sans">{m.notify.note}</div>}
+                    {m.notify.value && (
+                      <div class="text-slate-400 font-sans mt-1">kept for a person to ring; the automated call never uses it</div>
+                    )}
                   </td>
                   <td class="px-3 py-2 align-top font-mono text-xs text-slate-500">
                     {m.hotel.phone || <span class="text-slate-300">—</span>}
