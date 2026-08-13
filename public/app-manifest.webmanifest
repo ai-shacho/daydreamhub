@@ -1,15 +1,41 @@
 {
+  "id": "/app",
   "name": "DayDreamHub — Day-use now",
   "short_name": "DayDreamHub",
   "description": "Find day-use hotels you can rest in right now, near airports and city centers.",
   "start_url": "/app",
-  "scope": "/",
+  "scope": "/app",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
+  "categories": ["travel"],
   "icons": [
-    { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    {
+      "src": "/app-screenshots/narrow-1.png",
+      "sizes": "412x915",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Search for a day-use hotel near you"
+    },
+    {
+      "src": "/app-screenshots/narrow-2.png",
+      "sizes": "412x915",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Browse by region, country and city"
+    },
+    {
+      "src": "/app-screenshots/wide-1.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "DayDreamHub on a larger screen"
+    }
   ]
 }
