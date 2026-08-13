@@ -19,7 +19,7 @@ let error = '';
 if (db) {
   try {
     const r = await db.prepare(
-      "SELECT id, name, email, contact_email, country, city, phone, notify_phone, status FROM hotels ORDER BY name"
+      "SELECT id, name, email, contact_email, country, city, phone, notify_phone, status, call_kind, call_kind_set_by, call_kind_set_at FROM hotels ORDER BY name"
     ).all();
     hotels = r?.results || [];
   } catch (e: any) {
@@ -47,10 +47,32 @@ type Match = {
   notify: ReturnType<typeof toInternational>;
   verified?: (typeof PHONE_VERIFICATIONS)[number];
   /** What sort of business it is, and whether an automated call belongs there. */
-  callKind?: (typeof CALL_KINDS)[number];
+  callKind?: (typeof CALL_KINDS)[number] & { manual?: boolean };
   /** The published number, when checking found one that differs. */
   suggested?: string;
 };
+
+// A spa, a private host or a row that is not a property is never called,
+// whoever said so. Same rule as the merge script, applied again here so a hand
+// override cannot turn one of them back on by accident.
+const NEVER_CALL = new Set(['spa_salon', 'private_host', 'not_real']);
+
+const KIND_OPTIONS = Object.keys(KIND_LABEL) as Array<keyof typeof KIND_LABEL>;
+
+/** What a listing is: the hand-set value if there is one, else what checking found. */
+function effectiveKind(h: any) {
+  const checked = CALL_KINDS[h.id];
+  const manual = String(h.call_kind || '').trim();
+  if (!manual) return checked;
+  const callable = NEVER_CALL.has(manual) ? 'no' : manual === 'unclear' ? 'unclear' : 'yes';
+  return {
+    kind: manual as any,
+    callable: callable as any,
+    why: `Set by hand${h.call_kind_set_by ? ` by ${h.call_kind_set_by}` : ''}${h.call_kind_set_at ? ` on ${String(h.call_kind_set_at).slice(0, 10)}` : ''}.`
+      + (checked ? ` Checking had said: ${checked.kind.replace(/_/g, ' ')} — ${checked.why}` : ''),
+    manual: true,
+  };
+}
 
 const ready: Match[] = [];     // both numbers understood — safe to apply in bulk
 const checked: Match[] = [];   // looked up on the web; the finding decides
@@ -75,7 +97,7 @@ for (const h of hotels) {
   if (!phone.value && !notify.value) { unmatched++; continue; }
 
   const verified = PHONE_VERIFICATIONS[h.id];
-  const m: Match = { hotel: h, row, how, phone, notify, verified, callKind: CALL_KINDS[h.id] };
+  const m: Match = { hotel: h, row, how, phone, notify, verified, callKind: effectiveKind(h) };
 
   // Where the web disagrees, that number is offered as the default choice —
   // but the submitted one stays on the row and stays selectable. A number
@@ -278,12 +300,19 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
                           : 'bg-amber-50 text-amber-800'}`}>
                           {m.callKind.callable === 'yes' ? 'Call' : m.callKind.callable === 'no' ? 'Do not call' : 'Unclear'}
                         </span>
-                        <div class="text-slate-500 mt-1">{KIND_LABEL[m.callKind.kind]}</div>
+                        {m.callKind.manual && <span class="ml-1 text-slate-400">by hand</span>}
                         <div class="text-slate-400 mt-0.5 leading-snug">{m.callKind.why}</div>
                       </>
                     ) : (
                       <span class="inline-block rounded px-1.5 py-0.5 bg-amber-50 text-amber-800 font-medium">Unclear</span>
                     )}
+                    <select class="kind-pick mt-1.5 w-full border border-slate-200 rounded px-1 py-0.5 text-xs"
+                      data-hotel-id={m.hotel.id} data-original={m.hotel.call_kind || ''}>
+                      <option value="">{m.hotel.call_kind ? 'Use the checked value' : `As checked — ${m.callKind ? KIND_LABEL[m.callKind.kind] : 'unclear'}`}</option>
+                      {KIND_OPTIONS.map(k => (
+                        <option value={k} selected={m.hotel.call_kind === k}>{KIND_LABEL[k]}</option>
+                      ))}
+                    </select>
                     <div class="text-slate-300 mt-1">matched by {m.how}</div>
                   </td>
                   <td class="px-3 py-2 align-top font-mono text-xs">
@@ -420,6 +449,41 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
       document.querySelectorAll(`.row-tick[data-section="${sec}"]`).forEach(t => {
         if (visible(t.closest('tr'))) t.checked = box.checked;
       });
+    });
+  });
+
+  // Setting the kind by hand saves on the spot. The row then reloads its own
+  // state on the next page load; no need to re-render it here beyond saying so.
+  document.querySelectorAll('.kind-pick').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const id = Number(sel.getAttribute('data-hotel-id'));
+      const previous = sel.getAttribute('data-original') || '';
+      const out = document.getElementById('apply-result');
+      sel.disabled = true;
+      try {
+        const res = await fetch('/api/admin/hotel-call-kind', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotel_id: id, kind: sel.value }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        sel.setAttribute('data-original', sel.value);
+        // The badge and the do-not-call filter are rendered server-side, so the
+        // page has to come back for them to agree with what was just saved.
+        out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-emerald-50 text-emerald-800 border border-emerald-200';
+        out.textContent = sel.value
+          ? `Saved. Reloading so the filter and the badge agree.`
+          : `Cleared — back to the checked value. Reloading.`;
+        out.classList.remove('hidden');
+        setTimeout(() => window.location.reload(), 900);
+      } catch (e) {
+        sel.value = previous;
+        sel.disabled = false;
+        out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200';
+        out.textContent = `Could not save: ${e.message}`;
+        out.classList.remove('hidden');
+      }
     });
   });
 
