@@ -45,13 +45,15 @@ type Match = {
   phone: ReturnType<typeof toInternational>;
   notify: ReturnType<typeof toInternational>;
   verified?: (typeof PHONE_VERIFICATIONS)[number];
+  /** The published number, when checking found one that differs. */
+  suggested?: string;
 };
 
 const ready: Match[] = [];     // both numbers understood — safe to apply in bulk
 const checked: Match[] = [];   // looked up on the web; the finding decides
 const check: Match[] = [];     // a number needed an assumption, and nobody has looked yet
 const already: Match[] = [];   // the listing already has a phone
-const rejected: Match[] = [];  // looking it up showed the number does not belong here
+const flagged: Match[] = [];   // checking says this number is someone else's, or the listing is not real
 let unmatched = 0;
 
 for (const h of hotels) {
@@ -72,25 +74,16 @@ for (const h of hotels) {
   const verified = PHONE_VERIFICATIONS[h.id];
   const m: Match = { hotel: h, row, how, phone, notify, verified };
 
-  // A number that was actually looked up beats anything the parser worked out.
-  if (verified) {
-    const blank = { value: '', confident: false, note: '' };
-    if (verified.phone) m.phone = { value: verified.phone, confident: true, note: '' };
-    else if (verified.verdict !== 'confirmed') m.phone = blank;
-
-    if (verified.notify_phone !== undefined) {
-      m.notify = { value: verified.notify_phone, confident: !!verified.notify_phone, note: '' };
-    } else if (verified.verdict === 'test' || verified.phone === '') {
-      // The main line was thrown out because it belongs to someone else or the
-      // listing is not real. The second number came from the same submission,
-      // so it goes with it — otherwise a Mauritian hotel's line would still get
-      // dialled, just from the other column.
-      m.notify = blank;
-    }
+  // Where the web disagrees, that number is offered as the default choice —
+  // but the submitted one stays on the row and stays selectable. A number
+  // published nowhere is not wrong; a sales desk's direct line looks exactly
+  // like that.
+  if (verified?.webPhone && verified.verdict !== 'confirmed') {
+    m.suggested = verified.webPhone;
   }
 
-  if (verified && !m.phone.value && !m.notify.value) rejected.push(m);
-  else if (String(h.phone || '').trim()) already.push(m);
+  if (String(h.phone || '').trim()) already.push(m);
+  else if (verified && (verified.verdict === 'wrong_business' || verified.verdict === 'not_a_property')) flagged.push(m);
   else if (verified) checked.push(m);
   else if ((m.phone.value && !m.phone.confident) || (m.notify.value && !m.notify.confident)) check.push(m);
   else ready.push(m);
@@ -101,7 +94,7 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
   { key: 'checked', title: 'Checked against the web', blurb: 'These were doubtful, so each was looked up on the hotel\'s own site or a tourism registry. The finding is shown per row.', rows: checked, preTicked: true },
   { key: 'check', title: 'Read before applying', blurb: 'A country code had to be worked out from the listing\'s country, and nobody has checked yet.', rows: check, preTicked: false },
   { key: 'already', title: 'Listing already has a phone', blurb: 'Left alone. Tick only if the old number is better than what is on file.', rows: already, preTicked: false },
-  { key: 'rejected', title: 'Do not import', blurb: 'Looking these up showed the number belongs to someone else, or the listing is not a real property. Nothing to apply.', rows: rejected, preTicked: false },
+  { key: 'flagged', title: 'Checking disagrees — decide per row', blurb: 'The number appears to belong to a different business, or the listing may not be a real property. Nothing is deleted: the submitted number is still here and still selectable.', rows: flagged, preTicked: false },
 ];
 ---
 
@@ -120,7 +113,7 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
     {[['Ready', ready.length, 'text-emerald-700 bg-emerald-50 border-emerald-200'],
       ['Web-checked', checked.length, 'text-sky-700 bg-sky-50 border-sky-200'],
       ['Needs a look', check.length, 'text-amber-700 bg-amber-50 border-amber-200'],
-      ['Do not import', rejected.length, 'text-red-700 bg-red-50 border-red-200'],
+      ['Disagrees', flagged.length, 'text-red-700 bg-red-50 border-red-200'],
       ['Already has one', already.length, 'text-slate-600 bg-slate-50 border-slate-200'],
       ['No match', unmatched, 'text-slate-400 bg-white border-slate-200']].map(([label, n, cls]) => (
       <div class={`rounded-lg border px-4 py-3 ${cls}`}>
@@ -165,10 +158,10 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
               {sec.rows.map(m => (
                 <tr class="hover:bg-slate-50">
                   <td class="px-3 py-2 align-top">
-                    <input type="checkbox" class="row-tick" checked={sec.preTicked}
+                    <input type="checkbox" class="row-tick" checked={sec.preTicked && !m.suggested}
                       data-section={sec.key}
                       data-hotel-id={m.hotel.id}
-                      data-phone={m.phone.value}
+                      data-phone={m.suggested || m.phone.value}
                       data-notify={m.notify.value} />
                   </td>
                   <td class="px-3 py-2 align-top">
@@ -181,10 +174,11 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
                     {m.verified && (
                       <div class={`mt-1 text-xs rounded px-2 py-1 ${
                         m.verified.verdict === 'confirmed' ? 'bg-emerald-50 text-emerald-800'
-                        : m.verified.verdict === 'corrected' ? 'bg-sky-50 text-sky-800'
-                        : m.verified.verdict === 'test' ? 'bg-red-50 text-red-700'
+                        : m.verified.verdict === 'differs' ? 'bg-sky-50 text-sky-800'
+                        : m.verified.verdict === 'not_a_property' || m.verified.verdict === 'wrong_business' ? 'bg-red-50 text-red-700'
                         : 'bg-amber-50 text-amber-800'}`}>
-                        <strong>{m.verified.verdict}</strong> — {m.verified.note}
+                        <strong>{m.verified.verdict.replace(/_/g, ' ')}</strong> — {m.verified.note}
+                        {m.verified.matchedOn && <div class="mt-0.5 opacity-80">identified by: {m.verified.matchedOn}</div>}
                         {m.verified.source && (
                           <> <a href={m.verified.source} target="_blank" rel="noopener" class="underline">source</a></>
                         )}
@@ -193,9 +187,27 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
                   </td>
                   <td class="px-3 py-2 align-top text-xs text-slate-500">{m.how}</td>
                   <td class="px-3 py-2 align-top font-mono text-xs">
-                    {m.phone.value || <span class="text-slate-300">—</span>}
-                    {m.phone.value && !m.phone.confident && <div class="text-amber-600 font-sans">{m.phone.note}</div>}
-                    <div class="text-slate-300 font-sans">was: {m.row.hotel_phone || '—'}</div>
+                    {m.suggested ? (
+                      <>
+                        <label class="flex items-start gap-1.5">
+                          <input type="radio" name={`pick-${m.hotel.id}`} value={m.suggested} checked
+                            class="pick-phone mt-0.5" data-hotel-id={m.hotel.id} />
+                          <span>{m.suggested}<span class="block text-sky-700 font-sans">published online</span></span>
+                        </label>
+                        <label class="flex items-start gap-1.5 mt-1.5">
+                          <input type="radio" name={`pick-${m.hotel.id}`} value={m.phone.value}
+                            class="pick-phone mt-0.5" data-hotel-id={m.hotel.id} />
+                          <span>{m.phone.value || '—'}<span class="block text-slate-400 font-sans">as submitted</span></span>
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        {m.phone.value || <span class="text-slate-300">—</span>}
+                        {m.phone.value && !m.phone.confident && <div class="text-amber-600 font-sans">{m.phone.note}</div>}
+                      </>
+                    )}
+                    <div class="text-slate-300 font-sans mt-1">typed: {m.row.hotel_phone || '—'}</div>
+                    {m.verified?.webPhoneAlt && <div class="text-slate-400 font-sans">also published: {m.verified.webPhoneAlt}</div>}
                   </td>
                   <td class="px-3 py-2 align-top font-mono text-xs">
                     {m.notify.value || <span class="text-slate-300">—</span>}
@@ -222,6 +234,14 @@ const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]
       document.querySelectorAll(`.row-tick[data-section="${sec}"]`).forEach(t => {
         t.checked = box.checked;
       });
+    });
+  });
+
+  document.querySelectorAll('.pick-phone').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const id = radio.getAttribute('data-hotel-id');
+      const tick = document.querySelector(`.row-tick[data-hotel-id="${id}"]`);
+      if (tick) tick.setAttribute('data-phone', radio.value);
     });
   });
 
