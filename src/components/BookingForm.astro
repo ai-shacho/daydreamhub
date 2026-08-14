@@ -514,7 +514,9 @@ try {
                 } else if (plan.cancellation_hours === 0) {
                   return (
                     <div class="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-xs text-red-700 font-medium">
-                      {locale === 'ja' ? '❌ 返金不可プランです（キャンセルしても請求の二重発生はありません）' : '❌ This plan is non-refundable (you will never be charged twice).'}
+                      {locale === 'ja'
+                        ? '❌ 予約確定後は返金不可のプランです。請求が二重に発生することはありません。'
+                        : '❌ This plan is non-refundable after hotel confirmation. You will never be charged twice.'}
                     </div>
                   );
                 } else {

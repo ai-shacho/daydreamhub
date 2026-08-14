@@ -93,7 +93,12 @@ const en: Record<string, string> = {
   "hotel.cancel_policy": "Cancellation Policy",
   "hotel.cancel_policy_free": "Free cancellation up to {hours} hours before check-in",
   "hotel.cancel_policy_local_time": "Cancellation deadlines are counted in the local time of the city the hotel is in, not your own time zone.",
-  "hotel.cancel_policy_none": "Non-refundable",
+  // "Non-refundable" on its own reads as jargon: a guest can take it to mean the
+  // hotel merely has no free-cancellation window and still expect their money
+  // back. "after hotel confirmation" is the part that matters — payment is
+  // captured up front, but a request the hotel declines is refunded
+  // automatically, so confirmation is the point the money stops coming back.
+  "hotel.cancel_policy_none": "Non-refundable after hotel confirmation",
   "hotel.cancel_policy_contact": "Please contact the hotel for cancellation details",
   "hotel.cancel_policy_varies": "Cancellation terms differ by plan — see each plan below.",
   "hotel.not_found": "Hotel Not Found",
@@ -296,7 +301,7 @@ const ja: Record<string, string> = {
   "hotel.cancel_policy": "キャンセルポリシー",
   "hotel.cancel_policy_free": "チェックイン{hours}時間前まで無料キャンセル可能",
   "hotel.cancel_policy_local_time": "キャンセル期限は、お客様のいる地域の時刻ではなく、ホテル所在地の現地時間で計算されます。",
-  "hotel.cancel_policy_none": "キャンセル不可",
+  "hotel.cancel_policy_none": "予約確定後は返金不可",
   "hotel.cancel_policy_contact": "キャンセルの詳細はホテルにお問い合わせください",
   "hotel.cancel_policy_varies": "キャンセル条件はプランごとに異なります。各プランの記載をご確認ください。",
   "hotel.not_found": "ホテルが見つかりません",
