@@ -71,6 +71,9 @@ try {
     }
   }
 } catch (e) {
+  // Worth a line in the log: the fallback below quietly swaps in sample hotels,
+  // and a slug that is not among them then renders as a null hotel. Without
+  // this, a schema slip looks like an unrelated crash on hotel.latitude.
   console.error('[HotelDetail] DB load failed, falling back to sample data:', (e as any)?.message || e);
   dbAvailable = false;
 }
