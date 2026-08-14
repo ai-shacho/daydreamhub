@@ -71,6 +71,7 @@ try {
     }
   }
 } catch (e) {
+  console.error('[HotelDetail] DB load failed, falling back to sample data:', (e as any)?.message || e);
   dbAvailable = false;
 }
 
