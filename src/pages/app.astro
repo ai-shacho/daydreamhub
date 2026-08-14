@@ -810,7 +810,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
     <div id="home">
       <header class="bar">
         <img src="/logo-wordmark.png" alt="DayDreamHub" width="1209" height="191" />
-        <button class="ui-lang" id="uiLang" aria-label="Language">{isJa ? 'EN' : '日本語'}</button>
+        {/* No aria-label: it read "Language" while the button showed "日本語",
+            so voice control could not match what was on screen. */}
+        <button class="ui-lang" id="uiLang">{isJa ? 'EN' : '日本語'}</button>
       </header>
       <main>
         <h1>{t.tagline}</h1>
@@ -830,9 +832,11 @@ const areas: Array<{ label: string; q: string; img: string }> = [
 
         <div class="popular-title">{t.popular}</div>
         <div class="areas" id="areas">
-          {areas.map((a) => (
+          {areas.map((a, i) => (
             <button class="area" data-q={a.q}>
-              <img src={a.img} alt="" loading="lazy" />
+              {/* The first three rows are on screen at launch. Lazy-loading them
+                  deferred the request until after layout and pushed LCP to 8.5s. */}
+              <img src={a.img} alt="" loading={i < 6 ? 'eager' : 'lazy'} />
               <span>{a.label}</span>
             </button>
           ))}
@@ -2400,6 +2404,20 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         $('myBookingsBtn').classList.toggle('show', getBookings().length + getInquiries().length > 0);
       }
       refreshBkBtn();
+
+      // Long-pressing the installed icon offers the manifest shortcuts; they
+      // arrive as ?action= on the start URL and have to be acted on here, or
+      // they would just open the home screen and look broken.
+      (() => {
+        const action = new URLSearchParams(location.search).get('action');
+        if (!action) return;
+        // Drop it from the URL so a reload does not fire the shortcut again.
+        history.replaceState(null, '', location.pathname);
+        if (action === 'near') $('geoBtn').click();
+        if (action === 'bookings') $('myBookingsBtn').click();
+        track('app_shortcut', { action });
+      })();
+
       $('bkListClose').addEventListener('click', () => { stopBkPolling(); back(); });
       $('myBookingsBtn').addEventListener('click', () => {
         const bks = getBookings();
