@@ -155,6 +155,7 @@ const t = isJa
       ageChild: '{a}歳まで',
       ageInfant: '{a}歳まで',
       addonsLabel: 'オプション（有料）',
+      paidInUsd: '※ 決済はUSDで行われます',
       addonFor: '対象：',
       nationalityLabel: '国籍',
       nationalitySelect: '— 選択してください —',
@@ -303,6 +304,7 @@ const t = isJa
       ageChild: 'up to {a}',
       ageInfant: 'under {a}',
       addonsLabel: 'Paid add-ons',
+      paidInUsd: 'Payment is processed in USD.',
       addonFor: 'For: ',
       nationalityLabel: 'Nationality',
       nationalitySelect: '— Select —',
@@ -837,7 +839,8 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       .addon-body { flex: 1; min-width: 0; }
       .addon-name { display: block; font-size: 14px; font-weight: 600; color: var(--text); }
       .addon-cover { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
-      .addon-price { font-size: 14px; font-weight: 700; color: var(--teal-dark); flex: none; }
+      .addon-price { font-size: 14px; font-weight: 700; color: var(--teal-dark); flex: none; text-align: right; }
+      .addon-price .addon-local { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
 
       .cancel-box {
         border: 1px solid #fde68a; background: #fffbeb; border-radius: 12px;
@@ -2260,6 +2263,30 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       let paypalSdkPromise = null;
       let buttonsRendered = false;
 
+      // The hotel's own currency, alongside USD, the way the website shows it.
+      // Nothing is converted here: plans and add-ons carry price_local as
+      // entered by the hotel, so this only formats what is already stored.
+      // Payment is still taken in USD, which the note under the total says.
+      const ZERO_DECIMAL = new Set(['JPY', 'HUF', 'TWD', 'KRW', 'VND', 'CLP', 'ISK']);
+      let hotelCurrency = 'USD';
+      const money = (amount, currency) => {
+        const digits = ZERO_DECIMAL.has(currency) ? 0 : 2;
+        try {
+          return new Intl.NumberFormat('en-US', {
+            style: 'currency', currency,
+            minimumFractionDigits: 0, maximumFractionDigits: digits,
+          }).format(amount);
+        } catch (e) {
+          return currency + ' ' + amount.toFixed(digits);
+        }
+      };
+      /** "฿1,000" for a non-USD hotel, empty for a USD one (the $ is already shown). */
+      const localOf = (amountLocal) => {
+        if (!hotelCurrency || hotelCurrency === 'USD') return '';
+        if (amountLocal == null || !isFinite(amountLocal)) return '';
+        return money(Number(amountLocal), hotelCurrency);
+      };
+
       const yenOf = (usd) => {
         if (!isJa || !rateJPY || usd == null) return '';
         const v = usd * rateJPY;
@@ -2325,6 +2352,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           const d = await r.json();
           if (d.error) throw new Error(d.error);
           selHotel = d.hotel;
+          // Every price on this hotel's screens is quoted in its own currency
+          // from here on.
+          hotelCurrency = String(d.hotel.currency || 'USD').toUpperCase();
           if (isJa && d.hotel.name_ja) $('detailName').textContent = d.hotel.name_ja;
           // photo gallery (swipe) + hotel description
           const imgs = (d.hotel.images && d.hotel.images.length ? d.hotel.images : [cur.thumbnail]).filter(Boolean);
@@ -2361,7 +2391,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
               if (p.max_guests) bits.push(`${t.upTo}${p.max_guests}${t.ppl}`);
               return `<button class="plan" data-plan="${p.id}">
                 <div class="pinfo"><div class="pname">${esc(name)}</div><div class="pmeta">${esc(bits.join(' ・ '))}</div></div>
-                <div class="pprice"><div class="usd">$${p.price_usd}</div><div class="yen">${yenOf(p.price_usd)}</div></div>
+                <div class="pprice"><div class="usd">$${p.price_usd}</div><div class="yen">${localOf(p.price_local) || yenOf(p.price_usd)}</div></div>
                 <div class="go">›</div>
               </button>`;
             })
@@ -2429,16 +2459,24 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         const hours = plan.check_in_time && plan.check_out_time ? `${plan.check_in_time}–${plan.check_out_time}` : '';
         // Repainted whenever the bands or the add-ons change, so the total the
         // guest sees is the one they are about to be charged.
-        paintBookingSummary = (addonsUsd) => {
+        paintBookingSummary = (addonsUsd, addonsLocal) => {
           const extra = Number(addonsUsd || 0);
           const total = Number(plan.price_usd || 0) + extra;
+          const extraLocal = Number(addonsLocal || 0);
+          const totalLocal = Number(plan.price_local || 0) + extraLocal;
+          // The hotel's own figure, then a JPY estimate for Japanese readers of
+          // a USD-priced hotel. Never both: two approximations under one total
+          // is noise.
+          const totalSide = localOf(totalLocal) || yenOf(total);
           $('bookSummary').innerHTML =
             `<div class="row"><span class="k">${t.planLabel}</span><span>${esc(pname)}</span></div>` +
             (hours ? `<div class="row"><span class="k">${t.hoursLabel}</span><span>${esc(hours)}</span></div>` : '') +
-            (extra ? `<div class="row"><span class="k">${t.addonsLabel}</span><span>+$${extra.toFixed(2)}</span></div>` : '') +
-            `<div class="row total"><span>${t.total}</span><span class="v">$${total.toFixed(2)} <small style="color:var(--muted);font-weight:400">${yenOf(total)}</small></span></div>`;
+            (extra ? `<div class="row"><span class="k">${t.addonsLabel}</span><span>+$${extra.toFixed(2)}` +
+              (localOf(extraLocal) ? ` <small style="color:var(--muted)">${localOf(extraLocal)}</small>` : '') + `</span></div>` : '') +
+            `<div class="row total"><span>${t.total}</span><span class="v">$${total.toFixed(2)} <small style="color:var(--muted);font-weight:400">${totalSide}</small></span></div>` +
+            (localOf(totalLocal) ? `<div class="row"><span class="k" style="font-size:11px">${t.paidInUsd}</span><span></span></div>` : '');
         };
-        paintBookingSummary(0);
+        paintBookingSummary(0, 0);
         const d = new Date();
         const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const bkDate = $('bkDate');
@@ -2496,16 +2534,25 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         return parts.length ? t.addonFor + parts.join(' + ') : '';
       }
 
-      /** What one add-on adds to the bill, for display only. */
-      function addonUsd(o) {
-        if (o.pricing_type === 'per_room') return Number(o.price_usd || 0);
+      /**
+       * What one add-on adds to the bill, for display only.
+       *
+       * The same arithmetic serves both currencies — pass the field suffix —
+       * so the dollar figure and the local one can never disagree about who is
+       * being counted.
+       */
+      function addonAmount(o, suffix) {
+        const base = Number(o['price' + suffix] || 0);
+        if (o.pricing_type === 'per_room') return base;
         if (o.pricing_type === 'per_adult_child') {
-          return (o.counts_adults ? bandCount('bkAdults', 1) * Number(o.price_usd || 0) : 0)
-            + (o.counts_children ? bandCount('bkChildren', 0) * Number(o.child_price_usd ?? o.price_usd ?? 0) : 0)
-            + (o.counts_infants ? bandCount('bkInfants', 0) * Number(o.infant_price_usd ?? 0) : 0);
+          return (o.counts_adults ? bandCount('bkAdults', 1) * base : 0)
+            + (o.counts_children ? bandCount('bkChildren', 0) * Number(o['child_price' + suffix] ?? base) : 0)
+            + (o.counts_infants ? bandCount('bkInfants', 0) * Number(o['infant_price' + suffix] ?? 0) : 0);
         }
-        return coveredBy(o) * Number(o.price_usd || 0);   // per_person
+        return coveredBy(o) * base;   // per_person
       }
+      const addonUsd = (o) => addonAmount(o, '_usd');
+      const addonLocal = (o) => addonAmount(o, '_local');
 
       let planOptions = [];
       const chosenOptions = () =>
@@ -2547,16 +2594,20 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       /** Keep the summary in step with the bands and the add-ons chosen. */
       function refreshTotals() {
         let addons = 0;
+        let addonsLocal = 0;
         for (const o of planOptions) {
           const priceEl = document.querySelector(`[data-price="${o.id}"]`);
           const coverEl = document.querySelector(`[data-cover="${o.id}"]`);
           if (coverEl) coverEl.textContent = coverageLabel(o);
           const usd = addonUsd(o);
-          if (priceEl) priceEl.textContent = usd ? '+$' + usd.toFixed(2) : '';
+          const loc = localOf(addonLocal(o));
+          if (priceEl) priceEl.innerHTML = usd
+            ? '+$' + usd.toFixed(2) + (loc ? '<span class="addon-local">' + loc + '</span>' : '')
+            : '';
           const box = document.querySelector(`.addon-cb[data-opt="${o.id}"]`);
-          if (box && box.checked) addons += usd;
+          if (box && box.checked) { addons += usd; addonsLocal += addonLocal(o); }
         }
-        if (paintBookingSummary) paintBookingSummary(addons);
+        if (paintBookingSummary) paintBookingSummary(addons, addonsLocal);
       }
       ['bkAdults', 'bkChildren', 'bkInfants'].forEach((id) => {
         const el = $(id);
