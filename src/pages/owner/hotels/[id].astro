@@ -1459,8 +1459,14 @@ for (let h = 0; h < 24; h++) {
           document.getElementById('edit_latitude').value = data.latitude.toFixed(6);
           document.getElementById('edit_longitude').value = data.longitude.toFixed(6);
           btn.textContent = '✅ Coordinates updated';
-        } else {
+        } else if (res.status === 404) {
+          // Only a 404 means the address itself could not be found.
           btn.textContent = '❌ Not found — try a more specific address';
+        } else {
+          // Anything else is our fault, not the address's — a missing API key
+          // returns 500 — and blaming the address sends an owner off rewriting
+          // one that was already correct.
+          btn.textContent = '⚠️ Lookup unavailable: ' + (data.error || ('server error ' + res.status));
         }
       } catch (e) {
         btn.textContent = '❌ Error — please try again';
