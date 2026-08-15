@@ -1928,7 +1928,15 @@ const areas: Array<{ label: string; q: string; img: string }> = [
 
         showTyping();
         try {
-          const res = await fetch('/api/app/nearby?' + new URLSearchParams({ q: text, limit: 24, lang: V.code }));
+          // Two different questions on what used to be one parameter. `lang` is
+          // the language being read, and decides what a place is called back.
+          // `voice` is the language just spoken, which is what Google should
+          // geocode in — a Thai utterance matches best against Thai. Sending
+          // the spoken language as `lang` put Thai and Japanese place names
+          // into English chrome.
+          const res = await fetch('/api/app/nearby?' + new URLSearchParams({
+            q: text, limit: 24, lang: isJa ? 'ja' : 'en', voice: V.code,
+          }));
           const data = await res.json();
           if (data.error) throw new Error(data.error);
           track('app_search', { mode: data.mode, q: text });
