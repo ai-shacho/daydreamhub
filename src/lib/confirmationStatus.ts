@@ -47,8 +47,8 @@ export function initConfirmationStatus(): void {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
     };
-    set('detail-hotel', data.hotel_name || '—');
-    set('detail-plan', data.plan_name || '—');
+    set('detail-hotel', (ja && data.hotel_name_ja) || data.hotel_name || '—');
+    set('detail-plan', (ja && data.plan_name_ja) || data.plan_name || '—');
     set('detail-checkin', data.check_in_date ? formatDisplayDate(data.check_in_date, ja ? 'ja' : 'en') : '—');
     set('detail-price', data.total_price_usd != null ? `$${Number(data.total_price_usd).toFixed(2)}` : '—');
     fillAddOns(data.options || []);

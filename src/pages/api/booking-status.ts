@@ -28,7 +28,8 @@ export const GET: APIRoute = async ({ url, locals }) => {
       .prepare(
         `SELECT b.id, b.status, b.alt_status, b.check_in_date, b.total_price_usd,
                 b.guest_name, b.guest_email,
-                h.name as hotel_name, p.name as plan_name
+                h.name as hotel_name, h.name_ja as hotel_name_ja,
+                p.name as plan_name, p.name_ja as plan_name_ja
          FROM bookings b
          LEFT JOIN hotels h ON h.id = b.hotel_id
          LEFT JOIN plans p ON p.id = b.plan_id
@@ -42,7 +43,8 @@ export const GET: APIRoute = async ({ url, locals }) => {
       .prepare(
         `SELECT b.id, b.status, b.alt_status, b.check_in_date, b.total_price_usd,
                 b.guest_name, b.guest_email,
-                h.name as hotel_name, p.name as plan_name
+                h.name as hotel_name, h.name_ja as hotel_name_ja,
+                p.name as plan_name, p.name_ja as plan_name_ja
          FROM bookings b
          LEFT JOIN hotels h ON h.id = b.hotel_id
          LEFT JOIN plans p ON p.id = b.plan_id
@@ -71,8 +73,14 @@ export const GET: APIRoute = async ({ url, locals }) => {
       id: booking.id,
       status: booking.status,
       alt_status: booking.alt_status,
+      // The Japanese confirmation page showed the English plan name while the
+      // booking form a click earlier showed the Japanese one — the same plan
+      // changing language between two steps of one flow. Both are returned and
+      // the page picks; falling back to English when no translation exists.
       hotel_name: booking.hotel_name,
+      hotel_name_ja: booking.hotel_name_ja,
       plan_name: booking.plan_name,
+      plan_name_ja: booking.plan_name_ja,
       check_in_date: booking.check_in_date,
       total_price_usd: booking.total_price_usd,
       guest_name: booking.guest_name,
