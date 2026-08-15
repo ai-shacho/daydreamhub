@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { currencyForPhone } from '../../../lib/phoneCurrency';
 import { initiateCall, createCallGroup, initiateNextGroupCall, searchHotelsInternal, searchHotelsExternal, searchHotelsBrave, isJapanQuery } from '../../../lib/tools';
+import { sortByProximity, type Coords } from '../../../lib/filterExternalHotels';
 import { CONCIERGE_SYSTEM_PROMPT_EN, CONCIERGE_SYSTEM_PROMPT_JA } from '../../../lib/claude';
 import { filterExternalHotels } from '../../../lib/filterExternalHotels';
 import { sendConciergeCallStartedEmail } from '../../../lib/email';
@@ -153,17 +154,20 @@ async function getActiveCities(db: any): Promise<string[]> {
   return cities;
 }
 
-async function fetchExternalHotelsProgressive(env: any, city: string, locale: string, internalHotels: any[]): Promise<any[]> {
+async function fetchExternalHotelsProgressive(env: any, city: string, locale: string, internalHotels: any[], near?: Coords | null): Promise<any[]> {
   // Japan is permanently out of service — never surface external (unlisted) Japanese hotels
   if (isJapanQuery(city)) return [];
   const primaryQuery = `day use hotel ${city}`;
+  // Sort before the cap, not after: filterExternalHotels keeps the first three
+  // it sees, so ordering afterwards would just reshuffle the three highest-rated
+  // rather than surface the three nearest.
   const firstBatch = await searchHotelsExternal(env, { query: primaryQuery, location: city, language: locale, maxPages: 1 });
-  let externalHotels = filterExternalHotels((firstBatch?.hotels || []) as any[], internalHotels, 3) as any[];
+  let externalHotels = filterExternalHotels(sortByProximity((firstBatch?.hotels || []) as any[], near), internalHotels, 3) as any[];
 
   if (externalHotels.length < 2) {
     const secondBatch = await searchHotelsExternal(env, { query: `hourly hotel ${city}`, location: city, language: locale, maxPages: 1 });
     const merged = [...((firstBatch?.hotels || []) as any[]), ...((secondBatch?.hotels || []) as any[])];
-    externalHotels = filterExternalHotels(merged, internalHotels, 3) as any[];
+    externalHotels = filterExternalHotels(sortByProximity(merged, near), internalHotels, 3) as any[];
   }
 
   if (externalHotels.length === 0) {
@@ -173,11 +177,33 @@ async function fetchExternalHotelsProgressive(env: any, city: string, locale: st
   return externalHotels;
 }
 
+/**
+ * Where the guest is, for ordering the hotels we offer to ring.
+ *
+ * The browser's own position is best and needs permission. Cloudflare attaches
+ * a city-level guess to every request, which is free, needs no prompt and is
+ * accurate enough to tell one side of a city from the other — so it is used
+ * whenever the guest has not granted the real thing.
+ */
+export function guestPosition(request: Request, body: any): Coords | null {
+  const lat = Number(body?.lat);
+  const lng = Number(body?.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+    return { lat, lng };
+  }
+  const cf: any = (request as any).cf;
+  const cfLat = Number(cf?.latitude);
+  const cfLng = Number(cf?.longitude);
+  if (Number.isFinite(cfLat) && Number.isFinite(cfLng)) return { lat: cfLat, lng: cfLng };
+  return null;
+}
+
 async function buildStructuredHotelResults(
   env: any,
   db: any,
   locale: string,
-  lastUserMsg: string
+  lastUserMsg: string,
+  near?: Coords | null
 ): Promise<HotelSearchBundle> {
   if (!db || !lastUserMsg || lastUserMsg.length < 2) return { city: '', hotels: [] };
   if (shouldSkipHeavyHotelSearch(lastUserMsg)) return { city: '', hotels: [] };
@@ -267,7 +293,7 @@ async function buildStructuredHotelResults(
   } catch {}
 
   try {
-    externalHotels = await fetchExternalHotelsProgressive(env, city, locale, internalHotels);
+    externalHotels = await fetchExternalHotelsProgressive(env, city, locale, internalHotels, near);
   } catch {}
 
   const dedupedInternal = (() => {
@@ -556,6 +582,9 @@ async function telnyxOrchestrate(
         try {
           const { searchHotelsExternal, searchHotelsBrave } = await import('../../../lib/tools');
           let extHotels: any[] = [];
+          // No position here: telnyxOrchestrate has no caller anywhere in the
+          // tree, so this path never runs. Threading the guest's coordinates in
+          // would mean changing a signature to feed dead code.
           extHotels = await fetchExternalHotelsProgressive(env, city, locale, results);
           // Task #47: save external hotels for structured response
           _structExternalHotels = extHotels;
@@ -1500,7 +1529,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
     const isJa = String(locale || '').toLowerCase().startsWith('ja');
     const systemPrompt = isJa ? CONCIERGE_SYSTEM_PROMPT_JA : CONCIERGE_SYSTEM_PROMPT_EN;
     const lastMsg = claudeMessages.filter((m: any) => m.role === 'user').pop()?.content || '';
-    const searched = await buildStructuredHotelResults(env, db, locale, String(lastMsg));
+    const searched = await buildStructuredHotelResults(env, db, locale, String(lastMsg), guestPosition(request, body));
     const structuredHotels = searched.hotels;
     // This path only needs a short guidance line — hotel data is delivered as structured cards.
     // A compact purpose-built prompt is far more reliable here (esp. on the CF AI fallback)
