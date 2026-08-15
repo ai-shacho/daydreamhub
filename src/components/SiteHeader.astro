@@ -9,6 +9,14 @@ interface Props {
 }
 
 const { currentPath, isJa, enPath, jaPath, currentUser, getPath } = Astro.props;
+
+// The app lives at one URL for both languages and works out which to show from
+// ?lang, then a cookie, then the browser's own language. That last step is what
+// a link has to pre-empt: without it, someone reading the English site on a
+// Japanese-language phone taps App and lands in Japanese. Carrying the page's
+// language — including 'en', which is the whole point — keeps the app in step
+// with the site they were just reading.
+const appPath = `/app?lang=${isJa ? 'ja' : 'en'}`;
 ---
   <!-- Header -->
   <header class="bg-white text-gray-800 sticky top-0 z-[1100] shadow-sm border-b border-gray-100">
@@ -52,7 +60,7 @@ const { currentPath, isJa, enPath, jaPath, currentUser, getPath } = Astro.props;
               {isJa ? 'ご利用方法' : 'How it Works'}
             </span>
           </a>
-          <a href="/app" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/app' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+          <a href={appPath} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/app' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
               {isJa ? 'アプリ' : 'App'}
@@ -169,7 +177,7 @@ const { currentPath, isJa, enPath, jaPath, currentUser, getPath } = Astro.props;
         <a href={getPath('/map')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? 'マップ' : 'Map'}</a>
         <a href={getPath('/blog')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? 'ブログ' : 'Blog'}</a>
         <a href={getPath('/how-it-works')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? 'ご利用方法' : 'How it Works'}</a>
-        <a href="/app" class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? '📱 アプリ（今すぐデイユース）' : '📱 App (day-use now)'}</a>
+        <a href={appPath} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? '📱 アプリ（今すぐデイユース）' : '📱 App (day-use now)'}</a>
         <!-- SERVICES_MOBILE_REMOVED -->
         <div class="pt-1 pb-0.5">
           <p class="px-3 py-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">{isJa ? 'その他' : 'More'}</p>

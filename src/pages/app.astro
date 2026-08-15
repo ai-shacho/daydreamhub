@@ -5,6 +5,7 @@
 // with a draggable bottom sheet (Google Maps / Airbnb pattern).
 import { resolvePayPalConfig } from '../lib/paypal';
 import { VOICE_LANGS } from '../lib/voiceLangs';
+import { COUNTRIES } from '../lib/data/countries';
 
 const acceptLang = Astro.request.headers.get('accept-language') || '';
 const urlLang = Astro.url.searchParams.get('lang');
@@ -13,6 +14,16 @@ const urlLang = Astro.url.searchParams.get('lang');
 // then the device's own language.
 const cookieLang = (Astro.request.headers.get('cookie') || '').match(/(?:^|;\s*)ddh_app_lang=(en|ja)/)?.[1];
 const isJa = urlLang ? urlLang === 'ja' : cookieLang ? cookieLang === 'ja' : /(^|,)\s*ja/i.test(acceptLang);
+
+// Remember an explicit ?lang, the same way the in-app toggle does. Arriving
+// from the English site carries ?lang=en, and without this the next visit —
+// including an installed app launching at the bare /app in its manifest —
+// would fall back to the device's language and flip back.
+if (urlLang === 'en' || urlLang === 'ja') {
+  Astro.cookies.set('ddh_app_lang', urlLang, {
+    path: '/', maxAge: 31536000, sameSite: 'lax',
+  });
+}
 // Same GA4 property as the main site (Layout.astro) so app usage shows up
 // alongside site traffic, distinguished by the app_* event names.
 const ga4Id = ((Astro.locals as any).runtime?.env?.GA4_MEASUREMENT_ID as string) || 'G-5C6B1R3H1Q';
@@ -137,6 +148,23 @@ const t = isJa
       bookTitle: '予約内容の入力',
       dateLabel: '利用日',
       guestsLabel: '人数',
+      adultsLabel: '大人',
+      childrenLabel: '子供',
+      infantsLabel: '乳児',
+      ageAdult: '13歳以上',
+      ageChild: '{a}歳まで',
+      ageInfant: '{a}歳まで',
+      addonsLabel: 'オプション（有料）',
+      addonFor: '対象：',
+      nationalityLabel: '国籍',
+      nationalitySelect: '— 選択してください —',
+      nationalityNote: 'ホテルの受け入れ準備（本人確認書類や宿泊者名簿の記載）のためにお伺いしています。',
+      notesLabel: 'ご要望（任意）',
+      notesPlaceholder: 'ホテルへのご要望があればご記入ください',
+      cancelTitle: 'キャンセルポリシー',
+      cancelFree: 'チェックイン{h}時間前まで無料キャンセル可能',
+      cancelNone: '予約確定後は返金不可',
+      cancelLocal: 'キャンセル期限は、お客様のいる地域の時刻ではなく、ホテル所在地の現地時間で計算されます。',
       nameLabel: 'お名前',
       emailLabel: 'メールアドレス',
       phoneLabel: '電話番号（任意）',
@@ -268,6 +296,23 @@ const t = isJa
       bookTitle: 'Booking details',
       dateLabel: 'Date',
       guestsLabel: 'Guests',
+      adultsLabel: 'Adults',
+      childrenLabel: 'Children',
+      infantsLabel: 'Infants',
+      ageAdult: '13+',
+      ageChild: 'up to {a}',
+      ageInfant: 'under {a}',
+      addonsLabel: 'Paid add-ons',
+      addonFor: 'For: ',
+      nationalityLabel: 'Nationality',
+      nationalitySelect: '— Select —',
+      nationalityNote: 'Hotels ask for this to prepare for your arrival — the ID they expect and any guest register they must keep.',
+      notesLabel: 'Special requests (optional)',
+      notesPlaceholder: 'Anything the hotel should know',
+      cancelTitle: 'Cancellation Policy',
+      cancelFree: 'Free cancellation up to {h} hours before check-in',
+      cancelNone: 'Non-refundable after hotel confirmation',
+      cancelLocal: 'Cancellation deadlines are counted in the local time of the city the hotel is in, not your own time zone.',
       nameLabel: 'Name',
       emailLabel: 'Email',
       phoneLabel: 'Phone (optional)',
@@ -768,7 +813,38 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         width: 100%; padding: 13px; border-radius: 12px; border: 1.5px solid var(--line);
         background: var(--surface); color: var(--text); font-size: 16px;
       }
-      .field input:focus, .field select:focus { outline: none; border-color: var(--teal); }
+      .field textarea {
+        width: 100%; padding: 13px; border-radius: 12px; border: 1.5px solid var(--line);
+        background: var(--surface); color: var(--text); font-size: 16px; font-family: inherit; resize: vertical;
+      }
+      .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--teal); }
+      .field-note { font-size: 12px; color: var(--muted); margin: 6px 2px 0; line-height: 1.5; }
+
+      /* Three age bands side by side: they are one question, not three. */
+      .guest-bands { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .guest-bands .band { display: block; margin: 0; }
+      .guest-bands .band > span {
+        display: block; font-size: 11px; font-weight: 500; color: var(--muted);
+        margin-bottom: 4px; line-height: 1.3; min-height: 2.6em;
+      }
+      .guest-bands .band select { padding: 11px 8px; }
+
+      .addon {
+        display: flex; align-items: flex-start; gap: 10px; padding: 11px 12px; margin-bottom: 8px;
+        border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer;
+      }
+      .addon input { width: auto; flex: none; margin-top: 2px; accent-color: var(--teal); }
+      .addon-body { flex: 1; min-width: 0; }
+      .addon-name { display: block; font-size: 14px; font-weight: 600; color: var(--text); }
+      .addon-cover { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+      .addon-price { font-size: 14px; font-weight: 700; color: var(--teal-dark); flex: none; }
+
+      .cancel-box {
+        border: 1px solid #fde68a; background: #fffbeb; border-radius: 12px;
+        padding: 11px 13px; margin-bottom: 12px; font-size: 13px; line-height: 1.6; color: #475569;
+      }
+      .cancel-box .cancel-title { font-weight: 700; color: #92400e; margin-bottom: 3px; }
+      .cancel-box .cancel-note { font-size: 11px; color: var(--muted); margin-top: 5px; }
       #payArea { margin-top: 16px; }
       #payHint { color: var(--warn); font-size: 13px; margin-bottom: 8px; min-height: 17px; }
       #paypalBox.locked { opacity: .45; pointer-events: none; }
@@ -943,8 +1019,16 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           <input id="bkDate" type="date" />
         </div>
         <div class="field">
-          <label for="bkGuests">{t.guestsLabel}</label>
-          <select id="bkGuests"></select>
+          <label>{t.guestsLabel}</label>
+          <div class="guest-bands">
+            <label class="band"><span id="bkAdultsLabel">{t.adultsLabel}</span><select id="bkAdults"></select></label>
+            <label class="band"><span id="bkChildrenLabel">{t.childrenLabel}</span><select id="bkChildren"></select></label>
+            <label class="band"><span id="bkInfantsLabel">{t.infantsLabel}</span><select id="bkInfants"></select></label>
+          </div>
+        </div>
+        <div class="field" id="bkOptionsField" hidden>
+          <label>{t.addonsLabel}</label>
+          <div id="bkOptions"></div>
         </div>
         <div class="field">
           <label for="bkName">{t.nameLabel}</label>
@@ -958,6 +1042,19 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           <label for="bkPhone">{t.phoneLabel}</label>
           <input id="bkPhone" type="tel" autocomplete="tel" inputmode="tel" />
         </div>
+        <div class="field">
+          <label for="bkNationality">{t.nationalityLabel}</label>
+          <select id="bkNationality">
+            <option value="">{t.nationalitySelect}</option>
+            {COUNTRIES.map(([code, name]) => <option value={name}>{name}</option>)}
+          </select>
+          <p class="field-note">{t.nationalityNote}</p>
+        </div>
+        <div class="field">
+          <label for="bkNotes">{t.notesLabel}</label>
+          <textarea id="bkNotes" rows="3" placeholder={t.notesPlaceholder}></textarea>
+        </div>
+        <div class="cancel-box" id="bkCancelBox" hidden></div>
         <div id="payArea">
           <div id="payHint"></div>
           <div id="paypalBox" class="locked"></div>
@@ -2148,6 +2245,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       // ---------- in-app detail / booking / payment ----------
       let selHotel = null;
       let selPlan = null;
+      let paintBookingSummary = null;
       let paypalSdkPromise = null;
       let buttonsRendered = false;
 
@@ -2318,21 +2416,141 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         const pname = isJa && plan.name_ja ? plan.name_ja : plan.name;
         $('bookHotelLine').textContent = selHotel ? selHotel.name : '';
         const hours = plan.check_in_time && plan.check_out_time ? `${plan.check_in_time}–${plan.check_out_time}` : '';
-        $('bookSummary').innerHTML =
-          `<div class="row"><span class="k">${t.planLabel}</span><span>${esc(pname)}</span></div>` +
-          (hours ? `<div class="row"><span class="k">${t.hoursLabel}</span><span>${esc(hours)}</span></div>` : '') +
-          `<div class="row total"><span>${t.total}</span><span class="v">$${plan.price_usd} <small style="color:var(--muted);font-weight:400">${yenOf(plan.price_usd)}</small></span></div>`;
+        // Repainted whenever the bands or the add-ons change, so the total the
+        // guest sees is the one they are about to be charged.
+        paintBookingSummary = (addonsUsd) => {
+          const extra = Number(addonsUsd || 0);
+          const total = Number(plan.price_usd || 0) + extra;
+          $('bookSummary').innerHTML =
+            `<div class="row"><span class="k">${t.planLabel}</span><span>${esc(pname)}</span></div>` +
+            (hours ? `<div class="row"><span class="k">${t.hoursLabel}</span><span>${esc(hours)}</span></div>` : '') +
+            (extra ? `<div class="row"><span class="k">${t.addonsLabel}</span><span>+$${extra.toFixed(2)}</span></div>` : '') +
+            `<div class="row total"><span>${t.total}</span><span class="v">$${total.toFixed(2)} <small style="color:var(--muted);font-weight:400">${yenOf(total)}</small></span></div>`;
+        };
+        paintBookingSummary(0);
         const d = new Date();
         const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const bkDate = $('bkDate');
         bkDate.min = iso;
         if (!bkDate.value) bkDate.value = iso;
         const maxG = Math.min(plan.max_guests || 4, 8);
-        $('bkGuests').innerHTML = Array.from({ length: maxG }, (_, i) => `<option value="${i + 1}">${i + 1}${t.ppl}</option>`).join('');
+        // Three age bands, as the website asks for. Adults start at one because
+        // a booking with nobody in it is not a booking; the other two start at
+        // zero and may exceed nothing.
+        const fill = (id, from) => {
+          $(id).innerHTML = Array.from({ length: maxG - from + 1 }, (_, i) =>
+            `<option value="${i + from}">${i + from}${t.ppl}</option>`).join('');
+          $(id).value = String(from);
+        };
+        fill('bkAdults', 1);
+        fill('bkChildren', 0);
+        fill('bkInfants', 0);
+
+        // The hotel decides what counts as a child or an infant, so show its
+        // own bands rather than a number we made up.
+        const bands = selHotel || {};
+        const band = (tpl, age) => (age == null ? '' : ' (' + tpl.replace('{a}', age) + ')');
+        $('bkAdultsLabel').textContent = t.adultsLabel + ' (' + t.ageAdult + ')';
+        $('bkChildrenLabel').textContent = t.childrenLabel + band(t.ageChild, bands.child_max_age);
+        $('bkInfantsLabel').textContent = t.infantsLabel + band(t.ageInfant, bands.infant_max_age);
+
+        renderAddons(plan);
+        renderCancellation(plan, bands);
         openPanel('bookPanel');
         setupPay();
       }
       $('bookClose').addEventListener('click', back);
+
+      const bandCount = (id, dflt) => {
+        const el = $(id);
+        return el ? Number(el.value || dflt) : dflt;
+      };
+
+      // How many guests a per-guest add-on is charged for. Which bands count is
+      // the hotel's rule, not ours: a day pass may count everyone through the
+      // door, a tasting adults only. Mirrors priceSelectedOptions on the server.
+      function coveredBy(o) {
+        let n = 0;
+        if (o.counts_adults) n += bandCount('bkAdults', 1);
+        if (o.counts_children) n += bandCount('bkChildren', 0);
+        if (o.counts_infants) n += bandCount('bkInfants', 0);
+        return n;
+      }
+
+      function coverageLabel(o) {
+        const parts = [];
+        if (o.counts_adults) parts.push(t.adultsLabel);
+        if (o.counts_children) parts.push(t.childrenLabel);
+        if (o.counts_infants) parts.push(t.infantsLabel);
+        return parts.length ? t.addonFor + parts.join(' + ') : '';
+      }
+
+      /** What one add-on adds to the bill, for display only. */
+      function addonUsd(o) {
+        if (o.pricing_type === 'per_room') return Number(o.price_usd || 0);
+        if (o.pricing_type === 'per_adult_child') {
+          return (o.counts_adults ? bandCount('bkAdults', 1) * Number(o.price_usd || 0) : 0)
+            + (o.counts_children ? bandCount('bkChildren', 0) * Number(o.child_price_usd ?? o.price_usd ?? 0) : 0)
+            + (o.counts_infants ? bandCount('bkInfants', 0) * Number(o.infant_price_usd ?? 0) : 0);
+        }
+        return coveredBy(o) * Number(o.price_usd || 0);   // per_person
+      }
+
+      let planOptions = [];
+      const chosenOptions = () =>
+        planOptions.filter((o) => {
+          const box = document.querySelector(`.addon-cb[data-opt="${o.id}"]`);
+          return box && box.checked;
+        });
+
+      function renderAddons(plan) {
+        planOptions = Array.isArray(plan.options) ? plan.options : [];
+        const wrap = $('bkOptionsField');
+        if (!planOptions.length) { wrap.hidden = true; $('bkOptions').innerHTML = ''; return; }
+        wrap.hidden = false;
+        $('bkOptions').innerHTML = planOptions.map((o) => {
+          const name = isJa && o.name_ja ? o.name_ja : o.name;
+          return `<label class="addon"><input type="checkbox" class="addon-cb" data-opt="${o.id}" />` +
+            `<span class="addon-body"><span class="addon-name">${esc(name)}</span>` +
+            `<span class="addon-cover" data-cover="${o.id}">${esc(coverageLabel(o))}</span></span>` +
+            `<span class="addon-price" data-price="${o.id}"></span></label>`;
+        }).join('');
+        $('bkOptions').querySelectorAll('.addon-cb').forEach((b) => b.addEventListener('change', refreshTotals));
+        refreshTotals();
+      }
+
+      function renderCancellation(plan, hotel) {
+        const box = $('bkCancelBox');
+        const hours = plan.cancellation_hours;
+        const prose = (plan.cancellation_policy || hotel.cancellation_policy || '').trim();
+        let line;
+        if (prose) line = esc(prose);
+        else if (hours === 0) line = '❌ ' + t.cancelNone;
+        else if (hours != null) line = '✅ ' + t.cancelFree.replace('{h}', String(hours));
+        else { box.hidden = true; return; }
+        box.hidden = false;
+        box.innerHTML = `<div class="cancel-title">${t.cancelTitle}</div><div>${line}</div>` +
+          `<div class="cancel-note">🕘 ${t.cancelLocal}</div>`;
+      }
+
+      /** Keep the summary in step with the bands and the add-ons chosen. */
+      function refreshTotals() {
+        let addons = 0;
+        for (const o of planOptions) {
+          const priceEl = document.querySelector(`[data-price="${o.id}"]`);
+          const coverEl = document.querySelector(`[data-cover="${o.id}"]`);
+          if (coverEl) coverEl.textContent = coverageLabel(o);
+          const usd = addonUsd(o);
+          if (priceEl) priceEl.textContent = usd ? '+$' + usd.toFixed(2) : '';
+          const box = document.querySelector(`.addon-cb[data-opt="${o.id}"]`);
+          if (box && box.checked) addons += usd;
+        }
+        if (paintBookingSummary) paintBookingSummary(addons);
+      }
+      ['bkAdults', 'bkChildren', 'bkInfants'].forEach((id) => {
+        const el = $(id);
+        if (el) el.addEventListener('change', refreshTotals);
+      });
 
       const formValid = () =>
         !!($('bkName').value.trim() && /.+@.+\..+/.test($('bkEmail').value.trim()) && $('bkDate').value);
@@ -2348,11 +2566,15 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         guest_name: $('bkName').value.trim(),
         guest_email: $('bkEmail').value.trim(),
         guest_phone: $('bkPhone').value.trim(),
+        guest_nationality: $('bkNationality').value || '',
         check_in_date: $('bkDate').value,
-        adults: Number($('bkGuests').value || 1),
-        children: 0,
-        infants: 0,
-        notes: '',
+        adults: bandCount('bkAdults', 1),
+        children: bandCount('bkChildren', 0),
+        infants: bandCount('bkInfants', 0),
+        notes: $('bkNotes').value.trim(),
+        // Selections only. The server re-prices every add-on from the database
+        // in resolveBookingCharge, so a tampered price here changes nothing.
+        options: chosenOptions().map((o) => ({ option_id: o.id })),
       });
 
       function showDone(bookingId) {
