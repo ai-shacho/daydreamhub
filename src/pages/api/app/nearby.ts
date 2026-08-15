@@ -287,7 +287,11 @@ export const GET: APIRoute = async ({ request, locals }) => {
       mode = 'place';
     } else {
       const apiKey = (locals as any).runtime?.env?.GOOGLE_PLACES_API_KEY;
-      const gLang = (url.searchParams.get('lang') || 'en').slice(0, 5);
+      // Geocode in the language the words were spoken in when we know it —
+      // Google reads a Thai utterance best as Thai — falling back to the
+      // interface language. Which name comes back to the screen is decided
+      // separately, by `wantsJa`.
+      const gLang = (url.searchParams.get('voice') || url.searchParams.get('lang') || 'en').slice(0, 5);
       const geocode = async (address: string) => {
         if (!apiKey || !address) return null;
         try {

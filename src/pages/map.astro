@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import { nearestAirportInfo } from '../lib/airports';
 import { AIRPORTS } from '../lib/data/airportsData';
+import { getLocale } from '../lib/i18n';
 
 const runtime = (Astro.locals as any).runtime;
 const db = runtime?.env?.DB;
@@ -99,16 +100,29 @@ const mapData = {
   cityCoords,
   airports: airportMarkersData,
 };
-const locale = 'en';
-const translations = {
-  viewDetails: 'View Details',
-  fromPrice: '$${price}〜',
-  hotelsCount: '{count} hotels',
-  hotelFrom: 'From',
-  nearestAirport: 'Nearest airport',
-  fromAirport: '{dist} km from {airport}',
-  showAirports: 'Show Airports',
-};
+// /ja/map re-exports this page, so a hard-coded 'en' made the Japanese map
+// entirely English — and, because basePath is derived from it, sent every
+// popup's "view details" link to the English site.
+const locale = getLocale(Astro.url);
+const translations = locale === 'ja'
+  ? {
+      viewDetails: '詳細を見る',
+      fromPrice: '$${price}〜',
+      hotelsCount: '{count}件のホテル',
+      hotelFrom: '最安',
+      nearestAirport: '最寄り空港',
+      fromAirport: '{airport}から{dist}km',
+      showAirports: '空港を表示',
+    }
+  : {
+      viewDetails: 'View Details',
+      fromPrice: '$${price}〜',
+      hotelsCount: '{count} hotels',
+      hotelFrom: 'From',
+      nearestAirport: 'Nearest airport',
+      fromAirport: '{dist} km from {airport}',
+      showAirports: 'Show Airports',
+    };
 ---
 
 <Layout title="Hotel Map - DayDreamHub" description="Find day-use hotels near you on an interactive map. Browse hotels by city and category.">

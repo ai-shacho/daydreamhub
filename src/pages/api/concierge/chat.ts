@@ -852,7 +852,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       }
       if (c.status === 'completed') {
         // ホテルが言ったこと（transcript/ai_summary）をそのまま含める
-        const hotelSaid = c.availability_info ? `\n\n📋 **ホテルとの通話内容:**\n${c.availability_info}` : '';
+        const hotelSaid = c.availability_info ? `\n\n📋 **${locale === 'ja' ? 'ホテルとの通話内容:' : 'What the hotel said:'}**\n${c.availability_info}` : '';
         const priceCur = (() => { try { return JSON.parse(c.request_details || '{}')?.budget_currency || 'USD'; } catch { return 'USD'; } })();
         const priceNote = c.price_quoted ? (locale === 'ja' ? `\n💰 **料金:** ${priceCur} ${c.price_quoted}` : `\n💰 **Price:** ${priceCur} ${c.price_quoted}`) : '';
 
