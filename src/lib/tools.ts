@@ -292,10 +292,14 @@ export async function searchHotelsExternal(env: any, params: any) {
   // テスト用モック: staging 環境（DDH_ENV=staging）のみ。東京を含むクエリで
   // AI電話発信テスト用の非提携ホテルを返す。本番では実際の外部検索が走る。
   if ((cityInput.includes("tokyo") || cityInput.includes("東京")) && String(env?.DDH_ENV || "").toLowerCase() === "staging") {
+    // Coordinates included so the proximity ordering is exercised on staging
+    // too: real Places results always carry them, and mock data that does not
+    // would quietly skip the sort and look like it was never applied.
+    // A is Shinjuku, B is Shibuya, C is Ueno — far enough apart to reorder.
     const mockHotels = [
-      { name: "Tokyo Test Hotel A", address: "Tokyo", phone: "+817084443210", rating: null, rating_count: 0, website: null, source: "external" },
-      { name: "Tokyo Test Hotel B", address: "Tokyo", phone: "+818053689489", rating: null, rating_count: 0, website: null, source: "external" },
-      { name: "Tokyo Test Hotel C", address: "Tokyo", phone: "+17207275686", rating: null, rating_count: 0, website: null, source: "external" },
+      { name: "Tokyo Test Hotel A", address: "Shinjuku, Tokyo", phone: "+817084443210", rating: null, rating_count: 0, website: null, lat: 35.6896, lng: 139.7006, source: "external" },
+      { name: "Tokyo Test Hotel B", address: "Shibuya, Tokyo", phone: "+818053689489", rating: null, rating_count: 0, website: null, lat: 35.6580, lng: 139.7016, source: "external" },
+      { name: "Tokyo Test Hotel C", address: "Ueno, Tokyo", phone: "+17207275686", rating: null, rating_count: 0, website: null, lat: 35.7138, lng: 139.7770, source: "external" },
     ];
     return { count: mockHotels.length, source: "external", hotels: mockHotels };
   }

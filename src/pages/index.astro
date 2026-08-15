@@ -1236,7 +1236,7 @@ function escHtml(s) {
         : extractInternalHotelsFromText(text);
 
       var externalHotels = (_externalMeta && _externalMeta.length > 0)
-        ? _externalMeta.map(function(h){ return { name: h.name || '', phone: h.phone || '' }; })
+        ? _externalMeta.map(function(h){ return { name: h.name || '', phone: h.phone || '', distance_km: h.distance_km }; })
         : extractExternalHotels(text);
 
       var pageLocale = (document.documentElement.lang || 'en').indexOf('ja') === 0 ? 'ja' : 'en';
@@ -1259,11 +1259,14 @@ function escHtml(s) {
         var items = top3.map(function(h, i) {
           var safeName = (h.name || '').replace(/"/g, '&quot;').slice(0, 60);
           var safePhone = (h.phone || '').replace(/"/g, '');
+          var dist = (h.distance_km != null)
+            ? '<span class="text-teal-300 text-[11px] ml-1.5">' + (pageLocale === 'ja' ? '約' : '') + h.distance_km + 'km' + (pageLocale === 'ja' ? '' : ' away') + '</span>'
+            : '';
           return '<label class="flex items-start gap-2 p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 cursor-pointer transition-colors">' +
             '<input type="checkbox" class="hero-ext-hotel-cb mt-0.5 accent-amber-400" data-name="' + safeName + '" data-phone="' + safePhone + '" checked />' +
             '<span class="flex-1 text-xs text-white/90">' +
               '<span class="font-semibold block">' + safeName + '</span>' +
-              '<span class="text-white/50 text-[11px]">' + safePhone + '</span>' +
+              '<span class="text-white/50 text-[11px]">' + safePhone + '</span>' + dist +
             '</span>' +
           '</label>';
         }).join('');
@@ -1354,6 +1357,36 @@ function escHtml(s) {
   };
 
   // ===== External Hotel Call Booking Flow ($7 for up to 3 hotels) =====
+  // Ask for the guest's position once, the first time they say anything. Doing
+  // it on page load would prompt everyone who is only browsing; doing it lazily
+  // means the prompt arrives when the answer is about to be used. Nothing waits
+  // on it — if it is refused or slow, the server falls back to Cloudflare's
+  // city-level guess and the ordering is merely coarser.
+  var _heroGeoAsked = false;
+  function heroAskForPosition() {
+    if (_heroGeoAsked || !navigator.geolocation) return;
+    _heroGeoAsked = true;
+
+    // The browser's own permission dialog cannot be reworded, and on its own it
+    // asks for a location without saying what for. This line goes up first, so
+    // the question arrives with a reason and with what it costs to decline.
+    var isJaNote = (document.documentElement.lang || 'en').indexOf('ja') === 0;
+    var note = document.createElement('p');
+    note.className = 'text-[11px] text-white/50 leading-relaxed px-1 py-1';
+    note.textContent = isJaNote
+      ? '📍 現在地は、お近くのホテルを探すためだけに使用します。許可しない場合も検索できますが、最寄りではないホテルが表示されることがあります。'
+      : '📍 Your location is used only to find hotels near you. You can decline and still search, but the hotels shown may not be the closest ones.';
+    showMessages();
+    messagesEl.appendChild(note);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    navigator.geolocation.getCurrentPosition(
+      function(pos) { window._heroGeo = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+      function() { /* refused or unavailable — the edge guess stands in */ },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  }
+
   window._heroCallBook = async function(btn) {
     // チェックボックスから選択中のホテルを収集
     var container = btn.parentElement;
@@ -1594,6 +1627,8 @@ function escHtml(s) {
     sendBtn.disabled = true;
     inputEl.value = '';
 
+    heroAskForPosition();
+
     var ctx = getFormContext();
     // Step 2: combine the stored destination with the time answer into one search request
     var userQuery = text;
@@ -1611,6 +1646,10 @@ function escHtml(s) {
     try {
       var pageLoc = (document.documentElement.lang || 'en').indexOf('ja') === 0 ? 'ja' : 'en';
       var body = { session_id: sessionId, message: fullMsg, locale: pageLoc };
+      // Order the hotels we offer to ring by how close they are. Cloudflare
+      // already gives the server a city-level guess, so this only sharpens it;
+      // a refusal or a slow fix costs nothing.
+      if (window._heroGeo) { body.lat = window._heroGeo.lat; body.lng = window._heroGeo.lng; }
       if (pendingImageKey) { body.image_key = pendingImageKey; pendingImageKey = null; }
 
       var res = await fetch('/api/concierge/chat', {
