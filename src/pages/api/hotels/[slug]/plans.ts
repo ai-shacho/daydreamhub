@@ -95,8 +95,13 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
 
   const { slug } = params;
   try {
+    // currency and the age bands come along because the app has to price and
+    // label add-ons the same way the website does; the cancellation policy
+    // because a guest should see the terms before paying, not after.
     const hotel = await db.prepare(
-      'SELECT id, name, name_ja, slug, city, country, thumbnail_url, images, description, description_ja FROM hotels WHERE slug = ? AND is_active = 1'
+      `SELECT id, name, name_ja, slug, city, country, thumbnail_url, images, description, description_ja,
+              currency, infant_max_age, child_max_age, cancellation_policy
+         FROM hotels WHERE slug = ? AND is_active = 1`
     ).bind(slug).first();
 
     if (!hotel) return new Response(JSON.stringify({ error: 'Hotel not found' }), { status: 404 });
@@ -121,10 +126,39 @@ export const GET: APIRoute = async ({ params, locals, url }) => {
     hotel.images = photos.slice(0, 12);
 
     const plans = await db.prepare(
-      'SELECT id, name, name_ja, price_usd, check_in_time, check_out_time, plan_type, max_guests, duration_hours FROM plans WHERE hotel_id = ? AND is_active = 1 ORDER BY price_usd ASC'
+      `SELECT id, name, name_ja, price_usd, price_local, check_in_time, check_out_time, plan_type,
+              max_guests, duration_hours, room_type, cancellation_hours, cancellation_policy
+         FROM plans WHERE hotel_id = ? AND is_active = 1 ORDER BY price_usd ASC`
     ).bind(hotel.id).all();
 
     const planRows = plans.results || [];
+
+    // Paid add-ons, attached to the plan they belong to. counts_* decide who a
+    // per-guest option is charged for — a day pass may count everyone through
+    // the door, a tasting adults only — so the app cannot assume adults+children.
+    try {
+      const ids = planRows.map((p: any) => p.id);
+      if (ids.length) {
+        const optRows = await db.prepare(
+          `SELECT id, plan_id, name, name_ja, description, pricing_type,
+                  price_local, price_usd, child_price_local, child_price_usd,
+                  infant_price_local, infant_price_usd,
+                  counts_adults, counts_children, counts_infants
+             FROM plan_options
+            WHERE plan_id IN (${ids.map(() => '?').join(',')}) AND is_active = 1
+            ORDER BY sort_order ASC, id ASC`
+        ).bind(...ids).all();
+        const byPlan = new Map<number, any[]>();
+        for (const o of (optRows.results || []) as any[]) {
+          if (!byPlan.has(o.plan_id)) byPlan.set(o.plan_id, []);
+          byPlan.get(o.plan_id)!.push(o);
+        }
+        for (const p of planRows as any[]) p.options = byPlan.get(p.id) || [];
+      }
+    } catch {
+      // An older database without plan_options should still serve plans.
+      for (const p of planRows as any[]) p.options = [];
+    }
     if (url.searchParams.get('lang') === 'ja') {
       await ensureJapanese(env, db, hotel, planRows).catch(() => {});
     }
