@@ -13,6 +13,16 @@ const urlLang = Astro.url.searchParams.get('lang');
 // then the device's own language.
 const cookieLang = (Astro.request.headers.get('cookie') || '').match(/(?:^|;\s*)ddh_app_lang=(en|ja)/)?.[1];
 const isJa = urlLang ? urlLang === 'ja' : cookieLang ? cookieLang === 'ja' : /(^|,)\s*ja/i.test(acceptLang);
+
+// Remember an explicit ?lang, the same way the in-app toggle does. Arriving
+// from the English site carries ?lang=en, and without this the next visit —
+// including an installed app launching at the bare /app in its manifest —
+// would fall back to the device's language and flip back.
+if (urlLang === 'en' || urlLang === 'ja') {
+  Astro.cookies.set('ddh_app_lang', urlLang, {
+    path: '/', maxAge: 31536000, sameSite: 'lax',
+  });
+}
 // Same GA4 property as the main site (Layout.astro) so app usage shows up
 // alongside site traffic, distinguished by the app_* event names.
 const ga4Id = ((Astro.locals as any).runtime?.env?.GA4_MEASUREMENT_ID as string) || 'G-5C6B1R3H1Q';
