@@ -59,6 +59,16 @@ const NEVER_CALL = new Set(['spa_salon', 'private_host', 'not_real']);
 
 const KIND_OPTIONS = Object.keys(KIND_LABEL) as Array<keyof typeof KIND_LABEL>;
 
+// The badge has exactly three appearances. Kept as functions because the client
+// rebuilds the same badge after a hand override, and two copies of the mapping
+// would drift.
+const badgeClass = (c?: string) =>
+  c === 'yes' ? 'bg-emerald-50 text-emerald-800'
+  : c === 'no' ? 'bg-red-50 text-red-700'
+  : 'bg-amber-50 text-amber-800';
+const badgeText = (c?: string) =>
+  c === 'yes' ? 'Call' : c === 'no' ? 'Do not call' : 'Unclear';
+
 /** What a listing is: the hand-set value if there is one, else what checking found. */
 function effectiveKind(h: any) {
   const checked = CALL_KINDS[h.id];
@@ -158,8 +168,8 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
       ['Disagrees', flagged.length, 'text-red-700 bg-red-50 border-red-200'],
       ['Do not call', noCall, 'text-red-700 bg-red-50 border-red-200'],
       ['Call unclear', maybeCall, 'text-amber-700 bg-amber-50 border-amber-200']].map(([label, n, cls]) => (
-      <div class={`rounded-lg border px-4 py-3 ${cls}`}>
-        <div class="text-2xl font-bold">{n}</div>
+      <div class={`stat-tile rounded-lg border px-4 py-3 ${cls}`} data-label={label}>
+        <div class="stat-value text-2xl font-bold">{n}</div>
         <div class="text-xs">{label}</div>
       </div>
     ))}
@@ -292,23 +302,18 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
                     )}
                   </td>
                   <td class="px-3 py-2 align-top text-xs">
-                    {m.callKind ? (
-                      <>
-                        <span class={`inline-block rounded px-1.5 py-0.5 font-medium ${
-                          m.callKind.callable === 'yes' ? 'bg-emerald-50 text-emerald-800'
-                          : m.callKind.callable === 'no' ? 'bg-red-50 text-red-700'
-                          : 'bg-amber-50 text-amber-800'}`}>
-                          {m.callKind.callable === 'yes' ? 'Call' : m.callKind.callable === 'no' ? 'Do not call' : 'Unclear'}
-                        </span>
-                        {m.callKind.manual && <span class="ml-1 text-slate-400">by hand</span>}
-                        <div class="text-slate-400 mt-0.5 leading-snug">{m.callKind.why}</div>
-                      </>
-                    ) : (
-                      <span class="inline-block rounded px-1.5 py-0.5 bg-amber-50 text-amber-800 font-medium">Unclear</span>
-                    )}
+                    <span class={`call-badge inline-block rounded px-1.5 py-0.5 font-medium ${badgeClass(m.callKind?.callable)}`}>
+                      {badgeText(m.callKind?.callable)}
+                    </span>
+                    <span class="by-hand ml-1 text-slate-400" hidden={!m.callKind?.manual}>by hand</span>
+                    <div class="call-why text-slate-400 mt-0.5 leading-snug">{m.callKind?.why || ''}</div>
                     <select class="kind-pick mt-1.5 w-full border border-slate-200 rounded px-1 py-0.5 text-xs"
-                      data-hotel-id={m.hotel.id} data-original={m.hotel.call_kind || ''}>
-                      <option value="">{m.hotel.call_kind ? 'Use the checked value' : `As checked — ${m.callKind ? KIND_LABEL[m.callKind.kind] : 'unclear'}`}</option>
+                      data-hotel-id={m.hotel.id}
+                      data-original={m.hotel.call_kind || ''}
+                      data-checked-kind={CALL_KINDS[m.hotel.id]?.kind || ''}
+                      data-checked-callable={CALL_KINDS[m.hotel.id]?.callable || 'unclear'}
+                      data-checked-why={CALL_KINDS[m.hotel.id]?.why || ''}>
+                      <option value="">{m.hotel.call_kind ? 'Use the checked value' : `As checked — ${CALL_KINDS[m.hotel.id] ? KIND_LABEL[CALL_KINDS[m.hotel.id].kind] : 'unclear'}`}</option>
                       {KIND_OPTIONS.map(k => (
                         <option value={k} selected={m.hotel.call_kind === k}>{KIND_LABEL[k]}</option>
                       ))}
@@ -429,9 +434,41 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
       }
     });
 
+    rememberFilters();
+
     summary.textContent = shown === total
       ? `Showing all ${total} matched listings. Applying only ever writes rows that are both ticked and visible.`
       : `Showing ${shown} of ${total} matched listings. Applying only ever writes rows that are both ticked and visible, so the ${total - shown} hidden row(s) are safe.`;
+  }
+
+  // Filters live in the URL as well as the controls. Applying phone numbers
+  // still reloads the page, and without this the admin would come back to an
+  // unfiltered list of 180 rows every time — the same complaint that killed the
+  // reload on the kind selector. It also makes a filtered view shareable.
+  const FILTER_PARAMS = [['q', search], ['verdict', fVerdict], ['callable', fCallable], ['country', fCountry], ['sort', fSort]];
+
+  (function restoreFilters() {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, el] of FILTER_PARAMS) {
+      const v = params.get(key);
+      if (v === null) continue;
+      // A stale link naming a country that no longer has rows would otherwise
+      // leave a select showing nothing while the list looks empty for no reason.
+      if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === v)) continue;
+      el.value = v;
+    }
+  })();
+
+  function rememberFilters() {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, el] of FILTER_PARAMS) {
+      const v = (el.value || '').trim();
+      // 'verdict' is the default sort; leaving it out keeps the URL readable.
+      if (!v || (key === 'sort' && v === 'verdict')) params.delete(key);
+      else params.set(key, v);
+    }
+    const qs = params.toString();
+    window.history.replaceState(null, '', qs ? '?' + qs : window.location.pathname);
   }
 
   [search, fVerdict, fCallable, fCountry, fSort].forEach(el => {
@@ -455,6 +492,68 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
     });
   });
 
+  const NEVER_CALL = new Set(['spa_salon', 'private_host', 'not_real']);
+  const KIND_LABELS = {
+    hotel: 'Hotel', apartment: 'Serviced apartments', spa_salon: 'Spa or salon',
+    private_host: 'Private host', not_real: 'Not a property', unclear: 'Unclear',
+  };
+  const badgeClassFor = (c) =>
+    c === 'yes' ? 'bg-emerald-50 text-emerald-800'
+    : c === 'no' ? 'bg-red-50 text-red-700'
+    : 'bg-amber-50 text-amber-800';
+  const badgeTextFor = (c) => (c === 'yes' ? 'Call' : c === 'no' ? 'Do not call' : 'Unclear');
+
+  /** Redraw one row's verdict after a hand override, the way the server would. */
+  function applyKindToRow(sel) {
+    const cell = sel.closest('td');
+    const tr = sel.closest('tr');
+    const manual = sel.value;
+    const checkedKind = sel.getAttribute('data-checked-kind') || '';
+    const checkedWhy = sel.getAttribute('data-checked-why') || '';
+
+    const kind = manual || checkedKind;
+    const callable = manual
+      ? (NEVER_CALL.has(manual) ? 'no' : manual === 'unclear' ? 'unclear' : 'yes')
+      : (sel.getAttribute('data-checked-callable') || 'unclear');
+
+    const badge = cell.querySelector('.call-badge');
+    badge.className = 'call-badge inline-block rounded px-1.5 py-0.5 font-medium ' + badgeClassFor(callable);
+    badge.textContent = badgeTextFor(callable);
+    cell.querySelector('.by-hand').hidden = !manual;
+    cell.querySelector('.call-why').textContent = manual
+      ? 'Set by hand just now.' + (checkedKind ? ' Checking had said: ' + checkedKind.replace(/_/g, ' ') + ' — ' + checkedWhy : '')
+      : checkedWhy;
+
+    // The filter reads this, and the search box reads the reason text.
+    tr.setAttribute('data-callable', callable);
+    const hay = (tr.getAttribute('data-haystack') || '') + ' ' + (KIND_LABELS[kind] || '').toLowerCase();
+    tr.setAttribute('data-haystack', hay);
+
+    // "As checked — X" only makes sense while nothing is overriding it.
+    const first = sel.querySelector('option[value=""]');
+    if (first) {
+      first.textContent = manual
+        ? 'Use the checked value'
+        : 'As checked — ' + (KIND_LABELS[checkedKind] || 'Unclear');
+    }
+
+    updateCallTiles();
+    refresh();
+  }
+
+  /** Keep the "Do not call" / "Call unclear" counters honest after an edit. */
+  function updateCallTiles() {
+    const rows = [...document.querySelectorAll('tr.data-row')];
+    const no = rows.filter(r => r.getAttribute('data-callable') === 'no').length;
+    const unclear = rows.filter(r => r.getAttribute('data-callable') === 'unclear').length;
+    const set = (label, n) => {
+      const tile = [...document.querySelectorAll('.stat-tile')].find(t => t.dataset.label === label);
+      if (tile) tile.querySelector('.stat-value').textContent = String(n);
+    };
+    set('Do not call', no);
+    set('Call unclear', unclear);
+  }
+
   // Setting the kind by hand saves on the spot. The row then reloads its own
   // state on the next page load; no need to re-render it here beyond saying so.
   document.querySelectorAll('.kind-pick').forEach(sel => {
@@ -472,14 +571,17 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed');
         sel.setAttribute('data-original', sel.value);
-        // The badge and the do-not-call filter are rendered server-side, so the
-        // page has to come back for them to agree with what was just saved.
+        // Update the row here rather than reloading. A reload threw away the
+        // filter the admin was working under and every tick they had set, which
+        // for a screen whose whole job is working through 180 rows a filter at a
+        // time made each save cost more than it saved.
+        applyKindToRow(sel);
         out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-emerald-50 text-emerald-800 border border-emerald-200';
         out.textContent = sel.value
-          ? `Saved. Reloading so the filter and the badge agree.`
-          : `Cleared — back to the checked value. Reloading.`;
+          ? 'Saved.'
+          : 'Cleared — back to the checked value.';
         out.classList.remove('hidden');
-        setTimeout(() => window.location.reload(), 900);
+        setTimeout(() => out.classList.add('hidden'), 2500);
       } catch (e) {
         sel.value = previous;
         sel.disabled = false;
