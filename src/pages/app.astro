@@ -1580,7 +1580,10 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       async function search(params) {
         $('homeStatus').textContent = t.searching;
         try {
-          const res = await fetch('/api/app/nearby?' + new URLSearchParams({ ...params, limit: 24 }));
+          // lang decides which name a place is called back by; without it the
+          // server fell back to Japanese and an English app showed Japanese
+          // airport names.
+          const res = await fetch('/api/app/nearby?' + new URLSearchParams({ ...params, limit: 24, lang: isJa ? 'ja' : 'en' }));
           const data = await res.json();
           if (data.error) throw new Error(data.error);
           track('app_search', { mode: data.mode, q: params.q || '' });

@@ -34,45 +34,52 @@ function norm(s: string): string {
 
 // Resolve a free-text query to coordinates: airport code, airport name (EN/JA),
 // then city name (EN key or JA alias). Longest match wins to avoid false hits.
-function resolveQueryToCoords(raw: string): { lat: number; lng: number; label: string } | null {
+function resolveQueryToCoords(raw: string, ja = false): { lat: number; lng: number; label: string } | null {
   const q = norm(raw.replace(NOISE_RE, ' '));
   if (!q) return null;
 
   const airportByCode = new Map(AIRPORTS.map((a) => [a[0], a]));
 
+  // A place is matched in either language — someone on the English app may
+  // still type スワンナプーム — but the name shown back has to be the language
+  // they are reading, so every candidate carries both and the choice is made
+  // once, at the end.
+  const say = (en?: string, jaName?: string) =>
+    (ja ? jaName || en : en || jaName) || '';
+
   // Exact IATA code ("HND", "kix")
   const codeMatch = raw.toUpperCase().match(/\b([A-Z]{3})\b/);
   if (codeMatch && airportByCode.has(codeMatch[1])) {
     const a = airportByCode.get(codeMatch[1])!;
-    return { lat: a[2], lng: a[3], label: airportNamesJa[a[0]] || airportNames[a[0]] || a[1] };
+    return { lat: a[2], lng: a[3], label: say(airportNames[a[0]] || a[1], airportNamesJa[a[0]]) };
   }
 
-  type Cand = { key: string; lat: number; lng: number; label: string };
+  type Cand = { key: string; lat: number; lng: number; en?: string; ja?: string };
   const cands: Cand[] = [];
 
-  for (const [code, ja] of Object.entries(airportNamesJa)) {
+  for (const [code, jaName] of Object.entries(airportNamesJa)) {
     const a = airportByCode.get(code);
     if (!a) continue;
-    const stripped = ja.replace(/国際空港|空港/g, '');
-    cands.push({ key: norm(stripped), lat: a[2], lng: a[3], label: ja });
+    const stripped = jaName.replace(/国際空港|空港/g, '');
+    cands.push({ key: norm(stripped), lat: a[2], lng: a[3], ja: jaName, en: airportNames[code] || a[1] });
   }
   for (const [code, en] of Object.entries(airportNames)) {
     const a = airportByCode.get(code);
     if (!a) continue;
     const stripped = en.replace(/International Airport|Airport/gi, '');
-    cands.push({ key: norm(stripped), lat: a[2], lng: a[3], label: en });
+    cands.push({ key: norm(stripped), lat: a[2], lng: a[3], en, ja: airportNamesJa[code] });
   }
   // Full airport dataset names ("Narita International Airport" etc.)
   for (const a of AIRPORTS) {
     const stripped = a[1].replace(/International Airport|Airport/gi, '');
-    if (stripped.length >= 4) cands.push({ key: norm(stripped), lat: a[2], lng: a[3], label: a[1] });
+    if (stripped.length >= 4) cands.push({ key: norm(stripped), lat: a[2], lng: a[3], en: a[1], ja: airportNamesJa[a[0]] });
   }
-  for (const [ja, en] of Object.entries(JA_CITY_ALIASES)) {
+  for (const [jaName, en] of Object.entries(JA_CITY_ALIASES)) {
     const coords = airportByCity[en];
-    if (coords) cands.push({ key: norm(ja), lat: coords[0], lng: coords[1], label: en });
+    if (coords) cands.push({ key: norm(jaName), lat: coords[0], lng: coords[1], en, ja: jaName });
   }
   for (const [city, coords] of Object.entries(airportByCity)) {
-    cands.push({ key: norm(city), lat: coords[0], lng: coords[1], label: city });
+    cands.push({ key: norm(city), lat: coords[0], lng: coords[1], en: city });
   }
 
   let best: Cand | null = null;
@@ -82,7 +89,7 @@ function resolveQueryToCoords(raw: string): { lat: number; lng: number; label: s
       if (!best || c.key.length > best.key.length) best = c;
     }
   }
-  return best ? { lat: best.lat, lng: best.lng, label: best.label } : null;
+  return best ? { lat: best.lat, lng: best.lng, label: say(best.en, best.ja) } : null;
 }
 
 // Signals that a query carries intent beyond a bare place name (budget,
@@ -229,6 +236,10 @@ export const GET: APIRoute = async ({ request, locals }) => {
   const lat = parseFloat(url.searchParams.get('lat') || '');
   const lng = parseFloat(url.searchParams.get('lng') || '');
   const q = (url.searchParams.get('q') || '').trim().slice(0, 120);
+  // Which language the app is being read in. Place names came back in Japanese
+  // whatever the interface said, because the resolver preferred the Japanese
+  // name — so an English app showed スワンナプーム国際空港 as its heading.
+  const wantsJa = (url.searchParams.get('lang') || '').toLowerCase().startsWith('ja');
   // Exact city pick from the browse-by-country list: no geocoding guesswork.
   const city = (url.searchParams.get('city') || '').trim().slice(0, 80);
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '12'), 30);
@@ -252,7 +263,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
     center = { lat, lng, label: '' };
     mode = 'geo';
   } else if (q) {
-    center = resolveQueryToCoords(q);
+    center = resolveQueryToCoords(q, wantsJa);
     // Bare place names skip the AI round-trip; richer queries ("予算50ドルで
     // 今すぐ") get interpreted, which can also rescue an unresolved place.
     if (!center || INTENT_RE.test(q) || OPEN_NOW_RE.test(q)) {
@@ -298,7 +309,7 @@ export const GET: APIRoute = async ({ request, locals }) => {
       // does not invent), then the model's guess as a last resort.
       center = await geocode(q);
       if (!center && intent?.place && intent.place !== q) {
-        center = resolveQueryToCoords(intent.place) || (await geocode(intent.place));
+        center = resolveQueryToCoords(intent.place, wantsJa) || (await geocode(intent.place));
       }
       if (center) mode = 'place';
     }
