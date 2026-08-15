@@ -23,17 +23,45 @@ const CALLABLE = new Set(['yes', 'no', 'unclear']);
 // in no batch file. Left out, they would carry no classification at all and
 // fall through as unknown — which for a dialler is the wrong default.
 const MANUAL = {
-  60: { kind: 'unclear', callable: 'unclear', why: 'A Dubai listing under the Ninety Six Hotels group, but nothing found says whether Opera Tower is a hotel, serviced apartments, or a private letting inside the tower.' },
-  61: { kind: 'unclear', callable: 'unclear', why: 'Same group and same shared mailbox as #60; nothing found establishes what Marina Vista actually is.' },
+  60: { kind: 'private_host', callable: 'no', why: 'Not a hotel at all: Opera Tower is the residential half of Address Residences Dubai Opera, let unit by unit. The "Ninety Six Hotels" attribution is a data error — that group is in Port Louis, Mauritius and has no Dubai property; the shared sales@ mailbox collided onto this row, which is also why its phone checked out as a Mauritian hotel line. The tower has a residents\' concierge, not a front desk that answers this listing.' },
+  61: { kind: 'private_host', callable: 'no', why: 'Not a hotel at all: Marina Vista is an Emaar residential twin-tower at Emaar Beachfront, explicitly not a hotel or serviced-apartment operation. Same mistaken Ninety Six Hotels attribution and same shared mailbox as #60.' },
   80: { kind: 'not_real', callable: 'no', why: 'No hotel of this name exists in Bangkok and the number cannot be dialled anywhere.' },
   131: { kind: 'hotel', callable: 'yes', why: 'A boutique hotel in the You & Co group, listed on the Valencia tourism registry with a front-desk line.' },
   152: { kind: 'hotel', callable: 'yes', why: 'A boutique hotel in the same You & Co group, on the Valencia tourism registry with its own reception line.' },
   154: { kind: 'hotel', callable: 'yes', why: 'A Super 8 by Wyndham motel; the Maryland tourism board publishes its front desk.' },
-  236: { kind: 'unclear', callable: 'unclear', why: 'The operator publishes a mobile that doubles as WhatsApp and nothing found says whether this is a staffed property or one manager\'s handset.' },
+  236: { kind: 'private_host', callable: 'no', why: 'phuketking.com is Phuket King Muay Thai in Kathu — a training camp with about three guest rooms, listed as a guest house. No source states a staffed reception; the published number is a WhatsApp mobile. No 24-hour front desk, so not called.' },
   245: { kind: 'hotel', callable: 'yes', why: 'A Bangkok hotel with a published switchboard, now trading as imm hotel Ladprao Bangkapi.' },
   247: { kind: 'hotel', callable: 'yes', why: 'An inn whose own contact page publishes a front desk and a toll-free reservations line.' },
   338: { kind: 'spa_salon', callable: 'no', why: 'A day spa on the eighth floor of the Pathumwan Princess Hotel — the hotel itself is a separate business with its own line.' },
   792: { kind: 'not_real', callable: 'no', why: 'No such property in Yerevan, and the number has more digits than an Armenian number can have.' },
+  // Checked one question at a time in August 2026: is there a front desk
+  // staffed 24 hours? That is what decides whether an automated call reaches
+  // somebody whose job it is to answer. Anything less — daytime reception,
+  // self check-in, a host's own mobile — is not called, and neither is a
+  // property where nothing states it either way. An unproven front desk is
+  // not a front desk.
+  70: { kind: 'hotel', callable: 'yes', why: 'A small staffed B&B on Kiambu Road; the listing states a 24-hour front desk. Checked 2026-08-15.' },
+  205: { kind: 'hotel', callable: 'yes', why: 'A 22-room B&B near Heathrow; the facilities list states a 24-hour front desk. Note the address on file is wrong — it trades at 293-295 Bath Road, Hounslow TW3 3DB, not London N15. Checked 2026-08-15.' },
+  185: { kind: 'private_host', callable: 'no', why: 'Booking sites list a "24 Hour Reception", but that belongs to the Platinum KLCC building lobby, not to this operator: its own site (now FLIEXSE SUITES) advertises only WhatsApp support on one mobile and describes no reception, and it lets units across three unrelated condo towers. Dialling it would ring a personal phone. Checked 2026-08-15.' },
+  202: { kind: 'private_host', callable: 'no', why: 'An exclusive beachfront house let whole, with no OTA listing anywhere and nothing stating a reception. Checked 2026-08-15.' },
+  244: { kind: 'private_host', callable: 'no', why: 'No front desk appears anywhere in its 70-plus published facilities, and check-in is a one-hour window of 14:00-15:00 — incompatible with a 24-hour desk. Its own site offers a WhatsApp concierge. A retreat rather than a private host, but not somewhere to ring automatically. Checked 2026-08-15.' },
+  346: { kind: 'not_real', callable: 'no', why: 'Searched again by name, street and email across Booking, Agoda, Airbnb, Expedia, Hotels.com, TripAdvisor, Instagram and Facebook: no listing exists anywhere. The only page describing it is DayDreamHub\'s own blog. Checked 2026-08-15.' },
+  358: { kind: 'private_host', callable: 'no', why: 'A container-cabin homestay sold largely as a whole house; published facilities mention day security and luggage storage, no front desk. The number on file also belongs to a third-party agency. Checked 2026-08-15.' },
+  // NYNA House lets around a hundred flats across unrelated buildings, and its
+  // own siblings disagree — one advertises a 24-hour front desk, another says
+  // reception is 11:00-16:00 with a lockbox, a third has none. Reception is a
+  // property of the building, so it cannot be carried across units, and none of
+  // these three could be found on any booking site.
+  207: { kind: 'private_host', callable: 'no', why: 'One flat in the NYNA House chain; no listing found for this unit and no front desk established. Sibling units contradict each other, so a 24-hour desk elsewhere in the chain proves nothing here. Checked 2026-08-15.' },
+  208: { kind: 'private_host', callable: 'no', why: 'A studio in an old collective-housing block; same chain and same reasoning as #207. Its name says "HK Lake" but the address is about 3km from it. Checked 2026-08-15.' },
+  227: { kind: 'private_host', callable: 'no', why: 'Another NYNA House studio; same chain and same reasoning as #207. Named "Near Walking Street" but the plausible match sits in Dong Da / Ba Dinh. Checked 2026-08-15.' },
+  // All three May Homestay rows are one Booking.com property. Check-in closes at
+  // 23:00 and guests must give their arrival time in advance — Booking's
+  // standard wording for a property with no 24-hour reception — and reviews
+  // describe collecting keys by instruction.
+  348: { kind: 'private_host', callable: 'no', why: 'Entire self-catering apartments; check-in closes at 23:00, arrival must be notified ahead, and no 24-hour reception is listed. Checked 2026-08-15.' },
+  354: { kind: 'private_host', callable: 'no', why: 'An apartment on the same street under the same host as #348, with no listing of its own — classified with its siblings. Checked 2026-08-15.' },
+  355: { kind: 'private_host', callable: 'no', why: 'A second apartment at the same address as #348, same host and same booking record. Checked 2026-08-15.' },
 };
 
 const files = readdirSync(RESULTS_DIR).filter((f) => /^kind_.*\.json$/.test(f)).sort();
