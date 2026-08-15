@@ -445,6 +445,7 @@ for (let h = 0; h < 24; h++) {
               </div>
               <div class="flex gap-1 flex-shrink-0">
                 <button class="edit-plan-btn text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100 transition-colors">Edit</button>
+                <button class="addons-btn text-xs px-2 py-1 bg-teal-50 text-teal-700 rounded hover:bg-teal-100 transition-colors">Add-ons</button>
                 <button class="toggle-plan-btn text-xs px-2 py-1 rounded transition-colors"
                   class:list={[plan.is_active ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-green-50 text-green-700 hover:bg-green-100']}>
                   {plan.is_active ? 'Deactivate' : 'Activate'}
@@ -453,6 +454,72 @@ for (let h = 0; h < 24; h++) {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <!-- Add-ons panel. Same three pricing shapes and age-band rules the owner
+           screen offers, so a listing can be set up from either side. -->
+      <div id="addons-modal" data-currency={hotelCurrency} class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 sticky top-0 bg-white">
+            <div>
+              <h3 class="text-base font-semibold text-slate-900">Paid add-ons</h3>
+              <p id="addons-plan-name" class="text-xs text-slate-500"></p>
+            </div>
+            <button id="addons-close" class="text-slate-400 hover:text-slate-600 text-xl leading-none">&times;</button>
+          </div>
+          <div class="p-5">
+            <div id="addons-list" class="space-y-2 mb-4"></div>
+            <form id="addon-form" class="border-t border-slate-200 pt-4 space-y-3">
+              <input type="hidden" id="addon-id" />
+              <div class="grid grid-cols-2 gap-3">
+                <label class="block">
+                  <span class="block text-xs font-medium text-slate-600 mb-1">Name (English) *</span>
+                  <input id="addon-name" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Airport transfer" />
+                </label>
+                <label class="block">
+                  <span class="block text-xs font-medium text-slate-600 mb-1">Name (Japanese)</span>
+                  <input id="addon-name-ja" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="空港送迎" />
+                </label>
+              </div>
+              <label class="block">
+                <span class="block text-xs font-medium text-slate-600 mb-1">How it is charged</span>
+                <select id="addon-pricing" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">
+                  <option value="per_room">Per booking — one flat charge</option>
+                  <option value="per_person">Per guest — same rate for everyone counted</option>
+                  <option value="per_adult_child">Per guest — adults, children and infants priced separately</option>
+                </select>
+              </label>
+              <div class="grid grid-cols-3 gap-3">
+                <label class="block">
+                  <span class="block text-xs font-medium text-slate-600 mb-1">Price <span id="addon-cur" class="text-slate-400"></span></span>
+                  <input id="addon-price" type="number" step="0.01" min="0" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </label>
+                <label class="block addon-band-price hidden">
+                  <span class="block text-xs font-medium text-slate-600 mb-1">Child price</span>
+                  <input id="addon-child-price" type="number" step="0.01" min="0" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </label>
+                <label class="block addon-band-price hidden">
+                  <span class="block text-xs font-medium text-slate-600 mb-1">Infant price</span>
+                  <input id="addon-infant-price" type="number" step="0.01" min="0" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </label>
+              </div>
+              <div id="addon-counts">
+                <span class="block text-xs font-medium text-slate-600 mb-1">Charged for</span>
+                <p class="text-xs text-slate-400 mb-2">A day pass may count everyone who walks in; a tasting may count adults only.</p>
+                <div class="flex gap-4 text-sm">
+                  <label class="flex items-center gap-1.5"><input type="checkbox" id="addon-adults" checked class="accent-teal-600" /> Adults</label>
+                  <label class="flex items-center gap-1.5"><input type="checkbox" id="addon-children" checked class="accent-teal-600" /> Children</label>
+                  <label class="flex items-center gap-1.5"><input type="checkbox" id="addon-infants" class="accent-teal-600" /> Infants</label>
+                </div>
+              </div>
+              <div class="flex gap-2 pt-1">
+                <button type="submit" id="addon-save" class="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700">Add</button>
+                <button type="button" id="addon-cancel" class="hidden px-4 py-2 border border-slate-300 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+                <span id="addon-msg" class="text-xs self-center"></span>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
 
@@ -834,6 +901,157 @@ document.getElementById('update-plan-btn')?.addEventListener('click', async () =
 });
 
 // Geocode button
+// ── Paid add-ons ──
+// The same three pricing shapes and age-band rules the owner screen offers.
+// Prices are entered in the hotel's own currency; the server derives the USD
+// cache, so nothing here converts anything.
+(function addons() {
+  // Add-on prices are entered in the hotel's own currency, exactly as plan
+  // prices are; the server derives the USD cache.
+  const HOTEL_CURRENCY = document.getElementById('addons-modal')?.dataset.currency || 'USD';
+  const modal = document.getElementById('addons-modal');
+  if (!modal) return;
+  const listEl = document.getElementById('addons-list');
+  const form = document.getElementById('addon-form');
+  const msg = document.getElementById('addon-msg');
+  const pricing = document.getElementById('addon-pricing');
+  let planId = null;
+
+  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  const bandsVisible = () => {
+    const showBands = pricing.value === 'per_adult_child';
+    document.querySelectorAll('.addon-band-price').forEach((el) => el.classList.toggle('hidden', !showBands));
+    // A flat per-booking charge is not counted per guest, so who it covers
+    // does not apply.
+    document.getElementById('addon-counts').classList.toggle('hidden', pricing.value === 'per_room');
+  };
+  pricing.addEventListener('change', bandsVisible);
+
+  function resetForm() {
+    document.getElementById('addon-id').value = '';
+    form.reset();
+    document.getElementById('addon-adults').checked = true;
+    document.getElementById('addon-children').checked = true;
+    document.getElementById('addon-infants').checked = false;
+    document.getElementById('addon-save').textContent = 'Add';
+    document.getElementById('addon-cancel').classList.add('hidden');
+    bandsVisible();
+  }
+
+  const COVERS = (o) => [o.counts_adults && 'adults', o.counts_children && 'children', o.counts_infants && 'infants']
+    .filter(Boolean).join(' + ');
+
+  async function load() {
+    listEl.innerHTML = '<p class="text-sm text-slate-400">Loading…</p>';
+    const res = await fetch('/api/admin/plan-options?plan_id=' + encodeURIComponent(planId));
+    const data = await res.json();
+    const opts = data.options || [];
+    if (!opts.length) {
+      listEl.innerHTML = '<p class="text-sm text-slate-400">No add-ons on this plan yet.</p>';
+      return;
+    }
+    listEl.innerHTML = opts.map((o) => {
+      const shape = o.pricing_type === 'per_room' ? 'per booking'
+        : o.pricing_type === 'per_person' ? 'per guest'
+        : 'per guest, by age';
+      const covers = o.pricing_type === 'per_room' ? '' : ' · ' + (COVERS(o) || 'nobody');
+      return '<div class="flex items-start justify-between gap-3 p-3 border border-slate-200 rounded-lg" data-opt=\'' + esc(JSON.stringify(o)) + '\'>' +
+        '<div class="min-w-0"><div class="text-sm font-medium text-slate-800">' + esc(o.name) +
+          (o.name_ja ? ' <span class="text-slate-400 font-normal">' + esc(o.name_ja) + '</span>' : '') + '</div>' +
+        '<div class="text-xs text-slate-500 mt-0.5">' + esc(o.price_local) + ' ' + shape + covers +
+          (o.pricing_type === 'per_adult_child' ? ' (child ' + esc(o.child_price_local ?? 0) + ', infant ' + esc(o.infant_price_local ?? 0) + ')' : '') +
+          '</div></div>' +
+        '<div class="flex gap-1 flex-shrink-0">' +
+          '<button class="addon-edit text-xs px-2 py-1 bg-indigo-50 text-indigo-700 rounded">Edit</button>' +
+          '<button class="addon-del text-xs px-2 py-1 bg-red-50 text-red-600 rounded">Delete</button>' +
+        '</div></div>';
+    }).join('');
+  }
+
+  document.getElementById('plans-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.addons-btn');
+    if (!btn) return;
+    const row = btn.closest('.plan-row');
+    planId = Number(row.getAttribute('data-plan-id'));
+    document.getElementById('addons-plan-name').textContent =
+      (row.querySelector('.font-medium')?.textContent || '').trim();
+    document.getElementById('addon-cur').textContent = '(' + HOTEL_CURRENCY + ')';
+    msg.textContent = '';
+    resetForm();
+    modal.classList.remove('hidden');
+    load();
+  });
+
+  document.getElementById('addons-close').addEventListener('click', () => modal.classList.add('hidden'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+  document.getElementById('addon-cancel').addEventListener('click', resetForm);
+
+  listEl.addEventListener('click', async (e) => {
+    const wrap = e.target.closest('[data-opt]');
+    if (!wrap) return;
+    const o = JSON.parse(wrap.getAttribute('data-opt'));
+    if (e.target.closest('.addon-edit')) {
+      document.getElementById('addon-id').value = o.id;
+      document.getElementById('addon-name').value = o.name || '';
+      document.getElementById('addon-name-ja').value = o.name_ja || '';
+      pricing.value = o.pricing_type;
+      document.getElementById('addon-price').value = o.price_local ?? '';
+      document.getElementById('addon-child-price').value = o.child_price_local ?? '';
+      document.getElementById('addon-infant-price').value = o.infant_price_local ?? '';
+      document.getElementById('addon-adults').checked = !!o.counts_adults;
+      document.getElementById('addon-children').checked = !!o.counts_children;
+      document.getElementById('addon-infants').checked = !!o.counts_infants;
+      document.getElementById('addon-save').textContent = 'Save changes';
+      document.getElementById('addon-cancel').classList.remove('hidden');
+      bandsVisible();
+      return;
+    }
+    if (e.target.closest('.addon-del')) {
+      if (!confirm('Delete "' + o.name + '"? Past bookings keep their own copy and are not affected.')) return;
+      await fetch('/api/admin/plan-options?id=' + o.id, { method: 'DELETE' });
+      load();
+    }
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('addon-id').value;
+    const body = {
+      plan_id: planId,
+      name: document.getElementById('addon-name').value.trim(),
+      name_ja: document.getElementById('addon-name-ja').value.trim(),
+      pricing_type: pricing.value,
+      price: Number(document.getElementById('addon-price').value || 0),
+      child_price: Number(document.getElementById('addon-child-price').value || 0),
+      infant_price: Number(document.getElementById('addon-infant-price').value || 0),
+      counts_adults: document.getElementById('addon-adults').checked,
+      counts_children: document.getElementById('addon-children').checked,
+      counts_infants: document.getElementById('addon-infants').checked,
+    };
+    if (id) body.id = Number(id);
+    msg.textContent = 'Saving…';
+    msg.className = 'text-xs self-center text-slate-500';
+    try {
+      const res = await fetch('/api/admin/plan-options', {
+        method: id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      msg.textContent = id ? 'Saved.' : 'Added.';
+      msg.className = 'text-xs self-center text-emerald-600';
+      resetForm();
+      load();
+    } catch (err) {
+      msg.textContent = err.message;
+      msg.className = 'text-xs self-center text-red-600';
+    }
+  });
+})();
+
 document.getElementById('geocode-btn')?.addEventListener('click', async () => {
   const addressInput = document.getElementById('address');
   const address = addressInput?.value;

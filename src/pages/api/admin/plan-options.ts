@@ -1,55 +1,46 @@
 import type { APIRoute } from 'astro';
-import { requireOwner } from '../../../lib/apiAuth';
+import { requireAdmin } from '../../../lib/apiAuth';
 import { listOptions, createOption, updateOption, deleteOption } from '../../../lib/planOptions';
 
-// Paid add-ons attached to a plan (breakfast, airport transfer, day pass…).
-// The rules live in lib/planOptions and are shared with the admin route; what
-// is here is the part that differs — an owner may only touch options on plans
-// belonging to their own hotels.
+// Paid add-ons, from the admin side. Same rules as the owner route — the logic
+// lives in lib/planOptions — but an admin is not restricted to one hotel's
+// plans. Added because add-ons could only ever be created by an owner, and
+// after the feature shipped not one hotel had any: nobody on the DayDreamHub
+// side could set one up on a hotel's behalf.
 const json = { 'Content-Type': 'application/json' };
 
 function bad(message: string, status = 400) {
   return new Response(JSON.stringify({ error: message }), { status, headers: json });
 }
 
-async function ownedPlan(db: any, ownerEmail: string, planId: number) {
-  return await db.prepare(
-    `SELECT p.id, p.hotel_id FROM plans p
-       JOIN hotels h ON h.id = p.hotel_id
-      WHERE p.id = ? AND LOWER(TRIM(h.email)) = LOWER(TRIM(?))`
-  ).bind(planId, ownerEmail).first();
-}
+const planOf = (db: any, planId: number) =>
+  db.prepare('SELECT id, hotel_id FROM plans WHERE id = ?').bind(planId).first();
 
-async function ownedOption(db: any, ownerEmail: string, optionId: number) {
-  return await db.prepare(
-    `SELECT o.* FROM plan_options o
-       JOIN hotels h ON h.id = o.hotel_id
-      WHERE o.id = ? AND LOWER(TRIM(h.email)) = LOWER(TRIM(?))`
-  ).bind(optionId, ownerEmail).first();
-}
+const optionOf = (db: any, id: number) =>
+  db.prepare('SELECT * FROM plan_options WHERE id = ?').bind(id).first();
 
 async function gate(request: Request, locals: any) {
   const env = locals?.runtime?.env;
   const db = env?.DB;
   if (!db) return { error: bad('Database not available', 503) };
-  const { owner, response } = await requireOwner(request, env?.JWT_SECRET || 'dev-secret');
+  const { response } = await requireAdmin(request, env?.JWT_SECRET || 'dev-secret');
   if (response) return { error: response };
-  return { db, owner };
+  return { db };
 }
 
 export const GET: APIRoute = async ({ request, locals }) => {
-  const { db, owner, error } = await gate(request, locals);
+  const { db, error } = await gate(request, locals);
   if (error) return error;
 
   const planId = Number(new URL(request.url).searchParams.get('plan_id'));
   if (!planId) return bad('plan_id required');
-  if (!(await ownedPlan(db, owner.email, planId))) return bad('Plan not found', 404);
+  if (!(await planOf(db, planId))) return bad('Plan not found', 404);
 
   return new Response(JSON.stringify({ options: await listOptions(db, planId) }), { headers: json });
 };
 
 export const POST: APIRoute = async ({ request, locals }) => {
-  const { db, owner, error } = await gate(request, locals);
+  const { db, error } = await gate(request, locals);
   if (error) return error;
 
   let body: any;
@@ -57,7 +48,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   const planId = Number(body.plan_id);
   if (!planId) return bad('plan_id required');
-  const plan: any = await ownedPlan(db, owner.email, planId);
+  const plan: any = await planOf(db, planId);
   if (!plan) return bad('Plan not found', 404);
 
   try {
@@ -69,7 +60,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 };
 
 export const PUT: APIRoute = async ({ request, locals }) => {
-  const { db, owner, error } = await gate(request, locals);
+  const { db, error } = await gate(request, locals);
   if (error) return error;
 
   let body: any;
@@ -77,7 +68,7 @@ export const PUT: APIRoute = async ({ request, locals }) => {
   const id = Number(body.id);
   if (!id) return bad('id required');
 
-  const existing: any = await ownedOption(db, owner.email, id);
+  const existing: any = await optionOf(db, id);
   if (!existing) return bad('Option not found', 404);
 
   try {
@@ -89,12 +80,12 @@ export const PUT: APIRoute = async ({ request, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ request, locals }) => {
-  const { db, owner, error } = await gate(request, locals);
+  const { db, error } = await gate(request, locals);
   if (error) return error;
 
   const id = Number(new URL(request.url).searchParams.get('id'));
   if (!id) return bad('id required');
-  if (!(await ownedOption(db, owner.email, id))) return bad('Option not found', 404);
+  if (!(await optionOf(db, id))) return bad('Option not found', 404);
 
   await deleteOption(db, id);
   return new Response(JSON.stringify({ success: true }), { headers: json });
