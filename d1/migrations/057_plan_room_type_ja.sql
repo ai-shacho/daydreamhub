@@ -1,0 +1,11 @@
+-- Japanese room type, so the hotel page stops paying to translate it.
+--
+-- The Japanese hotel page translated the room type on every request through
+-- Workers AI and threw the answer away, once per plan. Together with the hotel
+-- name and the descriptions — which had nowhere to be cached either — that put
+-- one listing at 13-16 seconds to first byte against 0.6 for a listing whose
+-- Japanese was already stored.
+--
+-- Every other translated field already has a _ja column and is written back on
+-- first use. This is the one that was missing.
+ALTER TABLE plans ADD COLUMN room_type_ja TEXT DEFAULT NULL;

@@ -166,23 +166,46 @@ async function translateToJa(text: string): Promise<string> {
   }
 }
 
+// Translations are written back the first time they are needed. Without that
+// the Japanese page re-translated the name, the description and every plan's
+// room type and description through Workers AI on every single request and
+// discarded the results — which is why one listing took 13-16 seconds to first
+// byte while a listing with its Japanese already stored took 0.6.
+async function remember(table: 'hotels' | 'plans', column: string, id: number, value: string) {
+  const db = (Astro.locals as any).runtime?.env?.DB;
+  if (!db || !value || !id) return;
+  // Column and table are literals from this file, never request data.
+  await db.prepare(`UPDATE ${table} SET ${column} = ? WHERE id = ?`).bind(value, id).run().catch(() => {});
+}
+
 let displayName = hotel ? decodeHtmlEntities(ja && hotel.name_ja ? hotel.name_ja : hotel.name) : '';
 if (ja && hotel && !hotel.name_ja && hotel.name) {
-  displayName = decodeHtmlEntities(await translateToJa(hotel.name).catch(() => hotel.name));
+  const t = await translateToJa(hotel.name).catch(() => hotel.name);
+  displayName = decodeHtmlEntities(t);
+  if (t && t !== hotel.name) await remember('hotels', 'name_ja', hotel.id, t);
 }
 
 let displayDescription = hotel ? (ja && hotel.description_ja ? hotel.description_ja : hotel.description || '') : '';
 if (ja && hotel && !hotel.description_ja && hotel.description) {
-  displayDescription = await translateToJa(hotel.description).catch(() => hotel.description);
+  const t = await translateToJa(hotel.description).catch(() => hotel.description);
+  displayDescription = t;
+  if (t && t !== hotel.description) await remember('hotels', 'description_ja', hotel.id, t);
 }
 
 if (ja && plans.length > 0) {
-  plans = await Promise.all(plans.map(async (plan: any) => ({
-    ...plan,
-    _ja_name: plan.name_ja || translatePlanName(plan.name),
-    _ja_room_type: plan.room_type ? await translateToJa(plan.room_type) : '',
-    _ja_desc: plan.description_ja || (plan.description ? await translateToJa(plan.description).catch(() => plan.description) : ''),
-  })));
+  plans = await Promise.all(plans.map(async (plan: any) => {
+    let roomTypeJa = plan.room_type_ja || '';
+    if (plan.room_type && !roomTypeJa) {
+      roomTypeJa = await translateToJa(plan.room_type).catch(() => plan.room_type);
+      if (roomTypeJa && roomTypeJa !== plan.room_type) await remember('plans', 'room_type_ja', plan.id, roomTypeJa);
+    }
+    let descJa = plan.description_ja || '';
+    if (plan.description && !descJa) {
+      descJa = await translateToJa(plan.description).catch(() => plan.description);
+      if (descJa && descJa !== plan.description) await remember('plans', 'description_ja', plan.id, descJa);
+    }
+    return { ...plan, _ja_name: plan.name_ja || translatePlanName(plan.name), _ja_room_type: roomTypeJa, _ja_desc: descJa };
+  }));
 }
 
 // Place names and airport names read better in Japanese script.
