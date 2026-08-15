@@ -584,10 +584,15 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
         setTimeout(() => out.classList.add('hidden'), 2500);
       } catch (e) {
         sel.value = previous;
-        sel.disabled = false;
         out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200';
         out.textContent = `Could not save: ${e.message}`;
         out.classList.remove('hidden');
+      } finally {
+        // Always: the select is disabled during the save so it cannot be
+        // changed twice at once, and while this page reloaded on success it did
+        // not matter that only the failure path put it back. Without the reload
+        // that left every saved row permanently stuck on its new value.
+        sel.disabled = false;
       }
     });
   });
