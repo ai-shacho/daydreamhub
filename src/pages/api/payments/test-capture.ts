@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { sendBookingNotificationToHotel, sendGuestBookingConfirmation } from '../../../lib/email';
 import { getBookingInfoForCall, triggerAutoCall } from '../../../lib/autoCall';
+import { resolveBookingCharge } from '../../../lib/currency';
 
 // テスト用PayPalキャプチャシミュレーター
 // ?test_pay=1 モード時のみ使用。本番環境では使わないこと。
@@ -55,6 +56,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // テスト用PayPal order ID
     const testOrderId = `TEST-${Date.now()}`;
 
+    // Price it the way the real capture does. This used to store the plan
+    // price as the booking total, so a test booking recorded a figure the
+    // guest would never have been charged — and that figure is what the
+    // emails and the admin screens then showed.
+    const charge = await resolveBookingCharge(db, plan_id, {
+      options: Array.isArray(body.options) ? body.options : [],
+      adults: Number(adults) || 1,
+      children: Number(children) || 0,
+      infants: Number(infants) || 0,
+    });
+    const totalAmount = charge ? charge.totalAmount : Number(plan.price_usd || 0);
+
     // 実際のPayPalキャプチャと同じ: status = pending_confirmation
     await db.prepare(`
       INSERT INTO bookings (
@@ -73,13 +86,37 @@ export const POST: APIRoute = async ({ request, locals }) => {
       adults || 1,
       children || 0,
       infants || 0,
-      plan.price_usd,
+      totalAmount,
       testOrderId,
       notes || ''
     ).run();
 
     const row: any = await db.prepare(`SELECT last_insert_rowid() as id`).first();
     const bookingId = row?.id;
+
+    // Record what was bought, as the real capture does. Without this a test
+    // booking is charged for add-ons that appear nowhere afterwards — the
+    // hotel cannot see what to prepare, and the line items the guest paid for
+    // are missing from every screen.
+    if (bookingId && charge && charge.options.length) {
+      for (const o of charge.options) {
+        await db.prepare(
+          `INSERT INTO booking_options (
+             booking_id, option_id, name, pricing_type, currency,
+             unit_price_local, unit_price_usd, child_unit_price_local, child_unit_price_usd,
+             infant_unit_price_local, infant_unit_price_usd,
+             quantity, child_quantity, infant_quantity, amount_local, amount_usd
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).bind(
+          bookingId, o.option_id, o.name, o.pricing_type, charge.currency,
+          o.unit_price_local, o.unit_price_usd, o.child_unit_price_local, o.child_unit_price_usd,
+          o.infant_unit_price_local, o.infant_unit_price_usd,
+          o.quantity, o.child_quantity, o.infant_quantity, o.amount_local, o.amount_usd
+        ).run().catch((e: any) => console.error('[test-capture] booking_option insert failed', e));
+      }
+      await db.prepare('UPDATE bookings SET options_total_usd = ? WHERE id = ?')
+        .bind(charge.optionsUsd, bookingId).run().catch(() => {});
+    }
 
     // 自動発信トリガー（実PayPalと同じ）
     try {
@@ -114,7 +151,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             adults: adults || 1,
             children: children || 0,
             infants: infants || 0,
-            totalPriceUsd: plan.price_usd,
+            totalPriceUsd: totalAmount,
             notes: notes || '',
             hotelName: plan.hotel_name,
             hotelEmail: notifyEmails,
@@ -134,7 +171,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             checkOutTime: plan.check_out_time || '',
             adults: adults || 1,
             children: children || 0,
-            totalPriceUsd: plan.price_usd,
+            totalPriceUsd: totalAmount,
             notes: notes || '',
             cancellationHours: plan.cancellation_hours ?? 24,
           });
@@ -148,6 +185,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       success: true,
       order_id: testOrderId,
       booking_id: bookingId,
+      // Same shape as the real capture, so the client shows one figure either way.
+      total_price_usd: totalAmount,
+      local_total: charge ? charge.localTotal : null,
+      currency: charge ? charge.currency : 'USD',
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
