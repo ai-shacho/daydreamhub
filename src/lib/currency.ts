@@ -146,7 +146,15 @@ async function priceSelectedOptions(
   const wanted = new Map<number, number>();
   for (const s of selection || []) {
     const id = Number(s?.id);
-    if (!Number.isFinite(id) || id <= 0) continue;
+    if (!Number.isFinite(id) || id <= 0) {
+      // A selection we cannot read is a guest being under-charged, not a
+      // detail: the app once sent {option_id} and every add-on silently
+      // vanished from the bill. Say so rather than quietly dropping it.
+      if (s && Object.keys(s).length) {
+        console.warn('[currency] ignoring unreadable option selection', JSON.stringify(s));
+      }
+      continue;
+    }
     const q = Math.max(1, Math.floor(Number(s?.quantity) || 1));
     wanted.set(id, q);
   }

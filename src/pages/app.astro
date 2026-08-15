@@ -2752,7 +2752,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         notes: $('bkNotes').value.trim(),
         // Selections only. The server re-prices every add-on from the database
         // in resolveBookingCharge, so a tampered price here changes nothing.
-        options: chosenOptions().map((o) => ({ option_id: o.id })),
+        // The key must be `id` — priceSelectedOptions reads s.id, and anything
+        // else is silently skipped, which is how add-ons went unbilled.
+        options: chosenOptions().map((o) => ({ id: o.id })),
       });
 
       /**
