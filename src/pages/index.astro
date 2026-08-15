@@ -1366,6 +1366,20 @@ function escHtml(s) {
   function heroAskForPosition() {
     if (_heroGeoAsked || !navigator.geolocation) return;
     _heroGeoAsked = true;
+
+    // The browser's own permission dialog cannot be reworded, and on its own it
+    // asks for a location without saying what for. This line goes up first, so
+    // the question arrives with a reason and with what it costs to decline.
+    var isJaNote = (document.documentElement.lang || 'en').indexOf('ja') === 0;
+    var note = document.createElement('p');
+    note.className = 'text-[11px] text-white/50 leading-relaxed px-1 py-1';
+    note.textContent = isJaNote
+      ? '📍 現在地は、お近くのホテルを探すためだけに使用します。許可しない場合も検索できますが、最寄りではないホテルが表示されることがあります。'
+      : '📍 Your location is used only to find hotels near you. You can decline and still search, but the hotels shown may not be the closest ones.';
+    showMessages();
+    messagesEl.appendChild(note);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
     navigator.geolocation.getCurrentPosition(
       function(pos) { window._heroGeo = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
       function() { /* refused or unavailable — the edge guess stands in */ },
