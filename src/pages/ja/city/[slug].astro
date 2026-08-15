@@ -1,6 +1,7 @@
 ---
 import Layout from '../../../layouts/Layout.astro';
 import { getLocale, t, localePath } from '../../../lib/i18n';
+import { geoNameJa } from '../../../lib/geoJa';
 import HotelCard from '../../../components/HotelCard.astro';
 
 const locale = getLocale(Astro.url);
@@ -103,8 +104,12 @@ function getPageNumbers(current: number, totalPg: number) {
 }
 
 const pageNumbers = getPageNumbers(page, totalPages);
-const pageTitle = t('city.hotels_in', locale).replace('{city}', cityName);
-const resultsText = t('city.hotels_found', locale).replace('{count}', String(total)).replace('{city}', cityName);
+// cityName is rebuilt from the slug and is what the SQL LIKE matches on, so it
+// has to stay English. Only what the reader sees is japanized — otherwise the
+// page headed "Bangkokのホテル" while every card under it said バンコク.
+const cityDisplay = geoNameJa(cityName);
+const pageTitle = t('city.hotels_in', locale).replace('{city}', cityDisplay);
+const resultsText = t('city.hotels_found', locale).replace('{count}', String(total)).replace('{city}', cityDisplay);
 // min_price はメインクエリ（is_active = 1）から取得され、HotelCard へ直接渡される。
 ---
 
@@ -115,7 +120,7 @@ const resultsText = t('city.hotels_found', locale).replace('{count}', String(tot
         <nav class="mb-4 text-sm text-gray-500">
           <a href={localePath('/', locale)} class="hover:text-[#45A2C1] transition-colors">{t('breadcrumb.home', locale)}</a>
           <span class="mx-2">/</span>
-          <span class="text-gray-700">{cityName}</span>
+          <span class="text-gray-700">{cityDisplay}</span>
         </nav>
         <h1 class="text-2xl font-bold text-gray-800">{pageTitle}</h1>
         <p class="text-sm text-gray-500 mt-1">{resultsText}</p>
