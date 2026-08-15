@@ -1367,24 +1367,50 @@ function escHtml(s) {
     if (_heroGeoAsked || !navigator.geolocation) return;
     _heroGeoAsked = true;
 
-    // The browser's own permission dialog cannot be reworded, and on its own it
-    // asks for a location without saying what for. This line goes up first, so
-    // the question arrives with a reason and with what it costs to decline.
+    // The browser's permission dialog cannot be reworded, and it opens pinned to
+    // the top of the window while our explanation sits in the chat thread — far
+    // enough apart that the reason went unread and the prompt got a reflexive
+    // no. A refusal is close to permanent: browsers make re-asking hard. So the
+    // explanation now comes with a button, and the dialog only opens once the
+    // guest has chosen to see it.
     var isJaNote = (document.documentElement.lang || 'en').indexOf('ja') === 0;
-    var note = document.createElement('p');
-    note.className = 'text-[11px] text-white/50 leading-relaxed px-1 py-1';
-    note.textContent = isJaNote
-      ? '📍 現在地は、お近くのホテルを探すためだけに使用します。許可しない場合も検索できますが、最寄りではないホテルが表示されることがあります。'
-      : '📍 Your location is used only to find hotels near you. You can decline and still search, but the hotels shown may not be the closest ones.';
+    var wrap = document.createElement('div');
+    wrap.className = 'text-[11px] text-white/60 leading-relaxed px-1 py-1.5';
+    wrap.innerHTML =
+      '<p>📍 ' + (isJaNote
+        ? '現在地から近い順にホテルを表示できます。現在地は、お近くのホテルを探すためだけに使用します。許可しない場合も検索できますが、最寄りではないホテルが表示されることがあります。'
+        : 'We can order hotels by how close they are. Your location is used only to find hotels near you. You can decline and still search, but the hotels shown may not be the closest ones.') + '</p>' +
+      '<div class="mt-1.5 flex gap-2">' +
+        '<button type="button" class="hero-geo-yes px-2.5 py-1 rounded-md bg-white/15 hover:bg-white/25 text-white/90 transition-colors">' +
+          (isJaNote ? '現在地を使う' : 'Use my location') + '</button>' +
+        '<button type="button" class="hero-geo-no px-2.5 py-1 rounded-md text-white/50 hover:text-white/70 transition-colors">' +
+          (isJaNote ? '使わない' : 'Not now') + '</button>' +
+      '</div>';
     showMessages();
-    messagesEl.appendChild(note);
+    messagesEl.appendChild(wrap);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
-    navigator.geolocation.getCurrentPosition(
-      function(pos) { window._heroGeo = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
-      function() { /* refused or unavailable — the edge guess stands in */ },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
-    );
+    var done = function(text) {
+      wrap.innerHTML = '<p class="text-white/40">📍 ' + text + '</p>';
+    };
+    wrap.querySelector('.hero-geo-yes').addEventListener('click', function() {
+      done(isJaNote ? '現在地を確認しています…' : 'Checking your location…');
+      navigator.geolocation.getCurrentPosition(
+        function(pos) {
+          window._heroGeo = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          done(isJaNote ? '現在地から近い順に表示します。' : 'Showing the closest hotels first.');
+        },
+        function() {
+          // Refused at the browser dialog, or unavailable. The edge guess stands
+          // in, so the search still works — say so rather than leaving a spinner.
+          done(isJaNote ? '現在地は使用しません。検索はそのままご利用いただけます。' : 'Continuing without your location.');
+        },
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+      );
+    });
+    wrap.querySelector('.hero-geo-no').addEventListener('click', function() {
+      done(isJaNote ? '現在地は使用しません。検索はそのままご利用いただけます。' : 'Continuing without your location.');
+    });
   }
 
   window._heroCallBook = async function(btn) {
