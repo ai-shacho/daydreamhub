@@ -151,64 +151,64 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
 ---
 
 <AdminLayout title="Hotel Phone Update" activeNav="hotels">
-  <div class="mb-6">
-    <h2 class="text-xl font-semibold text-slate-900">📞 Hotel Phone Update</h2>
-    <p class="text-sm text-slate-500 mt-1">
-      Phone numbers from the old site's listing applications, matched to live listings.
-      Only {hotels.filter((h: any) => String(h.phone || '').trim()).length} of {hotels.length} listings have a number on file today.
-    </p>
-  </div>
+  <p class="text-xs text-slate-500 mb-3">
+    Phone numbers from the old site's listing applications, matched to live listings.
+    Only {hotels.filter((h: any) => String(h.phone || '').trim()).length} of {hotels.length} listings have a number on file today.
+  </p>
 
-  {error && <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>}
+  {error && <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-3 text-sm">{error}</div>}
 
-  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+  <div class="grid grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
     {[['Ready', ready.length, 'text-emerald-700 bg-emerald-50 border-emerald-200'],
       ['Web-checked', checked.length, 'text-sky-700 bg-sky-50 border-sky-200'],
       ['Needs a look', check.length, 'text-amber-700 bg-amber-50 border-amber-200'],
       ['Disagrees', flagged.length, 'text-red-700 bg-red-50 border-red-200'],
       ['Do not call', noCall, 'text-red-700 bg-red-50 border-red-200'],
       ['Call unclear', maybeCall, 'text-amber-700 bg-amber-50 border-amber-200']].map(([label, n, cls]) => (
-      <div class={`stat-tile rounded-lg border px-4 py-3 ${cls}`} data-label={label}>
-        <div class="stat-value text-2xl font-bold">{n}</div>
-        <div class="text-xs">{label}</div>
+      <div class={`stat-tile rounded-lg border px-2.5 py-1.5 flex items-baseline gap-1.5 ${cls}`} data-label={label}>
+        <div class="stat-value text-lg font-bold leading-none">{n}</div>
+        <div class="text-[11px] leading-tight">{label}</div>
       </div>
     ))}
   </div>
 
-  <div class="bg-white rounded-lg shadow px-4 py-3 mb-6">
-    <div class="flex flex-wrap items-end gap-3">
-      <label class="flex-1 min-w-[220px]">
-        <span class="block text-xs font-medium text-slate-600 mb-1">Search</span>
+  <!-- Pinned under the layout's own 64px header (z-30), so it stays reachable
+       while scrolling 189 rows. Bled to the edges with negative margins, or
+       rows would slide through the gap either side of it. -->
+  <div class="sticky top-16 z-20 bg-slate-50/95 backdrop-blur border-b border-slate-200 -mx-4 lg:-mx-8 px-4 lg:px-8 py-2 mb-3">
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+      <label class="flex items-center gap-1.5 flex-1 min-w-[200px]">
+        <span class="text-slate-500 shrink-0">Search</span>
         <input id="f-search" type="search" placeholder="Hotel, city, person, or any number"
-          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          class="w-full border border-slate-300 rounded px-2 py-1 text-xs" />
       </label>
-      <label>
-        <span class="block text-xs font-medium text-slate-600 mb-1">Checking result</span>
-        <select id="f-verdict" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      <label class="flex items-center gap-1.5">
+        <span class="text-slate-500 shrink-0">Result</span>
+        <select id="f-verdict" class="border border-slate-300 rounded px-2 py-1 text-xs">
           <option value="">Any</option>
           {verdictsPresent.map((v: any) => <option value={v}>{v.replace(/_/g, ' ')}</option>)}
           <option value="__none">not checked</option>
         </select>
       </label>
-      <label>
-        <span class="block text-xs font-medium text-slate-600 mb-1">Call this number?</span>
-        <select id="f-callable" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      <label class="flex items-center gap-1.5">
+        <span class="text-slate-500 shrink-0">Call?</span>
+        <select id="f-callable" class="border border-slate-300 rounded px-2 py-1 text-xs">
           <option value="">Any</option>
-          <option value="yes">Yes — staffed property</option>
-          <option value="no">No — spa, salon, private host or test row</option>
-          <option value="unclear">Unclear — needs a person</option>
+          <option value="yes">Yes — staffed</option>
+          <option value="no">No — spa, host, test</option>
+          <option value="unclear">Unclear</option>
         </select>
       </label>
-      <label>
-        <span class="block text-xs font-medium text-slate-600 mb-1">Country</span>
-        <select id="f-country" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      <label class="flex items-center gap-1.5">
+        <span class="text-slate-500 shrink-0">Country</span>
+        <select id="f-country" class="border border-slate-300 rounded px-2 py-1 text-xs">
           <option value="">Any</option>
           {countries.map((c: any) => <option value={c}>{c}</option>)}
         </select>
       </label>
-      <label>
-        <span class="block text-xs font-medium text-slate-600 mb-1">Sort by</span>
-        <select id="f-sort" class="border border-slate-300 rounded-lg px-3 py-2 text-sm">
+      <label class="flex items-center gap-1.5">
+        <span class="text-slate-500 shrink-0">Sort</span>
+        <select id="f-sort" class="border border-slate-300 rounded px-2 py-1 text-xs">
           <option value="verdict">Needs a decision first</option>
           <option value="name">Hotel name (A–Z)</option>
           <option value="country">Country, then hotel</option>
@@ -216,13 +216,13 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
           <option value="date-asc">Applied — oldest first</option>
         </select>
       </label>
-      <button id="f-clear" class="text-sm px-3 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50">
+      <button id="f-clear" class="px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-50">
         Clear
       </button>
+      <p id="f-summary" class="text-[11px] text-slate-500 basis-full">
+        Showing all {allMatched.length} matched listings. Applying only ever writes rows that are both ticked and visible.
+      </p>
     </div>
-    <p id="f-summary" class="text-xs text-slate-500 mt-2">
-      Showing all {allMatched.length} matched listings. Applying only ever writes rows that are both ticked and visible.
-    </p>
   </div>
 
   <div id="apply-result" class="hidden mb-4 px-4 py-3 rounded-lg text-sm"></div>
