@@ -848,6 +848,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       }
       .cancel-box .cancel-title { font-weight: 700; color: #92400e; margin-bottom: 3px; }
       .cancel-box .cancel-note { font-size: 11px; color: var(--muted); margin-top: 5px; }
+      /* Prices lead in the hotel's own currency, so say what is actually
+         charged — before the guest picks a plan, not only at the total. */
+      .usd-note { font-size: 11px; color: var(--muted); margin: 6px 2px 0; line-height: 1.5; }
       #payArea { margin-top: 16px; }
       #payHint { color: var(--warn); font-size: 13px; margin-bottom: 8px; min-height: 17px; }
       #paypalBox.locked { opacity: .45; pointer-events: none; }
@@ -1001,6 +1004,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         </div>
         <div class="sec-title" id="planTitle">{t.selectPlan}</div>
         <div id="planList"></div>
+        <p class="usd-note" id="planUsdNote" hidden>{t.paidInUsd}</p>
         <div id="extCta" style="display:none">
           <div class="cg-note" id="extNote"></div>
           <button class="test-pay-btn" id="extCallBtn">{t.cgCallBtn}</button>
@@ -2396,7 +2400,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             $('planList').innerHTML = `<div class="panel-meta">${t.noPlans}</div>`;
             return;
           }
-          $('planList').innerHTML = plans
+          const usdNote = $('planUsdNote');
+        if (usdNote) usdNote.hidden = !hotelCurrency || hotelCurrency === 'USD';
+        $('planList').innerHTML = plans
             .map((p) => {
               const name = isJa && p.name_ja ? p.name_ja : p.name;
               const bits = [];
@@ -2484,7 +2490,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             (extra ? `<div class="row"><span class="k">${t.addonsLabel}</span><span>+${priceLead(extra, extraLocal).main}` +
               (priceLead(extra, extraLocal).side ? ` <small style="color:var(--muted)">${priceLead(extra, extraLocal).side}</small>` : '') + `</span></div>` : '') +
             `<div class="row total"><span>${t.total}</span><span class="v">${priceLead(total, totalLocal).main} <small style="color:var(--muted);font-weight:400">${priceLead(total, totalLocal).side}</small></span></div>` +
-            (localOf(totalLocal) ? `<div class="row"><span class="k" style="font-size:11px">${t.paidInUsd}</span><span></span></div>` : '');
+            (localOf(totalLocal) ? `<div class="usd-note">${t.paidInUsd}</div>` : '');
         };
         paintBookingSummary(0, 0);
         const d = new Date();
