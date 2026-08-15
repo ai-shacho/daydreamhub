@@ -2287,6 +2287,20 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         return money(Number(amountLocal), hotelCurrency);
       };
 
+      /**
+       * The price as the hotel set it, with the dollar figure as the estimate.
+       *
+       * A hotel priced in baht charges baht; the dollar amount moves with the
+       * exchange rate and is what we happen to collect. Leading with USD made
+       * the hotel's own number look like the approximation, which is backwards
+       * — and the website has always shown it this way round.
+       */
+      const priceLead = (usd, local) => {
+        const loc = localOf(local);
+        const dollars = '$' + Number(usd || 0).toFixed(2);
+        return loc ? { main: loc, side: '≈ ' + dollars } : { main: dollars, side: yenOf(usd) };
+      };
+
       const yenOf = (usd) => {
         if (!isJa || !rateJPY || usd == null) return '';
         const v = usd * rateJPY;
@@ -2391,7 +2405,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
               if (p.max_guests) bits.push(`${t.upTo}${p.max_guests}${t.ppl}`);
               return `<button class="plan" data-plan="${p.id}">
                 <div class="pinfo"><div class="pname">${esc(name)}</div><div class="pmeta">${esc(bits.join(' ・ '))}</div></div>
-                <div class="pprice"><div class="usd">$${p.price_usd}</div><div class="yen">${localOf(p.price_local) || yenOf(p.price_usd)}</div></div>
+                <div class="pprice"><div class="usd">${priceLead(p.price_usd, p.price_local).main}</div><div class="yen">${priceLead(p.price_usd, p.price_local).side}</div></div>
                 <div class="go">›</div>
               </button>`;
             })
@@ -2464,16 +2478,12 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           const total = Number(plan.price_usd || 0) + extra;
           const extraLocal = Number(addonsLocal || 0);
           const totalLocal = Number(plan.price_local || 0) + extraLocal;
-          // The hotel's own figure, then a JPY estimate for Japanese readers of
-          // a USD-priced hotel. Never both: two approximations under one total
-          // is noise.
-          const totalSide = localOf(totalLocal) || yenOf(total);
           $('bookSummary').innerHTML =
             `<div class="row"><span class="k">${t.planLabel}</span><span>${esc(pname)}</span></div>` +
             (hours ? `<div class="row"><span class="k">${t.hoursLabel}</span><span>${esc(hours)}</span></div>` : '') +
-            (extra ? `<div class="row"><span class="k">${t.addonsLabel}</span><span>+$${extra.toFixed(2)}` +
-              (localOf(extraLocal) ? ` <small style="color:var(--muted)">${localOf(extraLocal)}</small>` : '') + `</span></div>` : '') +
-            `<div class="row total"><span>${t.total}</span><span class="v">$${total.toFixed(2)} <small style="color:var(--muted);font-weight:400">${totalSide}</small></span></div>` +
+            (extra ? `<div class="row"><span class="k">${t.addonsLabel}</span><span>+${priceLead(extra, extraLocal).main}` +
+              (priceLead(extra, extraLocal).side ? ` <small style="color:var(--muted)">${priceLead(extra, extraLocal).side}</small>` : '') + `</span></div>` : '') +
+            `<div class="row total"><span>${t.total}</span><span class="v">${priceLead(total, totalLocal).main} <small style="color:var(--muted);font-weight:400">${priceLead(total, totalLocal).side}</small></span></div>` +
             (localOf(totalLocal) ? `<div class="row"><span class="k" style="font-size:11px">${t.paidInUsd}</span><span></span></div>` : '');
         };
         paintBookingSummary(0, 0);
@@ -2600,9 +2610,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           const coverEl = document.querySelector(`[data-cover="${o.id}"]`);
           if (coverEl) coverEl.textContent = coverageLabel(o);
           const usd = addonUsd(o);
-          const loc = localOf(addonLocal(o));
+          const lead = priceLead(usd, addonLocal(o));
           if (priceEl) priceEl.innerHTML = usd
-            ? '+$' + usd.toFixed(2) + (loc ? '<span class="addon-local">' + loc + '</span>' : '')
+            ? '+' + lead.main + (lead.side ? '<span class="addon-local">' + lead.side + '</span>' : '')
             : '';
           const box = document.querySelector(`.addon-cb[data-opt="${o.id}"]`);
           if (box && box.checked) { addons += usd; addonsLocal += addonLocal(o); }
