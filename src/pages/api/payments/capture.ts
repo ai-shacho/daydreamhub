@@ -404,6 +404,11 @@ export const POST: APIRoute = async ({ request, locals }) => {
           booking_id: bookingId,
           status: 'pending_confirmation',
           paypal_status: captureStatus,
+          // What was actually charged, so a client can show the figure rather
+          // than recomputing the fee formula and risking a different answer.
+          total_price_usd: totalAmount,
+          local_total: localTotal,
+          currency: charge.currency,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );

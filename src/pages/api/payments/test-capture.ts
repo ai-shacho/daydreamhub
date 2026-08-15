@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { sendBookingNotificationToHotel, sendGuestBookingConfirmation } from '../../../lib/email';
 import { getBookingInfoForCall, triggerAutoCall } from '../../../lib/autoCall';
+import { resolveBookingCharge } from '../../../lib/currency';
 
 // テスト用PayPalキャプチャシミュレーター
 // ?test_pay=1 モード時のみ使用。本番環境では使わないこと。
@@ -55,6 +56,18 @@ export const POST: APIRoute = async ({ request, locals }) => {
     // テスト用PayPal order ID
     const testOrderId = `TEST-${Date.now()}`;
 
+    // Price it the way the real capture does. This used to store the plan
+    // price as the booking total, so a test booking recorded a figure the
+    // guest would never have been charged — and that figure is what the
+    // emails and the admin screens then showed.
+    const charge = await resolveBookingCharge(db, plan_id, {
+      options: Array.isArray(body.options) ? body.options : [],
+      adults: Number(adults) || 1,
+      children: Number(children) || 0,
+      infants: Number(infants) || 0,
+    });
+    const totalAmount = charge ? charge.totalAmount : Number(plan.price_usd || 0);
+
     // 実際のPayPalキャプチャと同じ: status = pending_confirmation
     await db.prepare(`
       INSERT INTO bookings (
@@ -73,7 +86,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
       adults || 1,
       children || 0,
       infants || 0,
-      plan.price_usd,
+      totalAmount,
       testOrderId,
       notes || ''
     ).run();
@@ -114,7 +127,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             adults: adults || 1,
             children: children || 0,
             infants: infants || 0,
-            totalPriceUsd: plan.price_usd,
+            totalPriceUsd: totalAmount,
             notes: notes || '',
             hotelName: plan.hotel_name,
             hotelEmail: notifyEmails,
@@ -134,7 +147,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
             checkOutTime: plan.check_out_time || '',
             adults: adults || 1,
             children: children || 0,
-            totalPriceUsd: plan.price_usd,
+            totalPriceUsd: totalAmount,
             notes: notes || '',
             cancellationHours: plan.cancellation_hours ?? 24,
           });
@@ -148,6 +161,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
       success: true,
       order_id: testOrderId,
       booking_id: bookingId,
+      // Same shape as the real capture, so the client shows one figure either way.
+      total_price_usd: totalAmount,
+      local_total: charge ? charge.localTotal : null,
+      currency: charge ? charge.currency : 'USD',
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

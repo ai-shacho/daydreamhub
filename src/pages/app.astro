@@ -2755,21 +2755,28 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         options: chosenOptions().map((o) => ({ option_id: o.id })),
       });
 
-      function showDone(bookingId) {
+      /**
+       * @param charged what the server says was taken, including fees. The plan
+       *   price is not the total — the completion screen used to show it and so
+       *   claimed $30.16 on a booking PayPal had charged $38.95 for.
+       */
+      function showDone(bookingId, charged) {
         const pname = isJa && selPlan.name_ja ? selPlan.name_ja : selPlan.name;
         $('doneBox').innerHTML =
           `<div class="row"><span class="k">${t.bookingNo}</span><span>${esc(String(bookingId))}</span></div>` +
           `<div class="row"><span class="k">${t.hotelLabel}</span><span>${esc(selHotel ? selHotel.name : '')}</span></div>` +
           `<div class="row"><span class="k">${t.planLabel}</span><span>${esc(pname)}</span></div>` +
           `<div class="row"><span class="k">${t.dateLabel}</span><span>${esc($('bkDate').value)}</span></div>` +
-          `<div class="row total"><span>${t.total}</span><span class="v">$${selPlan.price_usd}</span></div>`;
+          `<div class="row total"><span>${t.total}</span><span class="v">$${Number(
+            charged && charged.total_price_usd != null ? charged.total_price_usd : selPlan.price_usd
+          ).toFixed(2)} <small style="color:var(--muted);font-weight:400">USD</small></span></div>`;
         openPanel('donePanel');
         saveBooking({
           id: bookingId,
           hotel: selHotel ? selHotel.name : '',
           plan: pname,
           date: $('bkDate').value,
-          price: selPlan.price_usd,
+          price: Number(charged && charged.total_price_usd != null ? charged.total_price_usd : selPlan.price_usd),
         });
         track('app_booking_done', { booking: bookingId });
       }
@@ -3083,7 +3090,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
               const d = await r.json();
               if (!d.success) throw new Error(d.error || 'failed');
               $('payHint').textContent = '';
-              showDone(d.booking_id);
+              showDone(d.booking_id, d);
             } catch (e) {
               $('payHint').textContent = '⚠️ ' + t.payFailed;
             }
@@ -3125,7 +3132,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
               const d = await r.json();
               if (!d.success) throw new Error(d.error || 'capture failed');
               $('payHint').textContent = '';
-              showDone(d.booking_id);
+              showDone(d.booking_id, d);
             } catch (e) {
               $('payHint').textContent = '⚠️ ' + t.payFailed;
             }
