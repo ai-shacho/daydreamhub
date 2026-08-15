@@ -1,0 +1,647 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { verifyAdmin } from '../../lib/adminAuth';
+import { HOTEL_PHONE_ROWS } from '../../lib/data/hotelPhoneRows';
+import { toInternational } from '../../lib/phoneFormat';
+import { PHONE_VERIFICATIONS } from '../../lib/data/hotelPhoneVerified';
+import { CALL_KINDS, KIND_LABEL } from '../../lib/data/hotelCallKind';
+
+const runtime = (Astro.locals as any).runtime;
+const db = runtime?.env?.DB;
+const admin = await verifyAdmin(Astro.request, runtime?.env?.JWT_SECRET || 'dev-secret');
+if (!admin) return Astro.redirect('/admin/login');
+
+// Match the old signup submissions to live listings, so the numbers can be put
+// back where they belong. Nothing is written until an admin ticks rows and
+// presses Apply.
+let hotels: any[] = [];
+let error = '';
+if (db) {
+  try {
+    const r = await db.prepare(
+      "SELECT id, name, email, contact_email, country, city, phone, notify_phone, status, call_kind, call_kind_set_by, call_kind_set_at FROM hotels ORDER BY name"
+    ).all();
+    hotels = r?.results || [];
+  } catch (e: any) {
+    error = e.message || 'Failed to load hotels';
+  }
+}
+
+const norm = (s: string) => String(s || '').toLowerCase().normalize('NFKC').replace(/[^a-z0-9]+/g, '');
+
+// Two ways in: the hotel's name, or any email address on the submission. The
+// email route matters — one operator in Oulu runs six listings whose names look
+// nothing like what they signed up as.
+const byName = new Map<string, any>();
+const byEmail = new Map<string, any>();
+for (const row of HOTEL_PHONE_ROWS) {
+  if (row.name) byName.set(norm(row.name), row);
+  for (const e of row.emails) byEmail.set(e.trim().toLowerCase(), row);
+}
+
+type Match = {
+  hotel: any;
+  row: any;
+  how: 'name' | 'email';
+  phone: ReturnType<typeof toInternational>;
+  notify: ReturnType<typeof toInternational>;
+  verified?: (typeof PHONE_VERIFICATIONS)[number];
+  /** What sort of business it is, and whether an automated call belongs there. */
+  callKind?: (typeof CALL_KINDS)[number] & { manual?: boolean };
+  /** The published number, when checking found one that differs. */
+  suggested?: string;
+};
+
+// A spa, a private host or a row that is not a property is never called,
+// whoever said so. Same rule as the merge script, applied again here so a hand
+// override cannot turn one of them back on by accident.
+const NEVER_CALL = new Set(['spa_salon', 'private_host', 'not_real']);
+
+const KIND_OPTIONS = Object.keys(KIND_LABEL) as Array<keyof typeof KIND_LABEL>;
+
+// The badge has exactly three appearances. Kept as functions because the client
+// rebuilds the same badge after a hand override, and two copies of the mapping
+// would drift.
+const badgeClass = (c?: string) =>
+  c === 'yes' ? 'bg-emerald-50 text-emerald-800'
+  : c === 'no' ? 'bg-red-50 text-red-700'
+  : 'bg-amber-50 text-amber-800';
+const badgeText = (c?: string) =>
+  c === 'yes' ? 'Call' : c === 'no' ? 'Do not call' : 'Unclear';
+
+/** What a listing is: the hand-set value if there is one, else what checking found. */
+function effectiveKind(h: any) {
+  const checked = CALL_KINDS[h.id];
+  const manual = String(h.call_kind || '').trim();
+  if (!manual) return checked;
+  const callable = NEVER_CALL.has(manual) ? 'no' : manual === 'unclear' ? 'unclear' : 'yes';
+  return {
+    kind: manual as any,
+    callable: callable as any,
+    why: `Set by hand${h.call_kind_set_by ? ` by ${h.call_kind_set_by}` : ''}${h.call_kind_set_at ? ` on ${String(h.call_kind_set_at).slice(0, 10)}` : ''}.`
+      + (checked ? ` Checking had said: ${checked.kind.replace(/_/g, ' ')} — ${checked.why}` : ''),
+    manual: true,
+  };
+}
+
+const ready: Match[] = [];     // both numbers understood — safe to apply in bulk
+const checked: Match[] = [];   // looked up on the web; the finding decides
+const check: Match[] = [];     // a number needed an assumption, and nobody has looked yet
+const already: Match[] = [];   // the listing already has a phone
+const flagged: Match[] = [];   // checking says this number is someone else's, or the listing is not real
+let unmatched = 0;
+
+for (const h of hotels) {
+  let row = byName.get(norm(h.name));
+  let how: 'name' | 'email' = 'name';
+  if (!row) {
+    for (const key of [h.email, h.contact_email]) {
+      const v = String(key || '').trim().toLowerCase();
+      if (v && byEmail.has(v)) { row = byEmail.get(v); how = 'email'; break; }
+    }
+  }
+  if (!row) { unmatched++; continue; }
+
+  const phone = toInternational(row.hotel_phone, h.country);
+  const notify = toInternational(row.contact_phone, h.country);
+  if (!phone.value && !notify.value) { unmatched++; continue; }
+
+  const verified = PHONE_VERIFICATIONS[h.id];
+  const m: Match = { hotel: h, row, how, phone, notify, verified, callKind: effectiveKind(h) };
+
+  // Where the web disagrees, that number is offered as the default choice —
+  // but the submitted one stays on the row and stays selectable. A number
+  // published nowhere is not wrong; a sales desk's direct line looks exactly
+  // like that.
+  if (verified?.webPhone && verified.verdict !== 'confirmed') {
+    m.suggested = verified.webPhone;
+  }
+
+  if (String(h.phone || '').trim()) already.push(m);
+  else if (verified && (verified.verdict === 'wrong_business' || verified.verdict === 'not_a_property')) flagged.push(m);
+  else if (verified) checked.push(m);
+  else if ((m.phone.value && !m.phone.confident) || (m.notify.value && !m.notify.confident)) check.push(m);
+  else ready.push(m);
+}
+
+// Sorting by verdict puts what needs a decision at the top rather than in
+// alphabetical order, so "someone else's number" never sits below fifty
+// confirmed rows.
+const VERDICT_RANK: Record<string, number> = {
+  wrong_business: 0, not_a_property: 1, differs: 2, not_published: 3, confirmed: 4,
+};
+const rank = (m: Match) => (m.verified ? VERDICT_RANK[m.verified.verdict] ?? 9 : 8);
+
+const allMatched: Match[] = [];
+
+const sections: Array<{ key: string; title: string; blurb: string; rows: Match[]; preTicked: boolean }> = [
+  { key: 'ready', title: 'Ready to apply', blurb: 'Every number already carried its country code. Nothing was assumed.', rows: ready, preTicked: true },
+  { key: 'checked', title: 'Checked against the web', blurb: 'These were doubtful, so each was looked up on the hotel\'s own site or a tourism registry. The finding is shown per row.', rows: checked, preTicked: true },
+  { key: 'check', title: 'Read before applying', blurb: 'A country code had to be worked out from the listing\'s country, and nobody has checked yet.', rows: check, preTicked: false },
+  { key: 'already', title: 'Listing already has a phone', blurb: 'Left alone. Tick only if the old number is better than what is on file.', rows: already, preTicked: false },
+  { key: 'flagged', title: 'Checking disagrees — decide per row', blurb: 'The number appears to belong to a different business, or the listing may not be a real property. Nothing is deleted: the submitted number is still here and still selectable.', rows: flagged, preTicked: false },
+];
+
+for (const sec of sections) allMatched.push(...sec.rows);
+const countries = [...new Set(allMatched.map(m => m.hotel.country).filter(Boolean))].sort();
+const noCall = allMatched.filter(m => m.callKind?.callable === 'no').length;
+const maybeCall = allMatched.filter(m => !m.callKind || m.callKind.callable === 'unclear').length;
+const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).filter(Boolean))]
+  .sort((a: any, b: any) => (VERDICT_RANK[a] ?? 9) - (VERDICT_RANK[b] ?? 9));
+---
+
+<AdminLayout title="Hotel Phone Update" activeNav="hotels">
+  <p class="text-xs text-slate-500 mb-3">
+    Phone numbers from the old site's listing applications, matched to live listings.
+    Only {hotels.filter((h: any) => String(h.phone || '').trim()).length} of {hotels.length} listings have a number on file today.
+  </p>
+
+  {error && <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg mb-3 text-sm">{error}</div>}
+
+  <div class="grid grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
+    {[['Ready', ready.length, 'text-emerald-700 bg-emerald-50 border-emerald-200'],
+      ['Web-checked', checked.length, 'text-sky-700 bg-sky-50 border-sky-200'],
+      ['Needs a look', check.length, 'text-amber-700 bg-amber-50 border-amber-200'],
+      ['Disagrees', flagged.length, 'text-red-700 bg-red-50 border-red-200'],
+      ['Do not call', noCall, 'text-red-700 bg-red-50 border-red-200'],
+      ['Call unclear', maybeCall, 'text-amber-700 bg-amber-50 border-amber-200']].map(([label, n, cls]) => (
+      <div class={`stat-tile rounded-lg border px-2.5 py-1.5 flex items-baseline gap-1.5 ${cls}`} data-label={label}>
+        <div class="stat-value text-lg font-bold leading-none">{n}</div>
+        <div class="text-[11px] leading-tight">{label}</div>
+      </div>
+    ))}
+  </div>
+
+  <!-- Pinned under the layout's own 64px header (z-30), so it stays reachable
+       while scrolling 189 rows. Bled to the edges with negative margins, or
+       rows would slide through the gap either side of it. -->
+  <div class="sticky top-16 z-20 bg-slate-50/95 backdrop-blur border-b border-slate-200 -mx-4 lg:-mx-8 px-4 lg:px-8 py-2 mb-3">
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+      <label class="flex items-center gap-1.5 flex-1 min-w-[200px]">
+        <span class="text-slate-500 shrink-0">Search</span>
+        <input id="f-search" type="search" placeholder="Hotel, city, person, or any number"
+          class="w-full border border-slate-300 rounded px-2 py-1 text-xs" />
+      </label>
+      <label class="flex items-center gap-1.5">
+        <span class="text-slate-500 shrink-0">Result</span>
+        <select id="f-verdict" class="border border-slate-300 rounded px-2 py-1 text-xs">
+          <option value="">Any</option>
+          {verdictsPresent.map((v: any) => <option value={v}>{v.replace(/_/g, ' ')}</option>)}
+          <option value="__none">not checked</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <span class="text-slate-500 shrink-0">Call?</span>
+        <select id="f-callable" class="border border-slate-300 rounded px-2 py-1 text-xs">
+          <option value="">Any</option>
+          <option value="yes">Yes — staffed</option>
+          <option value="no">No — spa, host, test</option>
+          <option value="unclear">Unclear</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <span class="text-slate-500 shrink-0">Country</span>
+        <select id="f-country" class="border border-slate-300 rounded px-2 py-1 text-xs">
+          <option value="">Any</option>
+          {countries.map((c: any) => <option value={c}>{c}</option>)}
+        </select>
+      </label>
+      <label class="flex items-center gap-1.5">
+        <span class="text-slate-500 shrink-0">Sort</span>
+        <select id="f-sort" class="border border-slate-300 rounded px-2 py-1 text-xs">
+          <option value="verdict">Needs a decision first</option>
+          <option value="name">Hotel name (A–Z)</option>
+          <option value="country">Country, then hotel</option>
+          <option value="date-desc">Applied — newest first</option>
+          <option value="date-asc">Applied — oldest first</option>
+        </select>
+      </label>
+      <button id="f-clear" class="px-2 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-50">
+        Clear
+      </button>
+      <p id="f-summary" class="text-[11px] text-slate-500 basis-full">
+        Showing all {allMatched.length} matched listings. Applying only ever writes rows that are both ticked and visible.
+      </p>
+    </div>
+  </div>
+
+  <div id="apply-result" class="hidden mb-4 px-4 py-3 rounded-lg text-sm"></div>
+
+  {sections.map(sec => (
+    <section class="mb-8">
+      <div class="flex items-center justify-between mb-2">
+        <div>
+          <h3 class="font-semibold text-slate-800">{sec.title} <span class="text-slate-400 font-normal sec-count" data-section={sec.key} data-total={sec.rows.length}>({sec.rows.length})</span></h3>
+          <p class="text-xs text-slate-500">{sec.blurb}</p>
+        </div>
+        {sec.rows.length > 0 && (
+          <button class="apply-btn text-sm px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors" data-section={sec.key}>
+            Apply ticked rows
+          </button>
+        )}
+      </div>
+
+      {sec.rows.length === 0 ? (
+        <p class="text-sm text-slate-400 py-4">Nothing here.</p>
+      ) : (
+        <>
+        <div class="bg-white rounded-lg shadow overflow-x-auto">
+          <table class="w-full text-sm" data-section-table={sec.key}>
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-left">
+                <th class="px-3 py-2 w-8"><input type="checkbox" class="tick-all" data-section={sec.key} checked={sec.preTicked} /></th>
+                <th class="px-3 py-2 font-medium text-slate-600">Hotel</th>
+                <th class="px-3 py-2 font-medium text-slate-600">Call?</th>
+                <th class="px-3 py-2 font-medium text-slate-600">Main line <span class="font-normal text-slate-400">— the one called</span></th>
+                <th class="px-3 py-2 font-medium text-slate-600">Contact person <span class="font-normal text-slate-400">— never called</span></th>
+                <th class="px-3 py-2 font-medium text-slate-600">On file now</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {sec.rows.map(m => (
+                <tr class="hover:bg-slate-50 data-row"
+                  data-verdict={m.verified?.verdict || '__none'}
+                  data-callable={m.callKind?.callable || 'unclear'}
+                  data-country={m.hotel.country || ''}
+                  data-sort-name={String(m.hotel.name || '').toLowerCase()}
+                  data-sort-date={m.row.date || ''}
+                  data-sort-rank={rank(m)}
+                  data-haystack={[
+                    m.hotel.name, m.hotel.city, m.hotel.country, m.row.name, m.row.person,
+                    m.row.hotel_phone, m.row.contact_phone, m.phone.value, m.notify.value,
+                    m.suggested, m.verified?.webPhone, m.verified?.webPhoneAlt,
+                    m.callKind && KIND_LABEL[m.callKind.kind], m.callKind?.why,
+                    m.hotel.phone, m.hotel.notify_phone, ...(m.row.emails || []),
+                  ].filter(Boolean).join(' ').toLowerCase()}>
+                  <td class="px-3 py-2 align-top">
+                    <input type="checkbox" class="row-tick" checked={sec.preTicked && !m.suggested}
+                      data-section={sec.key}
+                      data-hotel-id={m.hotel.id}
+                      data-phone={m.suggested || m.phone.value}
+                      data-notify={m.notify.value} />
+                  </td>
+                  <td class="px-3 py-2 align-top">
+                    <a href={`/admin/hotels/${m.hotel.id}/edit`} class="font-medium text-teal-700 hover:underline">{m.hotel.name}</a>
+                    <div class="text-xs text-slate-400">{m.hotel.city}, {m.hotel.country} · {m.hotel.status}</div>
+                    <div class="text-xs text-slate-400">applied {m.row.date}{m.row.person ? ` · ${m.row.person}` : ''}</div>
+                    {m.row.name && m.row.name !== m.hotel.name && (
+                      <div class="text-xs text-slate-400">applied as: {m.row.name.slice(0, 70)}</div>
+                    )}
+                    {m.verified && (
+                      <div class={`mt-1 text-xs rounded px-2 py-1 ${
+                        m.verified.verdict === 'confirmed' ? 'bg-emerald-50 text-emerald-800'
+                        : m.verified.verdict === 'differs' ? 'bg-sky-50 text-sky-800'
+                        : m.verified.verdict === 'not_a_property' || m.verified.verdict === 'wrong_business' ? 'bg-red-50 text-red-700'
+                        : 'bg-amber-50 text-amber-800'}`}>
+                        <strong>{m.verified.verdict.replace(/_/g, ' ')}</strong> — {m.verified.note}
+                        {m.verified.matchedOn && <div class="mt-0.5 opacity-80">identified by: {m.verified.matchedOn}</div>}
+                        {m.verified.source && (
+                          <> <a href={m.verified.source} target="_blank" rel="noopener" class="underline">source</a></>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td class="px-3 py-2 align-top text-xs">
+                    <span class={`call-badge inline-block rounded px-1.5 py-0.5 font-medium ${badgeClass(m.callKind?.callable)}`}>
+                      {badgeText(m.callKind?.callable)}
+                    </span>
+                    <span class="by-hand ml-1 text-slate-400" hidden={!m.callKind?.manual}>by hand</span>
+                    <div class="call-why text-slate-400 mt-0.5 leading-snug">{m.callKind?.why || ''}</div>
+                    <select class="kind-pick mt-1.5 w-full border border-slate-200 rounded px-1 py-0.5 text-xs"
+                      data-hotel-id={m.hotel.id}
+                      data-original={m.hotel.call_kind || ''}
+                      data-checked-kind={CALL_KINDS[m.hotel.id]?.kind || ''}
+                      data-checked-callable={CALL_KINDS[m.hotel.id]?.callable || 'unclear'}
+                      data-checked-why={CALL_KINDS[m.hotel.id]?.why || ''}>
+                      <option value="">{m.hotel.call_kind ? 'Use the checked value' : `As checked — ${CALL_KINDS[m.hotel.id] ? KIND_LABEL[CALL_KINDS[m.hotel.id].kind] : 'unclear'}`}</option>
+                      {KIND_OPTIONS.map(k => (
+                        <option value={k} selected={m.hotel.call_kind === k}>{KIND_LABEL[k]}</option>
+                      ))}
+                    </select>
+                    <div class="text-slate-300 mt-1">matched by {m.how}</div>
+                  </td>
+                  <td class="px-3 py-2 align-top font-mono text-xs">
+                    {m.suggested ? (
+                      <>
+                        <label class="flex items-start gap-1.5">
+                          <input type="radio" name={`pick-${m.hotel.id}`} value={m.suggested} checked
+                            class="pick-phone mt-0.5" data-hotel-id={m.hotel.id} />
+                          <span>{m.suggested}<span class="block text-sky-700 font-sans">published online</span></span>
+                        </label>
+                        <label class="flex items-start gap-1.5 mt-1.5">
+                          <input type="radio" name={`pick-${m.hotel.id}`} value={m.phone.value}
+                            class="pick-phone mt-0.5" data-hotel-id={m.hotel.id} />
+                          <span>{m.phone.value || '—'}<span class="block text-slate-400 font-sans">as submitted</span></span>
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        {m.phone.value || <span class="text-slate-300">—</span>}
+                        {m.phone.value && !m.phone.confident && <div class="text-amber-600 font-sans">{m.phone.note}</div>}
+                      </>
+                    )}
+                    <div class="text-slate-300 font-sans mt-1">typed: {m.row.hotel_phone || '—'}</div>
+                    {m.verified?.webPhoneAlt && <div class="text-slate-400 font-sans">also published: {m.verified.webPhoneAlt}</div>}
+                  </td>
+                  <td class="px-3 py-2 align-top font-mono text-xs">
+                    {m.notify.value || <span class="text-slate-300">—</span>}
+                    {m.notify.value && !m.notify.confident && <div class="text-amber-600 font-sans">{m.notify.note}</div>}
+                    {m.notify.value && (
+                      <div class="text-slate-400 font-sans mt-1">kept for a person to ring; the automated call never uses it</div>
+                    )}
+                  </td>
+                  <td class="px-3 py-2 align-top font-mono text-xs text-slate-500">
+                    {m.hotel.phone || <span class="text-slate-300">—</span>}
+                    {m.hotel.notify_phone && <div>{m.hotel.notify_phone}</div>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p class="none-visible hidden text-sm text-slate-400 py-4">No rows here match the filter.</p>
+        </>
+      )}
+    </section>
+  ))}
+</AdminLayout>
+
+<script>
+  // Filtering and sorting happen here rather than on the server so that a tick
+  // survives narrowing the list. The one rule that matters: a hidden row is
+  // never written, so filtering can't quietly apply something off-screen.
+  const search = document.getElementById('f-search');
+  const fVerdict = document.getElementById('f-verdict');
+  const fCallable = document.getElementById('f-callable');
+  const fCountry = document.getElementById('f-country');
+  const fSort = document.getElementById('f-sort');
+  const summary = document.getElementById('f-summary');
+
+  const visible = (tr) => tr.style.display !== 'none';
+
+  function compare(a, b, mode) {
+    const name = (tr) => tr.getAttribute('data-sort-name') || '';
+    const date = (tr) => tr.getAttribute('data-sort-date') || '';
+    switch (mode) {
+      case 'name': return name(a).localeCompare(name(b));
+      case 'country':
+        return (a.getAttribute('data-country') || '').localeCompare(b.getAttribute('data-country') || '')
+          || name(a).localeCompare(name(b));
+      case 'date-desc': return date(b).localeCompare(date(a)) || name(a).localeCompare(name(b));
+      case 'date-asc': return date(a).localeCompare(date(b)) || name(a).localeCompare(name(b));
+      default:
+        return Number(a.getAttribute('data-sort-rank')) - Number(b.getAttribute('data-sort-rank'))
+          || name(a).localeCompare(name(b));
+    }
+  }
+
+  function refresh() {
+    const q = (search.value || '').trim().toLowerCase();
+    const wantVerdict = fVerdict.value;
+    const wantCallable = fCallable.value;
+    const wantCountry = fCountry.value;
+    const mode = fSort.value;
+    let shown = 0, total = 0;
+
+    document.querySelectorAll('[data-section-table]').forEach(table => {
+      const body = table.querySelector('tbody');
+      const rows = [...body.querySelectorAll('tr.data-row')];
+      let secShown = 0;
+
+      for (const tr of rows) {
+        const ok =
+          (!q || (tr.getAttribute('data-haystack') || '').includes(q)) &&
+          (!wantVerdict || tr.getAttribute('data-verdict') === wantVerdict) &&
+          (!wantCallable || tr.getAttribute('data-callable') === wantCallable) &&
+          (!wantCountry || tr.getAttribute('data-country') === wantCountry);
+        tr.style.display = ok ? '' : 'none';
+        if (ok) secShown++;
+      }
+      total += rows.length;
+      shown += secShown;
+
+      rows.sort((a, b) => compare(a, b, mode)).forEach(tr => body.appendChild(tr));
+
+      const key = table.getAttribute('data-section-table');
+      const label = document.querySelector(`.sec-count[data-section="${key}"]`);
+      if (label) {
+        const all = Number(label.getAttribute('data-total'));
+        label.textContent = secShown === all ? `(${all})` : `(${secShown} of ${all})`;
+      }
+      const empty = table.parentElement.nextElementSibling;
+      if (empty && empty.classList.contains('none-visible')) {
+        empty.classList.toggle('hidden', secShown > 0);
+      }
+    });
+
+    rememberFilters();
+
+    summary.textContent = shown === total
+      ? `Showing all ${total} matched listings. Applying only ever writes rows that are both ticked and visible.`
+      : `Showing ${shown} of ${total} matched listings. Applying only ever writes rows that are both ticked and visible, so the ${total - shown} hidden row(s) are safe.`;
+  }
+
+  // Filters live in the URL as well as the controls. Applying phone numbers
+  // still reloads the page, and without this the admin would come back to an
+  // unfiltered list of 180 rows every time — the same complaint that killed the
+  // reload on the kind selector. It also makes a filtered view shareable.
+  const FILTER_PARAMS = [['q', search], ['verdict', fVerdict], ['callable', fCallable], ['country', fCountry], ['sort', fSort]];
+
+  (function restoreFilters() {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, el] of FILTER_PARAMS) {
+      const v = params.get(key);
+      if (v === null) continue;
+      // A stale link naming a country that no longer has rows would otherwise
+      // leave a select showing nothing while the list looks empty for no reason.
+      if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === v)) continue;
+      el.value = v;
+    }
+  })();
+
+  function rememberFilters() {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, el] of FILTER_PARAMS) {
+      const v = (el.value || '').trim();
+      // 'verdict' is the default sort; leaving it out keeps the URL readable.
+      if (!v || (key === 'sort' && v === 'verdict')) params.delete(key);
+      else params.set(key, v);
+    }
+    const qs = params.toString();
+    window.history.replaceState(null, '', qs ? '?' + qs : window.location.pathname);
+  }
+
+  [search, fVerdict, fCallable, fCountry, fSort].forEach(el => {
+    el.addEventListener('input', refresh);
+    el.addEventListener('change', refresh);
+  });
+  document.getElementById('f-clear').addEventListener('click', () => {
+    search.value = ''; fVerdict.value = ''; fCallable.value = ''; fCountry.value = ''; fSort.value = 'verdict';
+    refresh();
+  });
+  refresh();
+
+  document.querySelectorAll('.tick-all').forEach(box => {
+    box.addEventListener('change', () => {
+      const sec = box.getAttribute('data-section');
+      // Only what the filter is currently showing, so "tick all" means what it
+      // looks like it means.
+      document.querySelectorAll(`.row-tick[data-section="${sec}"]`).forEach(t => {
+        if (visible(t.closest('tr'))) t.checked = box.checked;
+      });
+    });
+  });
+
+  const NEVER_CALL = new Set(['spa_salon', 'private_host', 'not_real']);
+  const KIND_LABELS = {
+    hotel: 'Hotel', apartment: 'Serviced apartments', spa_salon: 'Spa or salon',
+    private_host: 'Private host', not_real: 'Not a property', unclear: 'Unclear',
+  };
+  const badgeClassFor = (c) =>
+    c === 'yes' ? 'bg-emerald-50 text-emerald-800'
+    : c === 'no' ? 'bg-red-50 text-red-700'
+    : 'bg-amber-50 text-amber-800';
+  const badgeTextFor = (c) => (c === 'yes' ? 'Call' : c === 'no' ? 'Do not call' : 'Unclear');
+
+  /** Redraw one row's verdict after a hand override, the way the server would. */
+  function applyKindToRow(sel) {
+    const cell = sel.closest('td');
+    const tr = sel.closest('tr');
+    const manual = sel.value;
+    const checkedKind = sel.getAttribute('data-checked-kind') || '';
+    const checkedWhy = sel.getAttribute('data-checked-why') || '';
+
+    const kind = manual || checkedKind;
+    const callable = manual
+      ? (NEVER_CALL.has(manual) ? 'no' : manual === 'unclear' ? 'unclear' : 'yes')
+      : (sel.getAttribute('data-checked-callable') || 'unclear');
+
+    const badge = cell.querySelector('.call-badge');
+    badge.className = 'call-badge inline-block rounded px-1.5 py-0.5 font-medium ' + badgeClassFor(callable);
+    badge.textContent = badgeTextFor(callable);
+    cell.querySelector('.by-hand').hidden = !manual;
+    cell.querySelector('.call-why').textContent = manual
+      ? 'Set by hand just now.' + (checkedKind ? ' Checking had said: ' + checkedKind.replace(/_/g, ' ') + ' — ' + checkedWhy : '')
+      : checkedWhy;
+
+    // The filter reads this, and the search box reads the reason text.
+    tr.setAttribute('data-callable', callable);
+    const hay = (tr.getAttribute('data-haystack') || '') + ' ' + (KIND_LABELS[kind] || '').toLowerCase();
+    tr.setAttribute('data-haystack', hay);
+
+    // "As checked — X" only makes sense while nothing is overriding it.
+    const first = sel.querySelector('option[value=""]');
+    if (first) {
+      first.textContent = manual
+        ? 'Use the checked value'
+        : 'As checked — ' + (KIND_LABELS[checkedKind] || 'Unclear');
+    }
+
+    updateCallTiles();
+    refresh();
+  }
+
+  /** Keep the "Do not call" / "Call unclear" counters honest after an edit. */
+  function updateCallTiles() {
+    const rows = [...document.querySelectorAll('tr.data-row')];
+    const no = rows.filter(r => r.getAttribute('data-callable') === 'no').length;
+    const unclear = rows.filter(r => r.getAttribute('data-callable') === 'unclear').length;
+    const set = (label, n) => {
+      const tile = [...document.querySelectorAll('.stat-tile')].find(t => t.dataset.label === label);
+      if (tile) tile.querySelector('.stat-value').textContent = String(n);
+    };
+    set('Do not call', no);
+    set('Call unclear', unclear);
+  }
+
+  // Setting the kind by hand saves on the spot. The row then reloads its own
+  // state on the next page load; no need to re-render it here beyond saying so.
+  document.querySelectorAll('.kind-pick').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const id = Number(sel.getAttribute('data-hotel-id'));
+      const previous = sel.getAttribute('data-original') || '';
+      const out = document.getElementById('apply-result');
+      sel.disabled = true;
+      try {
+        const res = await fetch('/api/admin/hotel-call-kind', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hotel_id: id, kind: sel.value }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        sel.setAttribute('data-original', sel.value);
+        // Update the row here rather than reloading. A reload threw away the
+        // filter the admin was working under and every tick they had set, which
+        // for a screen whose whole job is working through 180 rows a filter at a
+        // time made each save cost more than it saved.
+        applyKindToRow(sel);
+        out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-emerald-50 text-emerald-800 border border-emerald-200';
+        out.textContent = sel.value
+          ? 'Saved.'
+          : 'Cleared — back to the checked value.';
+        out.classList.remove('hidden');
+        setTimeout(() => out.classList.add('hidden'), 2500);
+      } catch (e) {
+        sel.value = previous;
+        out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200';
+        out.textContent = `Could not save: ${e.message}`;
+        out.classList.remove('hidden');
+      } finally {
+        // Always: the select is disabled during the save so it cannot be
+        // changed twice at once, and while this page reloaded on success it did
+        // not matter that only the failure path put it back. Without the reload
+        // that left every saved row permanently stuck on its new value.
+        sel.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll('.pick-phone').forEach(radio => {
+    radio.addEventListener('change', () => {
+      const id = radio.getAttribute('data-hotel-id');
+      const tick = document.querySelector(`.row-tick[data-hotel-id="${id}"]`);
+      if (tick) tick.setAttribute('data-phone', radio.value);
+    });
+  });
+
+  document.querySelectorAll('.apply-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const sec = btn.getAttribute('data-section');
+      const ticked = [...document.querySelectorAll(`.row-tick[data-section="${sec}"]`)]
+        .filter(t => t.checked && visible(t.closest('tr')));
+      if (!ticked.length) return;
+      if (!confirm(`Write ${ticked.length} listing(s)?`)) return;
+
+      const rows = ticked.map(t => ({
+        hotel_id: Number(t.getAttribute('data-hotel-id')),
+        phone: t.getAttribute('data-phone') || '',
+        notify_phone: t.getAttribute('data-notify') || '',
+      }));
+
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = 'Applying...';
+      const out = document.getElementById('apply-result');
+      try {
+        const res = await fetch('/api/admin/hotel-phone-update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-emerald-50 text-emerald-800 border border-emerald-200';
+        out.textContent = `Updated ${data.updated} listing(s).` + (data.skipped?.length ? ` Skipped ${data.skipped.length}: ${data.skipped.map(s => s.why).join('; ')}` : '');
+        out.classList.remove('hidden');
+        setTimeout(() => window.location.reload(), 1500);
+      } catch (e) {
+        out.className = 'mb-4 px-4 py-3 rounded-lg text-sm bg-red-50 text-red-700 border border-red-200';
+        out.textContent = e.message;
+        out.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
+  });
+</script>
