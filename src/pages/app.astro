@@ -155,7 +155,26 @@ const t = isJa
       ageChild: '{a}歳まで',
       ageInfant: '{a}歳まで',
       addonsLabel: 'オプション（有料）',
-      paidInUsd: '※ 決済はUSDで行われます',
+      paidInUsd: '※ お支払いはUSD（米ドル）で処理されます。現地通貨の表示は参考価格です。',
+      planPriceLabel: 'プラン料金',
+      processingFee: '決済手数料',
+      serviceFee: 'サービス料',
+      ageNote: 'チェックイン時にホテルが年齢の確認を求める場合があります。予約時と年齢が異なる場合、現地で追加料金が発生することがあります。',
+      requestNote: 'ご要望はホテルにお伝えしますが、お応えできるかはホテルの判断によります。確約されるものではなく、内容によっては別途料金がかかる場合があります。',
+      lockTitleOpts: '⚠️ オプション・人数は予約後に変更できません',
+      lockTitleNoOpts: '⚠️ 人数は予約後に変更できません',
+      lockReduceOpts: 'オプションを外す・人数を減らす場合は、いったんキャンセルして予約し直してください（差額の返金はできません）。',
+      lockReduceNoOpts: '人数を減らす場合は、いったんキャンセルして予約し直してください（差額の返金はできません）。',
+      lockAdd: 'オプションを追加する場合も、キャンセルして予約し直すか、現地でホテルに直接依頼して追加料金をお支払いください。',
+      lockOnArrival: '現地での追加・変更が可能かどうかはホテル次第です。予約後のメッセージ（受信箱）からホテルにご確認ください。',
+      lockRefund: 'キャンセル時の返金は、プランのキャンセルポリシーに従います。',
+      approvalTitle: '予約承認制について',
+      approvalBody: 'ご予約はホテルによる承認制です。お支払いは予約時にお預かりしますが、承認されなかった場合は全額返金いたします。',
+      perBooking: '1予約あたり',
+      adultLabel: '大人',
+      childLabel: '子供',
+      infantLabel: '乳児',
+      freeLabel: '無料',
       addonFor: '対象：',
       nationalityLabel: '国籍',
       nationalitySelect: '— 選択してください —',
@@ -304,7 +323,26 @@ const t = isJa
       ageChild: 'up to {a}',
       ageInfant: 'under {a}',
       addonsLabel: 'Paid add-ons',
-      paidInUsd: 'Payment is processed in USD.',
+      paidInUsd: 'Payment is processed in USD. Local-currency amounts are for reference only.',
+      planPriceLabel: 'Plan Price',
+      processingFee: 'Processing fee',
+      serviceFee: 'Service Fee',
+      ageNote: 'The hotel may ask to verify ages at check-in. If ages differ from what was booked, an extra charge may apply on arrival.',
+      requestNote: 'We pass your request to the hotel, but whether it can be met is the hotel\u2019s decision. It is not guaranteed, and some requests may carry an extra charge payable to the hotel.',
+      lockTitleOpts: '\u26a0\ufe0f Add-ons and guest numbers cannot be changed after booking',
+      lockTitleNoOpts: '\u26a0\ufe0f Guest numbers cannot be changed after booking',
+      lockReduceOpts: 'To remove an add-on or reduce the number of guests, please cancel and book again \u2014 we cannot refund the difference on an existing booking.',
+      lockReduceNoOpts: 'To reduce the number of guests, please cancel and book again \u2014 we cannot refund the difference on an existing booking.',
+      lockAdd: 'To add an add-on, either cancel and book again, or ask the hotel directly on arrival and pay them for it there.',
+      lockOnArrival: 'Whether anything can still be arranged on arrival is up to the hotel \u2014 please check with them via Messages (your inbox) after booking.',
+      lockRefund: 'Any refund when you cancel follows the plan\u2019s cancellation policy.',
+      approvalTitle: 'Approval-based Booking',
+      approvalBody: 'Bookings are subject to hotel approval. Payment is collected at the time of booking, but you will receive a full refund if your request is not approved.',
+      perBooking: 'per booking',
+      adultLabel: 'Adult',
+      childLabel: 'Child',
+      infantLabel: 'Infant',
+      freeLabel: 'Free',
       addonFor: 'For: ',
       nationalityLabel: 'Nationality',
       nationalitySelect: '— Select —',
@@ -851,6 +889,15 @@ const areas: Array<{ label: string; q: string; img: string }> = [
       /* Prices lead in the hotel's own currency, so say what is actually
          charged — before the guest picks a plan, not only at the total. */
       .usd-note { font-size: 11px; color: var(--muted); margin: 6px 2px 0; line-height: 1.5; }
+      .addon-rates { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.5; }
+      .lock-box, .approval-box {
+        border: 1px solid #fde68a; background: #fffbeb; border-radius: 12px;
+        padding: 11px 13px; margin-bottom: 12px; font-size: 12px; line-height: 1.6; color: #78350f;
+      }
+      .lock-box .lock-title, .approval-box .approval-title { font-weight: 700; margin-bottom: 5px; }
+      .lock-box ul { margin: 0; padding-left: 18px; }
+      .lock-box li { margin-bottom: 4px; }
+      .approval-box { margin: 10px 0 0; }
       #payArea { margin-top: 16px; }
       #payHint { color: var(--warn); font-size: 13px; margin-bottom: 8px; min-height: 17px; }
       #paypalBox.locked { opacity: .45; pointer-events: none; }
@@ -1033,6 +1080,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
             <label class="band"><span id="bkInfantsLabel">{t.infantsLabel}</span><select id="bkInfants"></select></label>
           </div>
         </div>
+        <p class="field-note" id="bkAgeNote">{t.ageNote}</p>
         <div class="field" id="bkOptionsField" hidden>
           <label>{t.addonsLabel}</label>
           <div id="bkOptions"></div>
@@ -1060,7 +1108,9 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         <div class="field">
           <label for="bkNotes">{t.notesLabel}</label>
           <textarea id="bkNotes" rows="3" placeholder={t.notesPlaceholder}></textarea>
+          <p class="field-note">{t.requestNote}</p>
         </div>
+        <div class="lock-box" id="bkLockBox"></div>
         <div class="cancel-box" id="bkCancelBox" hidden></div>
         <div id="payArea">
           <div id="payHint"></div>
@@ -2481,16 +2531,30 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         // guest sees is the one they are about to be charged.
         paintBookingSummary = (addonsUsd, addonsLocal) => {
           const extra = Number(addonsUsd || 0);
-          const total = Number(plan.price_usd || 0) + extra;
           const extraLocal = Number(addonsLocal || 0);
+          // The same fee formula as resolveBookingCharge on the server. The app
+          // used to show the room price as the total, so a guest read $30.16
+          // and PayPal charged $38.95 — the fees were real and simply unstated.
+          const chargeable = Math.round((Number(plan.price_usd || 0) + extra) * 100) / 100;
+          const processing = Math.round(chargeable * 0.06 * 100) / 100;
+          const serviceBase = Math.round(chargeable * 0.10 * 100) / 100;
+          const service = serviceBase < 10 ? Math.round((10 - serviceBase) * 100) / 100 : 0;
+          const total = Math.round((chargeable + processing + service) * 100) / 100;
+          // Fees are charged in USD, so only the room and its add-ons have a
+          // local figure; the total is a dollar amount by definition.
           const totalLocal = Number(plan.price_local || 0) + extraLocal;
           $('bookSummary').innerHTML =
             `<div class="row"><span class="k">${t.planLabel}</span><span>${esc(pname)}</span></div>` +
             (hours ? `<div class="row"><span class="k">${t.hoursLabel}</span><span>${esc(hours)}</span></div>` : '') +
+            `<div class="row"><span class="k">${t.planPriceLabel}</span><span>${priceLead(plan.price_usd, plan.price_local).main}` +
+              (priceLead(plan.price_usd, plan.price_local).side ? ` <small style="color:var(--muted)">${priceLead(plan.price_usd, plan.price_local).side}</small>` : '') + `</span></div>` +
             (extra ? `<div class="row"><span class="k">${t.addonsLabel}</span><span>+${priceLead(extra, extraLocal).main}` +
               (priceLead(extra, extraLocal).side ? ` <small style="color:var(--muted)">${priceLead(extra, extraLocal).side}</small>` : '') + `</span></div>` : '') +
-            `<div class="row total"><span>${t.total}</span><span class="v">${priceLead(total, totalLocal).main} <small style="color:var(--muted);font-weight:400">${priceLead(total, totalLocal).side}</small></span></div>` +
-            (localOf(totalLocal) ? `<div class="usd-note">${t.paidInUsd}</div>` : '');
+            `<div class="row"><span class="k">${t.processingFee}</span><span>$${processing.toFixed(2)}</span></div>` +
+            (service ? `<div class="row"><span class="k">${t.serviceFee}</span><span>$${service.toFixed(2)}</span></div>` : '') +
+            `<div class="row total"><span>${t.total}</span><span class="v">$${total.toFixed(2)} <small style="color:var(--muted);font-weight:400">USD</small></span></div>` +
+            (localOf(totalLocal) ? `<div class="usd-note">${t.paidInUsd}</div>` : '') +
+            `<div class="approval-box"><div class="approval-title">${t.approvalTitle}</div><div>${t.approvalBody}</div></div>`;
         };
         paintBookingSummary(0, 0);
         const d = new Date();
@@ -2520,6 +2584,7 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         $('bkInfantsLabel').textContent = t.infantsLabel + band(t.ageInfant, bands.infant_max_age);
 
         renderAddons(plan);
+        renderLockNotice();
         renderCancellation(plan, bands);
         openPanel('bookPanel');
         setupPay();
@@ -2540,6 +2605,28 @@ const areas: Array<{ label: string; q: string; img: string }> = [
         if (o.counts_children) n += bandCount('bkChildren', 0);
         if (o.counts_infants) n += bandCount('bkInfants', 0);
         return n;
+      }
+
+      /**
+       * What each age band pays, spelled out the way the website does. A single
+       * "per guest" figure hides that a child may be half price and an infant
+       * free, which is exactly what a parent needs to know before ticking it.
+       */
+      function bandRates(o) {
+        const rate = (usd, local) => {
+          const n = Number(usd || 0);
+          if (!n) return t.freeLabel;
+          const lead = priceLead(n, local);
+          return lead.main + (lead.side ? ' ' + lead.side : '');
+        };
+        if (o.pricing_type === 'per_room') return rate(o.price_usd, o.price_local) + ' ' + t.perBooking;
+        if (o.pricing_type !== 'per_adult_child') return rate(o.price_usd, o.price_local);
+        const lines = [];
+        if (o.counts_adults) lines.push(t.adultLabel + ': ' + rate(o.price_usd, o.price_local));
+        if (o.counts_children) lines.push(t.childLabel + ': ' + rate(o.child_price_usd ?? o.price_usd, o.child_price_local ?? o.price_local));
+        if (o.counts_infants) lines.push(t.infantLabel + ': ' + rate(o.infant_price_usd, o.infant_price_local));
+        else lines.push(t.infantLabel + ': ' + t.freeLabel);
+        return lines.join('<br>');
       }
 
       function coverageLabel(o) {
@@ -2586,11 +2673,24 @@ const areas: Array<{ label: string; q: string; img: string }> = [
           const name = isJa && o.name_ja ? o.name_ja : o.name;
           return `<label class="addon"><input type="checkbox" class="addon-cb" data-opt="${o.id}" />` +
             `<span class="addon-body"><span class="addon-name">${esc(name)}</span>` +
+            `<span class="addon-rates">${bandRates(o)}</span>` +
             `<span class="addon-cover" data-cover="${o.id}">${esc(coverageLabel(o))}</span></span>` +
             `<span class="addon-price" data-price="${o.id}"></span></label>`;
         }).join('');
         $('bkOptions').querySelectorAll('.addon-cb').forEach((b) => b.addEventListener('change', refreshTotals));
         refreshTotals();
+      }
+
+      /** What cannot be changed once booked — the same four points the site makes. */
+      function renderLockNotice() {
+        const box = $('bkLockBox');
+        if (!box) return;
+        const hasOpts = planOptions.length > 0;
+        const items = [hasOpts ? t.lockReduceOpts : t.lockReduceNoOpts];
+        if (hasOpts) items.push(t.lockAdd);
+        items.push(t.lockOnArrival, t.lockRefund);
+        box.innerHTML = `<div class="lock-title">${hasOpts ? t.lockTitleOpts : t.lockTitleNoOpts}</div>` +
+          '<ul>' + items.map((i) => `<li>${i}</li>`).join('') + '</ul>';
       }
 
       function renderCancellation(plan, hotel) {
