@@ -197,7 +197,13 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   if (dryRun) {
     return new Response(JSON.stringify({
       success: true, dry_run: true, would_send: wouldSend.length, details: wouldSend,
-      suppressed: suppressed.length, suppressed_details: suppressed,
+      // "suppressed" would read as done. A dry run writes nothing, so these
+      // bookings are still due — say so, or the run looks like it finished the
+      // job and the next live run emails them anyway.
+      would_suppress: suppressed.length, would_suppress_details: suppressed,
+      note: suppressed.length
+        ? 'Dry run: nothing was recorded. Re-run with REMINDER_DRY_RUN=0 to actually suppress these.'
+        : undefined,
     }), { headers: json });
   }
 
