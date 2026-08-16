@@ -48,6 +48,17 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   // ?dry_run=1 reports exactly who would be emailed and writes nothing, so the
   // first run on a new environment can be checked before anything is sent.
   const dryRun = url.searchParams.get('dry_run') === '1';
+  // ?suppress=79,81 marks those bookings as already reminded and sends nothing.
+  // For a booking made while testing against a real hotel: the booking itself
+  // stays open, so the hotel can still approve or decline it from the email it
+  // already has, but it stops chasing them about a guest who does not exist.
+  // Explicit ids only — there is deliberately no "suppress everything".
+  const suppress = new Set(
+    (url.searchParams.get('suppress') || '')
+      .split(',')
+      .map((v) => Number(v.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0)
+  );
   // A ceiling on one run. Normal volume is a handful; anything near this means
   // something is wrong, and stopping is better than mailing every owner.
   const MAX_PER_RUN = 50;
@@ -62,11 +73,17 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: json });
   }
   if (!db) return new Response(JSON.stringify({ error: 'DB not available' }), { status: 500, headers: json });
-  if (!RESEND_API_KEY) return new Response(JSON.stringify({ error: 'RESEND_API_KEY not set' }), { status: 500, headers: json });
+  // Only the sending path needs the mail key. A dry run and a suppression both
+  // refuse to send by definition, and blocking them here made the one safe way
+  // to inspect this job unusable on any environment without Resend configured.
+  if (!RESEND_API_KEY && !dryRun && !suppress.size) {
+    return new Response(JSON.stringify({ error: 'RESEND_API_KEY not set' }), { status: 500, headers: json });
+  }
 
   const sent: any[] = [];
   const failed: any[] = [];
   const wouldSend: any[] = [];
+  const suppressed: any[] = [];
   // One booking gets at most one email per run. markSent already enforces this
   // by writing the earlier stages, but holding it in memory too means a dry run
   // reports exactly what a real run would send, and a failed write cannot turn
@@ -117,6 +134,13 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
         handled.add(b.id);
         await markSent(db, b.id, stage);
         failed.push({ booking_id: b.id, stage, error: 'no hotel email on file' });
+        continue;
+      }
+
+      if (suppress.has(b.id)) {
+        handled.add(b.id);
+        if (!dryRun) await markSent(db, b.id, stage);
+        suppressed.push({ booking_id: b.id, stage });
         continue;
       }
 
@@ -173,6 +197,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
   if (dryRun) {
     return new Response(JSON.stringify({
       success: true, dry_run: true, would_send: wouldSend.length, details: wouldSend,
+      suppressed: suppressed.length, suppressed_details: suppressed,
     }), { headers: json });
   }
 
@@ -180,6 +205,7 @@ export const POST: APIRoute = async ({ request, url, locals }) => {
     success: true,
     sent: sent.length,
     failed: failed.length,
-    details: { sent, failed },
+    suppressed: suppressed.length,
+    details: { sent, failed, suppressed },
   }), { headers: json });
 };
