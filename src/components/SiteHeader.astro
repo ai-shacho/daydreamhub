@@ -29,38 +29,38 @@ const appPath = `/app?lang=${isJa ? 'ja' : 'en'}`;
         </a>
 
         <!-- Nav links (desktop) -->
-        <nav class="hidden md:flex items-center gap-1">
-          <a href={getPath('/search')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/search') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+        <nav class:list={["hidden lg:flex items-center", isJa ? "gap-0 [&>a]:px-2" : "gap-1"]}>
+          <a href={getPath('/search')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap", currentPath === getPath('/search') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
               {isJa ? '検索' : 'Search'}
             </span>
           </a>
-          <a href={getPath('/wishlist')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/wishlist') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+          <a href={getPath('/wishlist')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap", currentPath === getPath('/wishlist') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
               {isJa ? 'ウィッシュリスト' : 'Wishlist'}
             </span>
           </a>
-          <a href={getPath('/map')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/map') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+          <a href={getPath('/map')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap", currentPath === getPath('/map') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
               {isJa ? 'マップ' : 'Map'}
             </span>
           </a>
-          <a href={getPath('/blog')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", (currentPath.startsWith('/blog') || currentPath.startsWith('/ja/blog')) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+          <a href={getPath('/blog')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap", (currentPath.startsWith('/blog') || currentPath.startsWith('/ja/blog')) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/></svg>
               Blog
             </span>
           </a>
-          <a href={getPath('/how-it-works')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === getPath('/how-it-works') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+          <a href={getPath('/how-it-works')} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap", currentPath === getPath('/how-it-works') ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               {isJa ? 'ご利用方法' : 'How it Works'}
             </span>
           </a>
-          <a href={appPath} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors", currentPath === '/app' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+          <a href={appPath} class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap", currentPath === '/app' ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
             <span class="inline-flex items-center gap-1.5">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
               {isJa ? 'アプリ' : 'App'}
@@ -69,7 +69,7 @@ const appPath = `/app?lang=${isJa ? 'ja' : 'en'}`;
           <!-- SERVICES_NAV_REMOVED -->
           <!-- More dropdown -->
           <div class="relative" id="more-menu-wrapper">
-            <button id="more-menu-btn" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5", ['/about','/faq','/for-hotel-owner'].includes(currentPath) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
+            <button id="more-menu-btn" class:list={["px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap inline-flex items-center gap-1.5", ['/about','/faq','/for-hotel-owner'].includes(currentPath) ? 'bg-teal-600 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900']}>
               {isJa ? 'その他' : 'More'}
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
@@ -108,15 +108,15 @@ const appPath = `/app?lang=${isJa ? 'ja' : 'en'}`;
 
           <!-- Owner Portal / Admin Panel CTA -->
           {currentUser?.role === 'admin' ? (
-            <a href="/admin" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-700 border border-purple-400/50 hover:border-purple-500 px-3 py-1.5 rounded-md transition-colors">
+            <a href="/admin" class="hidden lg:inline-flex whitespace-nowrap items-center gap-1.5 text-xs font-semibold text-purple-600 hover:text-purple-700 border border-purple-400/50 hover:border-purple-500 px-3 py-1.5 rounded-md transition-colors">
               ⚙️ Admin Panel
             </a>
           ) : (currentUser && (currentUser.role === 'owner' || currentUser.role === 'staff')) ? (
-            <a href="/owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
+            <a href="/owner" class="hidden lg:inline-flex whitespace-nowrap items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
               🏨 Owner Portal
             </a>
           ) : (
-            <a href="/for-hotel-owner" class="hidden lg:inline-flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
+            <a href="/for-hotel-owner" class="hidden lg:inline-flex whitespace-nowrap items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700 border border-teal-500/50 hover:border-teal-600 px-3 py-1.5 rounded-md transition-colors">
               🏨 List Your Property
             </a>
           )}
@@ -155,14 +155,14 @@ const appPath = `/app?lang=${isJa ? 'ja' : 'en'}`;
               </div>
             ) : (
               <>
-                <a href="/login" class="text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">{isJa ? 'ログイン' : 'Login'}</a>
-                <a href="/register" class="text-xs font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 px-3 py-1.5 rounded-md transition-colors">{isJa ? '新規登録' : 'Register'}</a>
+                <a href="/login" class="whitespace-nowrap text-xs font-medium text-gray-600 hover:text-gray-900 transition-colors px-3 py-1.5 rounded-md hover:bg-gray-100">{isJa ? 'ログイン' : 'Login'}</a>
+                <a href="/register" class="whitespace-nowrap text-xs font-medium bg-amber-500 hover:bg-amber-400 text-gray-900 px-3 py-1.5 rounded-md transition-colors">{isJa ? '新規登録' : 'Register'}</a>
               </>
             )}
           </div>
 
           <!-- Mobile menu button -->
-          <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-800" aria-label="Menu">
+          <button id="mobile-menu-btn" class="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-800" aria-label="Menu">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
           </button>
         </div>
@@ -170,7 +170,7 @@ const appPath = `/app?lang=${isJa ? 'ja' : 'en'}`;
     </div>
 
     <!-- Mobile menu -->
-    <div id="mobile-menu" class="md:hidden hidden border-t border-gray-200 bg-white">
+    <div id="mobile-menu" class="lg:hidden hidden border-t border-gray-200 bg-white">
       <div class="px-4 py-3 space-y-1">
         <a href={getPath('/search')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? '検索' : 'Search'}</a>
         <a href={getPath('/wishlist')} class="block px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">{isJa ? 'ウィッシュリスト' : 'Wishlist'}</a>
