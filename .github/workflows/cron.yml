@@ -32,6 +32,11 @@ on:
   schedule:
     - cron: '17 * * * *'      # hourly, off the hour to dodge the platform-wide rush
   workflow_dispatch:
+    inputs:
+      suppress:
+        description: 'Booking ids to silence without emailing, e.g. 79,81. Leave blank for a normal run.'
+        required: false
+        default: ''
 
 jobs:
   owner-booking-reminders:
@@ -40,11 +45,20 @@ jobs:
       - name: Chase owners who have not answered a booking (6h / 12h / 24h)
         env:
           DRY_RUN: ${{ vars.REMINDER_DRY_RUN }}
+          SUPPRESS: ${{ github.event.inputs.suppress }}
         run: |
           URL='https://daydreamhub.com/api/cron/booking-reminders'
+          SEP='?'
           if [ "$DRY_RUN" != "0" ]; then
             echo "REMINDER_DRY_RUN=${DRY_RUN:-unset} — reporting only, nothing will be sent."
-            URL="$URL?dry_run=1"
+            URL="$URL${SEP}dry_run=1"; SEP='&'
+          fi
+          # Bookings made while testing against a real hotel: record them as
+          # reminded and send them nothing. The booking stays open so the hotel
+          # can still approve or decline from the email it already has.
+          if [ -n "$SUPPRESS" ]; then
+            echo "Suppressing booking ids: $SUPPRESS — these will be marked as reminded, not emailed."
+            URL="$URL${SEP}suppress=$SUPPRESS"
           fi
           curl -sS -X POST "$URL" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
