@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'jest';
+import { describe, it, expect } from '@jest/globals';
 import { filterExternalHotels, buildPartnerSets } from '../lib/filterExternalHotels';
 
 const PARTNERS = [

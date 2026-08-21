@@ -6,7 +6,11 @@ module.exports = {
     '^.+\\.jsx?$': 'babel-jest'
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  testMatch: ['**/test/**/*.[jt]s?(x)', '**/?(*.)+(spec|test).[tj]s?(x)'],
+  // Only files named *.test.* or *.spec.* are suites. The old first pattern
+  // swept in everything under test/, so the hand-run scripts living there
+  // (renderMarkdownTest.js and friends) were loaded as test files and failed to
+  // parse — red suites that were never tests at all.
+  testMatch: ['**/?(*.)+(spec|test).[tj]s?(x)'],
 
   roots: ['<rootDir>/src', '<rootDir>/test'],
   verbose: true,

@@ -1,0 +1,51 @@
+# Runs the test suite on every push. Reports; does not gate.
+#
+# WHY THIS FILE EXISTS
+# Nothing ran the tests. Deploy to Cloudflare Pages says so in its own comment —
+# "Tests skipped (no unit test step in deploy workflow; npm test removed to
+# resolve deployment errors)" — and Deploy Staging never had one. So a test only
+# ever ran when someone typed npx jest, and four suites had been failing or not
+# loading at all without anyone seeing it. One of them, filterExternalHotels,
+# had never run once: it imported from 'jest' instead of '@jest/globals'.
+#
+# WHAT IT DOES NOT DO
+# It does not block a deploy. Deploy to Cloudflare Pages and Deploy Staging are
+# separate workflows and are untouched by this one — a red run here shows up in
+# Actions, and shipping still works. That is deliberate: the tests had been
+# unwatched long enough that gating on them first would have been a good way to
+# find out, mid-deploy, that something had rotted.
+#
+# WHEN TO MAKE IT GATE
+# Once this has stayed green for a while, the same npm test step can be added
+# back to Deploy to Cloudflare Pages, before the Build step, and then a broken
+# test stops a release. Do that as its own decision, not as a side effect.
+#
+# HOW TO ADD IT
+# It cannot be pushed from the server — the PAT has repo scope but not workflow
+# scope. Copy this file's contents from its raw view on GitHub and paste them
+# into a new file at .github/workflows/tests.yml through the web editor.
+
+name: Tests
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  jest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npx jest --ci --verbose
