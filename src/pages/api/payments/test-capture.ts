@@ -119,9 +119,17 @@ export const POST: APIRoute = async ({ request, locals }) => {
     }
 
     // 自動発信トリガー（実PayPalと同じ）
+    //
+    // 「実PayPalと同じ」と書いてありながら、capture.ts にある提携ホテルの判定が
+    // 抜けていた。メール登録済みのホテルは電話しない、が本番の挙動なのに、この
+    // テスト用の経路だけが無条件に発信していた。テストのつもりで叩くと本番より
+    // 危ないという逆転が起きていたので、判定を揃える。
     try {
-      const bookingInfo = await getBookingInfoForCall(db, bookingId);
-      if (bookingInfo) {
+      // plan の SELECT が h.email を hotel_email として拾っているので、
+      // capture.ts のように問い合わせ直す必要はない。
+      const isPartnerHotel = String(plan.hotel_email || '').trim() !== '';
+      const bookingInfo = isPartnerHotel ? null : await getBookingInfoForCall(db, bookingId);
+      if (!isPartnerHotel && bookingInfo) {
         await triggerAutoCall(
           {
             DB: db,
