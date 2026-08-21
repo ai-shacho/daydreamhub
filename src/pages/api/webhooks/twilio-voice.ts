@@ -14,6 +14,7 @@ type DbLike = {
 
 type Step =
   | 'intro'
+  | 'notify_ack'
   | 'outreach_phase_0'
   | 'outreach_phase_0_5'
   | 'outreach_phase_1'
@@ -151,6 +152,7 @@ function normalizeLogId(raw: string | null): string | null {
 
 function normalizeStep(raw: string | null): Step {
   const s = String(raw || 'intro').trim().toLowerCase();
+  if (s === 'notify_ack') return 'notify_ack';
   if (s === 'outreach_phase_0' || s === 'outreach_ask_interest') return 'outreach_phase_0';
   if (s === 'outreach_phase_0_5') return 'outreach_phase_0_5';
   if (s === 'outreach_phase_1') return 'outreach_phase_1';
@@ -179,7 +181,7 @@ function parseTurn(raw: string | null): number {
   return Math.min(Math.trunc(n), 8);
 }
 
-function makeWebhookUrl(request: Request, logId: string | null, step: Step, phase: 'booking' | 'outreach' | 'concierge', turn = 0, event?: string): string {
+function makeWebhookUrl(request: Request, logId: string | null, step: Step, phase: 'booking' | 'outreach' | 'concierge' | 'notify', turn = 0, event?: string): string {
   const u = new URL('/api/webhooks/twilio-voice', getWebhookBase(request));
   if (logId) u.searchParams.set('lid', logId);
   if (phase === 'concierge') {
@@ -980,9 +982,9 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       : null;
 
     const inferredPhase = (() => {
-      if (phaseParam === 'outreach' || phaseParam === 'concierge' || phaseParam === 'booking') return phaseParam;
+      if (phaseParam === 'outreach' || phaseParam === 'concierge' || phaseParam === 'booking' || phaseParam === 'notify') return phaseParam;
       const p = String(logRow?.phase || '').toLowerCase();
-      if (p === 'outreach' || p === 'concierge' || p === 'booking') return p;
+      if (p === 'outreach' || p === 'concierge' || p === 'booking' || p === 'notify') return p;
       if (String(logRow?.note || '').toLowerCase().includes('outreach')) return 'outreach';
       return 'booking';
     })();
@@ -1069,9 +1071,10 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
       return new Response('ok', { status: 200 });
     }
 
-    let phase: 'booking' | 'outreach' | 'concierge' = inferredPhase === 'outreach' || inferredPhase === 'concierge'
-      ? inferredPhase
-      : 'booking';
+    let phase: 'booking' | 'outreach' | 'concierge' | 'notify' =
+      inferredPhase === 'outreach' || inferredPhase === 'concierge' || inferredPhase === 'notify'
+        ? inferredPhase
+        : 'booking';
 
     let booking: any = null;
     let outreachLead: any = null;
@@ -1209,6 +1212,25 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
           : null)
       : null;
 
+    // The notification call's words, in one place. The intro and every repeat
+    // read the same thing, so a hotel that asks to hear it again hears it again
+    // rather than a paraphrase of it.
+    const notifyFor = String(booking?.hotel_name || '').trim()
+      ? ` for ${String(booking.hotel_name).trim()}`
+      : '';
+    const notifyWhen = bookingCheckInTime && bookingCheckOutTime
+      ? `, from ${bookingCheckInTime} to ${bookingCheckOutTime}`
+      : '';
+    const notifyPrompt = () =>
+      `Hello. This is DayDreamHub, calling${notifyFor}. `
+      + `You have a new day-use booking from a guest, for ${bookingCheckInDate}${notifyWhen}, `
+      + `for ${bookingGuests} ${bookingGuests === 1 ? 'person' : 'people'}. `
+      + `The guest's details and the full booking have been sent to your email. `
+      + `Please check that email, then approve or decline the booking in your owner portal. `
+      + `Press 1 if you have received this message. Press 2 to hear it again.`;
+    const notifyClosing = () =>
+      `The booking is in your email. Please review it in your owner portal. Thank you. Goodbye.`;
+
     if (step === 'intro') {
       if (phase === 'outreach') {
         await updateCallLog(db, logId, 'awaiting_response', 'twilio_outreach_phase_0', callSid ? `twilio:${callSid}` : undefined);
@@ -1225,10 +1247,42 @@ export const POST: APIRoute = async ({ request, locals, url }) => {
         return gatherTwiml(action, `Hello, this is DayDreamHub, calling back about the day-use inquiry we discussed with your property earlier for ${bookingCheckInDate}${timeInfo}. Are you the same person we spoke with on that call? Press 1 or say yes. Press 2 or say no.`);
       }
 
+      // A hotel that already has the booking in its inbox is told it is there,
+      // not asked whether it does day use. Nothing is negotiated on this call —
+      // the price, the room and the guest were all settled before it was placed,
+      // and the portal is where the hotel says yes or no. It exists because an
+      // email can sit unread for hours and a day-use check-in is same-day.
+      if (phase === 'notify') {
+        await updateCallLog(db, logId, 'awaiting_response', 'twilio_notify_intro', callSid ? `twilio:${callSid}` : undefined);
+        const action = makeWebhookUrl(request, logId, 'notify_ack', inferredPhase, 0);
+        return gatherTwiml(action, notifyPrompt(), { slow: true });
+      }
+
       await updateCallLog(db, logId, 'awaiting_response', 'twilio_booking_intro', callSid ? `twilio:${callSid}` : undefined);
       const action = makeWebhookUrl(request, logId, 'ask_dayuse', inferredPhase, 0);
       const prompt = `Hello, this is DayDreamHub, an online platform specializing in day-use hotel bookings. Do you offer day-use plans for guests? Press 1 or say yes. Press 2 or say no. Press 3 to hear this again.`;
       return gatherTwiml(action, prompt);
+    }
+
+    if (step === 'notify_ack') {
+      if (isRepeat(speech, digits) && turn < MAX_RETRY) {
+        const action = makeWebhookUrl(request, logId, 'notify_ack', inferredPhase, turn + 1);
+        return gatherTwiml(action, notifyPrompt(), { slow: true });
+      }
+      if (isYes(speech, digits)) {
+        // 'notified' and not 'confirmed': the hotel has heard that a booking
+        // arrived. Whether it takes it is answered in the portal, not here.
+        await updateCallLog(db, logId, 'notified', 'twilio_notify_ack', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: ${speech || 'pressed 1'}`);
+        return twiml(`<Say voice="${VOICE}">Thank you. Please review the booking in your owner portal. Goodbye.</Say><Hangup/>`);
+      }
+      if (turn >= MAX_RETRY) {
+        // Whoever picked up heard it either way, so this is not a failure — the
+        // details are in the email regardless of which button was pressed.
+        await updateCallLog(db, logId, 'notified', 'twilio_notify_no_ack', callSid ? `twilio:${callSid}` : undefined, `[Hotel]: no acknowledgement`);
+        return twiml(`<Say voice="${VOICE}">${esc(notifyClosing())}</Say><Hangup/>`);
+      }
+      const action = makeWebhookUrl(request, logId, 'notify_ack', inferredPhase, turn + 1);
+      return gatherTwiml(action, notifyPrompt(), { slow: true });
     }
 
     if (step === 'confirm2_person') {

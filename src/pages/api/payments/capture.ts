@@ -215,11 +215,14 @@ export const POST: APIRoute = async ({ request, locals }) => {
         );
       }
 
-      // Auto-call for non-partner hotels
+      // Both kinds of hotel are called; which script is read depends on whether
+      // the hotel has an email on file, and phaseFor in lib/autoCall decides it
+      // from the booking row. Partner hotels were skipped here entirely between
+      // 427433a and this commit — an email alone can sit unread, and a day-use
+      // check-in is same-day, so the point of the call is that someone picks up
+      // and hears that a booking has landed.
       try {
-        const hotelForCall = await db.prepare('SELECT email FROM hotels WHERE id = ?').bind(hotelId).first() as any;
-        const isPartnerHotel = hotelForCall?.email && hotelForCall.email.trim() !== '';
-        if (!isPartnerHotel) {
+        {
           const bookingInfo = await getBookingInfoForCall(db, bookingId!);
           if (bookingInfo) {
             await triggerAutoCall(

@@ -60,6 +60,14 @@ const dialled = () => (globalThis.fetch as jest.Mock).mock.calls.filter(
   (c) => String(c[0]).includes('twilio')
 );
 
+/** The query the voice webhook will be reached on, i.e. which script is read. */
+function dialledPhase(): string | null {
+  const call = dialled()[0];
+  if (!call) return null;
+  const url = new URLSearchParams(String(call[1]?.body || '')).get('Url') || '';
+  return new URL(url).searchParams.get('phase');
+}
+
 /** The 'To' Twilio was asked to ring, or null if it was never asked. */
 function dialledNumber(): string | null {
   const call = dialled()[0];
@@ -132,6 +140,43 @@ describe('triggerAutoCall', () => {
     await triggerAutoCall(env(db), booking({ hotel_call_kind: '' }));
     expect(dialledNumber()).toBe('+66812345678');
     expect(skippedWrites(db)).toHaveLength(0);
+  });
+});
+
+describe('which script the call reads', () => {
+  // A hotel with an email has a portal and already has the booking in its inbox,
+  // so it is told the booking landed. One without has neither, so the call is
+  // the whole conversation. Getting this backwards would read a stranger a
+  // message about "your owner portal", or ask a partner whether it does day use.
+  it('reads the notification script to a hotel with an email', async () => {
+    const db = fakeDb();
+    await triggerAutoCall(env(db), booking({ hotel_email: 'front@hotel.example' }));
+    expect(dialledPhase()).toBe('notify');
+  });
+
+  it('reads the booking script to a hotel without one', async () => {
+    const db = fakeDb();
+    await triggerAutoCall(env(db), booking({ hotel_email: '' }));
+    expect(dialledPhase()).toBe('booking');
+  });
+
+  it('does not count whitespace as an email', async () => {
+    const db = fakeDb();
+    await triggerAutoCall(env(db), booking({ hotel_email: '   ' }));
+    expect(dialledPhase()).toBe('booking');
+  });
+
+  it('rings a hotel with an email at all — it used to be skipped outright', async () => {
+    const db = fakeDb();
+    await triggerAutoCall(env(db), booking({ hotel_email: 'front@hotel.example' }));
+    expect(dialledNumber()).toBe('+66812345678');
+  });
+
+  it('still refuses a salon that happens to have an email', async () => {
+    const db = fakeDb();
+    await triggerAutoCall(env(db), booking({ hotel_email: 'spa@example.com', hotel_call_kind: 'spa_salon' }));
+    expect(dialled()).toHaveLength(0);
+    expect(skippedWrites(db)).toHaveLength(1);
   });
 });
 

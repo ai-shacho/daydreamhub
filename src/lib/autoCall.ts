@@ -79,14 +79,30 @@ function getNext5amUtc(country: string): string | null {
 }
 
 /**
+ * Which script this call reads.
+ *
+ * A hotel with an email on file has an owner account, a portal, and a booking
+ * email already in its inbox — it needs to be told a booking arrived, not asked
+ * whether it does day use. A hotel without one has none of that, so the call is
+ * the whole conversation.
+ *
+ * Deciding it here rather than at each call site means the overnight-queue cron,
+ * the alternative-hotel path and the admin re-call button cannot pick a
+ * different answer from the one payment capture picked.
+ */
+export function phaseFor(booking: any): 'notify' | 'booking' {
+  return String(booking?.hotel_email || '').trim() ? 'notify' : 'booking';
+}
+
+/**
  * Run the listing past callTarget before anything is dialled.
  *
- * `unclassified` is deliberately allowed through. The automated call is the only
- * way a non-partner hotel hears about a paid booking — it has no email on file,
- * which is why it is being called at all — so refusing to dial a listing merely
- * because nobody has classified it yet would strand the guest, not protect
- * anyone. Everything the classification is actually certain about (a salon,
- * somebody's flat, a listing that is not a real business) still blocks.
+ * `unclassified` is deliberately allowed through. For a hotel with no email the
+ * call is the only way it hears about a paid booking at all, so refusing to dial
+ * one merely because nobody has classified it yet would strand the guest rather
+ * than protect anyone. Everything the classification is actually certain about
+ * (a salon, somebody's flat, a listing that is not a real business) still
+ * blocks, for both kinds of hotel.
  */
 function decideCall(booking: any) {
   const decision = callTargetFor({
@@ -177,9 +193,12 @@ export async function initiateCall(env: any, callLogId: number, booking: any): P
     const params = new URLSearchParams();
     params.set('To', decision.to);
     params.set('From', env.TWILIO_FROM_NUMBER);
-    params.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}&phase=booking`);
+    // The phase travels in the URL rather than the call_logs row: the webhook
+    // reads the query first, and the phase column is not in any migration.
+    const phase = phaseFor(booking);
+    params.set('Url', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}&phase=${phase}`);
     params.set('Method', 'POST');
-    params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}&event=status&phase=booking`);
+    params.set('StatusCallback', `${baseUrl}/api/webhooks/twilio-voice?lid=${callLogId}&event=status&phase=${phase}`);
     params.set('StatusCallbackMethod', 'POST');
     params.set('Timeout', '120');
     params.set('StatusCallbackEvent', 'initiated');
@@ -231,7 +250,7 @@ export async function getBookingInfoForCall(db: any, bookingId: number): Promise
               b.check_in_time, b.check_out_time,
               (b.adults + b.children) as guests,
               h.name as hotel_name, h.phone as hotel_phone, h.country as hotel_country,
-              h.call_kind as hotel_call_kind,
+              h.call_kind as hotel_call_kind, h.email as hotel_email,
               p.name as plan_name
        FROM bookings b
        LEFT JOIN hotels h ON h.id = b.hotel_id
@@ -249,6 +268,7 @@ export async function getBookingInfoForCall(db: any, bookingId: number): Promise
     hotel_phone: row.hotel_phone || '',
     hotel_country: row.hotel_country || '',
     hotel_call_kind: row.hotel_call_kind || '',
+    hotel_email: row.hotel_email || '',
     guest_name: row.guest_name || 'Guest',
     check_in_date: row.check_in_date || '',
     check_in_time: row.check_in_time || '',
