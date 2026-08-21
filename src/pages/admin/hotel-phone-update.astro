@@ -220,7 +220,7 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
         Clear
       </button>
       <p id="f-summary" class="text-[11px] text-slate-500 basis-full">
-        Showing all {allMatched.length} matched listings. Applying only ever writes rows that are both ticked and visible.
+        Showing all {allMatched.length} matched listings. Apply only writes the rows you have checked and that are currently on screen.
       </p>
     </div>
   </div>
@@ -236,7 +236,7 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
         </div>
         {sec.rows.length > 0 && (
           <button class="apply-btn text-sm px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors" data-section={sec.key}>
-            Apply ticked rows
+            Apply checked rows
           </button>
         )}
       </div>
@@ -437,8 +437,8 @@ const verdictsPresent = [...new Set(allMatched.map(m => m.verified?.verdict).fil
     rememberFilters();
 
     summary.textContent = shown === total
-      ? `Showing all ${total} matched listings. Applying only ever writes rows that are both ticked and visible.`
-      : `Showing ${shown} of ${total} matched listings. Applying only ever writes rows that are both ticked and visible, so the ${total - shown} hidden row(s) are safe.`;
+      ? `Showing all ${total} matched listings. Apply only writes the rows you have checked and that are currently on screen.`
+      : `Showing ${shown} of ${total} matched listings. Apply only writes the rows you have checked and that are currently on screen, so the ${total - shown} row(s) hidden by the filter will not be touched.`;
   }
 
   // Filters live in the URL as well as the controls. Applying phone numbers

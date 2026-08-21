@@ -24,12 +24,54 @@ export const POST: APIRoute = async ({ request, locals }) => {
     });
   }
 
+  // ?dry_run=1 reports what would be dialled and writes nothing. This endpoint
+  // has never been on a schedule, so the first live run needs to be looked at
+  // before it happens rather than after.
+  const dryRun = new URL(request.url).searchParams.get('dry_run') === '1';
+
+  // A queued call is only worth placing while the booking it is about still
+  // lies ahead. This endpoint has never run, so anything already queued has
+  // been sitting there since it was written — ringing a hotel about a stay that
+  // came and went would be worse than never ringing at all. Those rows are
+  // closed off rather than dialled.
+  const STILL_WORTH_CALLING = `
+        AND b.id IS NOT NULL
+        AND COALESCE(b.status, '') NOT IN ('cancelled', 'refunded', 'completed', 'no_show')
+        AND (b.check_in_date IS NULL OR b.check_in_date >= date('now'))`;
+
+  const stale = await db
+    .prepare(
+      `SELECT cl.id, cl.booking_id, b.check_in_date, b.status as booking_status
+         FROM call_logs cl
+         LEFT JOIN bookings b ON b.id = cl.booking_id
+        WHERE cl.status = 'queued'
+          AND NOT (1 = 1 ${STILL_WORTH_CALLING})
+        LIMIT 50`
+    )
+    .all();
+
+  const stood_down: any[] = [];
+  for (const row of (stale as any).results) {
+    const why = !row.check_in_date
+      ? `booking ${row.booking_id} is gone`
+      : `booking ${row.booking_id} is ${row.booking_status || 'unknown'} and its check-in (${row.check_in_date}) has passed`;
+    if (!dryRun) {
+      await db
+        .prepare(`UPDATE call_logs SET status = 'skipped', error_detail = ? WHERE id = ?`)
+        .bind(`Not called — ${why}`, row.id)
+        .run();
+    }
+    stood_down.push({ call_log_id: row.id, why });
+  }
+
   const queuedCalls = await db
     .prepare(
       `SELECT cl.id as call_log_id, cl.booking_id, cl.hotel_id, cl.attempt_number
        FROM call_logs cl
+       JOIN bookings b ON b.id = cl.booking_id
        WHERE cl.status = 'queued'
          AND (cl.scheduled_at IS NULL OR cl.scheduled_at <= datetime('now'))
+         ${STILL_WORTH_CALLING}
        ORDER BY cl.scheduled_at ASC
        LIMIT 5`
     )
@@ -42,6 +84,10 @@ export const POST: APIRoute = async ({ request, locals }) => {
     try {
       const { initiateCall } = await import('../../../lib/autoCall');
       const bookingInfo = await getBookingInfoForCall(db, bookingId);
+      if (dryRun) {
+        results.push({ call_log_id: callLogId, booking_id: bookingId, would_call: bookingInfo?.hotel_phone || null });
+        continue;
+      }
       if (!bookingInfo || !bookingInfo.hotel_phone) {
         await db
           .prepare(`UPDATE call_logs SET status = 'failed', error_detail = 'No phone number' WHERE id = ?`)
@@ -86,6 +132,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   let expiredCount = 0;
   for (const row of (expiredChoices as any).results) {
+    if (dryRun) { expiredCount++; continue; }
     try {
       await autoRefundBooking(
         {
@@ -105,9 +152,13 @@ export const POST: APIRoute = async ({ request, locals }) => {
 
   return new Response(
     JSON.stringify({
+      dry_run: dryRun,
       processed: results.length,
       results,
-      expired_refunded: expiredCount,
+      // Queued calls closed off as too late to place, rather than dialled.
+      stood_down: stood_down.length,
+      stood_down_detail: stood_down,
+      [dryRun ? 'would_refund_expired' : 'expired_refunded']: expiredCount,
     }),
     { headers: { 'Content-Type': 'application/json' } }
   );

@@ -53,7 +53,7 @@ if (db) {
   }
 }
 
-const statusOptions = ["", "queued", "calling", "amd_detecting", "ivr_detecting", "ivr_navigating", "awaiting_response", "confirmed", "declined", "no_answer", "voicemail", "message_left", "recording_message", "failed"];
+const statusOptions = ["", "queued", "calling", "amd_detecting", "ivr_detecting", "ivr_navigating", "awaiting_response", "confirmed", "declined", "no_answer", "voicemail", "message_left", "recording_message", "failed", "skipped"];
 
 const statusColors: Record<string, string> = {
   queued: "bg-slate-100 text-slate-600",
@@ -69,7 +69,9 @@ const statusColors: Record<string, string> = {
   voicemail: "bg-violet-100 text-violet-700",
   message_left: "bg-purple-100 text-purple-700",
   recording_message: "bg-indigo-100 text-indigo-700",
-  failed: "bg-red-100 text-red-700"
+  failed: "bg-red-100 text-red-700",
+  // Never dialled — the reason is in error_detail.
+  skipped: "bg-slate-200 text-slate-700"
 };
 ---
 
