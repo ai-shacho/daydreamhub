@@ -12,58 +12,86 @@
 # The CRON_SECRET repository secret is already registered, and its value matches
 # the CRON_SECRET on the Cloudflare Pages production environment.
 #
-# DRY RUN SWITCH
-# The repository variable REMINDER_DRY_RUN controls whether this actually sends.
-#   REMINDER_DRY_RUN = 1  → calls the endpoint with ?dry_run=1: the run logs who
-#                           would be emailed and writes nothing. This is the
-#                           current setting.
-#   REMINDER_DRY_RUN = 0  → live sending.
-# It is a variable rather than a line in this file so the switch can be flipped
-# from Settings → Secrets and variables → Actions → Variables, with no edit here.
+# DRY RUN SWITCHES
+# A repository variable controls whether each job actually acts. Both default to
+# a dry run when the variable is missing, so forgetting to set one cannot cause
+# an email to be sent or a hotel to be rung.
+# REMINDER_DRY_RUN → owner-booking-reminders. 0 = live sending.
+# CALL_DRY_RUN → deferred-booking-calls. 0 = live dialling.
+# They are variables rather than lines in this file so the switches can be
+# flipped from Settings → Secrets and variables → Actions → Variables, with no
+# edit here.
 #
 # SAFETY
-# The endpoint records each (booking, stage) before the next run, so running
-# hourly — or twice by accident — sends nothing extra. Bookings that predate the
-# feature are excluded outright by migration 054.
+# Reminders: the endpoint records each (booking, stage) before the next run, so
+# running hourly — or twice by accident — sends nothing extra. Bookings that
+# predate the feature are excluded outright by migration 054.
+#
+# Calls: a queued call is only placed while the booking it is about still lies
+# ahead. process-calls has never been on a schedule, so every queued row in
+# production has been sitting there since it was written; without that rule the
+# first run would ring hotels about stays that came and went. Those rows are
+# closed off as 'skipped' instead, with the reason recorded against them.
 
 name: Scheduled jobs
 
 on:
-  schedule:
-    - cron: '17 * * * *'      # hourly, off the hour to dodge the platform-wide rush
-  workflow_dispatch:
-    inputs:
-      suppress:
-        description: 'Booking ids to silence without emailing, e.g. 79,81. Leave blank for a normal run.'
-        required: false
-        default: ''
+schedule:
+- cron: '17 * * * *' # hourly, off the hour to dodge the platform-wide rush
+workflow_dispatch:
+inputs:
+suppress:
+description: 'Booking ids to silence without emailing, e.g. 79,81. Leave blank for a normal run.'
+required: false
+default: ''
 
 jobs:
-  owner-booking-reminders:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Chase owners who have not answered a booking (6h / 12h / 24h)
-        env:
-          DRY_RUN: ${{ vars.REMINDER_DRY_RUN }}
-          SUPPRESS: ${{ github.event.inputs.suppress }}
-        run: |
-          URL='https://daydreamhub.com/api/cron/booking-reminders'
-          SEP='?'
-          if [ "$DRY_RUN" != "0" ]; then
-            echo "REMINDER_DRY_RUN=${DRY_RUN:-unset} — reporting only, nothing will be sent."
-            URL="$URL${SEP}dry_run=1"; SEP='&'
-          fi
-          # Bookings made while testing against a real hotel: record them as
-          # reminded and send them nothing. The booking stays open so the hotel
-          # can still approve or decline from the email it already has.
-          if [ -n "$SUPPRESS" ]; then
-            echo "Suppressing booking ids: $SUPPRESS — these will be marked as reminded, not emailed."
-            URL="$URL${SEP}suppress=$SUPPRESS"
-          fi
-          curl -sS -X POST "$URL" \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -w '\nHTTP %{http_code}\n' \
-            --fail-with-body
+owner-booking-reminders:
+runs-on: ubuntu-latest
+steps:
+- name: Chase owners who have not answered a booking (6h / 12h / 24h)
+env:
+DRY_RUN: ${{ vars.REMINDER_DRY_RUN }}
+SUPPRESS: ${{ github.event.inputs.suppress }}
+run: |
+URL='https://daydreamhub.com/api/cron/booking-reminders'
+SEP='?'
+if [ "$DRY_RUN" != "0" ]; then
+echo "REMINDER_DRY_RUN=${DRY_RUN:-unset} — reporting only, nothing will be sent."
+URL="$URL${SEP}dry_run=1"; SEP='&'
+fi
+# Bookings made while testing against a real hotel: record them as
+# reminded and send them nothing. The booking stays open so the hotel
+# can still approve or decline from the email it already has.
+if [ -n "$SUPPRESS" ]; then
+echo "Suppressing booking ids: $SUPPRESS — these will be marked as reminded, not emailed."
+URL="$URL${SEP}suppress=$SUPPRESS"
+fi
+curl -sS -X POST "$URL" \
+-H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+-w '\nHTTP %{http_code}\n' \
+--fail-with-body
+
+deferred-booking-calls:
+runs-on: ubuntu-latest
+steps:
+# A booking that lands between midnight and 5am local is held rather than
+# waking the front desk, and nothing has ever placed those held calls.
+# This step also refunds guests whose 24 hours to accept an alternative
+# hotel have run out.
+- name: Place calls held overnight, and refund expired alternative offers
+env:
+DRY_RUN: ${{ vars.CALL_DRY_RUN }}
+run: |
+URL='https://daydreamhub.com/api/cron/process-calls'
+if [ "$DRY_RUN" != "0" ]; then
+echo "CALL_DRY_RUN=${DRY_RUN:-unset} — reporting only. Nothing will be dialled and nothing will be written."
+URL="$URL?dry_run=1"
+fi
+curl -sS -X POST "$URL" \
+-H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+-w '\nHTTP %{http_code}\n' \
+--fail-with-body
 
 # ---------------------------------------------------------------------------
 # NOT ENABLED: /api/cron/update-booking-status
@@ -77,17 +105,17 @@ jobs:
 # To enable it later, add '5 1 * * *' to the schedule above and this job, gated
 # so each cron line triggers only its own job:
 #
-#   booking-status:
-#     if: github.event.schedule == '5 1 * * *' || github.event_name == 'workflow_dispatch'
-#     runs-on: ubuntu-latest
-#     steps:
-#       - name: Roll past bookings to completed / no_show
-#         run: |
-#           curl -sS -X POST 'https://daydreamhub.com/api/cron/update-booking-status' \
-#             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-#             -w '\nHTTP %{http_code}\n' \
-#             --fail-with-body
+# booking-status:
+# if: github.event.schedule == '5 1 * * *' || github.event_name == 'workflow_dispatch'
+# runs-on: ubuntu-latest
+# steps:
+# - name: Roll past bookings to completed / no_show
+# run: |
+# curl -sS -X POST 'https://daydreamhub.com/api/cron/update-booking-status' \
+# -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+# -w '\nHTTP %{http_code}\n' \
+# --fail-with-body
 #
 # and add the matching guard to owner-booking-reminders:
-#     if: github.event.schedule == '17 * * * *' || github.event_name == 'workflow_dispatch'
+# if: github.event.schedule == '17 * * * *' || github.event_name == 'workflow_dispatch'
 # ---------------------------------------------------------------------------
