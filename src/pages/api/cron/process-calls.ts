@@ -3,6 +3,22 @@ import { getBookingInfoForCall } from '../../../lib/autoCall';
 import { autoRefundBooking } from '../../../lib/autoRefund';
 
 export const POST: APIRoute = async ({ request, locals }) => {
+  try {
+    return await run(request, locals);
+  } catch (error) {
+    // A bare 500 told us only that something threw. The first live run failed
+    // that way and the cause had to be guessed at; the message goes in the
+    // response so the next failure can be read instead.
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[process-calls] failed', error);
+    return new Response(
+      JSON.stringify({ error: 'process-calls failed', message, stack: error instanceof Error ? error.stack : null }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+};
+
+const run = async (request: Request, locals: any) => {
   const runtime = (locals as any).runtime;
   const db = runtime?.env?.DB;
   const TWILIO_ACCOUNT_SID = runtime?.env?.TWILIO_ACCOUNT_SID;
@@ -27,7 +43,15 @@ export const POST: APIRoute = async ({ request, locals }) => {
   // ?dry_run=1 reports what would be dialled and writes nothing. This endpoint
   // has never been on a schedule, so the first live run needs to be looked at
   // before it happens rather than after.
-  const dryRun = new URL(request.url).searchParams.get('dry_run') === '1';
+  const url = new URL(request.url);
+  const dryRun = url.searchParams.get('dry_run') === '1';
+
+  // How many stale rows to close in one run. A parameter because the first live
+  // run failed with a bare 500 after a dry run of the same work had succeeded,
+  // and the only difference between the two is the number of writes — so the
+  // count needs to be something a run can be repeated with, rather than a
+  // constant that can only be changed by a deploy.
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
 
   // A queued call is only worth placing while the booking it is about still
   // lies ahead. This endpoint has never run, so anything already queued has
@@ -46,23 +70,28 @@ export const POST: APIRoute = async ({ request, locals }) => {
          LEFT JOIN bookings b ON b.id = cl.booking_id
         WHERE cl.status = 'queued'
           AND NOT (1 = 1 ${STILL_WORTH_CALLING})
-        LIMIT 50`
+        LIMIT ?`
     )
+    .bind(limit)
     .all();
 
   const stood_down: any[] = [];
+  const closures: any[] = [];
   for (const row of (stale as any).results) {
     const why = !row.check_in_date
       ? `booking ${row.booking_id} is gone`
       : `booking ${row.booking_id} is ${row.booking_status || 'unknown'} and its check-in (${row.check_in_date}) has passed`;
-    if (!dryRun) {
-      await db
+    closures.push(
+      db
         .prepare(`UPDATE call_logs SET status = 'skipped', error_detail = ? WHERE id = ?`)
         .bind(`Not called — ${why}`, row.id)
-        .run();
-    }
+    );
     stood_down.push({ call_log_id: row.id, why });
   }
+  // One round trip rather than one per row. Awaiting fifty updates in sequence
+  // is fifty separate calls out of the worker, and a worker has a ceiling on how
+  // many of those a single request may make.
+  if (!dryRun && closures.length) await db.batch(closures);
 
   const queuedCalls = await db
     .prepare(
