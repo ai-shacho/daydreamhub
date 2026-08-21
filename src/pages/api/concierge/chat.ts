@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { currencyForPhone } from '../../../lib/phoneCurrency';
+import { sanitizeAIText } from '../../../lib/sanitizeAIText';
 import { initiateCall, createCallGroup, initiateNextGroupCall, searchHotelsInternal, searchHotelsExternal, searchHotelsBrave, isJapanQuery } from '../../../lib/tools';
 import { sortByProximity, type Coords } from '../../../lib/filterExternalHotels';
 import { CONCIERGE_SYSTEM_PROMPT_EN, CONCIERGE_SYSTEM_PROMPT_JA } from '../../../lib/claude';
@@ -33,58 +34,6 @@ function stripInternalModelBlocks(text: string): string {
   return text.trim();
 }
 
-export function sanitizeAIText(text: string): string {
-  if (!text) return text;
-
-  // 0. Catch ALL Markdown links with HTML-like content in the URL part
-  text = text.replace(/\[([^\]]+)\]\(([^)]*?(?:<|"|'|\starget=|\sclass=)[^)]*)\)/g, (_, label, dirtyUrl) => {
-    const hotelMatch = dirtyUrl.match(/\/hotel\/[\w-]+/);
-    if (hotelMatch) return `[${label}](${hotelMatch[0]})`;
-    const httpMatch = dirtyUrl.match(/https?:\/\/[^"'<>\s]+/);
-    if (httpMatch) return `[${label}](${httpMatch[0]})`;
-    const cleanUrl = dirtyUrl.replace(/[<"'].*$/, '').trim();
-    return `[${label}](${cleanUrl})`;
-  });
-
-  // 0b. Handle [label](<a href="url" ...>) — AI mixing Markdown links with HTML anchors in URL
-  text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^"]+)"[^>]*>[\s\S]*?<\/a>\)/gi, (_, label, href) => `[${label}](${href})`);
-  text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^"]+)"[^>]*>\)/gi, (_, label, href) => `[${label}](${href})`);
-
-  // 0c. Handle bare /hotel/slug" target="_blank" class="...">Label pattern
-  // This fires when <a href=" was already stripped but the rest of the attribute string remains
-  text = text.replace(/(\/hotel\/[\w-]+)"[^>]*>(.*?)(?=\s*\n|$)/gi, (_, slug, afterText) => {
-    const label = afterText.replace(/<[^>]+>/g, '').trim() || 'Book Now';
-    return `[${label}](${slug})`;
-  });
-
-  // 1. Convert complete <a href="...">label</a> → Markdown [label](href)
-  text = text.replace(/<a\s[^>]*?href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
-    const cleanLabel = label.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() || href;
-    return `[${cleanLabel}](${href})`;
-  });
-
-  // 1b. Handle unclosed <a href="..."> tags (no </a>)
-  text = text.replace(/<a\s[^>]*?href="([^"]*)"[^>]*>/gi, (_, href) => `[リンク](${href})`);
-
-  // 2. Strip orphaned HTML attribute fragments
-  text = text.replace(/[^\s"(]*"?\s*target="_blank"[^>]*>(.*?)(?=\n|$)/gi, (_, after) => after.trim());
-  text = text.replace(/"?\s*target="_blank"/gi, '');
-  text = text.replace(/\s*class="(?:underline|text-amber|hover:|text-teal|font-)[^"]*"/gi, '');
-  text = text.replace(/"\s*>/g, ' ');
-
-  // 3. Convert <strong>/<b> → **text**
-  text = text.replace(/<(?:strong|b)>([\s\S]*?)<\/(?:strong|b)>/gi, '**$1**');
-  // 4. Convert <em>/<i> → *text*
-  text = text.replace(/<(?:em|i)>([\s\S]*?)<\/(?:em|i)>/gi, '*$1*');
-  // 5. Convert <br> → newline
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-  // 6. Strip all remaining HTML tags
-  text = text.replace(/<[^>]+>/g, '');
-  // 7. Decode common HTML entities
-  text = text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-
-  return text.trim();
-}
 
 function safeParseObject(raw: unknown): { value: any; ok: boolean } {
   if (raw && typeof raw === 'object') return { value: raw, ok: true };

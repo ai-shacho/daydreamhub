@@ -1,68 +1,62 @@
+/**
+ * The concierge's output cleaner.
+ *
+ * This file used to carry its own copy of sanitizeAIText, pasted in above the
+ * assertions, and two more copies sat unused in src/utils. The one the guest
+ * actually sees was a fourth, written inline in the chat route — untested, and
+ * unreachable from here. The failing assertion below was measuring a copy that
+ * no longer ran anywhere.
+ *
+ * There is one implementation now and this imports it.
+ */
+
 import { describe, it, expect } from '@jest/globals';
-
-function sanitizeAIText(text: string): string {
-  if (!text) return text;
-
-  // Directly clean <a> tags and turn them into Markdown links
-  text = text.replace(/<a[^>]+href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gi, (_, href, label) => {
-    const cleanLabel = label.replace(/<[^>]+>/g, '').trim();
-    return `[${cleanLabel || href}](${href})`;
-  });
-
-  // Catch variations of HTML in Markdown URLs or as fragments
-  text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^\"]+)"[^>]*>[\s\S]*?<\/a>\)/gi, (_, label, href) => `[${label.trim()}](${href})`);
-  text = text.replace(/\[([^\]]+)\]\(<a[^>]*href="([^\"]+)"[^>]*>\)/gi, (_, label, href) => `[${label.trim()}](${href})`);
-  text = text.replace(/[\s"]*target="[_blank]*[\s"]+>.*(?=\n|$)/gi, (_, after) => after.trim());  
-  text = text.replace(/[\s"]*target="[\s"]*"?[^>]+"?\s*[^>]*>/gi, '');
-  text = text.replace(/\s*class="[^"]*(?:underline|text-teal|hover:|[a-z-]+)"[^>]*>/gi, '');
-  text = text.replace(/">/g, ' ');
-
-  // Convert strong or b to bold
-  text = text.replace(/<(?:strong|b)>(.*?)<\/(?:strong|b)>/gi, '**$1**');
-
-  // Convert em or i to italics
-  text = text.replace(/<(?:em|i)>(.*?)<\/(?:em|i)>/gi, '*$1*');
-
-  // Convert <br> to newlines
-  text = text.replace(/<br\/*>/gi, '\n');
-
-  // Remove remaining HTML tags
-  text = text.replace(/<[^>]+>/g, '');
-
-  // Decode common HTML entities
-  text = text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-
-  return text.trim();
-}
+import { sanitizeAIText } from '../src/lib/sanitizeAIText';
 
 describe('sanitizeAIText', () => {
-  test('should convert HTML <a> tags to markdown links', () => {
-    const input = '<a href="/hotel/example">Book Now</a>';
-    const result = sanitizeAIText(input);
+  it('turns an anchor into a markdown link', () => {
+    expect(sanitizeAIText('<a href="/hotel/example">Book Now</a>')).toBe('[Book Now](/hotel/example)');
+  });
+
+  it('rescues a link whose opening tag was lost', () => {
+    // What the model emits when the <a href=" is truncated away. Left alone the
+    // guest reads `/hotel/example" target="_blank" class="underline">Book Now`.
+    const result = sanitizeAIText('/hotel/example" target="_blank" class="underline">Book Now');
     expect(result).toBe('[Book Now](/hotel/example)');
+    expect(result).not.toContain('target=');
+    expect(result).not.toContain('class=');
   });
 
-  test('should remove orphan HTML attributes', () => {
-    const input = '/hotel/example" target="_blank" class="underline">Book Now'
-    const result = sanitizeAIText(input);
-    expect(result).toBe('Book Now');
+  it('leaves a well-formed markdown link alone', () => {
+    expect(sanitizeAIText('[Book Now](/hotel/example)')).toBe('[Book Now](/hotel/example)');
   });
 
-  test('should preserve simple markdown links', () => {
-    const input = '[Book Now](/hotel/example)';
-    const result = sanitizeAIText(input);
-    expect(result).toBe('[Book Now](/hotel/example)');
+  it('pulls the real url out of a markdown link stuffed with html', () => {
+    expect(sanitizeAIText('[Book Now](/hotel/example" target="_blank")')).toBe('[Book Now](/hotel/example)');
   });
 
-  test('should handle HTML entities', () => {
-    const input = '&lt;div&gt;Test&lt;/div&gt;';
-    const result = sanitizeAIText(input);
-    expect(result).toBe('<div>Test</div>');
+  it('decodes html entities', () => {
+    expect(sanitizeAIText('&lt;div&gt;Test&lt;/div&gt;')).toBe('<div>Test</div>');
   });
 
-  test('should convert bold HTML to markdown', () => {
-    const input = '<strong>Important</strong>'; 
-    const result = sanitizeAIText(input);
-    expect(result).toBe('**Important**');
+  it('converts bold to markdown', () => {
+    expect(sanitizeAIText('<strong>Important</strong>')).toBe('**Important**');
+  });
+
+  // Carried over from src/utils/sanitizeAIText.test.js, which could not run at
+  // all — a .js file using ESM import with no babel config — and was testing a
+  // copy of the function that nothing imported.
+  it('strips every remaining html tag', () => {
+    const result = sanitizeAIText('<p>This is a <em>plain</em> sentence.</p>');
+    expect(result).not.toContain('<p>');
+    expect(result).toContain('sentence.');
+  });
+
+  it('leaves text with no html untouched', () => {
+    expect(sanitizeAIText('Just a normal sentence.')).toBe('Just a normal sentence.');
+  });
+
+  it('handles an empty string', () => {
+    expect(sanitizeAIText('')).toBe('');
   });
 });
