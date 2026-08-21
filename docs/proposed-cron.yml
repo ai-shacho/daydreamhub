@@ -91,3 +91,37 @@ jobs:
 # and add the matching guard to owner-booking-reminders:
 #     if: github.event.schedule == '17 * * * *' || github.event_name == 'workflow_dispatch'
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# ADD THIS JOB: deferred booking calls
+#
+# /api/cron/process-calls dials the calls that triggerAutoCall could not place
+# straight away — a booking that lands between midnight and 5am local is held
+# until 5am so the front desk is not woken. Nothing has ever called this
+# endpoint, so those calls have never been placed. It also refunds guests whose
+# 24-hour window to accept an alternative hotel has run out.
+#
+# Add it under `jobs:` in .github/workflows/cron.yml, alongside
+# owner-booking-reminders. It needs no new secret — CRON_SECRET is the same one.
+#
+# START IN DRY RUN. Set the repository variable CALL_DRY_RUN to 1 and read one
+# run's output before setting it to 0. The output lists every number a live run
+# would ring, and every queued call it would close off as too late to place.
+# ---------------------------------------------------------------------------
+#
+#   deferred-booking-calls:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Place calls held overnight, and refund expired alternative offers
+#         env:
+#           DRY_RUN: ${{ vars.CALL_DRY_RUN }}
+#         run: |
+#           URL='https://daydreamhub.com/api/cron/process-calls'
+#           if [ "$DRY_RUN" = "1" ]; then
+#             echo "DRY RUN — nothing will be dialled and nothing will be written."
+#             URL="$URL?dry_run=1"
+#           fi
+#           curl -sS -X POST "$URL" \
+#             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+#             -w '\nHTTP %{http_code}\n' \
+#             --fail-with-body
